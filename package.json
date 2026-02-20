@@ -1,0 +1,18 @@
+{
+    "name": "frey-day020",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "npm run wasm:build && vite",
+        "build": "npm run wasm:build && vite build",
+        "preview": "vite preview",
+        "wasm:build": "wasm-pack build rust --target web --out-dir ../src/wasm --release"
+    },
+    "dependencies": {
+        "three": "^0.180.0"
+    },
+    "devDependencies": {
+        "vite": "^7.1.9"
+    }
+}

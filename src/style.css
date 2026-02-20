@@ -1,0 +1,74 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+
+:root {
+    --bg-paper: #e9e4d8;
+    --bg-paper-shadow: #d4cbb6;
+    --ink-strong: #2f2b22;
+    --ink-soft: #5f5849;
+    --panel: color-mix(in oklab, var(--bg-paper), #b8ac8f 15%);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    font-family: "Inter", sans-serif;
+    color: var(--ink-strong);
+    background:
+        radial-gradient(130% 90% at 0% 0%, rgba(255, 255, 255, 0.75), transparent 50%),
+        linear-gradient(140deg, var(--bg-paper), var(--bg-paper-shadow));
+}
+
+.app-shell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.hud {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 2;
+    max-width: min(44rem, calc(100vw - 2rem));
+    padding: 0.85rem 1.1rem;
+    border: 1px solid color-mix(in oklab, var(--ink-strong), transparent 75%);
+    background: color-mix(in oklab, var(--panel), white 35%);
+    backdrop-filter: blur(2px);
+}
+
+.hud h1 {
+    margin: 0;
+    font-family: "Inter", sans-serif;
+    font-size: clamp(1.2rem, 2.5vw, 1.9rem);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.subtitle {
+    margin: 0.2rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+}
+
+#stats {
+    margin: 0.45rem 0 0;
+    font-size: 0.85rem;
+}
+
+#mesh-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
