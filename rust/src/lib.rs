@@ -228,12 +228,14 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
 
     let plate_count = choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
     let seeds = pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
+    let spread_factors = build_plate_spread_factors(plate_count, &mut rng);
     let mut plate_id = partition_plates(
         &positions,
         &phi,
         &nbr_offsets,
         &nbrs,
         &seeds,
+        &spread_factors,
         params.boundary_band,
     );
     plate_id = compact_plate_ids(plate_id, plate_count);
@@ -266,6 +268,13 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
         &mut height,
         params.smooth_iter,
         params.smooth_lambda,
+    );
+
+    postprocess_height(
+        &nbr_offsets,
+        &nbrs,
+        &mut height,
+        clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
     );
 
     let (river_flux, river_next) = generate_rivers(
@@ -589,12 +598,21 @@ fn farthest_point_seed(
     best_idx
 }
 
+fn build_plate_spread_factors(plate_count: usize, rng: &mut DeterministicRng) -> Vec<f32> {
+    let mut factors = Vec::with_capacity(plate_count);
+    for _ in 0..plate_count {
+        factors.push(rng.gen_range_f32(0.65, 1.45));
+    }
+    factors
+}
+
 fn partition_plates(
     positions: &[[f32; 3]],
     phi: &[f32],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     seeds: &[usize],
+    spread_factors: &[f32],
     boundary_band: f32,
 ) -> Vec<u32> {
     let mut best_cost = vec![f32::INFINITY; positions.len()];
@@ -623,7 +641,8 @@ fn partition_plates(
             let edge_len = chord_distance(positions[state.vertex], positions[n]);
             let phi_mid = 0.5 * (phi[state.vertex] + phi[n]);
             let penalty = clamp(phi_mid.abs() / boundary_band, 0.0, 1.0);
-            let next_cost = state.cost + edge_len * (1.0 + penalty);
+            let spread = spread_factors[state.plate].max(0.35);
+            let next_cost = state.cost + edge_len * (1.0 + penalty) / spread;
 
             if next_cost + 1e-7 < best_cost[n] {
                 best_cost[n] = next_cost;
@@ -693,9 +712,9 @@ fn assign_plate_attributes(
         let velocity = [speed * dir.cos(), speed * dir.sin(), 0.0];
 
         let base_height = if is_ocean {
-            -0.45 + rng.gen_range_f32(-0.08, 0.08)
+            -0.28 + rng.gen_range_f32(-0.06, 0.06)
         } else {
-            0.18 + rng.gen_range_f32(-0.10, 0.10)
+            0.10 + rng.gen_range_f32(-0.08, 0.08)
         };
 
         attrs.push(PlateAttr {
@@ -759,30 +778,36 @@ fn apply_boundary_interactions(
                 BoundaryType::Convergent => {
                     let oi = attributes[pi].is_ocean;
                     let oj = attributes[pj].is_ocean;
+                    let hi = height[i];
+                    let hj = height[j];
                     if oi && !oj {
-                        base_delta[i] -= subduct_gain;
-                        base_delta[j] += uplift_gain;
+                        base_delta[i] -= 0.45 * subduct_gain;
+                        if hj > 0.10 {
+                            base_delta[j] += 0.35 * uplift_gain;
+                        }
                     } else if !oi && oj {
-                        base_delta[i] += uplift_gain;
-                        base_delta[j] -= subduct_gain;
+                        if hi > 0.10 {
+                            base_delta[i] += 0.35 * uplift_gain;
+                        }
+                        base_delta[j] -= 0.45 * subduct_gain;
                     } else if !oi && !oj {
-                        base_delta[i] += 0.7 * uplift_gain;
-                        base_delta[j] += 0.7 * uplift_gain;
+                        base_delta[i] += 0.55 * uplift_gain;
+                        base_delta[j] += 0.55 * uplift_gain;
                     } else {
                         if v_rel_n >= 0.0 {
-                            base_delta[i] -= 0.7 * subduct_gain;
-                            base_delta[j] += 0.3 * uplift_gain;
+                            base_delta[i] -= 0.35 * subduct_gain;
+                            base_delta[j] += 0.15 * uplift_gain;
                         } else {
-                            base_delta[j] -= 0.7 * subduct_gain;
-                            base_delta[i] += 0.3 * uplift_gain;
+                            base_delta[j] -= 0.35 * subduct_gain;
+                            base_delta[i] += 0.15 * uplift_gain;
                         }
                     }
                 }
                 BoundaryType::Divergent => {
-                    base_delta[i] -= divergent_gain;
-                    base_delta[j] -= divergent_gain;
-                    base_delta[i] += 0.075 * divergent_gain;
-                    base_delta[j] += 0.075 * divergent_gain;
+                    base_delta[i] -= 0.45 * divergent_gain;
+                    base_delta[j] -= 0.45 * divergent_gain;
+                    base_delta[i] += 0.10 * divergent_gain;
+                    base_delta[j] += 0.10 * divergent_gain;
                 }
                 BoundaryType::Transform => {}
             }
@@ -855,6 +880,51 @@ fn smooth_heights(
             buffer[v] = clamp(height[v] + lambda * (mean - height[v]), -1.0, 1.0);
         }
         height.copy_from_slice(&buffer);
+    }
+}
+
+fn postprocess_height(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &mut [f32],
+    target_sea_ratio: f32,
+) {
+    let mut sorted = height.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let sea_idx = ((sorted.len() as f32) * target_sea_ratio) as usize;
+    let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
+    let sea_level = sorted[sea_idx];
+
+    for h in height.iter_mut() {
+        *h -= sea_level;
+        *h *= 0.58;
+        *h = clamp(*h, -1.0, 1.0);
+    }
+
+    let mut coast = vec![false; height.len()];
+    for v in 0..height.len() {
+        let start = nbr_offsets[v] as usize;
+        let end = nbr_offsets[v + 1] as usize;
+        for &n in &nbrs[start..end] {
+            let n = n as usize;
+            if (height[v] > 0.0 && height[n] <= 0.0) || (height[v] <= 0.0 && height[n] > 0.0) {
+                coast[v] = true;
+                break;
+            }
+        }
+    }
+
+    for v in 0..height.len() {
+        if coast[v] && height[v] > 0.0 {
+            height[v] *= 0.62;
+        }
+        if height[v] > 0.0 && height[v] < 0.15 {
+            height[v] *= 0.78;
+        }
+        if height[v] < 0.0 && height[v] > -0.10 {
+            height[v] *= 0.80;
+        }
+        height[v] = clamp(height[v], -1.0, 1.0);
     }
 }
 
@@ -1173,12 +1243,14 @@ mod tests {
             plate_count,
             &mut rng,
         );
+        let spread_factors = super::build_plate_spread_factors(plate_count, &mut rng);
         let plate_id = super::partition_plates(
             &positions,
             &phi,
             &nbr_offsets,
             &nbrs,
             &seeds,
+            &spread_factors,
             params.boundary_band,
         );
 
@@ -1209,6 +1281,12 @@ mod tests {
             &mut height,
             params.smooth_iter,
             params.smooth_lambda,
+        );
+        super::postprocess_height(
+            &nbr_offsets,
+            &nbrs,
+            &mut height,
+            super::clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
         );
 
         let (river_flux, river_next) = generate_rivers(

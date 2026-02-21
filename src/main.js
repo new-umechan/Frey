@@ -12,13 +12,13 @@ const TERRAIN_PARAMS = {
     num_plates_max: 18,
     ocean_plate_ratio: 0.65,
     boundary_band: 0.08,
-    uplift_gain: 0.45,
-    subduct_gain: 0.35,
-    divergent_gain: 0.20,
-    smooth_iter: 6,
-    smooth_lambda: 0.35,
+    uplift_gain: 0.28,
+    subduct_gain: 0.24,
+    divergent_gain: 0.10,
+    smooth_iter: 8,
+    smooth_lambda: 0.38,
     river_rain_base: 0.5,
-    river_accum_threshold: 0.015,
+    river_accum_threshold: 0.035,
 };
 
 async function bootstrap() {
@@ -46,7 +46,8 @@ async function bootstrap() {
         const r = positions[i];
         const g = positions[i + 1];
         const b = positions[i + 2];
-        const radius = 1.0 + h * 0.08;
+        const renderHeight = h > 0.0 ? h : 0.0;
+        const radius = 1.0 + renderHeight * 0.04;
         const river = riverFlux[v];
 
         positions[i] = r * radius;
@@ -55,12 +56,7 @@ async function bootstrap() {
 
         let color;
         if (h <= 0.0) {
-            const oceanDepth = Math.min(1.0, Math.abs(h));
-            color = new THREE.Color(
-                THREE.MathUtils.lerp(0.05, 0.02, oceanDepth),
-                THREE.MathUtils.lerp(0.20, 0.10, oceanDepth),
-                THREE.MathUtils.lerp(0.50, 0.30, oceanDepth),
-            );
+            color = new THREE.Color("#12406a");
         } else {
             const t = Math.min(1.0, h);
             color = new THREE.Color(
@@ -68,8 +64,8 @@ async function bootstrap() {
                 THREE.MathUtils.lerp(0.42, 0.56, t),
                 THREE.MathUtils.lerp(0.20, 0.48, t),
             );
-            if (river > 0.0) {
-                color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.55, river * 0.8));
+            if (river > 0.10 && h < 0.45) {
+                color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
             }
         }
 
@@ -119,7 +115,7 @@ async function bootstrap() {
             color: "#2f2b22",
             wireframe: true,
             transparent: true,
-            opacity: 0.20,
+            opacity: 0.08,
         }),
     );
     scene.add(wireframe);
