@@ -2,7 +2,8 @@
 
 ## データモデル
 
-球面上の各頂点を1セルとみなし、以下の情報を保持する。
+球面上の各頂点を 1 セルとみなし、幾何情報、近傍トポロジ、状態量を保持する。
+状態量には標高、温度、湿度、プレートID、人口、国家ID、河川流量、河川の流下先を含む。
 
 ```rust
 pub struct Vec3 {
@@ -12,46 +13,41 @@ pub struct Vec3 {
 }
 
 pub struct Mesh {
-    // Geometry
-    pub base_pos: Vec<Vec3>,      // len = V（unit sphere）
-    pub tri_indices: Vec<u32>,    // len = 3 * F（三角形描画用）
-
-    // Topology（CSR）
-    pub nbr_offsets: Vec<u32>,    // len = V + 1
-    pub nbrs: Vec<u32>,           // len ≈ 6V（5/6近傍）
-
-    // State
-    pub height: Vec<f32>,         // len = V, [-1, 1]
-    pub temp: Vec<f32>,           // len = V
-    pub humid: Vec<f32>,          // len = V
-    pub plate_id: Vec<u32>,       // len = V
-    pub pop: Vec<f32>,            // len = V
-    pub state_id: Vec<u32>,       // len = V
-    pub river_flux: Vec<f32>,     // len = V
-    pub river_next: Vec<i32>,     // len = V, -1 は終端
+    pub base_pos: Vec<Vec3>,
+    pub tri_indices: Vec<u32>,
+    pub nbr_offsets: Vec<u32>,
+    pub nbrs: Vec<u32>,
+    pub height: Vec<f32>,
+    pub temp: Vec<f32>,
+    pub humid: Vec<f32>,
+    pub plate_id: Vec<u32>,
+    pub pop: Vec<f32>,
+    pub state_id: Vec<u32>,
+    pub river_flux: Vec<f32>,
+    pub river_next: Vec<i32>,
 }
 ```
 
 ## 処理の流れ
 
-1. MESH生成
-2. 地形生成（プレート・標高・川）
+1. メッシュ生成
+2. 地形生成（プレート、標高、川）
 3. 気候生成
 4. 歴史生成
 
-## MESH 生成仕様
+## MESH生成仕様
 
-- 基本形状: 正二十面体
-- 細分化: 再帰分割 `L=6`
-- 頂点は単位球面に正規化
+- 基本形状は正二十面体
+- 再帰分割レベルはL=6を中心に運用
+- 頂点は単位球面へ正規化
 - 描画は三角形インデックスを利用
-
-※ 五角形セルは正二十面体を使うため、12個生まれる
 
 ## 地形生成
 
-1. プレートから外形生成
-2. 川の侵食
-3. 細部処理
+地形生成は、場の生成、プレート分割、境界補正、平滑化、海面再調整、河川計算の順で進む。
+詳細仕様はdocs/plate_spec.mdを参照。
 
-プレートの生成は `docs/plate_spec.md` に詳しく仕様をまとめた
+## 描画ポリシー
+
+海面下の地形値は計算結果として保持するが、現行の描画では海面下の頂点変位を反映しない。
+海で亀裂のように見えるアーティファクトを避けるため、地形変位は陸地のみへ適用する。
