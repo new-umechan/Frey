@@ -8,11 +8,63 @@
     </head>
     <body>
         <main class="app-shell">
-            <header class="hud">
-                <h1>Frey</h1>
-                <p id="stats">Initializing...</p>
+            <header class="top-bar" aria-label="controls">
+                <div class="title-block">
+                    <h1>Frey</h1>
+                    <p class="subtitle">大陸から文明までの世界生成モデル</p>
+                </div>
+                <form id="seed-form" class="seed-form" autocomplete="off">
+                    <label for="seed-input">Seed</label>
+                    <input
+                        id="seed-input"
+                        name="seed"
+                        type="text"
+                        value="alpha"
+                        placeholder="Enter seed"
+                        maxlength="64"
+                    />
+                    <button type="submit">決定</button>
+                </form>
             </header>
-            <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
+            <section class="workspace">
+                <div class="viewport-panel" id="viewport-panel">
+                    <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
+                </div>
+                <aside class="sidebar" id="sidebar" aria-label="sidebar">
+                    <button
+                        id="sidebar-toggle"
+                        class="sidebar-toggle"
+                        type="button"
+                        aria-expanded="true"
+                        aria-controls="sidebar-body"
+                    >
+                        <span class="sidebar-toggle-text">Sidebar</span>
+                        <span class="sidebar-toggle-icon" aria-hidden="true">›</span>
+                    </button>
+                    <div class="sidebar-body" id="sidebar-body">
+                        <section class="panel">
+                            <h2>Status</h2>
+                            <p id="status-message">Initializing...</p>
+                        </section>
+                        <section class="panel">
+                            <h2>Stats</h2>
+                            <dl class="stats-list">
+                                <div><dt>Vertices</dt><dd id="stat-vertices">-</dd></div>
+                                <div><dt>Triangles</dt><dd id="stat-triangles">-</dd></div>
+                                <div><dt>Level</dt><dd id="stat-level">-</dd></div>
+                                <div><dt>Seed</dt><dd id="stat-seed">-</dd></div>
+                                <div><dt>Plates</dt><dd id="stat-plates">-</dd></div>
+                                <div><dt>Land</dt><dd id="stat-land">-</dd></div>
+                            </dl>
+                        </section>
+                        <section class="panel panel-note">
+                            <h2>CONTROL</h2>
+                            <p>ドラッグ: 回転</p>
+                            <p>ホイール / ピンチ: ズーム</p>
+                        </section>
+                    </div>
+                </aside>
+            </section>
         </main>
         <script type="module" src="/src/main.js"></script>
     </body>

@@ -1,11 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Sans+JP:wght@400;500&display=swap");
 
 :root {
-    --bg-paper: #e9e4d8;
-    --bg-paper-shadow: #d4cbb6;
-    --ink-strong: #2f2b22;
-    --ink-soft: #5f5849;
-    --panel: color-mix(in oklab, var(--bg-paper), #b8ac8f 15%);
+    --bg: oklch(0.95 0.012 235);
+    --panel: oklch(0.965 0.01 235 / 0.9);
+    --panel-strong: oklch(0.925 0.015 235 / 0.95);
+    --ink: oklch(0.28 0.015 245);
+    --ink-soft: oklch(0.46 0.012 245);
+    --line: oklch(0.68 0.018 240 / 0.35);
+    --accent: oklch(0.60 0.045 235);
+    --accent-soft: oklch(0.76 0.03 235);
+    --sidebar-width: clamp(15rem, 22vw, 19rem);
+    --sidebar-rail: 3.1rem;
+    --topbar-height: clamp(4.6rem, 11vw, 5.6rem);
 }
 
 *,
@@ -22,53 +28,268 @@ body {
 }
 
 body {
-    font-family: "Inter", sans-serif;
-    color: var(--ink-strong);
-    background:
-        radial-gradient(130% 90% at 0% 0%, rgba(255, 255, 255, 0.75), transparent 50%),
-        linear-gradient(140deg, var(--bg-paper), var(--bg-paper-shadow));
+    font-family: "IBM Plex Sans JP", "Manrope", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
 }
 
 .app-shell {
-    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr;
     width: 100%;
     height: 100%;
-    overflow: hidden;
+    padding: 0.9rem;
+    gap: 0.8rem;
 }
 
-.hud {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    z-index: 2;
-    max-width: min(44rem, calc(100vw - 2rem));
-    padding: 0.85rem 1.1rem;
-    border: 1px solid color-mix(in oklab, var(--ink-strong), transparent 75%);
-    background: color-mix(in oklab, var(--panel), white 35%);
-    backdrop-filter: blur(2px);
+.top-bar {
+    min-height: var(--topbar-height);
+    display: grid;
+    grid-template-columns: auto minmax(14rem, 20rem);
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--line);
+    background: var(--panel);
 }
 
-.hud h1 {
+.title-block {
+    min-width: 0;
+}
+
+.title-block h1 {
     margin: 0;
-    font-family: "Inter", sans-serif;
-    font-size: clamp(1.2rem, 2.5vw, 1.9rem);
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    font-family: "Manrope", sans-serif;
+    font-size: clamp(1.1rem, 2.5vw, 1.7rem);
+    font-weight: 700;
+    letter-spacing: 0.01em;
 }
 
 .subtitle {
-    margin: 0.2rem 0 0;
+    margin: 0.1rem 0 0;
     color: var(--ink-soft);
-    font-size: 0.88rem;
+    font-size: 0.8rem;
 }
 
-#stats {
-    margin: 0.45rem 0 0;
-    font-size: 0.85rem;
+.seed-form {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    padding: 0.45rem;
+}
+
+.seed-form label {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+}
+
+.seed-form input {
+    min-width: 0;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 22%);
+    background: color-mix(in oklab, var(--panel), white 25%);
+    color: var(--ink);
+    padding: 0.5rem 0.65rem;
+    font: inherit;
+}
+
+.seed-form input:focus-visible,
+.seed-form button:focus-visible,
+.sidebar-toggle:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.seed-form button {
+    border: 1px solid color-mix(in oklab, var(--line), transparent 25%);
+    background: oklch(0.84 0.04 235);
+    color: oklch(0.24 0.02 245);
+    font: inherit;
+    font-weight: 600;
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+}
+
+.workspace {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    gap: 0.8rem;
+}
+
+.viewport-panel {
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--line);
+    background: color-mix(in oklab, var(--panel), oklch(0.90 0.01 235) 18%);
+    overflow: hidden;
+}
+
+.sidebar {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: var(--sidebar-rail) minmax(0, 1fr);
+    border: 1px solid var(--line);
+    background: var(--panel);
+    transition: grid-template-columns 220ms ease;
+}
+
+.app-shell.is-sidebar-collapsed .workspace {
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-rail);
+}
+
+.app-shell.is-sidebar-collapsed .sidebar {
+    grid-template-columns: var(--sidebar-rail) 0fr;
+}
+
+.sidebar-toggle {
+    border: 0;
+    border-right: 1px solid var(--line);
+    background: var(--panel-strong);
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0.75rem 0.45rem;
+    display: grid;
+    align-content: start;
+    justify-items: center;
+    gap: 0.7rem;
+}
+
+.sidebar-toggle-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+}
+
+.sidebar-toggle-icon {
+    display: inline-block;
+    font-size: 1rem;
+    transition: transform 220ms ease;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.sidebar-body {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem;
+    display: grid;
+    align-content: start;
+    gap: 0.65rem;
+}
+
+.panel {
+    padding: 0.65rem 0.7rem;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 10%);
+    background: color-mix(in oklab, var(--panel), white 8%);
+}
+
+.panel h2 {
+    margin: 0 0 0.35rem;
+    font-family: "Manrope", sans-serif;
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.panel p {
+    margin: 0.22rem 0;
+    color: var(--ink-soft);
+    font-size: 0.84rem;
+}
+
+#status-message {
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.stats-list {
+    margin: 0;
+    display: grid;
+    gap: 0.38rem;
+}
+
+.stats-list > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: baseline;
+    font-size: 0.83rem;
+}
+
+.stats-list dt {
+    color: var(--ink-soft);
+}
+
+.stats-list dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.panel-note p {
+    font-size: 0.8rem;
 }
 
 #mesh-canvas {
     width: 100%;
     height: 100%;
     display: block;
+}
+
+@media (max-width: 980px) {
+    .top-bar {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+        gap: 0.55rem;
+    }
+
+    .workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .sidebar {
+        min-height: 12rem;
+    }
+
+    .app-shell.is-sidebar-collapsed .workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .app-shell.is-sidebar-collapsed .sidebar {
+        grid-template-columns: var(--sidebar-rail) minmax(0, 1fr);
+    }
+
+    .app-shell.is-sidebar-collapsed .sidebar-body {
+        display: none;
+    }
+
+    .sidebar-toggle {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        grid-auto-flow: column;
+        align-content: center;
+        justify-content: start;
+        gap: 0.5rem;
+        padding: 0.65rem 0.75rem;
+    }
+
+    .sidebar-toggle-text {
+        writing-mode: horizontal-tb;
+        letter-spacing: 0.02em;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .sidebar-toggle-icon {
+        transition: none;
+    }
 }

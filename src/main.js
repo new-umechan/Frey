@@ -3,7 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
 
 const LEVEL = 6;
-const TERRAIN_SEED = "alpha";
+const DEFAULT_TERRAIN_SEED = "alpha";
 const TERRAIN_PARAMS = {
     level: LEVEL,
     l_max: 4,
@@ -29,63 +29,60 @@ const TERRAIN_PARAMS = {
     shallow_sea_floor: -0.08,
 };
 
-async function bootstrap() {
-    const canvas = document.getElementById("mesh-canvas");
-    const statsElement = document.getElementById("stats");
-
-    if (!(canvas instanceof HTMLCanvasElement) || !(statsElement instanceof HTMLElement)) {
-        throw new Error("required DOM elements are missing");
+function requireElement(id, type) {
+    const element = document.getElementById(id);
+    if (!(element instanceof type)) {
+        throw new Error(`required DOM element is missing: #${id}`);
     }
+    return element;
+}
+
+async function bootstrap() {
+    const appShell = requireElement("mesh-canvas", HTMLCanvasElement).closest(".app-shell");
+    const canvas = requireElement("mesh-canvas", HTMLCanvasElement);
+    const viewportPanel = requireElement("viewport-panel", HTMLDivElement);
+    const seedForm = requireElement("seed-form", HTMLFormElement);
+    const seedInput = requireElement("seed-input", HTMLInputElement);
+    const sidebarToggle = requireElement("sidebar-toggle", HTMLButtonElement);
+    const statusMessage = requireElement("status-message", HTMLElement);
+
+    if (!(appShell instanceof HTMLElement)) {
+        throw new Error("required app shell is missing");
+    }
+
+    const statFields = {
+        vertices: requireElement("stat-vertices", HTMLElement),
+        triangles: requireElement("stat-triangles", HTMLElement),
+        level: requireElement("stat-level", HTMLElement),
+        seed: requireElement("stat-seed", HTMLElement),
+        plates: requireElement("stat-plates", HTMLElement),
+        land: requireElement("stat-land", HTMLElement),
+    };
+
+    function setStatus(message) {
+        statusMessage.textContent = message;
+    }
+
+    function setSidebarOpen(isOpen) {
+        appShell.classList.toggle("is-sidebar-collapsed", !isOpen);
+        sidebarToggle.setAttribute("aria-expanded", String(isOpen));
+    }
+
+    setSidebarOpen(true);
+    seedInput.value = DEFAULT_TERRAIN_SEED;
+    setStatus("Loading WASM...");
 
     await initWasm();
+    setStatus("Preparing mesh...");
+
     const mesh = generate_mesh(LEVEL);
-    const terrain = generate_terrain(TERRAIN_SEED, TERRAIN_PARAMS);
-
-    const positions = new Float32Array(mesh.positions);
+    const basePositions = new Float32Array(mesh.positions);
     const indices = new Uint32Array(mesh.indices);
-    const height = new Float32Array(terrain.height);
-    const plateId = new Uint32Array(terrain.plate_id);
-    const riverFlux = new Float32Array(terrain.river_flux);
-
-    const colors = new Float32Array((positions.length / 3) * 3);
-    for (let i = 0; i < positions.length; i += 3) {
-        const v = i / 3;
-        const h = height[v];
-        const r = positions[i];
-        const g = positions[i + 1];
-        const b = positions[i + 2];
-        const renderHeight = h > 0.0 ? h : 0.0;
-        const radius = 1.0 + renderHeight * 0.04;
-        const river = riverFlux[v];
-
-        positions[i] = r * radius;
-        positions[i + 1] = g * radius;
-        positions[i + 2] = b * radius;
-
-        let color;
-        if (h <= 0.0) {
-            color = new THREE.Color("#12406a");
-        } else {
-            const t = Math.min(1.0, h);
-            color = new THREE.Color(
-                THREE.MathUtils.lerp(0.18, 0.62, t),
-                THREE.MathUtils.lerp(0.42, 0.56, t),
-                THREE.MathUtils.lerp(0.20, 0.48, t),
-            );
-            if (river > 0.10 && h < 0.45) {
-                color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
-            }
-        }
-
-        colors[i] = color.r;
-        colors[i + 1] = color.g;
-        colors[i + 2] = color.b;
-    }
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#e9e4d8");
+    scene.background = new THREE.Color("#e8edf3");
 
-    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     camera.position.set(0, 0, 2.7);
 
     const renderer = new THREE.WebGLRenderer({
@@ -102,11 +99,7 @@ async function bootstrap() {
     controls.maxDistance = 6.0;
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    geometry.computeVertexNormals();
-    geometry.computeBoundingSphere();
 
     const material = new THREE.MeshStandardMaterial({
         vertexColors: true,
@@ -128,39 +121,147 @@ async function bootstrap() {
     );
     scene.add(wireframe);
 
-    const keyLight = new THREE.DirectionalLight("#fff8eb", 1.1);
+    const keyLight = new THREE.DirectionalLight("#f1f6ff", 1.05);
     keyLight.position.set(1.3, 1.4, 1.2);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight("#c9dbff", 0.6);
+    const fillLight = new THREE.DirectionalLight("#c8daf1", 0.55);
     fillLight.position.set(-1.5, -0.5, -1.2);
     scene.add(fillLight);
 
-    const ambient = new THREE.AmbientLight("#f2f2e8", 0.45);
+    const ambient = new THREE.AmbientLight("#eef2f8", 0.42);
     scene.add(ambient);
 
     const haloGeometry = new THREE.SphereGeometry(1.01, 64, 64);
     const haloMaterial = new THREE.MeshBasicMaterial({
-        color: "#8d907f",
+        color: "#8390a3",
         transparent: true,
         opacity: 0.08,
     });
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
     scene.add(halo);
 
-    const plateCount = new Set(plateId).size;
-    const landRatio = height.reduce((acc, h) => acc + (h > 0.0 ? 1 : 0), 0) / height.length;
-    statsElement.textContent = `Vertices: ${positions.length / 3} / Triangles: ${indices.length / 3} / L=${LEVEL} / Seed=${TERRAIN_SEED} / Plates=${plateCount} / Land=${(landRatio * 100).toFixed(1)}%`;
+    let generationToken = 0;
+    let currentSeed = DEFAULT_TERRAIN_SEED;
 
     function onResize() {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        const width = viewportPanel.clientWidth;
+        const height = viewportPanel.clientHeight;
+        if (width <= 0 || height <= 0) {
+            return;
+        }
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
     }
 
+    async function updateTerrain(seed) {
+        const token = ++generationToken;
+        const nextSeed = seed.trim() || DEFAULT_TERRAIN_SEED;
+
+        setStatus(`Generating terrain for "${nextSeed}"...`);
+        seedForm.querySelector("button")?.setAttribute("disabled", "disabled");
+        seedInput.setAttribute("disabled", "disabled");
+
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        if (token !== generationToken) {
+            return;
+        }
+
+        const terrain = generate_terrain(nextSeed, TERRAIN_PARAMS);
+        const positions = new Float32Array(basePositions);
+        const heightData = new Float32Array(terrain.height);
+        const plateId = new Uint32Array(terrain.plate_id);
+        const riverFlux = new Float32Array(terrain.river_flux);
+        const colors = new Float32Array((positions.length / 3) * 3);
+
+        for (let i = 0; i < positions.length; i += 3) {
+            const v = i / 3;
+            const h = heightData[v];
+            const x = positions[i];
+            const y = positions[i + 1];
+            const z = positions[i + 2];
+            const renderHeight = h > 0.0 ? h : 0.0;
+            const radius = 1.0 + renderHeight * 0.04;
+            const river = riverFlux[v];
+
+            positions[i] = x * radius;
+            positions[i + 1] = y * radius;
+            positions[i + 2] = z * radius;
+
+            let color;
+            if (h <= 0.0) {
+                color = new THREE.Color("#12406a");
+            } else {
+                const t = Math.min(1.0, h);
+                color = new THREE.Color(
+                    THREE.MathUtils.lerp(0.18, 0.62, t),
+                    THREE.MathUtils.lerp(0.42, 0.56, t),
+                    THREE.MathUtils.lerp(0.20, 0.48, t),
+                );
+                if (river > 0.10 && h < 0.45) {
+                    color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
+                }
+            }
+
+            colors[i] = color.r;
+            colors[i + 1] = color.g;
+            colors[i + 2] = color.b;
+        }
+
+        if (token !== generationToken) {
+            return;
+        }
+
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+
+        const plateCount = new Set(plateId).size;
+        const landRatio =
+            heightData.reduce((acc, h) => acc + (h > 0.0 ? 1 : 0), 0) / Math.max(1, heightData.length);
+
+        currentSeed = nextSeed;
+        statFields.vertices.textContent = `${positions.length / 3}`;
+        statFields.triangles.textContent = `${indices.length / 3}`;
+        statFields.level.textContent = `${LEVEL}`;
+        statFields.seed.textContent = currentSeed;
+        statFields.plates.textContent = `${plateCount}`;
+        statFields.land.textContent = `${(landRatio * 100).toFixed(1)}%`;
+
+        setStatus(`Ready (${currentSeed})`);
+        seedInput.value = currentSeed;
+        seedInput.removeAttribute("disabled");
+        seedForm.querySelector("button")?.removeAttribute("disabled");
+    }
+
     window.addEventListener("resize", onResize);
+    if (typeof ResizeObserver !== "undefined") {
+        const resizeObserver = new ResizeObserver(() => onResize());
+        resizeObserver.observe(viewportPanel);
+    }
+
+    sidebarToggle.addEventListener("click", () => {
+        const isOpen = sidebarToggle.getAttribute("aria-expanded") === "true";
+        setSidebarOpen(!isOpen);
+        requestAnimationFrame(onResize);
+    });
+
+    seedForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+            await updateTerrain(seedInput.value);
+        } catch (error) {
+            setStatus(`Generation failed: ${String(error)}`);
+            seedInput.removeAttribute("disabled");
+            seedForm.querySelector("button")?.removeAttribute("disabled");
+            console.error(error);
+        }
+    });
+
+    await updateTerrain(DEFAULT_TERRAIN_SEED);
+    onResize();
 
     function render() {
         controls.update();
@@ -172,9 +273,9 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-    const statsElement = document.getElementById("stats");
-    if (statsElement instanceof HTMLElement) {
-        statsElement.textContent = `Initialization failed: ${String(error)}`;
+    const statusMessage = document.getElementById("status-message");
+    if (statusMessage instanceof HTMLElement) {
+        statusMessage.textContent = `Initialization failed: ${String(error)}`;
     }
     console.error(error);
 });
