@@ -15,6 +15,7 @@
 
 データモデルと処理の流れはdocs/architecture.md。
 プレート地形生成の仕様はdocs/plate_spec.md。
+画面についてはdocs/ui_spec.md
 
 ## Teck Stack
 
