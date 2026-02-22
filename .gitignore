@@ -3,3 +3,5 @@ dist/
 src/wasm/
 
 rust/target/
+
+docs/TODO.md

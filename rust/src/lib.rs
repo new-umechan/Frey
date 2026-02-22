@@ -222,6 +222,7 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
     let (positions, indices) = generate_icosphere(params.level);
     let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
     let spherical = compute_spherical_coords(&positions);
+    let plate_boundary_proximity;
 
     let mut phi = evaluate_phi(&spherical, params.l_max, params.alpha, &mut rng);
     normalize_zscore(&mut phi);
@@ -239,14 +240,31 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
         params.boundary_band,
     );
     plate_id = compact_plate_ids(plate_id, plate_count);
+    plate_boundary_proximity = compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
 
     let attributes = assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
+    let (band_low, band_mid, band_high) =
+        generate_frequency_bands(&spherical, &nbr_offsets, &nbrs, params.l_max, params.alpha, &mut rng);
 
     let mut height = vec![0.0; positions.len()];
     for v in 0..positions.len() {
         let pid = plate_id[v] as usize;
-        let noise = rng.gen_range_f32(-0.03, 0.03);
-        height[v] = clamp(attributes[pid].base_height + 0.10 * phi[v] + noise, -1.2, 1.2);
+        let boundary_w = plate_boundary_proximity[v];
+        let land_ocean_scale = if attributes[pid].is_ocean { 0.85 } else { 1.0 };
+        let low_amp = 0.12;
+        let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
+        let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
+        let jitter = rng.gen_range_f32(-0.008, 0.008);
+        height[v] = clamp(
+            attributes[pid].base_height
+                + 0.08 * phi[v]
+                + low_amp * band_low[v]
+                + mid_amp * band_mid[v]
+                + high_amp * band_high[v]
+                + jitter,
+            -1.2,
+            1.2,
+        );
     }
 
     let boundary_vertices = apply_boundary_interactions(
@@ -487,6 +505,188 @@ fn normalize_zscore(data: &mut [f32]) {
     for v in data {
         *v = (*v - mean) / std;
     }
+}
+
+fn normalize_zscore_if_var(data: &mut [f32]) {
+    if data.is_empty() {
+        return;
+    }
+    let mean = data.iter().sum::<f32>() / data.len() as f32;
+    let variance = data
+        .iter()
+        .map(|v| {
+            let d = *v - mean;
+            d * d
+        })
+        .sum::<f32>()
+        / data.len() as f32;
+    if variance < 1e-8 {
+        data.fill(0.0);
+        return;
+    }
+    let std = variance.sqrt();
+    for v in data {
+        *v = (*v - mean) / std;
+    }
+}
+
+fn generate_frequency_bands(
+    spherical: &[(f32, f32)],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    l_max: u32,
+    alpha: f32,
+    rng: &mut DeterministicRng,
+) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    let low_max = l_max.max(3).min(5);
+    let mid_max = (l_max + 3).max(low_max + 1).min(10);
+
+    let mut low = evaluate_phi_band(spherical, 2, low_max, alpha + 0.35, rng);
+    let mut mid = evaluate_phi_band(spherical, low_max + 1, mid_max, alpha, rng);
+    if mid.iter().all(|v| v.abs() < 1e-7) {
+        mid = generate_smoothed_noise_band(spherical.len(), nbr_offsets, nbrs, 3, 1, rng);
+    }
+
+    let mut high = generate_smoothed_noise_band(spherical.len(), nbr_offsets, nbrs, 1, 4, rng);
+
+    normalize_zscore_if_var(&mut low);
+    normalize_zscore_if_var(&mut mid);
+    normalize_zscore_if_var(&mut high);
+
+    (low, mid, high)
+}
+
+fn evaluate_phi_band(
+    spherical: &[(f32, f32)],
+    l_min: u32,
+    l_max: u32,
+    alpha: f32,
+    rng: &mut DeterministicRng,
+) -> Vec<f32> {
+    if l_min > l_max {
+        return vec![0.0; spherical.len()];
+    }
+
+    let mut coeffs: Vec<Vec<f32>> = vec![Vec::new(); (l_max + 1) as usize];
+    for l in l_min..=l_max {
+        let sigma = 1.0 / (l as f32).powf(alpha.max(0.1));
+        let len = (2 * l + 1) as usize;
+        let mut arr = vec![0.0; len];
+        for value in &mut arr {
+            *value = sigma * rng.standard_normal();
+        }
+        coeffs[l as usize] = arr;
+    }
+
+    let mut out = vec![0.0; spherical.len()];
+    for (i, (theta, lambda)) in spherical.iter().enumerate() {
+        let mut sum = 0.0;
+        for l in l_min..=l_max {
+            for m in -(l as i32)..=(l as i32) {
+                let c = coeffs[l as usize][(m + l as i32) as usize];
+                sum += c * real_spherical_harmonic(l as i32, m, *theta, *lambda);
+            }
+        }
+        out[i] = sum;
+    }
+    out
+}
+
+fn generate_smoothed_noise_band(
+    count: usize,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    smooth_short: u32,
+    smooth_long: u32,
+    rng: &mut DeterministicRng,
+) -> Vec<f32> {
+    let mut raw = vec![0.0; count];
+    for v in &mut raw {
+        *v = rng.gen_range_f32(-1.0, 1.0);
+    }
+
+    let mut a = raw.clone();
+    let mut b = raw;
+    smooth_scalar_field(nbr_offsets, nbrs, &mut a, smooth_short);
+    smooth_scalar_field(nbr_offsets, nbrs, &mut b, smooth_long.max(smooth_short));
+
+    a.iter().zip(b.iter()).map(|(x, y)| x - y).collect()
+}
+
+fn smooth_scalar_field(nbr_offsets: &[u32], nbrs: &[u32], field: &mut [f32], iter: u32) {
+    if iter == 0 || field.is_empty() {
+        return;
+    }
+    let mut buf = field.to_vec();
+    for _ in 0..iter {
+        for v in 0..field.len() {
+            let start = nbr_offsets[v] as usize;
+            let end = nbr_offsets[v + 1] as usize;
+            if start == end {
+                buf[v] = field[v];
+                continue;
+            }
+            let mut sum = field[v];
+            let mut wsum = 1.0;
+            for &n in &nbrs[start..end] {
+                sum += field[n as usize];
+                wsum += 1.0;
+            }
+            buf[v] = sum / wsum;
+        }
+        field.copy_from_slice(&buf);
+    }
+}
+
+fn compute_plate_boundary_proximity(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    max_hops: u32,
+) -> Vec<f32> {
+    let mut dist = vec![u32::MAX; plate_id.len()];
+    let mut frontier = Vec::<usize>::new();
+
+    for v in 0..plate_id.len() {
+        let start = nbr_offsets[v] as usize;
+        let end = nbr_offsets[v + 1] as usize;
+        for &n in &nbrs[start..end] {
+            if plate_id[v] != plate_id[n as usize] {
+                dist[v] = 0;
+                frontier.push(v);
+                break;
+            }
+        }
+    }
+
+    let mut head = 0usize;
+    while head < frontier.len() {
+        let v = frontier[head];
+        head += 1;
+        let d = dist[v];
+        if d >= max_hops {
+            continue;
+        }
+        let start = nbr_offsets[v] as usize;
+        let end = nbr_offsets[v + 1] as usize;
+        for &n in &nbrs[start..end] {
+            let n = n as usize;
+            if dist[n] > d + 1 {
+                dist[n] = d + 1;
+                frontier.push(n);
+            }
+        }
+    }
+
+    dist.iter()
+        .map(|&d| {
+            if d == u32::MAX {
+                0.0
+            } else {
+                (1.0 - d as f32 / (max_hops.max(1) as f32 + 1.0)).max(0.0)
+            }
+        })
+        .collect()
 }
 
 fn choose_plate_count(min_count: u32, max_count: u32, rng: &mut DeterministicRng) -> usize {
@@ -740,7 +940,8 @@ fn apply_boundary_interactions(
 ) -> HashSet<usize> {
     let mut boundary_vertices = HashSet::<usize>::new();
     let mut base_delta = vec![0.0; height.len()];
-    let eps = 0.02;
+    let classify_eps = 0.05;
+    let trench_eps = 0.10;
 
     for i in 0..positions.len() {
         let start = nbr_offsets[i] as usize;
@@ -765,10 +966,13 @@ fn apply_boundary_interactions(
             let edge_dir = normalize3(edge);
             let rel_v = sub3(attributes[pj].velocity, attributes[pi].velocity);
             let v_rel_n = dot3(rel_v, edge_dir);
+            let convergent_strength = clamp((v_rel_n - classify_eps) / 0.20, 0.0, 1.0);
+            let divergent_strength = clamp((-v_rel_n - classify_eps) / 0.20, 0.0, 1.0);
+            let trench_strength = clamp((v_rel_n - trench_eps) / 0.18, 0.0, 1.0);
 
-            let btype = if v_rel_n > eps {
+            let btype = if v_rel_n > classify_eps {
                 BoundaryType::Convergent
-            } else if v_rel_n < -eps {
+            } else if v_rel_n < -classify_eps {
                 BoundaryType::Divergent
             } else {
                 BoundaryType::Transform
@@ -781,33 +985,33 @@ fn apply_boundary_interactions(
                     let hi = height[i];
                     let hj = height[j];
                     if oi && !oj {
-                        base_delta[i] -= 0.45 * subduct_gain;
+                        base_delta[i] -= 0.45 * subduct_gain * trench_strength;
                         if hj > 0.10 {
-                            base_delta[j] += 0.35 * uplift_gain;
+                            base_delta[j] += 0.35 * uplift_gain * convergent_strength;
                         }
                     } else if !oi && oj {
                         if hi > 0.10 {
-                            base_delta[i] += 0.35 * uplift_gain;
+                            base_delta[i] += 0.35 * uplift_gain * convergent_strength;
                         }
-                        base_delta[j] -= 0.45 * subduct_gain;
+                        base_delta[j] -= 0.45 * subduct_gain * trench_strength;
                     } else if !oi && !oj {
-                        base_delta[i] += 0.55 * uplift_gain;
-                        base_delta[j] += 0.55 * uplift_gain;
+                        base_delta[i] += 0.55 * uplift_gain * convergent_strength;
+                        base_delta[j] += 0.55 * uplift_gain * convergent_strength;
                     } else {
                         if v_rel_n >= 0.0 {
-                            base_delta[i] -= 0.35 * subduct_gain;
-                            base_delta[j] += 0.15 * uplift_gain;
+                            base_delta[i] -= 0.35 * subduct_gain * trench_strength;
+                            base_delta[j] += 0.15 * uplift_gain * convergent_strength;
                         } else {
-                            base_delta[j] -= 0.35 * subduct_gain;
-                            base_delta[i] += 0.15 * uplift_gain;
+                            base_delta[j] -= 0.35 * subduct_gain * trench_strength;
+                            base_delta[i] += 0.15 * uplift_gain * convergent_strength;
                         }
                     }
                 }
                 BoundaryType::Divergent => {
-                    base_delta[i] -= 0.45 * divergent_gain;
-                    base_delta[j] -= 0.45 * divergent_gain;
-                    base_delta[i] += 0.10 * divergent_gain;
-                    base_delta[j] += 0.10 * divergent_gain;
+                    base_delta[i] -= 0.35 * divergent_gain * divergent_strength;
+                    base_delta[j] -= 0.35 * divergent_gain * divergent_strength;
+                    base_delta[i] += 0.08 * divergent_gain * divergent_strength;
+                    base_delta[j] += 0.08 * divergent_gain * divergent_strength;
                 }
                 BoundaryType::Transform => {}
             }
@@ -872,12 +1076,24 @@ fn smooth_heights(
             }
             let mean = sum / degree;
 
-            let lambda = if boundary_vertices.contains(&v) {
-                smooth_lambda * 0.6
+            let h = height[v];
+            let is_coast = nbrs[start..end].iter().any(|&n| {
+                let nh = height[n as usize];
+                (h > 0.0 && nh <= 0.0) || (h <= 0.0 && nh > 0.0)
+            });
+            let boundary_scale = if boundary_vertices.contains(&v) { 0.6 } else { 1.0 };
+            let terrain_scale = if h > 0.35 {
+                0.70
+            } else if h > 0.0 {
+                0.90
+            } else if h < -0.35 {
+                1.15
             } else {
-                smooth_lambda
+                1.00
             };
-            buffer[v] = clamp(height[v] + lambda * (mean - height[v]), -1.0, 1.0);
+            let coast_scale = if is_coast { 0.82 } else { 1.0 };
+            let lambda = clamp(smooth_lambda * boundary_scale * terrain_scale * coast_scale, 0.0, 1.0);
+            buffer[v] = clamp(h + lambda * (mean - h), -1.0, 1.0);
         }
         height.copy_from_slice(&buffer);
     }
@@ -1218,6 +1434,10 @@ fn clamp(v: f32, lo: f32, hi: f32) -> f32 {
     } else {
         v
     }
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * clamp(t, 0.0, 1.0)
 }
 
 #[cfg(test)]
