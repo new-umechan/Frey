@@ -26,6 +26,14 @@ pub struct TerrainParams {
     pub smooth_lambda: f32,
     pub river_rain_base: f32,
     pub river_accum_threshold: f32,
+    pub erosion_iter: u32,
+    pub hydraulic_erode_rate: f32,
+    pub hydraulic_deposit_rate: f32,
+    pub sediment_capacity_gain: f32,
+    pub erosion_min_slope: f32,
+    pub erosion_max_delta_per_iter: f32,
+    pub coastal_deposit_rate: f32,
+    pub shallow_sea_floor: f32,
 }
 
 impl Default for TerrainParams {
@@ -45,6 +53,14 @@ impl Default for TerrainParams {
             smooth_lambda: 0.35,
             river_rain_base: 0.5,
             river_accum_threshold: 0.015,
+            erosion_iter: 12,
+            hydraulic_erode_rate: 0.020,
+            hydraulic_deposit_rate: 0.35,
+            sediment_capacity_gain: 0.90,
+            erosion_min_slope: 0.002,
+            erosion_max_delta_per_iter: 0.015,
+            coastal_deposit_rate: 0.45,
+            shallow_sea_floor: -0.08,
         }
     }
 }
@@ -288,6 +304,14 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
         params.smooth_lambda,
     );
 
+    apply_hydraulic_erosion(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &mut height,
+        &params,
+    );
+
     postprocess_height(
         &nbr_offsets,
         &nbrs,
@@ -330,11 +354,19 @@ fn sanitize_params(params: &mut TerrainParams) {
     params.smooth_lambda = clamp(params.smooth_lambda, 0.0, 1.0);
     params.river_rain_base = params.river_rain_base.max(0.0);
     params.river_accum_threshold = params.river_accum_threshold.max(0.0);
+    params.erosion_iter = params.erosion_iter.min(128);
+    params.hydraulic_erode_rate = params.hydraulic_erode_rate.max(0.0);
+    params.hydraulic_deposit_rate = clamp(params.hydraulic_deposit_rate, 0.0, 1.0);
+    params.sediment_capacity_gain = params.sediment_capacity_gain.max(0.0);
+    params.erosion_min_slope = params.erosion_min_slope.max(0.0);
+    params.erosion_max_delta_per_iter = params.erosion_max_delta_per_iter.max(0.0);
+    params.coastal_deposit_rate = clamp(params.coastal_deposit_rate, 0.0, 1.0);
+    params.shallow_sea_floor = clamp(params.shallow_sea_floor, -1.0, 0.0);
 }
 
 fn rng_from_seed(seed: &str, params: &TerrainParams) -> DeterministicRng {
     let canonical = format!(
-        "{{\"l_max\":{},\"alpha\":{:.8},\"num_plates_min\":{},\"num_plates_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"uplift_gain\":{:.8},\"subduct_gain\":{:.8},\"divergent_gain\":{:.8},\"smooth_iter\":{},\"smooth_lambda\":{:.8},\"river_rain_base\":{:.8},\"river_accum_threshold\":{:.8}}}",
+        "{{\"l_max\":{},\"alpha\":{:.8},\"num_plates_min\":{},\"num_plates_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"uplift_gain\":{:.8},\"subduct_gain\":{:.8},\"divergent_gain\":{:.8},\"smooth_iter\":{},\"smooth_lambda\":{:.8},\"river_rain_base\":{:.8},\"river_accum_threshold\":{:.8},\"erosion_iter\":{},\"hydraulic_erode_rate\":{:.8},\"hydraulic_deposit_rate\":{:.8},\"sediment_capacity_gain\":{:.8},\"erosion_min_slope\":{:.8},\"erosion_max_delta_per_iter\":{:.8},\"coastal_deposit_rate\":{:.8},\"shallow_sea_floor\":{:.8}}}",
         params.l_max,
         params.alpha,
         params.num_plates_min,
@@ -348,6 +380,14 @@ fn rng_from_seed(seed: &str, params: &TerrainParams) -> DeterministicRng {
         params.smooth_lambda,
         params.river_rain_base,
         params.river_accum_threshold,
+        params.erosion_iter,
+        params.hydraulic_erode_rate,
+        params.hydraulic_deposit_rate,
+        params.sediment_capacity_gain,
+        params.erosion_min_slope,
+        params.erosion_max_delta_per_iter,
+        params.coastal_deposit_rate,
+        params.shallow_sea_floor,
     );
 
     let mut source = Vec::new();
@@ -1144,13 +1184,101 @@ fn postprocess_height(
     }
 }
 
-fn generate_rivers(
+fn apply_hydraulic_erosion(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &mut [f32],
+    params: &TerrainParams,
+) {
+    if params.erosion_iter == 0
+        || params.hydraulic_erode_rate <= 0.0
+        || params.erosion_max_delta_per_iter <= 0.0
+    {
+        return;
+    }
+
+    let v_count = height.len();
+    let mut next_height = height.to_vec();
+    let mut delta = vec![0.0; v_count];
+
+    for _ in 0..params.erosion_iter {
+        let (river_flux, river_next) = compute_river_flux_and_next(
+            positions,
+            nbr_offsets,
+            nbrs,
+            height,
+            params.river_rain_base,
+        );
+
+        delta.fill(0.0);
+
+        for i in 0..v_count {
+            if height[i] <= 0.0 {
+                continue;
+            }
+
+            let next = river_next[i];
+            if next < 0 {
+                continue;
+            }
+            let n = next as usize;
+
+            let edge_len = chord_distance(positions[i], positions[n]).max(1e-4);
+            let raw_drop = (height[i] - height[n]).max(0.0);
+            let local_slope = raw_drop / edge_len;
+            let effective_slope = local_slope.max(params.erosion_min_slope);
+            let capacity = params.sediment_capacity_gain * river_flux[i] * effective_slope;
+
+            let erode_amount = clamp(
+                params.hydraulic_erode_rate * capacity,
+                0.0,
+                params.erosion_max_delta_per_iter,
+            );
+            if erode_amount <= 0.0 {
+                continue;
+            }
+
+            delta[i] -= erode_amount;
+
+            let deposit_amount = if height[n] > 0.0 {
+                let downstream_slope = if river_next[n] >= 0 {
+                    let nn = river_next[n] as usize;
+                    let next_len = chord_distance(positions[n], positions[nn]).max(1e-4);
+                    ((height[n] - height[nn]).max(0.0)) / next_len
+                } else {
+                    0.0
+                };
+                let flattening = clamp(
+                    1.0 - downstream_slope / (local_slope.max(params.erosion_min_slope) + 1e-6),
+                    0.0,
+                    1.0,
+                );
+                erode_amount * params.hydraulic_deposit_rate * flattening
+            } else if height[n] > params.shallow_sea_floor {
+                erode_amount * params.hydraulic_deposit_rate * params.coastal_deposit_rate
+            } else {
+                0.0
+            };
+
+            if deposit_amount > 0.0 {
+                delta[n] += deposit_amount;
+            }
+        }
+
+        for i in 0..v_count {
+            next_height[i] = clamp(height[i] + delta[i], -1.2, 1.2);
+        }
+        height.copy_from_slice(&next_height);
+    }
+}
+
+fn compute_river_flux_and_next(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
     river_rain_base: f32,
-    river_accum_threshold: f32,
 ) -> (Vec<f32>, Vec<i32>) {
     let v_count = positions.len();
     let rain = build_precipitation_map(positions, nbr_offsets, nbrs, height, river_rain_base);
@@ -1159,7 +1287,6 @@ fn generate_rivers(
 
     for i in 0..v_count {
         if height[i] <= 0.0 {
-            river_next[i] = -1;
             continue;
         }
 
@@ -1198,8 +1325,25 @@ fn generate_rivers(
         .fold(0.0_f32, |acc, v| if v > acc { v } else { acc })
         .max(1e-6);
 
-    for i in 0..v_count {
-        river_flux[i] /= max_flux;
+    for value in &mut river_flux {
+        *value /= max_flux;
+    }
+
+    (river_flux, river_next)
+}
+
+fn generate_rivers(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    river_rain_base: f32,
+    river_accum_threshold: f32,
+) -> (Vec<f32>, Vec<i32>) {
+    let (mut river_flux, mut river_next) =
+        compute_river_flux_and_next(positions, nbr_offsets, nbrs, height, river_rain_base);
+
+    for i in 0..positions.len() {
         if river_flux[i] < river_accum_threshold {
             river_flux[i] = 0.0;
         }
@@ -1626,6 +1770,7 @@ mod tests {
             params.smooth_iter,
             params.smooth_lambda,
         );
+        super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, params);
         super::postprocess_height(
             &nbr_offsets,
             &nbrs,
@@ -1694,5 +1839,21 @@ mod tests {
         for (ha, hb) in a.height.iter().zip(b.height.iter()) {
             assert!((ha - hb).abs() <= 1e-6);
         }
+    }
+
+    #[test]
+    fn hydraulic_erosion_is_noop_when_iter_zero() {
+        let (positions, indices) = generate_icosphere(2);
+        let (nbr_offsets, nbrs) = super::build_neighbors(positions.len(), &indices);
+        let mut height = positions.iter().map(|p| p[1] * 0.2 + 0.05).collect::<Vec<_>>();
+        let original = height.clone();
+
+        let params = TerrainParams {
+            erosion_iter: 0,
+            ..TerrainParams::default()
+        };
+
+        super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, &params);
+        assert_eq!(height, original);
     }
 }

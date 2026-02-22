@@ -28,6 +28,14 @@ pub struct TerrainParams {
     pub smooth_lambda: f32,           // 平滑化係数（既定 0.35）
     pub river_rain_base: f32,         // 降水ベース（既定 0.5）
     pub river_accum_threshold: f32,   // 河川成立閾値（既定 0.015）
+    pub erosion_iter: u32,            // 水食侵食反復（既定 12）
+    pub hydraulic_erode_rate: f32,    // 侵食率（既定 0.020）
+    pub hydraulic_deposit_rate: f32,  // 堆積率（既定 0.35）
+    pub sediment_capacity_gain: f32,  // 土砂容量係数（既定 0.90）
+    pub erosion_min_slope: f32,       // 最小勾配（既定 0.002）
+    pub erosion_max_delta_per_iter: f32, // 1反復の最大変化量（既定 0.015）
+    pub coastal_deposit_rate: f32,    // 沿岸・浅海堆積率（既定 0.45）
+    pub shallow_sea_floor: f32,       // 浅海閾値（既定 -0.08）
 }
 ```
 
@@ -50,6 +58,7 @@ seedがearthの場合は生成を行わず、プリセット地形を返す。
 
 - 乱数生成器は固定アルゴリズムの疑似乱数を使う
 - 初期化シードはseedとparamsを正規化した文字列から計算する
+- 侵食パラメータもparams正規化文字列へ含める
 - 同一入力でplate_id一致、heightは実用上同一の再現性を目標とする
 
 ## 4. 生成手順
@@ -114,12 +123,25 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 
 ラプラシアン平滑化を反復適用する。境界上は平滑化係数を下げ、地形コントラストを保つ。
 
-### 4.9 海面再調整と後処理
+### 4.9 水食侵食（簡易）
+
+平滑化後の地形に対し、球面メッシュ上のセル型水食侵食を適用する。
+
+1. 各反復で暫定河川（river_next, river_flux）を再計算する
+2. 陸セル（height > 0）のみを侵食対象にする
+3. 流量と勾配から侵食量を計算し、1反復の変化量に上限をかける
+4. 下流の平坦化や終端で堆積を発生させる
+5. 海への流出は基本的に系外へ捨てるが、沿岸・浅海セルには減衰付きで堆積を許可する
+6. 更新はバッファ方式で同時反映する
+
+湖・内陸盆地の溢流や海底全体の侵食は、この段階では扱わない。
+
+### 4.10 海面再調整と後処理
 
 固定sea_levelではなく、分位点から海面を再推定して全体の海陸バランスを調整する。
 その後、海岸付近と低標高域に抑制をかけ、海岸線の山脈化や標高差の過剰を防ぐ。
 
-### 4.10 河川生成
+### 4.11 河川生成
 
 1. 緯度依存の降水を計算
 2. 最急降下先をriver_nextとして設定
@@ -167,6 +189,7 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 - プレート分割の多源伝播はO(E log V)
 - 境界補正の減衰拡散はO(E)
 - 平滑化はO(smooth_iter * E)
+- 水食侵食は各反復で河川再計算を含み、おおむねO(erosion_iter * (V log V + E))
 - 河川集水は高さソートを含みO(V log V)
 
-L_maxとsmooth_iterを固定した運用では、全体の支配項はおおむねV log Vになる。
+L_max、smooth_iter、erosion_iterを固定した運用では、全体の支配項はおおむねV log Vになる。

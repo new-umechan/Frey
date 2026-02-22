@@ -19,6 +19,14 @@ const TERRAIN_PARAMS = {
     smooth_lambda: 0.38,
     river_rain_base: 0.5,
     river_accum_threshold: 0.035,
+    erosion_iter: 12,
+    hydraulic_erode_rate: 0.02,
+    hydraulic_deposit_rate: 0.35,
+    sediment_capacity_gain: 0.9,
+    erosion_min_slope: 0.002,
+    erosion_max_delta_per_iter: 0.015,
+    coastal_deposit_rate: 0.45,
+    shallow_sea_floor: -0.08,
 };
 
 async function bootstrap() {
