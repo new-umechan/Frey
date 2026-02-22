@@ -1153,14 +1153,9 @@ fn generate_rivers(
     river_accum_threshold: f32,
 ) -> (Vec<f32>, Vec<i32>) {
     let v_count = positions.len();
-    let mut rain = vec![0.0; v_count];
+    let rain = build_precipitation_map(positions, nbr_offsets, nbrs, height, river_rain_base);
     let mut river_next = vec![-1; v_count];
     let mut river_flux = vec![0.0; v_count];
-
-    for i in 0..v_count {
-        let lat = clamp(positions[i][1], -1.0, 1.0).asin();
-        rain[i] = river_rain_base * (1.0 - lat.abs() / (std::f32::consts::PI * 0.5)).max(0.0);
-    }
 
     for i in 0..v_count {
         if height[i] <= 0.0 {
@@ -1214,6 +1209,123 @@ fn generate_rivers(
     }
 
     (river_flux, river_next)
+}
+
+fn build_precipitation_map(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    river_rain_base: f32,
+) -> Vec<f32> {
+    let mut rain = vec![0.0; positions.len()];
+
+    for i in 0..positions.len() {
+        let p = positions[i];
+        let lat = clamp(p[1], -1.0, 1.0).asin();
+
+        let lat_factor = (1.0 - lat.abs() / (std::f32::consts::PI * 0.5)).max(0.0);
+        let altitude_factor = 1.0 + 0.20 * height[i].max(0.0);
+
+        let wind_dir = prevailing_wind_dir(p, lat);
+        let (upwind_h, downwind_h) =
+            directional_neighbor_heights(i, positions, nbr_offsets, nbrs, height, wind_dir);
+
+        let slope_signal = clamp((downwind_h - upwind_h) / 0.20, -1.0, 1.0);
+        let windward_boost = slope_signal.max(0.0);
+        let leeward_drop = (-slope_signal).max(0.0);
+        let barrier_strength = upwind_h.max(0.0);
+
+        let orographic_factor = clamp(
+            1.0
+                + 0.60 * windward_boost * (1.0 + 0.6 * height[i].max(0.0))
+                - 1.10 * leeward_drop * (1.0 + 0.8 * barrier_strength),
+            0.12,
+            2.20,
+        );
+
+        rain[i] = river_rain_base * lat_factor * altitude_factor * orographic_factor;
+    }
+
+    rain
+}
+
+fn prevailing_wind_dir(p: [f32; 3], lat: f32) -> [f32; 3] {
+    let abs_lat = lat.abs();
+    let zonal_sign = if abs_lat < std::f32::consts::FRAC_PI_6 {
+        -1.0
+    } else if abs_lat < std::f32::consts::PI / 3.0 {
+        1.0
+    } else {
+        -1.0
+    };
+
+    let mut east = [-p[2], 0.0, p[0]];
+    if length3(east) < 1e-6 {
+        east = project_to_tangent([1.0, 0.0, 0.0], p);
+    }
+    east = normalize3(east);
+
+    let pole = if lat >= 0.0 {
+        [0.0, 1.0, 0.0]
+    } else {
+        [0.0, -1.0, 0.0]
+    };
+    let meridional = normalize3(project_to_tangent(pole, p));
+    let meridional_sign = if abs_lat < std::f32::consts::FRAC_PI_6 {
+        -1.0
+    } else {
+        0.35
+    };
+
+    normalize3(add3(
+        mul3(east, zonal_sign),
+        mul3(meridional, 0.25 * meridional_sign),
+    ))
+}
+
+fn directional_neighbor_heights(
+    i: usize,
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    wind_dir: [f32; 3],
+) -> (f32, f32) {
+    let p = positions[i];
+    let start = nbr_offsets[i] as usize;
+    let end = nbr_offsets[i + 1] as usize;
+
+    let mut up_sum = 0.0;
+    let mut up_w = 0.0;
+    let mut down_sum = 0.0;
+    let mut down_w = 0.0;
+
+    for &n in &nbrs[start..end] {
+        let n = n as usize;
+        let edge = sub3(positions[n], p);
+        let tangent = project_to_tangent(edge, p);
+        let len = length3(tangent);
+        if len < 1e-6 {
+            continue;
+        }
+        let dir = [tangent[0] / len, tangent[1] / len, tangent[2] / len];
+        let score = dot3(dir, wind_dir);
+
+        if score > 0.15 {
+            let w = score * score;
+            down_sum += height[n] * w;
+            down_w += w;
+        } else if score < -0.15 {
+            let w = score * score;
+            up_sum += height[n] * w;
+            up_w += w;
+        }
+    }
+
+    let upwind_h = if up_w > 0.0 { up_sum / up_w } else { height[i] };
+    let downwind_h = if down_w > 0.0 { down_sum / down_w } else { height[i] };
+    (upwind_h, downwind_h)
 }
 
 fn earth_preset(
@@ -1409,6 +1521,14 @@ fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
+fn add3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+fn mul3(v: [f32; 3], s: f32) -> [f32; 3] {
+    [v[0] * s, v[1] * s, v[2] * s]
+}
+
 fn length3(v: [f32; 3]) -> f32 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
 }
@@ -1420,6 +1540,10 @@ fn normalize3(v: [f32; 3]) -> [f32; 3] {
     } else {
         [v[0] / len, v[1] / len, v[2] / len]
     }
+}
+
+fn project_to_tangent(v: [f32; 3], normal: [f32; 3]) -> [f32; 3] {
+    sub3(v, mul3(normal, dot3(v, normal)))
 }
 
 fn chord_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
