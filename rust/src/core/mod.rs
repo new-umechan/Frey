@@ -38,7 +38,12 @@ struct QueueState {
 struct PlateGrowthProfile {
     spread: f32,
     preferred_axis: [f32; 3],
+    secondary_axis: [f32; 3],
+    axis_blend_axis: [f32; 3],
     anisotropy: f32,
+    roughness: f32,
+    warp_weights: [f32; 3],
+    warp_gain: f32,
 }
 
 struct BoundaryVertices {
@@ -133,15 +138,20 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
     let plate_count = choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
     let seeds = pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
     let growth_profiles = build_plate_growth_profiles(plate_count, &mut rng);
+    let plate_cost_warp_basis =
+        generate_plate_cost_warp_basis(positions.len(), &nbr_offsets, &nbrs, &mut rng);
     let mut plate_id = partition_plates(
         &positions,
         &phi,
+        &plate_cost_warp_basis,
         &nbr_offsets,
         &nbrs,
         &seeds,
         &growth_profiles,
         params.boundary_band,
     );
+    plate_id = compact_plate_ids(plate_id, plate_count);
+    cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
     plate_id = compact_plate_ids(plate_id, plate_count);
     let plate_boundary_proximity =
         compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
@@ -614,12 +624,19 @@ fn pick_plate_seeds(
     let k_down = plate_count - k_up;
 
     let mut seeds = Vec::<usize>::with_capacity(plate_count);
-    seeds.extend(max_candidates.iter().take(k_up).copied());
-    seeds.extend(min_candidates.iter().take(k_down).copied());
+    let mut min_spacing = estimate_seed_min_spacing(plate_count);
+    for _ in 0..5 {
+        take_spaced_candidates(&mut seeds, &max_candidates, positions, k_up, min_spacing);
+        take_spaced_candidates(&mut seeds, &min_candidates, positions, k_up + k_down, min_spacing);
+        if seeds.len() >= plate_count {
+            break;
+        }
+        min_spacing *= 0.82;
+    }
 
     while seeds.len() < plate_count {
         let next = farthest_point_seed(positions, &seeds, rng);
-        if !seeds.contains(&next) {
+        if !seeds.contains(&next) && is_seed_far_enough(positions, &seeds, next, min_spacing * 0.7) {
             seeds.push(next);
         } else {
             break;
@@ -631,10 +648,71 @@ fn pick_plate_seeds(
     }
 
     while seeds.len() < plate_count {
-        seeds.push(rng.gen_range_usize(0, phi.len()));
+        let mut next = rng.gen_range_usize(0, phi.len());
+        let mut attempts = 0;
+        while attempts < 12 && (seeds.contains(&next) || !is_seed_far_enough(positions, &seeds, next, min_spacing * 0.45))
+        {
+            next = rng.gen_range_usize(0, phi.len());
+            attempts += 1;
+        }
+        if seeds.contains(&next) {
+            if let Some(fallback) = (0..phi.len()).find(|&i| !seeds.contains(&i)) {
+                next = fallback;
+            } else {
+                break;
+            }
+        }
+        if !seeds.contains(&next) {
+            seeds.push(next);
+        } else {
+            break;
+        }
     }
 
     seeds
+}
+
+fn estimate_seed_min_spacing(plate_count: usize) -> f32 {
+    let n = plate_count.max(2) as f32;
+    let target_angle = (4.0 * std::f32::consts::PI / n).sqrt() * 0.55;
+    clamp((2.0 - 2.0 * target_angle.cos()).max(0.0).sqrt(), 0.10, 0.75)
+}
+
+fn is_seed_far_enough(
+    positions: &[[f32; 3]],
+    seeds: &[usize],
+    candidate: usize,
+    min_spacing: f32,
+) -> bool {
+    for &s in seeds {
+        if chord_distance(positions[candidate], positions[s]) < min_spacing {
+            return false;
+        }
+    }
+    true
+}
+
+fn take_spaced_candidates(
+    seeds: &mut Vec<usize>,
+    candidates: &[usize],
+    positions: &[[f32; 3]],
+    target_len: usize,
+    min_spacing: f32,
+) {
+    if seeds.len() >= target_len {
+        return;
+    }
+    for &candidate in candidates {
+        if seeds.len() >= target_len {
+            break;
+        }
+        if seeds.contains(&candidate) {
+            continue;
+        }
+        if is_seed_far_enough(positions, seeds, candidate, min_spacing) {
+            seeds.push(candidate);
+        }
+    }
 }
 
 fn farthest_point_seed(
@@ -669,19 +747,111 @@ fn farthest_point_seed(
     best_idx
 }
 
-fn build_plate_growth_profiles(
-    plate_count: usize,
-    rng: &mut DeterministicRng,
-) -> Vec<PlateGrowthProfile> {
+fn build_plate_growth_profiles(plate_count: usize, rng: &mut DeterministicRng) -> Vec<PlateGrowthProfile> {
     let mut profiles = Vec::with_capacity(plate_count);
     for _ in 0..plate_count {
+        let mut warp_weights = [
+            rng.gen_range_f32(-1.0, 1.0),
+            rng.gen_range_f32(-1.0, 1.0),
+            rng.gen_range_f32(-1.0, 1.0),
+        ];
+        let norm = (warp_weights[0] * warp_weights[0]
+            + warp_weights[1] * warp_weights[1]
+            + warp_weights[2] * warp_weights[2])
+            .sqrt()
+            .max(1e-6);
+        for w in &mut warp_weights {
+            *w /= norm;
+        }
         profiles.push(PlateGrowthProfile {
             spread: rng.gen_range_f32(0.65, 1.45),
             preferred_axis: random_unit_vector3(rng),
-            anisotropy: rng.gen_range_f32(0.10, 0.65),
+            secondary_axis: random_unit_vector3(rng),
+            axis_blend_axis: random_unit_vector3(rng),
+            anisotropy: rng.gen_range_f32(0.25, 0.95),
+            roughness: rng.gen_range_f32(0.10, 0.30),
+            warp_weights,
+            warp_gain: rng.gen_range_f32(0.18, 0.42),
         });
     }
     profiles
+}
+
+fn edge_noise_signed(a: usize, b: usize, plate: usize) -> f32 {
+    let (lo, hi) = if a <= b { (a as u64, b as u64) } else { (b as u64, a as u64) };
+    let mut x = lo
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(hi.wrapping_mul(0xBF58_476D_1CE4_E5B9))
+        .wrapping_add((plate as u64).wrapping_mul(0x94D0_49BB_1331_11EB));
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^= x >> 31;
+    let u = ((x >> 40) as u32) as f32 / 16_777_215.0;
+    2.0 * u - 1.0
+}
+
+fn generate_plate_cost_warp_basis(
+    count: usize,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    rng: &mut DeterministicRng,
+) -> [Vec<f32>; 3] {
+    let mut a = generate_smoothed_noise_band(count, nbr_offsets, nbrs, 6, 15, rng);
+    let mut b = generate_smoothed_noise_band(count, nbr_offsets, nbrs, 2, 6, rng);
+    let mut c = generate_smoothed_noise_band(count, nbr_offsets, nbrs, 1, 3, rng);
+    normalize_zscore_if_var(&mut a);
+    normalize_zscore_if_var(&mut b);
+    normalize_zscore_if_var(&mut c);
+    smooth_scalar_field(nbr_offsets, nbrs, &mut a, 1);
+    smooth_scalar_field(nbr_offsets, nbrs, &mut b, 1);
+    smooth_scalar_field(nbr_offsets, nbrs, &mut c, 1);
+    normalize_zscore_if_var(&mut a);
+    normalize_zscore_if_var(&mut b);
+    normalize_zscore_if_var(&mut c);
+    for i in 0..count {
+        b[i] *= 1.30;
+        c[i] *= 1.15;
+    }
+    [a, b, c]
+}
+
+fn sample_plate_warp_mid(
+    profile: &PlateGrowthProfile,
+    basis: &[Vec<f32>; 3],
+    v0: usize,
+    v1: usize,
+) -> f32 {
+    let mut acc = 0.0;
+    for i in 0..3 {
+        let mid = 0.5 * (basis[i][v0] + basis[i][v1]);
+        acc += profile.warp_weights[i] * mid;
+    }
+    acc
+}
+
+fn local_preferred_tangent_axis(
+    profile: &PlateGrowthProfile,
+    position: [f32; 3],
+    edge_dir: [f32; 3],
+) -> [f32; 3] {
+    let blend = 0.5 + 0.5 * clamp(dot3(position, profile.axis_blend_axis), -1.0, 1.0);
+    let mixed = normalize3(add3(
+        mul3(profile.preferred_axis, 1.0 - blend),
+        mul3(profile.secondary_axis, blend),
+    ));
+    let tangent = normalize3(project_to_tangent(mixed, position));
+    if length3(tangent) <= 1e-6 {
+        let fallback = normalize3(project_to_tangent(profile.preferred_axis, position));
+        if length3(fallback) <= 1e-6 {
+            edge_dir
+        } else {
+            fallback
+        }
+    } else {
+        tangent
+    }
 }
 
 fn random_unit_vector3(rng: &mut DeterministicRng) -> [f32; 3] {
@@ -701,6 +871,7 @@ fn random_unit_vector3(rng: &mut DeterministicRng) -> [f32; 3] {
 fn partition_plates(
     positions: &[[f32; 3]],
     phi: &[f32],
+    plate_cost_warp_basis: &[Vec<f32>; 3],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     seeds: &[usize],
@@ -736,13 +907,23 @@ fn partition_plates(
             let profile = &growth_profiles[state.plate];
             let spread = profile.spread.max(0.35);
             let edge_dir = normalize3(sub3(positions[n], positions[state.vertex]));
-            let tangent_axis = normalize3(project_to_tangent(
-                profile.preferred_axis,
-                positions[state.vertex],
-            ));
+            let tangent_axis =
+                local_preferred_tangent_axis(profile, positions[state.vertex], edge_dir);
             let alignment = dot3(edge_dir, tangent_axis).abs();
             let directional_factor = 1.0 + profile.anisotropy * (1.0 - clamp(alignment, 0.0, 1.0));
-            let next_cost = state.cost + edge_len * (1.0 + penalty) * directional_factor / spread;
+            let phi_discount = clamp(1.0 - 0.18 * phi_mid, 0.68, 1.30);
+            let warp_mid = sample_plate_warp_mid(profile, plate_cost_warp_basis, state.vertex, n);
+            let warp_factor = clamp(1.0 + profile.warp_gain * warp_mid, 0.62, 1.45);
+            let random_factor =
+                1.0 + profile.roughness * edge_noise_signed(state.vertex, n, state.plate);
+            let next_cost = state.cost
+                + edge_len
+                    * (1.0 + penalty)
+                    * directional_factor
+                    * phi_discount
+                    * warp_factor
+                    * random_factor
+                    / spread;
 
             if next_cost + 1e-7 < best_cost[n] {
                 best_cost[n] = next_cost;
@@ -772,6 +953,151 @@ fn partition_plates(
     }
 
     plate_id
+}
+
+fn cleanup_plate_components(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &mut [u32],
+    plate_count: usize,
+) {
+    if plate_id.is_empty() || plate_count == 0 {
+        return;
+    }
+    let small_component_max = (plate_id.len() / (plate_count.max(1) * 18)).clamp(6, 64);
+
+    for _ in 0..6 {
+        let largest = largest_component_sizes_by_plate(nbr_offsets, nbrs, plate_id, plate_count);
+        let mut visited = vec![false; plate_id.len()];
+        let mut stack = Vec::<usize>::new();
+        let mut relabel = Vec::<(usize, u32)>::new();
+        let mut changed = false;
+
+        for start_v in 0..plate_id.len() {
+            if visited[start_v] {
+                continue;
+            }
+            let plate = plate_id[start_v];
+            if (plate as usize) >= plate_count {
+                visited[start_v] = true;
+                continue;
+            }
+
+            let mut component = Vec::<usize>::new();
+            stack.push(start_v);
+            visited[start_v] = true;
+
+            while let Some(v) = stack.pop() {
+                component.push(v);
+                let start = nbr_offsets[v] as usize;
+                let end = nbr_offsets[v + 1] as usize;
+                for &n in &nbrs[start..end] {
+                    let n = n as usize;
+                    if visited[n] || plate_id[n] != plate {
+                        continue;
+                    }
+                    visited[n] = true;
+                    stack.push(n);
+                }
+            }
+
+            let mut neighbor_counts = vec![0usize; plate_count];
+            let mut unique_neighbors = 0usize;
+            let mut best_neighbor = None::<usize>;
+            let mut best_touch = 0usize;
+
+            for &v in &component {
+                let start = nbr_offsets[v] as usize;
+                let end = nbr_offsets[v + 1] as usize;
+                for &n in &nbrs[start..end] {
+                    let n = n as usize;
+                    let other = plate_id[n] as usize;
+                    if other >= plate_count || other == plate as usize {
+                        continue;
+                    }
+                    if neighbor_counts[other] == 0 {
+                        unique_neighbors += 1;
+                    }
+                    neighbor_counts[other] += 1;
+                    if neighbor_counts[other] > best_touch {
+                        best_touch = neighbor_counts[other];
+                        best_neighbor = Some(other);
+                    }
+                }
+            }
+
+            let is_enclave = unique_neighbors == 1 && best_neighbor.is_some();
+            let is_small_fragment = component.len() <= small_component_max
+                && component.len() < largest[plate as usize];
+
+            if !(is_enclave || is_small_fragment) {
+                continue;
+            }
+
+            let target = match best_neighbor {
+                Some(v) => v as u32,
+                None => continue,
+            };
+            for &v in &component {
+                relabel.push((v, target));
+            }
+        }
+
+        for (v, new_plate) in relabel {
+            if plate_id[v] != new_plate {
+                plate_id[v] = new_plate;
+                changed = true;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+}
+
+fn largest_component_sizes_by_plate(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    plate_count: usize,
+) -> Vec<usize> {
+    let mut largest = vec![0usize; plate_count];
+    let mut visited = vec![false; plate_id.len()];
+    let mut stack = Vec::<usize>::new();
+
+    for start_v in 0..plate_id.len() {
+        if visited[start_v] {
+            continue;
+        }
+        visited[start_v] = true;
+        let plate = plate_id[start_v] as usize;
+        if plate >= plate_count {
+            continue;
+        }
+
+        let mut size = 0usize;
+        stack.push(start_v);
+        while let Some(v) = stack.pop() {
+            size += 1;
+            let start = nbr_offsets[v] as usize;
+            let end = nbr_offsets[v + 1] as usize;
+            for &n in &nbrs[start..end] {
+                let n = n as usize;
+                if visited[n] || plate_id[n] as usize != plate {
+                    continue;
+                }
+                visited[n] = true;
+                stack.push(n);
+            }
+        }
+
+        if size > largest[plate] {
+            largest[plate] = size;
+        }
+    }
+
+    largest
 }
 
 fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> Vec<u32> {
@@ -1417,15 +1743,21 @@ mod tests {
         let seeds =
             super::pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
         let growth_profiles = super::build_plate_growth_profiles(plate_count, &mut rng);
-        let plate_id = super::partition_plates(
+        let plate_cost_warp_basis =
+            super::generate_plate_cost_warp_basis(positions.len(), &nbr_offsets, &nbrs, &mut rng);
+        let mut plate_id = super::partition_plates(
             &positions,
             &phi,
+            &plate_cost_warp_basis,
             &nbr_offsets,
             &nbrs,
             &seeds,
             &growth_profiles,
             params.boundary_band,
         );
+        plate_id = super::compact_plate_ids(plate_id, plate_count);
+        super::cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
+        plate_id = super::compact_plate_ids(plate_id, plate_count);
 
         let attributes =
             super::assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);

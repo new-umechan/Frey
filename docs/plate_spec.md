@@ -83,9 +83,15 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 ### 4.3 プレートseed抽出
 
 1. phiの局所極大・極小を検出
-2. 極大と極小から必要数を採用
-3. 極値不足時はfarthest-pointで補完
-4. プレート数はnum_plates_minからnum_plates_maxの範囲でseed依存に決定
+2. 極大と極小から必要数を採用するが、seed同士の最小距離制約を課す
+3. 制約が厳し過ぎて不足する場合は段階的に距離閾値を緩和する
+4. 極値不足時はfarthest-pointで補完（同様に距離制約を優先）
+5. 最後に不足が残る場合のみ乱数で補完
+6. プレート数はnum_plates_minからnum_plates_maxの範囲でseed依存に決定
+
+意図:
+- seed近接による「小さいプレートが大きいプレート内に発生しやすい」状態を減らす
+- プレートサイズの極端な偏りを抑える
 
 ### 4.4 プレート分割
 
@@ -93,21 +99,32 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 2. 伝播コストは辺長、境界ペナルティ、plateごとの拡張係数で決める
 3. さらに各plateに「成長しやすい向き（preferred growth axis）」と異方性強度を持たせる
 4. 辺方向が好みの向きに沿うほどコストを下げ、直交するほどコストを上げる
-5. 未到達頂点は最短seedに再割当
+5. エッジ単位の決定的乱数ゆらぎを加える
+6. 頂点上の空間相関ノイズ場（低周波+中周波）で伝播コストを歪める
+7. phiが高い領域ほど伝播コストを割引する
+8. 未到達頂点は最短seedに再割当
+9. 分割後、連結成分ベースの飛び地/入れ子除去を行う
+10. 小さな飛び地成分、または単一プレートに完全に囲まれた成分を隣接プレートへ吸収する（反復）
 
 方向依存コストの意図:
 - プレート境界を単純なVoronoi状から崩し、細長い/方向性のあるプレート形状を作る
 - 異方性はプレートごとにランダムに与えるが、seedとparamsに対して決定的である
+- 空間相関ノイズにより、局所的なギザギザではなく大局的に歪んだ境界を作る
+- 飛び地/入れ子除去により、プレートの連結性と見た目の自然さを改善する
 
 概念式（簡略）:
 
 ```text
 step_cost = edge_len * (1 + boundary_penalty) / spread
 direction_factor = 1 + anisotropy * (1 - |dot(edge_dir, tangent(preferred_axis))|)
-next_cost = prev_cost + step_cost * direction_factor
+phi_factor = clamp(1 - k_phi * phi_mid, min_phi_factor, max_phi_factor)
+warp_factor = clamp(1 + k_warp * warp_mid, min_warp_factor, max_warp_factor)
+random_factor = 1 + roughness * edge_noise(edge, plate)
+next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor * random_factor
 ```
 
 ここで `tangent(preferred_axis)` は現在頂点の接平面へ射影した向き。
+`warp_mid` は隣接2頂点の空間相関ノイズ場の平均値。
 
 ### 4.5 プレート属性付与
 
