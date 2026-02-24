@@ -1,6 +1,12 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
+import { collectAppElements } from "./app/dom.js";
+import { createGlobeScene, resizeViewport } from "./app/scene.js";
+import {
+    buildRenderPositions,
+    buildVertexColors,
+    summarizeTerrain,
+} from "./app/terrain-visuals.js";
 
 const LEVEL = 6;
 const DEFAULT_TERRAIN_SEED = "alpha";
@@ -30,38 +36,18 @@ const TERRAIN_PARAMS = {
     shallow_sea_floor: -0.08,
 };
 
-function requireElement(id, type) {
-    const element = document.getElementById(id);
-    if (!(element instanceof type)) {
-        throw new Error(`required DOM element is missing: #${id}`);
-    }
-    return element;
-}
-
 async function bootstrap() {
-    const appShell = requireElement("mesh-canvas", HTMLCanvasElement).closest(".app-shell");
-    const canvas = requireElement("mesh-canvas", HTMLCanvasElement);
-    const viewportPanel = requireElement("viewport-panel", HTMLDivElement);
-    const seedForm = requireElement("seed-form", HTMLFormElement);
-    const seedInput = requireElement("seed-input", HTMLInputElement);
-    const sidebarToggle = requireElement("sidebar-toggle", HTMLButtonElement);
-    const statusMessage = requireElement("status-message", HTMLElement);
-    const viewModeInputs = Array.from(
-        document.querySelectorAll('input[name="view-mode"]'),
-    ).filter((input) => input instanceof HTMLInputElement);
-
-    if (!(appShell instanceof HTMLElement)) {
-        throw new Error("required app shell is missing");
-    }
-
-    const statFields = {
-        vertices: requireElement("stat-vertices", HTMLElement),
-        triangles: requireElement("stat-triangles", HTMLElement),
-        level: requireElement("stat-level", HTMLElement),
-        seed: requireElement("stat-seed", HTMLElement),
-        plates: requireElement("stat-plates", HTMLElement),
-        land: requireElement("stat-land", HTMLElement),
-    };
+    const {
+        appShell,
+        canvas,
+        viewportPanel,
+        seedForm,
+        seedInput,
+        sidebarToggle,
+        statusMessage,
+        viewModeInputs,
+        statFields,
+    } = collectAppElements();
 
     function setStatus(message) {
         statusMessage.textContent = message;
@@ -83,115 +69,12 @@ async function bootstrap() {
     const basePositions = new Float32Array(mesh.positions);
     const indices = new Uint32Array(mesh.indices);
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#e8edf3");
-
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 2.7);
-
-    const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        canvas,
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 1.2;
-    controls.maxDistance = 6.0;
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-
-    const material = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.95,
-        metalness: 0.02,
-    });
-
-    const sphere = new THREE.Mesh(geometry, material);
-    scene.add(sphere);
-
-    const wireframe = new THREE.Mesh(
-        geometry,
-        new THREE.MeshBasicMaterial({
-            color: "#2f2b22",
-            wireframe: true,
-            transparent: true,
-            opacity: 0.08,
-        }),
-    );
-    scene.add(wireframe);
-
-    const keyLight = new THREE.DirectionalLight("#f1f6ff", 1.05);
-    keyLight.position.set(1.3, 1.4, 1.2);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight("#c8daf1", 0.55);
-    fillLight.position.set(-1.5, -0.5, -1.2);
-    scene.add(fillLight);
-
-    const ambient = new THREE.AmbientLight("#eef2f8", 0.42);
-    scene.add(ambient);
-
-    const haloGeometry = new THREE.SphereGeometry(1.01, 64, 64);
-    const haloMaterial = new THREE.MeshBasicMaterial({
-        color: "#8390a3",
-        transparent: true,
-        opacity: 0.08,
-    });
-    const halo = new THREE.Mesh(haloGeometry, haloMaterial);
-    scene.add(halo);
+    const { scene, camera, renderer, controls, geometry } = createGlobeScene(canvas, indices);
 
     let generationToken = 0;
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentTerrainData = null;
-
-    function plateModeColor(plate, heightValue) {
-        const hue = ((plate * 137.508) % 360) / 360;
-        const saturation = 0.58;
-        const lightness = heightValue > 0.0 ? 0.54 : 0.38;
-        return new THREE.Color().setHSL(hue, saturation, lightness);
-    }
-
-    function buildVertexColors(heightData, plateId, riverFlux, viewMode) {
-        const colors = new Float32Array(heightData.length * 3);
-
-        for (let v = 0; v < heightData.length; v += 1) {
-            const h = heightData[v];
-            const river = riverFlux[v];
-            let color;
-
-            if (viewMode === "plates") {
-                color = plateModeColor(plateId[v], h);
-                if (h <= 0.0) {
-                    color.lerp(new THREE.Color("#0e2847"), 0.25);
-                }
-            } else if (h <= 0.0) {
-                color = new THREE.Color("#12406a");
-            } else {
-                const t = Math.min(1.0, h);
-                color = new THREE.Color(
-                    THREE.MathUtils.lerp(0.18, 0.62, t),
-                    THREE.MathUtils.lerp(0.42, 0.56, t),
-                    THREE.MathUtils.lerp(0.20, 0.48, t),
-                );
-                if (river > 0.10 && h < 0.45) {
-                    color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
-                }
-            }
-
-            const i = v * 3;
-            colors[i] = color.r;
-            colors[i + 1] = color.g;
-            colors[i + 2] = color.b;
-        }
-
-        return colors;
-    }
 
     function applyCurrentViewColors() {
         if (!currentTerrainData) {
@@ -207,14 +90,7 @@ async function bootstrap() {
     }
 
     function onResize() {
-        const width = viewportPanel.clientWidth;
-        const height = viewportPanel.clientHeight;
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height);
+        resizeViewport(viewportPanel, camera, renderer);
     }
 
     async function updateTerrain(seed) {
@@ -231,24 +107,10 @@ async function bootstrap() {
         }
 
         const terrain = generate_terrain(nextSeed, TERRAIN_PARAMS);
-        const positions = new Float32Array(basePositions);
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
         const riverFlux = new Float32Array(terrain.river_flux);
-
-        for (let i = 0; i < positions.length; i += 3) {
-            const v = i / 3;
-            const h = heightData[v];
-            const x = positions[i];
-            const y = positions[i + 1];
-            const z = positions[i + 2];
-            const renderHeight = h > 0.0 ? h : 0.0;
-            const radius = 1.0 + renderHeight * 0.04;
-
-            positions[i] = x * radius;
-            positions[i + 1] = y * radius;
-            positions[i + 2] = z * radius;
-        }
+        const positions = buildRenderPositions(basePositions, heightData);
 
         if (token !== generationToken) {
             return;
@@ -264,9 +126,7 @@ async function bootstrap() {
         geometry.computeVertexNormals();
         geometry.computeBoundingSphere();
 
-        const plateCount = new Set(plateId).size;
-        const landRatio =
-            heightData.reduce((acc, h) => acc + (h > 0.0 ? 1 : 0), 0) / Math.max(1, heightData.length);
+        const { plateCount, landRatio } = summarizeTerrain(heightData, plateId);
 
         currentSeed = nextSeed;
         statFields.vertices.textContent = `${positions.length / 3}`;
