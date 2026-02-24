@@ -236,6 +236,48 @@ body {
     font-size: 0.8rem;
 }
 
+.view-mode-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+}
+
+.view-mode-option {
+    position: relative;
+    display: block;
+    cursor: pointer;
+}
+
+.view-mode-option input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.view-mode-option span {
+    display: block;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 0.45rem 0.5rem;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background: color-mix(in oklab, var(--panel), white 14%);
+}
+
+.view-mode-option input:checked + span {
+    color: var(--ink);
+    border-color: color-mix(in oklab, var(--accent), white 10%);
+    background: color-mix(in oklab, var(--accent-soft), white 35%);
+}
+
+.view-mode-option input:focus-visible + span {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
 #mesh-canvas {
     width: 100%;
     height: 100%;

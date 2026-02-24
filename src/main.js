@@ -4,6 +4,7 @@ import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
 
 const LEVEL = 6;
 const DEFAULT_TERRAIN_SEED = "alpha";
+const DEFAULT_VIEW_MODE = "normal";
 const TERRAIN_PARAMS = {
     level: LEVEL,
     l_max: 4,
@@ -45,6 +46,9 @@ async function bootstrap() {
     const seedInput = requireElement("seed-input", HTMLInputElement);
     const sidebarToggle = requireElement("sidebar-toggle", HTMLButtonElement);
     const statusMessage = requireElement("status-message", HTMLElement);
+    const viewModeInputs = Array.from(
+        document.querySelectorAll('input[name="view-mode"]'),
+    ).filter((input) => input instanceof HTMLInputElement);
 
     if (!(appShell instanceof HTMLElement)) {
         throw new Error("required app shell is missing");
@@ -143,6 +147,64 @@ async function bootstrap() {
 
     let generationToken = 0;
     let currentSeed = DEFAULT_TERRAIN_SEED;
+    let currentViewMode = DEFAULT_VIEW_MODE;
+    let currentTerrainData = null;
+
+    function plateModeColor(plate, heightValue) {
+        const hue = ((plate * 137.508) % 360) / 360;
+        const saturation = 0.58;
+        const lightness = heightValue > 0.0 ? 0.54 : 0.38;
+        return new THREE.Color().setHSL(hue, saturation, lightness);
+    }
+
+    function buildVertexColors(heightData, plateId, riverFlux, viewMode) {
+        const colors = new Float32Array(heightData.length * 3);
+
+        for (let v = 0; v < heightData.length; v += 1) {
+            const h = heightData[v];
+            const river = riverFlux[v];
+            let color;
+
+            if (viewMode === "plates") {
+                color = plateModeColor(plateId[v], h);
+                if (h <= 0.0) {
+                    color.lerp(new THREE.Color("#0e2847"), 0.25);
+                }
+            } else if (h <= 0.0) {
+                color = new THREE.Color("#12406a");
+            } else {
+                const t = Math.min(1.0, h);
+                color = new THREE.Color(
+                    THREE.MathUtils.lerp(0.18, 0.62, t),
+                    THREE.MathUtils.lerp(0.42, 0.56, t),
+                    THREE.MathUtils.lerp(0.20, 0.48, t),
+                );
+                if (river > 0.10 && h < 0.45) {
+                    color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
+                }
+            }
+
+            const i = v * 3;
+            colors[i] = color.r;
+            colors[i + 1] = color.g;
+            colors[i + 2] = color.b;
+        }
+
+        return colors;
+    }
+
+    function applyCurrentViewColors() {
+        if (!currentTerrainData) {
+            return;
+        }
+        const colors = buildVertexColors(
+            currentTerrainData.heightData,
+            currentTerrainData.plateId,
+            currentTerrainData.riverFlux,
+            currentViewMode,
+        );
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    }
 
     function onResize() {
         const width = viewportPanel.clientWidth;
@@ -173,7 +235,6 @@ async function bootstrap() {
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
         const riverFlux = new Float32Array(terrain.river_flux);
-        const colors = new Float32Array((positions.length / 3) * 3);
 
         for (let i = 0; i < positions.length; i += 3) {
             const v = i / 3;
@@ -183,30 +244,10 @@ async function bootstrap() {
             const z = positions[i + 2];
             const renderHeight = h > 0.0 ? h : 0.0;
             const radius = 1.0 + renderHeight * 0.04;
-            const river = riverFlux[v];
 
             positions[i] = x * radius;
             positions[i + 1] = y * radius;
             positions[i + 2] = z * radius;
-
-            let color;
-            if (h <= 0.0) {
-                color = new THREE.Color("#12406a");
-            } else {
-                const t = Math.min(1.0, h);
-                color = new THREE.Color(
-                    THREE.MathUtils.lerp(0.18, 0.62, t),
-                    THREE.MathUtils.lerp(0.42, 0.56, t),
-                    THREE.MathUtils.lerp(0.20, 0.48, t),
-                );
-                if (river > 0.10 && h < 0.45) {
-                    color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
-                }
-            }
-
-            colors[i] = color.r;
-            colors[i + 1] = color.g;
-            colors[i + 2] = color.b;
         }
 
         if (token !== generationToken) {
@@ -214,7 +255,12 @@ async function bootstrap() {
         }
 
         geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        currentTerrainData = {
+            heightData,
+            plateId,
+            riverFlux,
+        };
+        applyCurrentViewColors();
         geometry.computeVertexNormals();
         geometry.computeBoundingSphere();
 
@@ -247,6 +293,16 @@ async function bootstrap() {
         setSidebarOpen(!isOpen);
         requestAnimationFrame(onResize);
     });
+
+    for (const input of viewModeInputs) {
+        input.addEventListener("change", () => {
+            if (!input.checked) {
+                return;
+            }
+            currentViewMode = input.value === "plates" ? "plates" : "normal";
+            applyCurrentViewColors();
+        });
+    }
 
     seedForm.addEventListener("submit", async (event) => {
         event.preventDefault();
