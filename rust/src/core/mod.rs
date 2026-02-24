@@ -35,6 +35,12 @@ struct QueueState {
     plate: usize,
 }
 
+struct PlateGrowthProfile {
+    spread: f32,
+    preferred_axis: [f32; 3],
+    anisotropy: f32,
+}
+
 struct BoundaryVertices {
     mask: Vec<bool>,
     indices: Vec<usize>,
@@ -126,14 +132,14 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
 
     let plate_count = choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
     let seeds = pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
-    let spread_factors = build_plate_spread_factors(plate_count, &mut rng);
+    let growth_profiles = build_plate_growth_profiles(plate_count, &mut rng);
     let mut plate_id = partition_plates(
         &positions,
         &phi,
         &nbr_offsets,
         &nbrs,
         &seeds,
-        &spread_factors,
+        &growth_profiles,
         params.boundary_band,
     );
     plate_id = compact_plate_ids(plate_id, plate_count);
@@ -663,12 +669,33 @@ fn farthest_point_seed(
     best_idx
 }
 
-fn build_plate_spread_factors(plate_count: usize, rng: &mut DeterministicRng) -> Vec<f32> {
-    let mut factors = Vec::with_capacity(plate_count);
+fn build_plate_growth_profiles(
+    plate_count: usize,
+    rng: &mut DeterministicRng,
+) -> Vec<PlateGrowthProfile> {
+    let mut profiles = Vec::with_capacity(plate_count);
     for _ in 0..plate_count {
-        factors.push(rng.gen_range_f32(0.65, 1.45));
+        profiles.push(PlateGrowthProfile {
+            spread: rng.gen_range_f32(0.65, 1.45),
+            preferred_axis: random_unit_vector3(rng),
+            anisotropy: rng.gen_range_f32(0.10, 0.65),
+        });
     }
-    factors
+    profiles
+}
+
+fn random_unit_vector3(rng: &mut DeterministicRng) -> [f32; 3] {
+    let v = [
+        rng.standard_normal(),
+        rng.standard_normal(),
+        rng.standard_normal(),
+    ];
+    let n = normalize3(v);
+    if length3(n) <= 1e-6 {
+        [1.0, 0.0, 0.0]
+    } else {
+        n
+    }
 }
 
 fn partition_plates(
@@ -677,7 +704,7 @@ fn partition_plates(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     seeds: &[usize],
-    spread_factors: &[f32],
+    growth_profiles: &[PlateGrowthProfile],
     boundary_band: f32,
 ) -> Vec<u32> {
     let mut best_cost = vec![f32::INFINITY; positions.len()];
@@ -706,8 +733,16 @@ fn partition_plates(
             let edge_len = chord_distance(positions[state.vertex], positions[n]);
             let phi_mid = 0.5 * (phi[state.vertex] + phi[n]);
             let penalty = clamp(phi_mid.abs() / boundary_band, 0.0, 1.0);
-            let spread = spread_factors[state.plate].max(0.35);
-            let next_cost = state.cost + edge_len * (1.0 + penalty) / spread;
+            let profile = &growth_profiles[state.plate];
+            let spread = profile.spread.max(0.35);
+            let edge_dir = normalize3(sub3(positions[n], positions[state.vertex]));
+            let tangent_axis = normalize3(project_to_tangent(
+                profile.preferred_axis,
+                positions[state.vertex],
+            ));
+            let alignment = dot3(edge_dir, tangent_axis).abs();
+            let directional_factor = 1.0 + profile.anisotropy * (1.0 - clamp(alignment, 0.0, 1.0));
+            let next_cost = state.cost + edge_len * (1.0 + penalty) * directional_factor / spread;
 
             if next_cost + 1e-7 < best_cost[n] {
                 best_cost[n] = next_cost;
@@ -1381,14 +1416,14 @@ mod tests {
             super::choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
         let seeds =
             super::pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
-        let spread_factors = super::build_plate_spread_factors(plate_count, &mut rng);
+        let growth_profiles = super::build_plate_growth_profiles(plate_count, &mut rng);
         let plate_id = super::partition_plates(
             &positions,
             &phi,
             &nbr_offsets,
             &nbrs,
             &seeds,
-            &spread_factors,
+            &growth_profiles,
             params.boundary_band,
         );
 

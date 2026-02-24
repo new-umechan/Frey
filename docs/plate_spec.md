@@ -90,9 +90,24 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 ### 4.4 プレート分割
 
 1. 各seedから多源伝播でplate_idを決定
-2. 伝播コストは辺長と境界ペナルティで決める
-3. 追加でplateごとの拡張係数をかけ、プレート面積の均一化を避ける
-4. 未到達頂点は最短seedに再割当
+2. 伝播コストは辺長、境界ペナルティ、plateごとの拡張係数で決める
+3. さらに各plateに「成長しやすい向き（preferred growth axis）」と異方性強度を持たせる
+4. 辺方向が好みの向きに沿うほどコストを下げ、直交するほどコストを上げる
+5. 未到達頂点は最短seedに再割当
+
+方向依存コストの意図:
+- プレート境界を単純なVoronoi状から崩し、細長い/方向性のあるプレート形状を作る
+- 異方性はプレートごとにランダムに与えるが、seedとparamsに対して決定的である
+
+概念式（簡略）:
+
+```text
+step_cost = edge_len * (1 + boundary_penalty) / spread
+direction_factor = 1 + anisotropy * (1 - |dot(edge_dir, tangent(preferred_axis))|)
+next_cost = prev_cost + step_cost * direction_factor
+```
+
+ここで `tangent(preferred_axis)` は現在頂点の接平面へ射影した向き。
 
 ### 4.5 プレート属性付与
 
