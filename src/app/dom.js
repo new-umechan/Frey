@@ -26,7 +26,6 @@ export function collectAppElements() {
 
     const statFields = {
         vertices: requireElement("stat-vertices", HTMLElement),
-        triangles: requireElement("stat-triangles", HTMLElement),
         level: requireElement("stat-level", HTMLElement),
         seed: requireElement("stat-seed", HTMLElement),
         plates: requireElement("stat-plates", HTMLElement),

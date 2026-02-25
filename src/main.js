@@ -625,7 +625,6 @@ async function bootstrap() {
 
         currentSeed = nextSeed;
         statFields.vertices.textContent = `${basePositions.length / 3}`;
-        statFields.triangles.textContent = `${indices.length / 3}`;
         statFields.level.textContent = `${LEVEL}`;
         statFields.seed.textContent = currentSeed;
         statFields.plates.textContent = `${plateCount}`;
