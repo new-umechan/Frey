@@ -14,6 +14,8 @@ export function collectAppElements() {
     const seedInput = requireElement("seed-input", HTMLInputElement);
     const sidebarToggle = requireElement("sidebar-toggle", HTMLButtonElement);
     const statusMessage = requireElement("status-message", HTMLElement);
+    const plateHoverPopup = requireElement("plate-hover-popup", HTMLDivElement);
+    const debugToggleInput = requireElement("debug-mode-toggle", HTMLInputElement);
     const viewModeInputs = Array.from(
         document.querySelectorAll('input[name="view-mode"]'),
     ).filter((input) => input instanceof HTMLInputElement);
@@ -39,8 +41,9 @@ export function collectAppElements() {
         seedInput,
         sidebarToggle,
         statusMessage,
+        plateHoverPopup,
+        debugToggleInput,
         viewModeInputs,
         statFields,
     };
 }
-

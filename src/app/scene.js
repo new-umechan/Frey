@@ -70,6 +70,7 @@ export function createGlobeScene(canvas, indices) {
         renderer,
         controls,
         geometry,
+        sphere,
     };
 }
 
@@ -83,4 +84,3 @@ export function resizeViewport(viewportPanel, camera, renderer) {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
 }
-

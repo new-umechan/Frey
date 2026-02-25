@@ -119,11 +119,30 @@ body {
 }
 
 .viewport-panel {
+    position: relative;
     min-width: 0;
     min-height: 0;
     border: 1px solid var(--line);
     background: color-mix(in oklab, var(--panel), oklch(0.90 0.01 235) 18%);
     overflow: hidden;
+}
+
+.plate-hover-popup {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    min-width: 10.5rem;
+    max-width: min(18rem, calc(100% - 1rem));
+    padding: 0.45rem 0.55rem;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 15%);
+    background: color-mix(in oklab, var(--panel), white 16%);
+    color: var(--ink);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    pointer-events: none;
+    box-shadow: 0 8px 24px color-mix(in oklab, var(--ink), transparent 88%);
+    white-space: pre-line;
 }
 
 .sidebar {
@@ -278,6 +297,68 @@ body {
     outline-offset: 2px;
 }
 
+.toggle-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    cursor: pointer;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-grid;
+    align-items: center;
+}
+
+.toggle-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.toggle-slider {
+    width: 2.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 5%);
+    background: color-mix(in oklab, var(--panel), white 10%);
+    position: relative;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.toggle-slider::after {
+    content: "";
+    position: absolute;
+    top: 0.12rem;
+    left: 0.14rem;
+    width: 0.95rem;
+    height: 0.95rem;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+    transition: transform 150ms ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: color-mix(in oklab, var(--accent-soft), white 20%);
+    border-color: color-mix(in oklab, var(--accent), white 15%);
+}
+
+.toggle-switch input:checked + .toggle-slider::after {
+    transform: translateX(0.96rem);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
 #mesh-canvas {
     width: 100%;
     height: 100%;
@@ -331,7 +412,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
     .sidebar,
-    .sidebar-toggle-icon {
+    .sidebar-toggle-icon,
+    .toggle-slider,
+    .toggle-slider::after {
         transition: none;
     }
 }

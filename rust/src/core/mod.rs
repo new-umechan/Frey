@@ -308,12 +308,32 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         params.river_rain_base,
         params.river_accum_threshold,
     );
+    let vertex_weight = vertex_lithosphere
+        .iter()
+        .map(|lith| lith.weight)
+        .collect::<Vec<_>>();
+    let plate_is_ocean = attributes
+        .iter()
+        .map(|attr| u8::from(attr.is_ocean))
+        .collect::<Vec<_>>();
+    let plate_base_height = attributes
+        .iter()
+        .map(|attr| attr.base_height)
+        .collect::<Vec<_>>();
+    let plate_base_weight = attributes
+        .iter()
+        .map(|attr| attr.base_weight)
+        .collect::<Vec<_>>();
 
     let output = TerrainOutput {
         height,
         plate_id,
         river_flux,
         river_next,
+        vertex_weight,
+        plate_is_ocean,
+        plate_base_height,
+        plate_base_weight,
     };
 
     serde_wasm_bindgen::to_value(&output)
@@ -1333,18 +1353,6 @@ fn compute_vertex_lithosphere(
         }
     }
 
-    for i in 0..v_count {
-        let pid = plate_id[i] as usize;
-        if attributes[pid].is_ocean && crust_age_dist[i].is_infinite() {
-            crust_age_dist[i] = 0.0;
-            heap.push(BoundaryDistState {
-                cost: 0.0,
-                vertex: i,
-                source_edge: i,
-            });
-        }
-    }
-
     while let Some(state) = heap.pop() {
         if state.cost > crust_age_dist[state.vertex] + 1e-6 {
             continue;
@@ -2175,6 +2183,10 @@ fn earth_preset(
         plate_id,
         river_flux,
         river_next,
+        vertex_weight: vec![0.66, 0.24, 0.20, 0.61],
+        plate_is_ocean: vec![1, 0, 0, 1],
+        plate_base_height: vec![-0.06, 0.14, 0.08, -0.03],
+        plate_base_weight: vec![0.66, 0.24, 0.20, 0.61],
     }
 }
 
@@ -2276,12 +2288,32 @@ mod tests {
             params.river_rain_base,
             params.river_accum_threshold,
         );
+        let vertex_weight = vertex_lithosphere
+            .iter()
+            .map(|lith| lith.weight)
+            .collect::<Vec<_>>();
+        let plate_is_ocean = attributes
+            .iter()
+            .map(|attr| u8::from(attr.is_ocean))
+            .collect::<Vec<_>>();
+        let plate_base_height = attributes
+            .iter()
+            .map(|attr| attr.base_height)
+            .collect::<Vec<_>>();
+        let plate_base_weight = attributes
+            .iter()
+            .map(|attr| attr.base_weight)
+            .collect::<Vec<_>>();
 
         TerrainOutput {
             height,
             plate_id,
             river_flux,
             river_next,
+            vertex_weight,
+            plate_is_ocean,
+            plate_base_height,
+            plate_base_weight,
         }
     }
 

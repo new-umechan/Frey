@@ -29,6 +29,13 @@
             <section class="workspace">
                 <div class="viewport-panel" id="viewport-panel">
                     <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
+                    <div
+                        id="plate-hover-popup"
+                        class="plate-hover-popup"
+                        role="status"
+                        aria-live="polite"
+                        hidden
+                    ></div>
                 </div>
                 <aside class="sidebar" id="sidebar" aria-label="sidebar">
                     <button
@@ -75,10 +82,25 @@
                                 </label>
                             </div>
                         </section>
+                        <section class="panel">
+                            <h2>Mode</h2>
+                            <label class="toggle-row" for="debug-mode-toggle">
+                                <span>Debug (D)</span>
+                                <span class="toggle-switch">
+                                    <input
+                                        id="debug-mode-toggle"
+                                        type="checkbox"
+                                        checked
+                                    />
+                                    <span class="toggle-slider" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                        </section>
                         <section class="panel panel-note">
                             <h2>CONTROL</h2>
                             <p>ドラッグ: 回転</p>
                             <p>ホイール / ピンチ: ズーム</p>
+                            <p>D: デバッグ表示切替</p>
                         </section>
                     </div>
                 </aside>
