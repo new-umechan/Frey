@@ -59,10 +59,6 @@ impl DeterministicRng {
         }
     }
 
-    pub(super) fn bernoulli(&mut self, p: f32) -> bool {
-        self.next_f32() < p
-    }
-
     pub(super) fn standard_normal(&mut self) -> f32 {
         if let Some(v) = self.cached_normal.take() {
             return v;
