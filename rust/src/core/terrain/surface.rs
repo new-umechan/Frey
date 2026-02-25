@@ -56,18 +56,26 @@ fn postprocess_height(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &mut [f32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
     target_sea_ratio: f32,
 ) {
-    let mut sorted = height.to_vec();
+    let mut adjusted = Vec::with_capacity(height.len());
+    for v in 0..height.len() {
+        let pid = plate_id[v] as usize;
+        let buoyancy_bias = if attributes[pid].is_ocean { -0.09 } else { 0.09 };
+        adjusted.push(height[v] + buoyancy_bias);
+    }
+
+    let mut sorted = adjusted.clone();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
     let sea_idx = ((sorted.len() as f32) * target_sea_ratio) as usize;
     let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
     let sea_level = sorted[sea_idx];
 
-    for h in height.iter_mut() {
-        *h -= sea_level;
-        *h *= 0.58;
-        *h = clamp(*h, -1.0, 1.0);
+    for v in 0..height.len() {
+        let normalized = (adjusted[v] - sea_level) * 0.58;
+        height[v] = clamp(normalized, -1.0, 1.0);
     }
 
     let mut coast = vec![false; height.len()];

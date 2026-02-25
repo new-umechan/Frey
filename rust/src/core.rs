@@ -1,9 +1,13 @@
 use crate::MeshOutput;
 use crate::{TerrainOutput, TerrainParams};
 
+#[path = "core/geom.rs"]
 mod geom;
+#[path = "core/mesh.rs"]
 mod mesh;
+#[path = "core/rng.rs"]
 mod rng;
+#[path = "core/terrain.rs"]
 mod terrain;
 
 use self::mesh::{flatten_positions, generate_icosphere};

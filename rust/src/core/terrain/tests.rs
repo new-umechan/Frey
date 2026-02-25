@@ -85,6 +85,8 @@ mod tests {
             &nbr_offsets,
             &nbrs,
             &mut height,
+            &plate_id,
+            &attributes,
             super::clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
         );
 
@@ -188,5 +190,53 @@ mod tests {
 
         super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, &params);
         assert_eq!(height, original);
+    }
+
+    #[test]
+    fn continental_plates_are_on_average_higher_than_oceanic_plates() {
+        let params = TerrainParams {
+            level: 2,
+            ..TerrainParams::default()
+        };
+        let output = generate_for_test("plate-buoyancy-check", &params);
+
+        let mut cont_sum = 0.0f32;
+        let mut cont_count = 0usize;
+        let mut ocean_sum = 0.0f32;
+        let mut ocean_count = 0usize;
+        let mut cont_land = 0usize;
+        let mut ocean_land = 0usize;
+
+        for (i, &h) in output.height.iter().enumerate() {
+            let pid = output.plate_id[i] as usize;
+            let is_ocean = output.plate_is_ocean[pid] != 0;
+            if is_ocean {
+                ocean_sum += h;
+                ocean_count += 1;
+                if h > 0.0 {
+                    ocean_land += 1;
+                }
+            } else {
+                cont_sum += h;
+                cont_count += 1;
+                if h > 0.0 {
+                    cont_land += 1;
+                }
+            }
+        }
+
+        assert!(cont_count > 0);
+        assert!(ocean_count > 0);
+
+        let cont_mean = cont_sum / cont_count as f32;
+        let ocean_mean = ocean_sum / ocean_count as f32;
+        let cont_land_ratio = cont_land as f32 / cont_count as f32;
+        let ocean_land_ratio = ocean_land as f32 / ocean_count as f32;
+
+        assert!(cont_mean > ocean_mean, "cont_mean={cont_mean}, ocean_mean={ocean_mean}");
+        assert!(
+            cont_land_ratio > ocean_land_ratio,
+            "cont_land_ratio={cont_land_ratio}, ocean_land_ratio={ocean_land_ratio}"
+        );
     }
 }

@@ -1,3 +1,4 @@
+#[path = "core.rs"]
 mod core;
 
 use serde::{Deserialize, Serialize};
@@ -100,10 +101,21 @@ pub struct TerrainOutput {
 
 #[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
-    core::generate_mesh(level)
+    let output = core::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
+    serde_wasm_bindgen::to_value(&output)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
 }
 
 #[wasm_bindgen]
 pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
-    core::generate_terrain(seed, params_js)
+    let params = if params_js.is_undefined() || params_js.is_null() {
+        TerrainParams::default()
+    } else {
+        serde_wasm_bindgen::from_value::<TerrainParams>(params_js)
+            .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
+    };
+
+    let output = core::build_terrain(&seed, params);
+    serde_wasm_bindgen::to_value(&output)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }

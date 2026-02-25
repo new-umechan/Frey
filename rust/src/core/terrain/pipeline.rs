@@ -108,6 +108,8 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &nbr_offsets,
         &nbrs,
         &mut height,
+        &plate_id,
+        &attributes,
         clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
     );
 
