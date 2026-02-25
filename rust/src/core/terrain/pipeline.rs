@@ -87,7 +87,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         );
     }
 
-    let boundary_fields = apply_boundary_model(
+    let mut boundary_fields = apply_boundary_model(
         &positions,
         &nbr_offsets,
         &nbrs,
@@ -96,6 +96,17 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &vertex_lithosphere,
         &boundary_edges,
         &mut height,
+        &params,
+    );
+    apply_intraplate_fold_belts(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &plate_id,
+        &attributes,
+        &boundary_edges,
+        &mut height,
+        &mut boundary_fields,
         &params,
     );
 

@@ -61,18 +61,30 @@ fn apply_boundary_model(
                                 SubductionPolarity::BUnderA => (edge.plate_b, edge.plate_a),
                                 SubductionPolarity::None => (usize::MAX, usize::MAX),
                             };
+                            let subduction_angle = estimate_subduction_angle_proxy(
+                                edge,
+                                subduction_polarity,
+                                attributes,
+                                vertex_lithosphere,
+                            );
+                            let trench_depth_scale = lerp(0.90, 1.28, subduction_angle);
+                            let trench_width_scale = lerp(1.16, 0.88, subduction_angle);
+                            let arc_offset_scale = lerp(1.22, 0.82, subduction_angle);
 
                             if pid == subducting {
                                 let trench_w = band_weight(
                                     d,
-                                    params.boundary_width_trench * (0.9 + 0.35 * edge.obliquity),
+                                    params.boundary_width_trench
+                                        * trench_width_scale
+                                        * (0.9 + 0.35 * edge.obliquity),
                                     params.boundary_anisotropy,
                                 );
-                                let trench = conv_base * params.trench_gain * trench_w;
+                                let trench =
+                                    conv_base * params.trench_gain * trench_depth_scale * trench_w;
                                 delta[v] -= trench;
                                 let outer_rise = ring_weight(
                                     d,
-                                    params.boundary_width_trench * 1.6,
+                                    params.boundary_width_trench * trench_width_scale * 1.6,
                                     params.boundary_width_trench * 0.65,
                                 );
                                 delta[v] += 0.12 * conv_base * outer_rise * dist_scale;
@@ -86,7 +98,9 @@ fn apply_boundary_model(
                                 delta[v] -= 0.08 * conv_base * forearc_w;
 
                                 let arc_center =
-                                    params.boundary_width_arc * (0.9 + 0.4 * edge.obliquity);
+                                    params.boundary_width_arc
+                                        * arc_offset_scale
+                                        * (0.9 + 0.4 * edge.obliquity);
                                 let arc_w = ring_weight(
                                     d,
                                     arc_center,
@@ -148,6 +162,104 @@ fn apply_boundary_model(
     }
 
     BoundaryFields { preserve_strength }
+}
+
+fn apply_intraplate_fold_belts(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
+    boundary_edges: &[BoundaryEdge],
+    height: &mut [f32],
+    boundary_fields: &mut BoundaryFields,
+    params: &TerrainParams,
+) {
+    if boundary_edges.is_empty() || height.is_empty() {
+        return;
+    }
+
+    let fold_sources = collect_intraplate_fold_sources(boundary_edges, attributes);
+    if fold_sources.is_empty() {
+        return;
+    }
+
+    let (nearest_source, source_dist) = compute_continental_stress_assignment(
+        positions,
+        nbr_offsets,
+        nbrs,
+        plate_id,
+        attributes,
+        &fold_sources,
+    );
+
+    let near_quiet = params.boundary_width_collision * 0.55;
+    let inland_ramp = (params.boundary_width_collision * 1.8).max(near_quiet + 1e-3);
+    let stress_falloff = 2.4 / (params.boundary_width_collision + 0.20);
+    let fold_gain = 0.055 * (0.7 + 0.6 * params.collision_gain);
+    let preserve_gain = 0.55;
+
+    for v in 0..height.len() {
+        let pid = plate_id[v] as usize;
+        if pid >= attributes.len() || attributes[pid].is_ocean {
+            continue;
+        }
+
+        let source_idx = nearest_source[v];
+        if source_idx == usize::MAX {
+            continue;
+        }
+
+        let d = source_dist[v];
+        let inland_gate = smoothstep01((d - near_quiet) / (inland_ramp - near_quiet));
+        if inland_gate <= 0.0 {
+            continue;
+        }
+
+        let source = fold_sources[source_idx];
+        let stress_mag = source.seed_strength * inland_gate * (-(d * stress_falloff)).exp();
+        if stress_mag < 0.015 {
+            continue;
+        }
+
+        let plate_velocity = project_to_tangent(attributes[pid].velocity, positions[v]);
+        let comp_dir = normalize3(plate_velocity);
+        if length3(comp_dir) <= 1e-5 {
+            continue;
+        }
+
+        let edge = source.edge;
+        let edge_tangent = normalize3(project_to_tangent(sub3(positions[edge.b], positions[edge.a]), positions[v]));
+        if length3(edge_tangent) <= 1e-5 {
+            continue;
+        }
+
+        let edge_mid = normalize3(add3(positions[edge.a], positions[edge.b]));
+        let rel = project_to_tangent(sub3(positions[v], edge_mid), positions[v]);
+        let across = dot3(rel, comp_dir);
+        let along = dot3(rel, edge_tangent);
+
+        let source_hash = trig_hash01(positions[v], source_idx as u32);
+        let wavelength = lerp(0.10, 0.22, source_hash);
+        let base_phase = (across / wavelength) * std::f32::consts::TAU;
+        let phase_offset = source.phase * std::f32::consts::TAU;
+        let harmonic_phase = phase_offset + 0.35 * along / (wavelength * 1.3 + 1e-4);
+        let fold_pattern = 0.72 * (base_phase + phase_offset).sin()
+            + 0.28 * (2.1 * base_phase + harmonic_phase).sin();
+
+        let weakness = 0.70 + 0.30 * trig_hash01(positions[v], (source_idx as u32) ^ 0x9e37_79b9);
+        let uplift_bias = 0.22;
+        let mode_gain = source.mode_gain;
+        let delta = fold_gain * mode_gain * stress_mag * weakness * (fold_pattern + uplift_bias);
+        height[v] = clamp(height[v] + delta, -1.0, 1.0);
+
+        let preserve = clamp(
+            preserve_gain * stress_mag * (0.35 + 0.65 * fold_pattern.abs()),
+            0.0,
+            0.70,
+        );
+        boundary_fields.preserve_strength[v] = boundary_fields.preserve_strength[v].max(preserve);
+    }
 }
 
 fn extract_boundary_edges(
@@ -214,6 +326,48 @@ fn extract_boundary_edges(
     edges
 }
 
+#[derive(Clone, Copy)]
+struct IntraplateFoldSource {
+    edge: BoundaryEdge,
+    seed_strength: f32,
+    mode_gain: f32,
+    phase: f32,
+}
+
+fn collect_intraplate_fold_sources(
+    boundary_edges: &[BoundaryEdge],
+    attributes: &[PlateAttr],
+) -> Vec<IntraplateFoldSource> {
+    let mut sources = Vec::new();
+    for (idx, edge) in boundary_edges.iter().enumerate() {
+        if !matches!(edge.boundary_type, BoundaryType::Convergent) {
+            continue;
+        }
+
+        let a_ocean = attributes[edge.plate_a].is_ocean;
+        let b_ocean = attributes[edge.plate_b].is_ocean;
+        if a_ocean && b_ocean {
+            continue;
+        }
+
+        let both_continent = !a_ocean && !b_ocean;
+        let mode_gain = if both_continent { 1.0 } else { 0.70 };
+        let seed_strength = edge.strength * (1.0 - 0.35 * edge.obliquity);
+        if seed_strength <= 0.04 {
+            continue;
+        }
+
+        let phase = fract01((idx as f32) * 0.618_034 + edge.obliquity * 0.37);
+        sources.push(IntraplateFoldSource {
+            edge: *edge,
+            seed_strength,
+            mode_gain,
+            phase,
+        });
+    }
+    sources
+}
+
 fn classify_convergent_edge(
     vertex_a: usize,
     vertex_b: usize,
@@ -243,6 +397,117 @@ fn classify_convergent_edge(
     }
 
     (Some(ConvergentMode::ContinentContinent), SubductionPolarity::None)
+}
+
+fn estimate_subduction_angle_proxy(
+    edge: BoundaryEdge,
+    polarity: SubductionPolarity,
+    attributes: &[PlateAttr],
+    vertex_lithosphere: &[VertexLithosphere],
+) -> f32 {
+    let (subducting_vertex, overriding_vertex, subducting_plate, overriding_plate) = match polarity {
+        SubductionPolarity::AUnderB => (edge.a, edge.b, edge.plate_a, edge.plate_b),
+        SubductionPolarity::BUnderA => (edge.b, edge.a, edge.plate_b, edge.plate_a),
+        SubductionPolarity::None => return 0.5,
+    };
+
+    if subducting_vertex >= vertex_lithosphere.len() || overriding_vertex >= vertex_lithosphere.len() {
+        return 0.5;
+    }
+    if subducting_plate >= attributes.len() || overriding_plate >= attributes.len() {
+        return 0.5;
+    }
+
+    let sub = vertex_lithosphere[subducting_vertex];
+    let over = vertex_lithosphere[overriding_vertex];
+
+    let sub_age = clamp(sub.age_norm, 0.0, 1.0);
+    let sub_weight = clamp(sub.weight, 0.0, 1.0);
+    let over_buoyancy = clamp(over.buoyancy, -1.0, 1.0);
+    let over_resistance = 0.5 + 0.5 * over_buoyancy;
+    let convergence_component = edge.strength * (1.0 - 0.35 * edge.obliquity);
+    let ocean_ocean_bonus =
+        if attributes[subducting_plate].is_ocean && attributes[overriding_plate].is_ocean {
+            0.06
+        } else {
+            0.0
+        };
+
+    clamp(
+        0.34
+            + 0.28 * sub_age
+            + 0.20 * sub_weight
+            + 0.14 * convergence_component
+            - 0.08 * over_resistance
+            + ocean_ocean_bonus,
+        0.0,
+        1.0,
+    )
+}
+
+fn compute_continental_stress_assignment(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
+    fold_sources: &[IntraplateFoldSource],
+) -> (Vec<usize>, Vec<f32>) {
+    let vertex_count = positions.len();
+    let mut nearest_source = vec![usize::MAX; vertex_count];
+    let mut dist = vec![f32::INFINITY; vertex_count];
+    let mut heap = BinaryHeap::new();
+
+    for (source_idx, source) in fold_sources.iter().enumerate() {
+        for &v in &[source.edge.a, source.edge.b] {
+            let pid = plate_id[v] as usize;
+            if pid >= attributes.len() || attributes[pid].is_ocean {
+                continue;
+            }
+            if dist[v] > 0.0 {
+                dist[v] = 0.0;
+                nearest_source[v] = source_idx;
+                heap.push(BoundaryDistState {
+                    cost: 0.0,
+                    vertex: v,
+                    source_edge: source_idx,
+                });
+            }
+        }
+    }
+
+    while let Some(state) = heap.pop() {
+        if state.cost > dist[state.vertex] + 1e-6 {
+            continue;
+        }
+
+        let start = nbr_offsets[state.vertex] as usize;
+        let end = nbr_offsets[state.vertex + 1] as usize;
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            let npid = plate_id[n] as usize;
+            if npid >= attributes.len() || attributes[npid].is_ocean {
+                continue;
+            }
+
+            let mut step = chord_distance(positions[state.vertex], positions[n]).max(1e-4);
+            if plate_id[n] != plate_id[state.vertex] {
+                step *= 1.35;
+            }
+            let next_cost = state.cost + step;
+            if next_cost + 1e-6 < dist[n] {
+                dist[n] = next_cost;
+                nearest_source[n] = state.source_edge;
+                heap.push(BoundaryDistState {
+                    cost: next_cost,
+                    vertex: n,
+                    source_edge: state.source_edge,
+                });
+            }
+        }
+    }
+
+    (nearest_source, dist)
 }
 
 fn compute_boundary_distance_assignment(
@@ -307,4 +572,19 @@ fn ring_weight(distance: f32, center: f32, width: f32) -> f32 {
     let sigma = width.max(1e-4);
     let dx = distance - center;
     (-(dx * dx) / (2.0 * sigma * sigma)).exp()
+}
+
+fn smoothstep01(t: f32) -> f32 {
+    let x = clamp(t, 0.0, 1.0);
+    x * x * (3.0 - 2.0 * x)
+}
+
+fn fract01(v: f32) -> f32 {
+    v - v.floor()
+}
+
+fn trig_hash01(pos: [f32; 3], seed: u32) -> f32 {
+    let seedf = seed as f32;
+    let s = (pos[0] * 12.9898 + pos[1] * 78.233 + pos[2] * 37.719 + seedf * 0.12345).sin();
+    fract01(s * 43_758.547)
 }
