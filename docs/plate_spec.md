@@ -21,9 +21,20 @@ pub struct TerrainParams {
     pub num_plates_max: u32,          // 最大プレート数（既定 18）
     pub ocean_plate_ratio: f32,       // 海洋プレート比率（既定 0.65）
     pub boundary_band: f32,           // 境界帯域の閾値（既定 0.08）
-    pub uplift_gain: f32,             // 収束境界の隆起係数（既定 0.45）
-    pub subduct_gain: f32,            // 沈み込み係数（既定 0.35）
-    pub divergent_gain: f32,          // 発散境界の沈降係数（既定 0.20）
+    pub boundary_convergent_base_gain: f32, // 収束境界の基礎地形係数
+    pub boundary_divergent_base_gain: f32,  // 発散境界の基礎地形係数
+    pub boundary_transform_relief_gain: f32,// 横ずれ境界の微地形係数
+    pub trench_gain: f32,             // 海溝の強さ
+    pub arc_gain: f32,                // 火山弧/島弧の強さ
+    pub collision_gain: f32,          // 大陸衝突帯の造山強度
+    pub rift_gain: f32,               // リフト沈降の強さ
+    pub boundary_width_trench: f32,   // 海溝帯の幅
+    pub boundary_width_arc: f32,      // 弧状隆起帯のオフセット幅
+    pub boundary_width_collision: f32,// 衝突造山帯の幅
+    pub boundary_width_rift: f32,     // リフト帯の幅
+    pub boundary_obliquity_mix: f32,  // 斜交収束/発散の緩和係数
+    pub boundary_distance_falloff: f32, // 境界距離減衰
+    pub boundary_anisotropy: f32,     // 境界帯の異方性
     pub smooth_iter: u32,             // 平滑化反復（既定 6）
     pub smooth_lambda: f32,           // 平滑化係数（既定 0.35）
     pub river_rain_base: f32,         // 降水ベース（既定 0.5）
@@ -140,20 +151,26 @@ next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor 
 
 ### 4.7 境界相互作用
 
-境界辺ごとに収束・発散・横ずれを判定し、隆起と沈降を加える。
+境界辺を抽出して収束・発散・横ずれを判定し、境界距離場に基づく帯状の地形特徴を生成する。
 
 タイプ分類:
 - v_rel_n > +eps: 収束
 - v_rel_n < -eps: 発散
 - それ以外: 横ずれ
 
-海洋と大陸の境界は補正を弱める
-海洋同士の補正も抑える
-境界影響はhop距離で減衰拡散する
+収束境界では、海洋-大陸/海洋-海洋/大陸-大陸を分けて扱う。
+- 海洋-大陸: 海溝 + 前弧 + 火山弧帯
+- 海洋-海洋: 海溝 + 島弧帯
+- 大陸-大陸: 幅広い造山帯
+
+発散境界ではリフト帯（沈降帯）を生成する。
+横ずれ境界では大規模な高低差は抑え、微地形的な粗さのみを付与する。
+
+境界影響は固定 hop 拡散ではなく、最近傍境界への距離（弦長近似）で減衰させる。
 
 ### 4.8 平滑化
 
-ラプラシアン平滑化を反復適用する。境界上は平滑化係数を下げ、地形コントラストを保つ。
+ラプラシアン平滑化を反復適用する。境界特徴量の強い領域では平滑化係数を下げ、海溝・山脈・弧状帯のコントラストを保つ。
 
 ### 4.9 水食侵食（簡易）
 

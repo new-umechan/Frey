@@ -29,6 +29,44 @@ enum BoundaryType {
 }
 
 #[derive(Clone, Copy)]
+enum ConvergentMode {
+    OceanContinent,
+    OceanOcean,
+    ContinentContinent,
+}
+
+#[derive(Clone, Copy)]
+enum SubductionPolarity {
+    AUnderB,
+    BUnderA,
+    None,
+}
+
+#[derive(Clone, Copy)]
+struct BoundaryEdge {
+    a: usize,
+    b: usize,
+    plate_a: usize,
+    plate_b: usize,
+    boundary_type: BoundaryType,
+    convergent_mode: Option<ConvergentMode>,
+    subduction_polarity: SubductionPolarity,
+    strength: f32,
+    obliquity: f32,
+}
+
+struct BoundaryFields {
+    preserve_strength: Vec<f32>,
+}
+
+#[derive(Clone, Copy)]
+struct BoundaryDistState {
+    cost: f32,
+    vertex: usize,
+    source_edge: usize,
+}
+
+#[derive(Clone, Copy)]
 struct QueueState {
     cost: f32,
     vertex: usize,
@@ -88,6 +126,31 @@ impl Eq for QueueState {}
 impl PartialEq for QueueState {
     fn eq(&self, other: &Self) -> bool {
         self.vertex == other.vertex && self.plate == other.plate && self.cost == other.cost
+    }
+}
+
+impl Ord for BoundaryDistState {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(Ordering::Equal)
+    }
+}
+
+impl PartialOrd for BoundaryDistState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Eq for BoundaryDistState {}
+
+impl PartialEq for BoundaryDistState {
+    fn eq(&self, other: &Self) -> bool {
+        self.vertex == other.vertex
+            && self.source_edge == other.source_edge
+            && self.cost == other.cost
     }
 }
 
@@ -187,22 +250,20 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         );
     }
 
-    let boundary_vertices = apply_boundary_interactions(
+    let boundary_fields = apply_boundary_model(
         &positions,
         &nbr_offsets,
         &nbrs,
         &plate_id,
         &attributes,
         &mut height,
-        params.uplift_gain,
-        params.subduct_gain,
-        params.divergent_gain,
+        &params,
     );
 
     smooth_heights(
         &nbr_offsets,
         &nbrs,
-        &boundary_vertices,
+        &boundary_fields,
         &mut height,
         params.smooth_iter,
         params.smooth_lambda,
@@ -249,6 +310,20 @@ fn sanitize_params(params: &mut TerrainParams) {
     }
     params.ocean_plate_ratio = clamp(params.ocean_plate_ratio, 0.0, 1.0);
     params.boundary_band = params.boundary_band.max(1e-3);
+    params.boundary_convergent_base_gain = params.boundary_convergent_base_gain.max(0.0);
+    params.boundary_divergent_base_gain = params.boundary_divergent_base_gain.max(0.0);
+    params.boundary_transform_relief_gain = params.boundary_transform_relief_gain.max(0.0);
+    params.trench_gain = params.trench_gain.max(0.0);
+    params.arc_gain = params.arc_gain.max(0.0);
+    params.collision_gain = params.collision_gain.max(0.0);
+    params.rift_gain = params.rift_gain.max(0.0);
+    params.boundary_width_trench = params.boundary_width_trench.max(1e-3);
+    params.boundary_width_arc = params.boundary_width_arc.max(1e-3);
+    params.boundary_width_collision = params.boundary_width_collision.max(1e-3);
+    params.boundary_width_rift = params.boundary_width_rift.max(1e-3);
+    params.boundary_obliquity_mix = clamp(params.boundary_obliquity_mix, 0.0, 1.0);
+    params.boundary_distance_falloff = params.boundary_distance_falloff.max(0.1);
+    params.boundary_anisotropy = clamp(params.boundary_anisotropy, 0.0, 1.0);
     params.smooth_lambda = clamp(params.smooth_lambda, 0.0, 1.0);
     params.river_rain_base = params.river_rain_base.max(0.0);
     params.river_accum_threshold = params.river_accum_threshold.max(0.0);
@@ -1153,132 +1228,316 @@ fn assign_plate_attributes(
     attrs
 }
 
-fn apply_boundary_interactions(
+fn apply_boundary_model(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
     height: &mut [f32],
-    uplift_gain: f32,
-    subduct_gain: f32,
-    divergent_gain: f32,
-) -> BoundaryVertices {
-    let mut boundary_vertices = BoundaryVertices::new(height.len());
-    let mut base_delta = vec![0.0; height.len()];
+    params: &TerrainParams,
+) -> BoundaryFields {
+    let boundary_edges = extract_boundary_edges(positions, nbr_offsets, nbrs, plate_id, attributes);
+    if boundary_edges.is_empty() {
+        return BoundaryFields {
+            preserve_strength: vec![0.0; height.len()],
+        };
+    }
+
+    let (nearest_edge, boundary_dist, boundary_vertices) =
+        compute_boundary_distance_assignment(positions, nbr_offsets, nbrs, &boundary_edges, height.len());
+
+    let mut delta = vec![0.0_f32; height.len()];
+    let mut preserve_strength = vec![0.0_f32; height.len()];
+
+    for v in 0..height.len() {
+        let edge_idx = nearest_edge[v];
+        if edge_idx == usize::MAX {
+            continue;
+        }
+        let edge = boundary_edges[edge_idx];
+        let pid = plate_id[v] as usize;
+        let d = boundary_dist[v];
+        let dist_scale = (-(d * params.boundary_distance_falloff)).exp();
+
+        match edge.boundary_type {
+            BoundaryType::Convergent => {
+                let oblique_relief = 1.0 - params.boundary_obliquity_mix * edge.obliquity;
+                let conv_base = params.boundary_convergent_base_gain * edge.strength * oblique_relief;
+
+                if let Some(mode) = edge.convergent_mode {
+                    match mode {
+                        ConvergentMode::ContinentContinent => {
+                            let w = band_weight(d, params.boundary_width_collision, params.boundary_anisotropy);
+                            let uplift = conv_base * params.collision_gain * w;
+                            delta[v] += uplift;
+                            if d < params.boundary_width_collision * 0.55 {
+                                delta[v] -= 0.10 * uplift;
+                            }
+                            preserve_strength[v] = preserve_strength[v].max(0.80 * w);
+                        }
+                        ConvergentMode::OceanContinent | ConvergentMode::OceanOcean => {
+                            let (subducting, overriding) = match edge.subduction_polarity {
+                                SubductionPolarity::AUnderB => (edge.plate_a, edge.plate_b),
+                                SubductionPolarity::BUnderA => (edge.plate_b, edge.plate_a),
+                                SubductionPolarity::None => (usize::MAX, usize::MAX),
+                            };
+
+                            if pid == subducting {
+                                let trench_w = band_weight(
+                                    d,
+                                    params.boundary_width_trench * (0.9 + 0.35 * edge.obliquity),
+                                    params.boundary_anisotropy,
+                                );
+                                let trench = conv_base * params.trench_gain * trench_w;
+                                delta[v] -= trench;
+                                let outer_rise = ring_weight(
+                                    d,
+                                    params.boundary_width_trench * 1.6,
+                                    params.boundary_width_trench * 0.65,
+                                );
+                                delta[v] += 0.12 * conv_base * outer_rise * dist_scale;
+                                preserve_strength[v] = preserve_strength[v].max(0.95 * trench_w);
+                            } else if pid == overriding {
+                                let forearc_w = band_weight(
+                                    d,
+                                    params.boundary_width_trench * 1.35,
+                                    params.boundary_anisotropy * 0.6,
+                                );
+                                delta[v] -= 0.08 * conv_base * forearc_w;
+
+                                let arc_center =
+                                    params.boundary_width_arc * (0.9 + 0.4 * edge.obliquity);
+                                let arc_w = ring_weight(
+                                    d,
+                                    arc_center,
+                                    params.boundary_width_arc * 0.55,
+                                );
+                                let arc_gain = if matches!(mode, ConvergentMode::OceanOcean) {
+                                    params.arc_gain * 1.15
+                                } else {
+                                    params.arc_gain
+                                };
+                                delta[v] += conv_base * arc_gain * arc_w * dist_scale;
+                                preserve_strength[v] =
+                                    preserve_strength[v].max(0.85 * forearc_w.max(arc_w));
+                            }
+                        }
+                    }
+                }
+            }
+            BoundaryType::Divergent => {
+                let mut rift_width = params.boundary_width_rift;
+                if !attributes[edge.plate_a].is_ocean && !attributes[edge.plate_b].is_ocean {
+                    rift_width *= 1.35;
+                }
+                let oblique_relief = 1.0 - 0.6 * params.boundary_obliquity_mix * edge.obliquity;
+                let rift_w = band_weight(d, rift_width, params.boundary_anisotropy * 0.8);
+                let rift = params.boundary_divergent_base_gain
+                    * params.rift_gain
+                    * edge.strength
+                    * oblique_relief
+                    * rift_w;
+                delta[v] -= rift;
+                if d < rift_width * 0.65 {
+                    delta[v] -=
+                        0.05 * params.boundary_divergent_base_gain * edge.strength * rift_w;
+                }
+                preserve_strength[v] = preserve_strength[v].max(0.55 * rift_w);
+            }
+            BoundaryType::Transform => {
+                let width = params.boundary_width_trench * 0.9;
+                let w = band_weight(d, width, params.boundary_anisotropy * 0.5);
+                let sign = if ((v as u32).wrapping_mul(1103515245) ^ (edge_idx as u32)) & 1 == 0 {
+                    1.0
+                } else {
+                    -1.0
+                };
+                let relief = params.boundary_transform_relief_gain
+                    * edge.strength
+                    * (1.0 + 0.4 * edge.obliquity)
+                    * w;
+                delta[v] += sign * 0.5 * relief;
+                preserve_strength[v] = preserve_strength[v].max(0.35 * w);
+            }
+        }
+    }
+
+    for v in 0..height.len() {
+        let boosted = if boundary_vertices.mask[v] { delta[v] * 1.20 } else { delta[v] };
+        height[v] = clamp(height[v] + boosted, -1.0, 1.0);
+    }
+
+    BoundaryFields { preserve_strength }
+}
+
+fn extract_boundary_edges(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
+) -> Vec<BoundaryEdge> {
+    let mut edges = Vec::new();
     let classify_eps = 0.05;
-    let trench_eps = 0.10;
 
     for i in 0..positions.len() {
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
-
         for &j_u32 in &nbrs[start..end] {
             let j = j_u32 as usize;
             if j <= i {
                 continue;
             }
 
-            let pi = plate_id[i] as usize;
-            let pj = plate_id[j] as usize;
-            if pi == pj {
+            let plate_a = plate_id[i] as usize;
+            let plate_b = plate_id[j] as usize;
+            if plate_a == plate_b {
                 continue;
             }
 
-            boundary_vertices.insert(i);
-            boundary_vertices.insert(j);
-
-            let edge = sub3(positions[j], positions[i]);
-            let edge_dir = normalize3(edge);
-            let rel_v = sub3(attributes[pj].velocity, attributes[pi].velocity);
+            let edge_vec = sub3(positions[j], positions[i]);
+            let edge_dir = normalize3(edge_vec);
+            let rel_v = sub3(attributes[plate_b].velocity, attributes[plate_a].velocity);
             let v_rel_n = dot3(rel_v, edge_dir);
-            let convergent_strength = clamp((v_rel_n - classify_eps) / 0.20, 0.0, 1.0);
-            let divergent_strength = clamp((-v_rel_n - classify_eps) / 0.20, 0.0, 1.0);
-            let trench_strength = clamp((v_rel_n - trench_eps) / 0.18, 0.0, 1.0);
-
-            let btype = if v_rel_n > classify_eps {
-                BoundaryType::Convergent
+            let v_rel_t_vec = sub3(rel_v, mul3(edge_dir, v_rel_n));
+            let v_rel_t = length3(v_rel_t_vec);
+            let obliquity = v_rel_t / (v_rel_t + v_rel_n.abs() + 1e-5);
+            let (boundary_type, strength) = if v_rel_n > classify_eps {
+                (
+                    BoundaryType::Convergent,
+                    clamp((v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
+                )
             } else if v_rel_n < -classify_eps {
-                BoundaryType::Divergent
+                (
+                    BoundaryType::Divergent,
+                    clamp((-v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
+                )
             } else {
-                BoundaryType::Transform
+                (
+                    BoundaryType::Transform,
+                    clamp((v_rel_t - 0.02) / 0.18, 0.0, 1.0),
+                )
             };
 
-            match btype {
-                BoundaryType::Convergent => {
-                    let oi = attributes[pi].is_ocean;
-                    let oj = attributes[pj].is_ocean;
-                    let hi = height[i];
-                    let hj = height[j];
-                    if oi && !oj {
-                        base_delta[i] -= 0.45 * subduct_gain * trench_strength;
-                        if hj > 0.10 {
-                            base_delta[j] += 0.35 * uplift_gain * convergent_strength;
-                        }
-                    } else if !oi && oj {
-                        if hi > 0.10 {
-                            base_delta[i] += 0.35 * uplift_gain * convergent_strength;
-                        }
-                        base_delta[j] -= 0.45 * subduct_gain * trench_strength;
-                    } else if !oi && !oj {
-                        base_delta[i] += 0.55 * uplift_gain * convergent_strength;
-                        base_delta[j] += 0.55 * uplift_gain * convergent_strength;
-                    } else {
-                        if v_rel_n >= 0.0 {
-                            base_delta[i] -= 0.35 * subduct_gain * trench_strength;
-                            base_delta[j] += 0.15 * uplift_gain * convergent_strength;
-                        } else {
-                            base_delta[j] -= 0.35 * subduct_gain * trench_strength;
-                            base_delta[i] += 0.15 * uplift_gain * convergent_strength;
-                        }
-                    }
-                }
-                BoundaryType::Divergent => {
-                    let rift_delta = -0.27 * divergent_gain * divergent_strength;
-                    base_delta[i] += rift_delta;
-                    base_delta[j] += rift_delta;
-                }
-                BoundaryType::Transform => {}
+            let (convergent_mode, subduction_polarity) =
+                if matches!(boundary_type, BoundaryType::Convergent) {
+                    classify_convergent_edge(plate_a, plate_b, attributes)
+                } else {
+                    (None, SubductionPolarity::None)
+                };
+
+            edges.push(BoundaryEdge {
+                a: i,
+                b: j,
+                plate_a,
+                plate_b,
+                boundary_type,
+                convergent_mode,
+                subduction_polarity,
+                strength: strength.max(0.05),
+                obliquity,
+            });
+        }
+    }
+
+    edges
+}
+
+fn classify_convergent_edge(
+    plate_a: usize,
+    plate_b: usize,
+    attributes: &[PlateAttr],
+) -> (Option<ConvergentMode>, SubductionPolarity) {
+    let a_ocean = attributes[plate_a].is_ocean;
+    let b_ocean = attributes[plate_b].is_ocean;
+
+    if a_ocean && !b_ocean {
+        return (Some(ConvergentMode::OceanContinent), SubductionPolarity::AUnderB);
+    }
+    if !a_ocean && b_ocean {
+        return (Some(ConvergentMode::OceanContinent), SubductionPolarity::BUnderA);
+    }
+    if a_ocean && b_ocean {
+        let polarity = if attributes[plate_a].base_height <= attributes[plate_b].base_height {
+            SubductionPolarity::AUnderB
+        } else {
+            SubductionPolarity::BUnderA
+        };
+        return (Some(ConvergentMode::OceanOcean), polarity);
+    }
+
+    (Some(ConvergentMode::ContinentContinent), SubductionPolarity::None)
+}
+
+fn compute_boundary_distance_assignment(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    boundary_edges: &[BoundaryEdge],
+    vertex_count: usize,
+) -> (Vec<usize>, Vec<f32>, BoundaryVertices) {
+    let mut nearest_edge = vec![usize::MAX; vertex_count];
+    let mut dist = vec![f32::INFINITY; vertex_count];
+    let mut boundary_vertices = BoundaryVertices::new(vertex_count);
+    let mut heap = BinaryHeap::new();
+
+    for (edge_idx, edge) in boundary_edges.iter().enumerate() {
+        for &v in &[edge.a, edge.b] {
+            boundary_vertices.insert(v);
+            if 0.0 < dist[v] {
+                dist[v] = 0.0;
+                nearest_edge[v] = edge_idx;
+                heap.push(BoundaryDistState {
+                    cost: 0.0,
+                    vertex: v,
+                    source_edge: edge_idx,
+                });
             }
         }
     }
 
-    let sigma = 2.0;
-    let w0 = 1.0;
-    let w1 = (-1.0_f32 / (2.0 * sigma * sigma)).exp();
-    let w2 = (-4.0_f32 / (2.0 * sigma * sigma)).exp();
+    while let Some(state) = heap.pop() {
+        if state.cost > dist[state.vertex] + 1e-6 {
+            continue;
+        }
 
-    let mut spread_delta = vec![0.0; height.len()];
-
-    for &b in &boundary_vertices.indices {
-        spread_delta[b] += base_delta[b] * w0;
-
-        let s1 = nbr_offsets[b] as usize;
-        let e1 = nbr_offsets[b + 1] as usize;
-        for &n1 in &nbrs[s1..e1] {
-            let n1 = n1 as usize;
-            spread_delta[n1] += base_delta[b] * w1;
-
-            let s2 = nbr_offsets[n1] as usize;
-            let e2 = nbr_offsets[n1 + 1] as usize;
-            for &n2 in &nbrs[s2..e2] {
-                let n2 = n2 as usize;
-                spread_delta[n2] += base_delta[b] * w2;
+        let start = nbr_offsets[state.vertex] as usize;
+        let end = nbr_offsets[state.vertex + 1] as usize;
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            let step = chord_distance(positions[state.vertex], positions[n]).max(1e-4);
+            let next_cost = state.cost + step;
+            if next_cost + 1e-6 < dist[n] {
+                dist[n] = next_cost;
+                nearest_edge[n] = state.source_edge;
+                heap.push(BoundaryDistState {
+                    cost: next_cost,
+                    vertex: n,
+                    source_edge: state.source_edge,
+                });
             }
         }
     }
 
-    for i in 0..height.len() {
-        height[i] = clamp(height[i] + spread_delta[i], -1.0, 1.0);
-    }
+    (nearest_edge, dist, boundary_vertices)
+}
 
-    boundary_vertices
+fn band_weight(distance: f32, width: f32, anisotropy: f32) -> f32 {
+    let sigma = (width * (1.0 - 0.35 * anisotropy)).max(1e-4);
+    (-(distance * distance) / (2.0 * sigma * sigma)).exp()
+}
+
+fn ring_weight(distance: f32, center: f32, width: f32) -> f32 {
+    let sigma = width.max(1e-4);
+    let dx = distance - center;
+    (-(dx * dx) / (2.0 * sigma * sigma)).exp()
 }
 
 fn smooth_heights(
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    boundary_vertices: &BoundaryVertices,
+    boundary_fields: &BoundaryFields,
     height: &mut [f32],
     smooth_iter: u32,
     smooth_lambda: f32,
@@ -1306,7 +1565,8 @@ fn smooth_heights(
                 let nh = height[n as usize];
                 (h > 0.0 && nh <= 0.0) || (h <= 0.0 && nh > 0.0)
             });
-            let boundary_scale = if boundary_vertices.mask[v] { 0.6 } else { 1.0 };
+            let preserve = boundary_fields.preserve_strength[v];
+            let boundary_scale = lerp(1.0, 0.45, preserve);
             let terrain_scale = if h > 0.35 {
                 0.70
             } else if h > 0.0 {
@@ -1772,22 +2032,20 @@ mod tests {
             );
         }
 
-        let boundary_vertices = super::apply_boundary_interactions(
+        let boundary_fields = super::apply_boundary_model(
             &positions,
             &nbr_offsets,
             &nbrs,
             &plate_id,
             &attributes,
             &mut height,
-            params.uplift_gain,
-            params.subduct_gain,
-            params.divergent_gain,
+            params,
         );
 
         super::smooth_heights(
             &nbr_offsets,
             &nbrs,
-            &boundary_vertices,
+            &boundary_fields,
             &mut height,
             params.smooth_iter,
             params.smooth_lambda,
