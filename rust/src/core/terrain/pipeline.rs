@@ -119,6 +119,16 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
     );
 
+    apply_hotspot_island_chains(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &plate_id,
+        &attributes,
+        &mut height,
+        &mut rng,
+    );
+
     let (river_flux, river_next) = generate_rivers(
         &positions,
         &nbr_offsets,

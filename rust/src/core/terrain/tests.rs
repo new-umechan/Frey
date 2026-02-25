@@ -94,6 +94,15 @@ mod tests {
             &attributes,
             super::clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
         );
+        super::apply_hotspot_island_chains(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &plate_id,
+            &attributes,
+            &mut height,
+            &mut rng,
+        );
 
         let (river_flux, river_next) = generate_rivers(
             &positions,
@@ -287,6 +296,37 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn hotspot_chains_create_some_oceanic_land() {
+        let params = TerrainParams {
+            level: 3,
+            ..TerrainParams::default()
+        };
+
+        for seed in ["alpha", "beta", "gamma", "delta"] {
+            let output = generate_for_test(seed, &params);
+            let mut ocean_land = 0usize;
+            let mut ocean_vertices = 0usize;
+            for (i, &h) in output.height.iter().enumerate() {
+                let pid = output.plate_id[i] as usize;
+                let is_ocean = output.plate_is_ocean[pid] != 0;
+                if !is_ocean {
+                    continue;
+                }
+                ocean_vertices += 1;
+                if h > 0.0 {
+                    ocean_land += 1;
+                }
+            }
+
+            assert!(ocean_vertices > 0);
+            assert!(
+                ocean_land > 0,
+                "expected hotspot/oceanic islands for seed={seed}, but ocean_land=0"
+            );
         }
     }
 }

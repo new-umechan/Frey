@@ -196,10 +196,10 @@ fn build_plate_growth_profiles(plate_count: usize, rng: &mut DeterministicRng) -
             preferred_axis: random_unit_vector3(rng),
             secondary_axis: random_unit_vector3(rng),
             axis_blend_axis: random_unit_vector3(rng),
-            anisotropy: rng.gen_range_f32(0.25, 0.95),
-            roughness: rng.gen_range_f32(0.10, 0.30),
+            anisotropy: rng.gen_range_f32(0.55, 1.20),
+            roughness: rng.gen_range_f32(0.02, 0.12),
             warp_weights,
-            warp_gain: rng.gen_range_f32(0.18, 0.42),
+            warp_gain: rng.gen_range_f32(0.06, 0.22),
         });
     }
     profiles
@@ -338,10 +338,11 @@ fn partition_plates(
             let tangent_axis =
                 local_preferred_tangent_axis(profile, positions[state.vertex], edge_dir);
             let alignment = dot3(edge_dir, tangent_axis).abs();
-            let directional_factor = 1.0 + profile.anisotropy * (1.0 - clamp(alignment, 0.0, 1.0));
+            let directional_factor =
+                1.0 + 1.25 * profile.anisotropy * (1.0 - clamp(alignment, 0.0, 1.0));
             let phi_discount = clamp(1.0 - 0.18 * phi_mid, 0.68, 1.30);
             let warp_mid = sample_plate_warp_mid(profile, plate_cost_warp_basis, state.vertex, n);
-            let warp_factor = clamp(1.0 + profile.warp_gain * warp_mid, 0.62, 1.45);
+            let warp_factor = clamp(1.0 + profile.warp_gain * warp_mid, 0.82, 1.22);
             let random_factor =
                 1.0 + profile.roughness * edge_noise_signed(state.vertex, n, state.plate);
             let next_cost = state.cost
