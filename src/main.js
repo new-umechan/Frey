@@ -89,6 +89,15 @@ async function bootstrap() {
         geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     }
 
+    function setViewMode(nextMode) {
+        const normalizedMode = nextMode === "plates" ? "plates" : "normal";
+        currentViewMode = normalizedMode;
+        for (const input of viewModeInputs) {
+            input.checked = input.value === normalizedMode;
+        }
+        applyCurrentViewColors();
+    }
+
     function onResize() {
         resizeViewport(viewportPanel, camera, renderer);
     }
@@ -159,10 +168,49 @@ async function bootstrap() {
             if (!input.checked) {
                 return;
             }
-            currentViewMode = input.value === "plates" ? "plates" : "normal";
-            applyCurrentViewColors();
+            setViewMode(input.value);
         });
     }
+
+    document.addEventListener("keydown", (event) => {
+        if (
+            event.defaultPrevented ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        const target = event.target;
+        if (
+            target instanceof HTMLElement &&
+            (target.isContentEditable ||
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLTextAreaElement ||
+                target instanceof HTMLSelectElement)
+        ) {
+            return;
+        }
+
+        if (event.key === "1") {
+            event.preventDefault();
+            setViewMode("normal");
+            return;
+        }
+
+        if (event.key === "2") {
+            event.preventDefault();
+            setViewMode("plates");
+            return;
+        }
+
+        if (event.key.toLowerCase() === "t") {
+            event.preventDefault();
+            seedInput.focus();
+            seedInput.select();
+        }
+    });
 
     seedForm.addEventListener("submit", async (event) => {
         event.preventDefault();

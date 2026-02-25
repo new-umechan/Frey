@@ -238,7 +238,7 @@ body {
 
 .view-mode-group {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.35rem;
 }
 
@@ -258,11 +258,11 @@ body {
 
 .view-mode-option span {
     display: block;
-    text-align: center;
+    text-align: left;
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--ink-soft);
-    padding: 0.45rem 0.5rem;
+    padding: 0.45rem 1.0rem;
     border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
     background: color-mix(in oklab, var(--panel), white 14%);
 }
