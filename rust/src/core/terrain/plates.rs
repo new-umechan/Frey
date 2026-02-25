@@ -645,6 +645,9 @@ fn compute_vertex_lithosphere(
     attributes: &[PlateAttr],
     boundary_edges: &[BoundaryEdge],
 ) -> Vec<VertexLithosphere> {
+    const AGE_SPEED_REF: f32 = 0.65;
+    const AGE_DIRECTIONAL_INFLUENCE: f32 = 0.35;
+
     let v_count = positions.len();
     let mut crust_age_dist = vec![f32::INFINITY; v_count];
     let mut lith = vec![
@@ -657,6 +660,13 @@ fn compute_vertex_lithosphere(
     ];
     let mut heap = BinaryHeap::new();
     let plate_count = attributes.len();
+    let mut plate_age_distance_weight = vec![1.0_f32; plate_count];
+
+    // プレートの速度に応じて重み付け
+    for (pid, attr) in attributes.iter().enumerate() {
+        let speed = length3(attr.velocity).max(1e-4);
+        plate_age_distance_weight[pid] = AGE_SPEED_REF / speed;
+    }
 
     let mut has_divergent_source = vec![false; plate_count];
     let mut has_boundary_seed = vec![false; plate_count];
@@ -735,7 +745,23 @@ fn compute_vertex_lithosphere(
                 continue;
             }
             let step = chord_distance(positions[state.vertex], positions[n]).max(1e-4);
-            let next_cost = state.cost + step;
+            let base_weight = plate_age_distance_weight[pid];
+
+            let edge_vec = sub3(positions[n], positions[state.vertex]);
+            let edge_tangent = project_to_tangent(edge_vec, positions[state.vertex]);
+            let edge_dir = normalize3(edge_tangent);
+
+            let plate_vel_tangent = project_to_tangent(attributes[pid].velocity, positions[state.vertex]);
+            let plate_vel_dir = normalize3(plate_vel_tangent);
+            let dir_alignment = dot3(edge_dir, plate_vel_dir);
+            let dir_weight = if length3(plate_vel_tangent) <= 1e-6 {
+                1.0
+            } else {
+                clamp(1.0 - AGE_DIRECTIONAL_INFLUENCE * dir_alignment, 0.55, 1.45)
+            };
+
+            let weighted_step = step * base_weight * dir_weight;
+            let next_cost = state.cost + weighted_step;
             if next_cost + 1e-6 < crust_age_dist[n] {
                 crust_age_dist[n] = next_cost;
                 heap.push(BoundaryDistState {
