@@ -19,6 +19,7 @@ struct PlateAttr {
     is_ocean: bool,
     velocity: [f32; 3],
     base_height: f32,
+    base_weight: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -220,6 +221,13 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
 
     let attributes = assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
+    let (vertex_plate_weight, oceanic_crust_age) = compute_plate_vertex_weight_and_age(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &plate_id,
+        &attributes,
+    );
     let (band_low, band_mid, band_high) = generate_frequency_bands(
         &spherical,
         &nbr_offsets,
@@ -238,8 +246,15 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
         let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
         let jitter = rng.gen_range_f32(-0.008, 0.008);
+        let weight_bias = if attributes[pid].is_ocean {
+            let delta_w = vertex_plate_weight[v] - attributes[pid].base_weight;
+            -0.24 * delta_w + 0.03 * (1.0 - oceanic_crust_age[v])
+        } else {
+            0.0
+        };
         height[v] = clamp(
             attributes[pid].base_height
+                + weight_bias
                 + 0.08 * phi[v]
                 + low_amp * band_low[v]
                 + mid_amp * band_mid[v]
@@ -256,6 +271,7 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         &nbrs,
         &plate_id,
         &attributes,
+        &vertex_plate_weight,
         &mut height,
         &params,
     );
@@ -1217,15 +1233,186 @@ fn assign_plate_attributes(
         } else {
             0.10 + rng.gen_range_f32(-0.08, 0.08)
         };
+        let base_weight = if is_ocean {
+            0.62 + rng.gen_range_f32(-0.06, 0.08)
+        } else {
+            0.22 + rng.gen_range_f32(-0.04, 0.04)
+        };
 
         attrs.push(PlateAttr {
             is_ocean,
             velocity,
             base_height,
+            base_weight,
         });
     }
 
     attrs
+}
+
+fn compute_plate_vertex_weight_and_age(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
+) -> (Vec<f32>, Vec<f32>) {
+    let v_count = positions.len();
+    let mut crust_age_dist = vec![f32::INFINITY; v_count];
+    let mut plate_weight = vec![0.0_f32; v_count];
+    let mut ocean_age_norm = vec![0.0_f32; v_count];
+    let mut heap = BinaryHeap::new();
+    let classify_eps = 0.05;
+    let plate_count = attributes.len();
+
+    let mut has_divergent_source = vec![false; plate_count];
+    let mut has_boundary_seed = vec![false; plate_count];
+
+    for i in 0..v_count {
+        let pid = plate_id[i] as usize;
+        plate_weight[i] = attributes[pid].base_weight;
+    }
+
+    for i in 0..v_count {
+        let start = nbr_offsets[i] as usize;
+        let end = nbr_offsets[i + 1] as usize;
+        for &j_u32 in &nbrs[start..end] {
+            let j = j_u32 as usize;
+            if j <= i {
+                continue;
+            }
+            let pi = plate_id[i] as usize;
+            let pj = plate_id[j] as usize;
+            if pi == pj {
+                continue;
+            }
+
+            let edge_vec = sub3(positions[j], positions[i]);
+            let edge_dir = normalize3(edge_vec);
+            let rel_v = sub3(attributes[pj].velocity, attributes[pi].velocity);
+            let v_rel_n = dot3(rel_v, edge_dir);
+            let is_divergent = v_rel_n < -classify_eps;
+
+            for &v in &[i, j] {
+                let pv = plate_id[v] as usize;
+                if !attributes[pv].is_ocean {
+                    continue;
+                }
+                has_boundary_seed[pv] = true;
+                if is_divergent {
+                    has_divergent_source[pv] = true;
+                    if crust_age_dist[v] > 0.0 {
+                        crust_age_dist[v] = 0.0;
+                        heap.push(BoundaryDistState {
+                            cost: 0.0,
+                            vertex: v,
+                            source_edge: v,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    for i in 0..v_count {
+        let pid = plate_id[i] as usize;
+        if !attributes[pid].is_ocean {
+            continue;
+        }
+        if has_divergent_source[pid] {
+            continue;
+        }
+        if has_boundary_seed[pid] && crust_age_dist[i].is_infinite() {
+            let start = nbr_offsets[i] as usize;
+            let end = nbr_offsets[i + 1] as usize;
+            let is_boundary = nbrs[start..end]
+                .iter()
+                .any(|&n| plate_id[n as usize] != plate_id[i]);
+            if is_boundary {
+                crust_age_dist[i] = 0.0;
+                heap.push(BoundaryDistState {
+                    cost: 0.0,
+                    vertex: i,
+                    source_edge: i,
+                });
+            }
+        }
+    }
+
+    for i in 0..v_count {
+        let pid = plate_id[i] as usize;
+        if attributes[pid].is_ocean && crust_age_dist[i].is_infinite() {
+            crust_age_dist[i] = 0.0;
+            heap.push(BoundaryDistState {
+                cost: 0.0,
+                vertex: i,
+                source_edge: i,
+            });
+        }
+    }
+
+    while let Some(state) = heap.pop() {
+        if state.cost > crust_age_dist[state.vertex] + 1e-6 {
+            continue;
+        }
+        let pid = plate_id[state.vertex] as usize;
+        if !attributes[pid].is_ocean {
+            continue;
+        }
+
+        let start = nbr_offsets[state.vertex] as usize;
+        let end = nbr_offsets[state.vertex + 1] as usize;
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            if plate_id[n] != plate_id[state.vertex] {
+                continue;
+            }
+            let npid = plate_id[n] as usize;
+            if !attributes[npid].is_ocean {
+                continue;
+            }
+            let step = chord_distance(positions[state.vertex], positions[n]).max(1e-4);
+            let next_cost = state.cost + step;
+            if next_cost + 1e-6 < crust_age_dist[n] {
+                crust_age_dist[n] = next_cost;
+                heap.push(BoundaryDistState {
+                    cost: next_cost,
+                    vertex: n,
+                    source_edge: state.source_edge,
+                });
+            }
+        }
+    }
+
+    let mut ocean_plate_max_age = vec![0.0_f32; plate_count];
+    for v in 0..v_count {
+        let pid = plate_id[v] as usize;
+        if !attributes[pid].is_ocean {
+            continue;
+        }
+        if crust_age_dist[v].is_finite() {
+            ocean_plate_max_age[pid] = ocean_plate_max_age[pid].max(crust_age_dist[v]);
+        }
+    }
+
+    for v in 0..v_count {
+        let pid = plate_id[v] as usize;
+        if !attributes[pid].is_ocean {
+            ocean_age_norm[v] = 0.0;
+            plate_weight[v] = attributes[pid].base_weight;
+            continue;
+        }
+        let max_age = ocean_plate_max_age[pid].max(1e-4);
+        let age = if crust_age_dist[v].is_finite() {
+            clamp(crust_age_dist[v] / max_age, 0.0, 1.0)
+        } else {
+            0.0
+        };
+        ocean_age_norm[v] = age;
+        plate_weight[v] = attributes[pid].base_weight + 0.42 * age;
+    }
+
+    (plate_weight, ocean_age_norm)
 }
 
 fn apply_boundary_model(
@@ -1234,10 +1421,18 @@ fn apply_boundary_model(
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
+    vertex_plate_weight: &[f32],
     height: &mut [f32],
     params: &TerrainParams,
 ) -> BoundaryFields {
-    let boundary_edges = extract_boundary_edges(positions, nbr_offsets, nbrs, plate_id, attributes);
+    let boundary_edges = extract_boundary_edges(
+        positions,
+        nbr_offsets,
+        nbrs,
+        plate_id,
+        attributes,
+        vertex_plate_weight,
+    );
     if boundary_edges.is_empty() {
         return BoundaryFields {
             preserve_strength: vec![0.0; height.len()],
@@ -1377,6 +1572,7 @@ fn extract_boundary_edges(
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
+    vertex_plate_weight: &[f32],
 ) -> Vec<BoundaryEdge> {
     let mut edges = Vec::new();
     let classify_eps = 0.05;
@@ -1422,7 +1618,7 @@ fn extract_boundary_edges(
 
             let (convergent_mode, subduction_polarity) =
                 if matches!(boundary_type, BoundaryType::Convergent) {
-                    classify_convergent_edge(plate_a, plate_b, attributes)
+                    classify_convergent_edge(i, j, plate_a, plate_b, attributes, vertex_plate_weight)
                 } else {
                     (None, SubductionPolarity::None)
                 };
@@ -1445,9 +1641,12 @@ fn extract_boundary_edges(
 }
 
 fn classify_convergent_edge(
+    vertex_a: usize,
+    vertex_b: usize,
     plate_a: usize,
     plate_b: usize,
     attributes: &[PlateAttr],
+    vertex_plate_weight: &[f32],
 ) -> (Option<ConvergentMode>, SubductionPolarity) {
     let a_ocean = attributes[plate_a].is_ocean;
     let b_ocean = attributes[plate_b].is_ocean;
@@ -1459,7 +1658,9 @@ fn classify_convergent_edge(
         return (Some(ConvergentMode::OceanContinent), SubductionPolarity::BUnderA);
     }
     if a_ocean && b_ocean {
-        let polarity = if attributes[plate_a].base_height <= attributes[plate_b].base_height {
+        let a_weight = vertex_plate_weight[vertex_a];
+        let b_weight = vertex_plate_weight[vertex_b];
+        let polarity = if a_weight >= b_weight {
             SubductionPolarity::AUnderB
         } else {
             SubductionPolarity::BUnderA
@@ -2021,12 +2222,25 @@ mod tests {
 
         let attributes =
             super::assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
+        let (vertex_plate_weight, oceanic_crust_age) = super::compute_plate_vertex_weight_and_age(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &plate_id,
+            &attributes,
+        );
         let mut height = vec![0.0; positions.len()];
         for v in 0..positions.len() {
             let pid = plate_id[v] as usize;
             let noise = rng.gen_range_f32(-0.03, 0.03);
+            let weight_bias = if attributes[pid].is_ocean {
+                let delta_w = vertex_plate_weight[v] - attributes[pid].base_weight;
+                -0.24 * delta_w + 0.03 * (1.0 - oceanic_crust_age[v])
+            } else {
+                0.0
+            };
             height[v] = super::clamp(
-                attributes[pid].base_height + 0.10 * phi[v] + noise,
+                attributes[pid].base_height + weight_bias + 0.10 * phi[v] + noise,
                 -1.2,
                 1.2,
             );
@@ -2038,6 +2252,7 @@ mod tests {
             &nbrs,
             &plate_id,
             &attributes,
+            &vertex_plate_weight,
             &mut height,
             params,
         );
