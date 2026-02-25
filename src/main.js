@@ -176,7 +176,7 @@ async function bootstrap() {
         globeControls.enabled = true;
         mapControls.enabled = false;
         sphere.visible = true;
-        wireframe.visible = true;
+        wireframe.visible = debugEnabled;
         halo.visible = true;
         mapPlane.visible = false;
         globeControls.update();
@@ -261,6 +261,7 @@ async function bootstrap() {
     function setDebugModeEnabled(nextEnabled) {
         debugEnabled = Boolean(nextEnabled);
         debugToggleInput.checked = debugEnabled;
+        wireframe.visible = debugEnabled && currentSurfaceMode === "globe";
 
         if (!plateHoverPopup.hidden && pendingPlateHover) {
             showPlateHoverPopup(
