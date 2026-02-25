@@ -3,10 +3,14 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#e8edf3");
+    scene.background = new THREE.Color("#EDF4FA");
 
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 2.7);
+    const globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+    globeCamera.position.set(0, 0, 2.7);
+    const mapCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+    mapCamera.position.set(0, 0, 5);
+    mapCamera.lookAt(0, 0, 0);
+    mapCamera.updateProjectionMatrix();
 
     const renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -15,11 +19,21 @@ export function createGlobeScene(canvas, indices) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 1.2;
-    controls.maxDistance = 6.0;
+    const globeControls = new OrbitControls(globeCamera, renderer.domElement);
+    globeControls.enableDamping = true;
+    globeControls.dampingFactor = 0.05;
+    globeControls.minDistance = 1.2;
+    globeControls.maxDistance = 6.0;
+
+    const mapControls = new OrbitControls(mapCamera, renderer.domElement);
+    mapControls.enableRotate = false;
+    mapControls.enablePan = true;
+    mapControls.enableZoom = true;
+    mapControls.enableDamping = false;
+    mapControls.zoomSpeed = 1.0;
+    mapControls.screenSpacePanning = true;
+    mapControls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+    mapControls.touches.ONE = THREE.TOUCH.PAN;
 
     const geometry = new THREE.BufferGeometry();
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
@@ -64,23 +78,54 @@ export function createGlobeScene(canvas, indices) {
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
     scene.add(halo);
 
+    const mapPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 1),
+        new THREE.MeshBasicMaterial({
+            color: "#d9e0e8",
+        }),
+    );
+    mapPlane.visible = false;
+    scene.add(mapPlane);
+
     return {
         scene,
-        camera,
+        globeCamera,
+        mapCamera,
         renderer,
-        controls,
+        globeControls,
+        mapControls,
         geometry,
         sphere,
+        wireframe,
+        halo,
+        mapPlane,
     };
 }
 
-export function resizeViewport(viewportPanel, camera, renderer) {
+export function resizeViewport(viewportPanel, globeCamera, mapCamera, renderer) {
     const width = viewportPanel.clientWidth;
     const height = viewportPanel.clientHeight;
     if (width <= 0 || height <= 0) {
         return;
     }
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    globeCamera.aspect = width / height;
+    globeCamera.updateProjectionMatrix();
+
+    const aspect = width / height;
+    const mapAspect = 2;
+    const margin = 1.08;
+    let halfWidth = 1 * margin;
+    let halfHeight = 0.5 * margin;
+    if (aspect > mapAspect) {
+        halfWidth = aspect * halfHeight;
+    } else {
+        halfHeight = (halfWidth / aspect);
+    }
+    mapCamera.left = -halfWidth;
+    mapCamera.right = halfWidth;
+    mapCamera.top = halfHeight;
+    mapCamera.bottom = -halfHeight;
+    mapCamera.updateProjectionMatrix();
+
     renderer.setSize(width, height);
 }
