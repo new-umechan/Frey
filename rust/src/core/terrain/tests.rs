@@ -32,8 +32,13 @@ mod tests {
         super::cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
         plate_id = super::compact_plate_ids(plate_id, plate_count);
 
-        let attributes =
-            super::assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
+        let attributes = super::assign_plate_attributes(
+            &plate_id,
+            plate_count,
+            &phi,
+            &mut rng,
+            params.ocean_plate_ratio,
+        );
         let boundary_edges =
             super::extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
         let vertex_lithosphere = super::compute_vertex_lithosphere(
@@ -238,5 +243,50 @@ mod tests {
             cont_land_ratio > ocean_land_ratio,
             "cont_land_ratio={cont_land_ratio}, ocean_land_ratio={ocean_land_ratio}"
         );
+    }
+
+    #[test]
+    fn plate_type_matches_land_tendency_per_plate() {
+        let params = TerrainParams {
+            level: 2,
+            ..TerrainParams::default()
+        };
+
+        for seed in ["alpha", "beta", "gamma", "delta"] {
+            let output = generate_for_test(seed, &params);
+            let plate_count = output.plate_is_ocean.len();
+            let mut counts = vec![0usize; plate_count];
+            let mut land_counts = vec![0usize; plate_count];
+            let mut mean_sum = vec![0.0f32; plate_count];
+
+            for (i, &h) in output.height.iter().enumerate() {
+                let pid = output.plate_id[i] as usize;
+                counts[pid] += 1;
+                mean_sum[pid] += h;
+                if h > 0.0 {
+                    land_counts[pid] += 1;
+                }
+            }
+
+            for pid in 0..plate_count {
+                if counts[pid] == 0 {
+                    continue;
+                }
+                let land_ratio = land_counts[pid] as f32 / counts[pid] as f32;
+                let mean_h = mean_sum[pid] / counts[pid] as f32;
+                let is_ocean = output.plate_is_ocean[pid] != 0;
+                if is_ocean {
+                    assert!(
+                        !(land_ratio > 0.70 && mean_h > 0.02),
+                        "seed={seed} ocean plate #{pid} looks continental: land_ratio={land_ratio}, mean={mean_h}"
+                    );
+                } else {
+                    assert!(
+                        !(land_ratio < 0.02 && mean_h < -0.02),
+                        "seed={seed} continental plate #{pid} is submerged: land_ratio={land_ratio}, mean={mean_h}"
+                    );
+                }
+            }
+        }
     }
 }

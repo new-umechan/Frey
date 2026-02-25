@@ -33,7 +33,13 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
     plate_id = compact_plate_ids(plate_id, plate_count);
     cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
     plate_id = compact_plate_ids(plate_id, plate_count);
-    let attributes = assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
+    let attributes = assign_plate_attributes(
+        &plate_id,
+        plate_count,
+        &phi,
+        &mut rng,
+        params.ocean_plate_ratio,
+    );
     let boundary_edges =
         extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
     let vertex_lithosphere = compute_vertex_lithosphere(

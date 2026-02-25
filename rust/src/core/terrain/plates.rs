@@ -553,22 +553,72 @@ fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> Vec<u32> {
 }
 
 fn assign_plate_attributes(
+    plate_id: &[u32],
     plate_count: usize,
+    phi: &[f32],
     rng: &mut DeterministicRng,
     ocean_plate_ratio: f32,
 ) -> Vec<PlateAttr> {
+    let mut plate_counts = vec![0usize; plate_count];
+    let mut plate_phi_sum = vec![0.0f32; plate_count];
+    for (v, &pid_u32) in plate_id.iter().enumerate() {
+        let pid = pid_u32 as usize;
+        if pid >= plate_count {
+            continue;
+        }
+        plate_counts[pid] += 1;
+        plate_phi_sum[pid] += phi[v];
+    }
+
+    let mut plate_scores = Vec::with_capacity(plate_count);
+    for pid in 0..plate_count {
+        let mean_phi = if plate_counts[pid] > 0 {
+            plate_phi_sum[pid] / plate_counts[pid] as f32
+        } else {
+            0.0
+        };
+        let jitter = rng.gen_range_f32(-0.12, 0.12);
+        plate_scores.push((pid, mean_phi + jitter, mean_phi));
+    }
+    plate_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+    let mut ocean_target = ((plate_count as f32) * ocean_plate_ratio).round() as usize;
+    if plate_count >= 2 {
+        ocean_target = ocean_target.clamp(1, plate_count - 1);
+    } else {
+        ocean_target = ocean_target.min(plate_count);
+    }
+    let continent_target = plate_count.saturating_sub(ocean_target);
+    let mut is_ocean_plate = vec![true; plate_count];
+    for (rank, (pid, _, _)) in plate_scores.iter().enumerate() {
+        is_ocean_plate[*pid] = rank >= continent_target;
+    }
+
     let mut attrs = Vec::with_capacity(plate_count);
 
-    for _ in 0..plate_count {
-        let is_ocean = rng.bernoulli(ocean_plate_ratio);
+    for pid in 0..plate_count {
+        let is_ocean = is_ocean_plate[pid];
         let dir = rng.gen_range_f32(0.0, 2.0 * std::f32::consts::PI);
         let speed = rng.gen_range_f32(0.3, 1.0);
         let velocity = [speed * dir.cos(), speed * dir.sin(), 0.0];
+        let mean_phi = if plate_counts[pid] > 0 {
+            plate_phi_sum[pid] / plate_counts[pid] as f32
+        } else {
+            0.0
+        };
 
         let base_height = if is_ocean {
-            -0.04 + rng.gen_range_f32(-0.03, 0.03)
+            clamp(
+                -0.09 + 0.02 * mean_phi + rng.gen_range_f32(-0.03, 0.02),
+                -0.20,
+                -0.02,
+            )
         } else {
-            0.10 + rng.gen_range_f32(-0.08, 0.08)
+            clamp(
+                0.12 + 0.05 * mean_phi + rng.gen_range_f32(-0.05, 0.06),
+                0.03,
+                0.30,
+            )
         };
         let base_weight = if is_ocean {
             0.62 + rng.gen_range_f32(-0.06, 0.08)
