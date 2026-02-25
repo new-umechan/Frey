@@ -575,6 +575,9 @@ async function bootstrap() {
 
     function onResize() {
         resizeViewport(viewportPanel, globeCamera, mapCamera, renderer);
+        if (typeof globeControls.handleResize === "function") {
+            globeControls.handleResize();
+        }
         if (currentSurfaceMode === "map") {
             fitCameraToCurrentSurface();
         }

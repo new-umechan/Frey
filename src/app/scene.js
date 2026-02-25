@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
 
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
@@ -19,9 +20,10 @@ export function createGlobeScene(canvas, indices) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    const globeControls = new OrbitControls(globeCamera, renderer.domElement);
-    globeControls.enableDamping = true;
-    globeControls.dampingFactor = 0.05;
+    const globeControls = new TrackballControls(globeCamera, renderer.domElement);
+    globeControls.noPan = true;
+    globeControls.dynamicDampingFactor = 0.08;
+    globeControls.staticMoving = false;
     globeControls.minDistance = 1.2;
     globeControls.maxDistance = 6.0;
 
