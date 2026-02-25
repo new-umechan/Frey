@@ -138,6 +138,10 @@ mod tests {
             plate_is_ocean,
             plate_base_height,
             plate_base_weight,
+            debug_trench_strength: vec![0.0; positions.len()],
+            debug_arc_strength: vec![0.0; positions.len()],
+            debug_backarc_strength: vec![0.0; positions.len()],
+            debug_ocean_ocean_arc_strength: vec![0.0; positions.len()],
         }
     }
 

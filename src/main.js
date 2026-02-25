@@ -26,7 +26,7 @@ const TERRAIN_PARAMS = {
     boundary_divergent_base_gain: 0.34,
     boundary_transform_relief_gain: 0.08,
     trench_gain: 0.34,
-    arc_gain: 0.28,
+    arc_gain: 0.40,
     collision_gain: 0.44,
     rift_gain: 0.22,
     boundary_width_trench: 0.11,
@@ -36,8 +36,8 @@ const TERRAIN_PARAMS = {
     boundary_obliquity_mix: 0.50,
     boundary_distance_falloff: 1.0,
     boundary_anisotropy: 0.40,
-    smooth_iter: 8,
-    smooth_lambda: 0.38,
+    smooth_iter: 3,
+    smooth_lambda: 0.16,
     river_rain_base: 0.5,
     river_accum_threshold: 0.035,
     erosion_iter: 12,
@@ -262,6 +262,7 @@ async function bootstrap() {
         debugEnabled = Boolean(nextEnabled);
         debugToggleInput.checked = debugEnabled;
         wireframe.visible = debugEnabled && currentSurfaceMode === "globe";
+        applyCurrentViewColors();
 
         if (!plateHoverPopup.hidden && pendingPlateHover) {
             showPlateHoverPopup(
@@ -557,6 +558,8 @@ async function bootstrap() {
             currentTerrainData.plateId,
             currentTerrainData.riverFlux,
             currentViewMode,
+            debugEnabled,
+            currentTerrainData.tectonicDebug,
         );
         geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
         updateMapTexture(colors);
@@ -607,6 +610,14 @@ async function bootstrap() {
             baseWeight: new Float32Array(terrain.plate_base_weight),
         };
         const vertexWeight = new Float32Array(terrain.vertex_weight);
+        const tectonicDebug = {
+            trench: new Float32Array(terrain.debug_trench_strength ?? heightData.length),
+            arc: new Float32Array(terrain.debug_arc_strength ?? heightData.length),
+            backarc: new Float32Array(terrain.debug_backarc_strength ?? heightData.length),
+            oceanOceanArc: new Float32Array(
+                terrain.debug_ocean_ocean_arc_strength ?? heightData.length,
+            ),
+        };
         if (token !== generationToken) {
             return;
         }
@@ -617,6 +628,7 @@ async function bootstrap() {
             riverFlux,
             plateInfo,
             vertexWeight,
+            tectonicDebug,
         };
         updateGeometryPositions();
         applyCurrentViewColors();

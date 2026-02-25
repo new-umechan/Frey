@@ -174,6 +174,10 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         plate_is_ocean,
         plate_base_height,
         plate_base_weight,
+        debug_trench_strength: boundary_fields.debug_trench_strength,
+        debug_arc_strength: boundary_fields.debug_arc_strength,
+        debug_backarc_strength: boundary_fields.debug_backarc_strength,
+        debug_ocean_ocean_arc_strength: boundary_fields.debug_ocean_ocean_arc_strength,
     }
 }
 

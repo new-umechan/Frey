@@ -47,6 +47,10 @@ struct VertexLithosphere {
 
 struct BoundaryFields {
     preserve_strength: Vec<f32>,
+    debug_trench_strength: Vec<f32>,
+    debug_arc_strength: Vec<f32>,
+    debug_backarc_strength: Vec<f32>,
+    debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 
 #[derive(Clone, Copy)]

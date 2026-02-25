@@ -97,6 +97,10 @@ pub struct TerrainOutput {
     pub plate_is_ocean: Vec<u8>,
     pub plate_base_height: Vec<f32>,
     pub plate_base_weight: Vec<f32>,
+    pub debug_trench_strength: Vec<f32>,
+    pub debug_arc_strength: Vec<f32>,
+    pub debug_backarc_strength: Vec<f32>,
+    pub debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 
 #[wasm_bindgen]

@@ -611,5 +611,9 @@ fn earth_preset(
         plate_is_ocean: vec![1, 0, 0, 1],
         plate_base_height: vec![-0.06, 0.14, 0.08, -0.03],
         plate_base_weight: vec![0.66, 0.24, 0.20, 0.61],
+        debug_trench_strength: vec![0.0; positions.len()],
+        debug_arc_strength: vec![0.0; positions.len()],
+        debug_backarc_strength: vec![0.0; positions.len()],
+        debug_ocean_ocean_arc_strength: vec![0.0; positions.len()],
     }
 }

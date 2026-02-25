@@ -7,7 +7,14 @@ function plateModeColor(plate, heightValue) {
     return new THREE.Color().setHSL(hue, saturation, lightness);
 }
 
-export function buildVertexColors(heightData, plateId, riverFlux, viewMode) {
+export function buildVertexColors(
+    heightData,
+    plateId,
+    riverFlux,
+    viewMode,
+    debugEnabled = false,
+    tectonicDebug = null,
+) {
     const colors = new Float32Array(heightData.length * 3);
 
     for (let v = 0; v < heightData.length; v += 1) {
@@ -31,6 +38,26 @@ export function buildVertexColors(heightData, plateId, riverFlux, viewMode) {
             );
             if (river > 0.10 && h < 0.45) {
                 color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
+            }
+        }
+
+        if (debugEnabled && viewMode === "normal" && tectonicDebug) {
+            const trench = tectonicDebug.trench?.[v] ?? 0;
+            const arc = tectonicDebug.arc?.[v] ?? 0;
+            const backarc = tectonicDebug.backarc?.[v] ?? 0;
+            const oceanOceanArc = tectonicDebug.oceanOceanArc?.[v] ?? 0;
+
+            if (trench > 0.01) {
+                color.lerp(new THREE.Color("#ff355e"), Math.min(0.80, trench * 0.90));
+            }
+            if (backarc > 0.01) {
+                color.lerp(new THREE.Color("#7b61ff"), Math.min(0.55, backarc * 0.60));
+            }
+            if (arc > 0.01) {
+                color.lerp(new THREE.Color("#ffb000"), Math.min(0.85, arc * 0.95));
+            }
+            if (oceanOceanArc > 0.01) {
+                color.lerp(new THREE.Color("#2aff7a"), Math.min(0.95, oceanOceanArc));
             }
         }
 
