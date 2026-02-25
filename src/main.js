@@ -2,6 +2,7 @@ import * as THREE from "three";
 import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
 import { collectAppElements } from "./app/dom.js";
 import { createGlobeScene, resizeViewport } from "./app/scene.js";
+import { buildEquirectangularMapTexture } from "./app/map-texture.js";
 import {
     buildRenderPositions,
     buildVertexColors,
@@ -11,6 +12,7 @@ import {
 const LEVEL = 6;
 const DEFAULT_TERRAIN_SEED = "alpha";
 const DEFAULT_VIEW_MODE = "normal";
+const DEFAULT_SURFACE_MODE = "globe";
 const PLATE_HOVER_POPUP_DELAY_MS = 450;
 const TERRAIN_PARAMS = {
     level: LEVEL,
@@ -83,11 +85,28 @@ async function bootstrap() {
     const basePositions = new Float32Array(mesh.positions);
     const indices = new Uint32Array(mesh.indices);
 
-    const { scene, camera, renderer, controls, geometry, sphere } = createGlobeScene(canvas, indices);
+    const {
+        scene,
+        globeCamera,
+        mapCamera,
+        renderer,
+        globeControls,
+        mapControls,
+        geometry,
+        sphere,
+        wireframe,
+        halo,
+        mapPlane,
+    } = createGlobeScene(canvas, indices);
+    let camera = globeCamera;
+    let activeControls = globeControls;
+    globeControls.enabled = true;
+    mapControls.enabled = false;
 
     let generationToken = 0;
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentViewMode = DEFAULT_VIEW_MODE;
+    let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentTerrainData = null;
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
@@ -100,6 +119,79 @@ async function bootstrap() {
     let pendingPlateHover = null;
     let visiblePlateHoverId = null;
     let debugEnabled = debugToggleInput.checked;
+    let currentMapTexture = null;
+
+    function updateMapTexture(vertexColors) {
+        const nextTexture = buildEquirectangularMapTexture(basePositions, indices, vertexColors);
+        const mapMaterial = mapPlane.material;
+        if (!(mapMaterial instanceof THREE.MeshBasicMaterial)) {
+            return;
+        }
+        if (currentMapTexture) {
+            currentMapTexture.dispose();
+        }
+        currentMapTexture = nextTexture;
+        mapMaterial.map = nextTexture;
+        mapMaterial.needsUpdate = true;
+    }
+
+    function updateGeometryPositions() {
+        if (!currentTerrainData) {
+            return;
+        }
+        const positions = buildRenderPositions(
+            basePositions,
+            currentTerrainData.heightData,
+            currentSurfaceMode,
+        );
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+    }
+
+    function fitCameraToCurrentSurface() {
+        if (currentSurfaceMode === "map") {
+            camera = mapCamera;
+            mapCamera.position.set(0, 0, 5);
+            mapCamera.up.set(0, 1, 0);
+            mapCamera.lookAt(0, 0, 0);
+            mapControls.target.set(0, 0, 0);
+            mapControls.update();
+            activeControls = mapControls;
+            globeControls.enabled = false;
+            mapControls.enabled = true;
+            mapControls.enablePan = true;
+            sphere.visible = false;
+            wireframe.visible = false;
+            halo.visible = false;
+            mapPlane.visible = true;
+            return;
+        }
+
+        camera = globeCamera;
+        globeCamera.position.set(0, 0, 2.7);
+        globeCamera.up.set(0, 1, 0);
+        globeControls.target.set(0, 0, 0);
+        activeControls = globeControls;
+        globeControls.enabled = true;
+        mapControls.enabled = false;
+        sphere.visible = true;
+        wireframe.visible = true;
+        halo.visible = true;
+        mapPlane.visible = false;
+        globeControls.update();
+    }
+
+    function setSurfaceMode(nextMode) {
+        const normalizedMode = nextMode === "map" ? "map" : "globe";
+        if (currentSurfaceMode === normalizedMode && currentTerrainData) {
+            return;
+        }
+        currentSurfaceMode = normalizedMode;
+        updateGeometryPositions();
+        fitCameraToCurrentSurface();
+        hidePlateHoverPopup();
+    }
 
     function clearPlateHoverTimer() {
         if (plateHoverTimerId !== null) {
@@ -391,7 +483,7 @@ async function bootstrap() {
     }
 
     function updatePlateHoverFromPointer(event) {
-        if (!currentTerrainData || currentViewMode !== "plates") {
+        if (!currentTerrainData || currentViewMode !== "plates" || currentSurfaceMode !== "globe") {
             hidePlateHoverPopup();
             return;
         }
@@ -466,6 +558,7 @@ async function bootstrap() {
             currentViewMode,
         );
         geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        updateMapTexture(colors);
     }
 
     function setViewMode(nextMode) {
@@ -481,7 +574,10 @@ async function bootstrap() {
     }
 
     function onResize() {
-        resizeViewport(viewportPanel, camera, renderer);
+        resizeViewport(viewportPanel, globeCamera, mapCamera, renderer);
+        if (currentSurfaceMode === "map") {
+            fitCameraToCurrentSurface();
+        }
     }
 
     async function updateTerrain(seed) {
@@ -507,13 +603,10 @@ async function bootstrap() {
             baseWeight: new Float32Array(terrain.plate_base_weight),
         };
         const vertexWeight = new Float32Array(terrain.vertex_weight);
-        const positions = buildRenderPositions(basePositions, heightData);
-
         if (token !== generationToken) {
             return;
         }
 
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
         currentTerrainData = {
             heightData,
             plateId,
@@ -521,15 +614,14 @@ async function bootstrap() {
             plateInfo,
             vertexWeight,
         };
+        updateGeometryPositions();
         applyCurrentViewColors();
-        geometry.computeVertexNormals();
-        geometry.computeBoundingSphere();
         hidePlateHoverPopup();
 
         const { plateCount, landRatio } = summarizeTerrain(heightData, plateId);
 
         currentSeed = nextSeed;
-        statFields.vertices.textContent = `${positions.length / 3}`;
+        statFields.vertices.textContent = `${basePositions.length / 3}`;
         statFields.triangles.textContent = `${indices.length / 3}`;
         statFields.level.textContent = `${LEVEL}`;
         statFields.seed.textContent = currentSeed;
@@ -615,6 +707,12 @@ async function bootstrap() {
         if (event.key.toLowerCase() === "d") {
             event.preventDefault();
             setDebugModeEnabled(!debugEnabled);
+            return;
+        }
+
+        if (event.key.toLowerCase() === "v") {
+            event.preventDefault();
+            setSurfaceMode(currentSurfaceMode === "globe" ? "map" : "globe");
         }
     });
 
@@ -635,7 +733,7 @@ async function bootstrap() {
     hidePlateHoverPopup();
 
     function render() {
-        controls.update();
+        activeControls.update();
         renderer.render(scene, camera);
         requestAnimationFrame(render);
     }

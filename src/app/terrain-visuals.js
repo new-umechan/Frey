@@ -43,8 +43,9 @@ export function buildVertexColors(heightData, plateId, riverFlux, viewMode) {
     return colors;
 }
 
-export function buildRenderPositions(basePositions, heightData) {
+export function buildRenderPositions(basePositions, heightData, surfaceMode = "globe") {
     const positions = new Float32Array(basePositions);
+    const isMapMode = surfaceMode === "map";
 
     for (let i = 0; i < positions.length; i += 3) {
         const v = i / 3;
@@ -54,6 +55,20 @@ export function buildRenderPositions(basePositions, heightData) {
         const z = positions[i + 2];
         const renderHeight = h > 0.0 ? h : 0.0;
         const radius = 1.0 + renderHeight * 0.04;
+
+        if (isMapMode) {
+            const invLen = 1 / Math.max(1e-6, Math.hypot(x, y, z));
+            const nx = x * invLen;
+            const ny = y * invLen;
+            const nz = z * invLen;
+            const longitude = Math.atan2(nz, nx);
+            const latitude = Math.asin(THREE.MathUtils.clamp(ny, -1, 1));
+
+            positions[i] = longitude / Math.PI;
+            positions[i + 1] = latitude / Math.PI;
+            positions[i + 2] = 0;
+            continue;
+        }
 
         positions[i] = x * radius;
         positions[i + 1] = y * radius;
@@ -73,4 +88,3 @@ export function summarizeTerrain(heightData, plateId) {
         landRatio,
     };
 }
-
