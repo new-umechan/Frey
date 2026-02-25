@@ -50,10 +50,15 @@ struct BoundaryEdge {
     plate_a: usize,
     plate_b: usize,
     boundary_type: BoundaryType,
-    convergent_mode: Option<ConvergentMode>,
-    subduction_polarity: SubductionPolarity,
     strength: f32,
     obliquity: f32,
+}
+
+#[derive(Clone, Copy)]
+struct VertexLithosphere {
+    age_norm: f32,
+    weight: f32,
+    buoyancy: f32,
 }
 
 struct BoundaryFields {
@@ -217,17 +222,19 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
     plate_id = compact_plate_ids(plate_id, plate_count);
     cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
     plate_id = compact_plate_ids(plate_id, plate_count);
-    let plate_boundary_proximity =
-        compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
-
     let attributes = assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
-    let (vertex_plate_weight, oceanic_crust_age) = compute_plate_vertex_weight_and_age(
+    let boundary_edges =
+        extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
+    let vertex_lithosphere = compute_vertex_lithosphere(
         &positions,
         &nbr_offsets,
         &nbrs,
         &plate_id,
         &attributes,
+        &boundary_edges,
     );
+    let plate_boundary_proximity =
+        compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
     let (band_low, band_mid, band_high) = generate_frequency_bands(
         &spherical,
         &nbr_offsets,
@@ -246,15 +253,13 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
         let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
         let jitter = rng.gen_range_f32(-0.008, 0.008);
-        let weight_bias = if attributes[pid].is_ocean {
-            let delta_w = vertex_plate_weight[v] - attributes[pid].base_weight;
-            -0.24 * delta_w + 0.03 * (1.0 - oceanic_crust_age[v])
+        let crust_base = if attributes[pid].is_ocean {
+            vertex_lithosphere[v].buoyancy
         } else {
-            0.0
+            attributes[pid].base_height
         };
         height[v] = clamp(
-            attributes[pid].base_height
-                + weight_bias
+            crust_base
                 + 0.08 * phi[v]
                 + low_amp * band_low[v]
                 + mid_amp * band_mid[v]
@@ -271,7 +276,8 @@ pub(crate) fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsVal
         &nbrs,
         &plate_id,
         &attributes,
-        &vertex_plate_weight,
+        &vertex_lithosphere,
+        &boundary_edges,
         &mut height,
         &params,
     );
@@ -1229,7 +1235,7 @@ fn assign_plate_attributes(
         let velocity = [speed * dir.cos(), speed * dir.sin(), 0.0];
 
         let base_height = if is_ocean {
-            -0.28 + rng.gen_range_f32(-0.06, 0.06)
+            -0.04 + rng.gen_range_f32(-0.03, 0.03)
         } else {
             0.10 + rng.gen_range_f32(-0.08, 0.08)
         };
@@ -1250,19 +1256,25 @@ fn assign_plate_attributes(
     attrs
 }
 
-fn compute_plate_vertex_weight_and_age(
+fn compute_vertex_lithosphere(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
-) -> (Vec<f32>, Vec<f32>) {
+    boundary_edges: &[BoundaryEdge],
+) -> Vec<VertexLithosphere> {
     let v_count = positions.len();
     let mut crust_age_dist = vec![f32::INFINITY; v_count];
-    let mut plate_weight = vec![0.0_f32; v_count];
-    let mut ocean_age_norm = vec![0.0_f32; v_count];
+    let mut lith = vec![
+        VertexLithosphere {
+            age_norm: 0.0,
+            weight: 0.0,
+            buoyancy: 0.0,
+        };
+        v_count
+    ];
     let mut heap = BinaryHeap::new();
-    let classify_eps = 0.05;
     let plate_count = attributes.len();
 
     let mut has_divergent_source = vec![false; plate_count];
@@ -1270,45 +1282,27 @@ fn compute_plate_vertex_weight_and_age(
 
     for i in 0..v_count {
         let pid = plate_id[i] as usize;
-        plate_weight[i] = attributes[pid].base_weight;
+        lith[i].weight = attributes[pid].base_weight;
+        lith[i].buoyancy = attributes[pid].base_height;
     }
 
-    for i in 0..v_count {
-        let start = nbr_offsets[i] as usize;
-        let end = nbr_offsets[i + 1] as usize;
-        for &j_u32 in &nbrs[start..end] {
-            let j = j_u32 as usize;
-            if j <= i {
+    for edge in boundary_edges {
+        let is_divergent = matches!(edge.boundary_type, BoundaryType::Divergent);
+        for &v in &[edge.a, edge.b] {
+            let pv = plate_id[v] as usize;
+            if !attributes[pv].is_ocean {
                 continue;
             }
-            let pi = plate_id[i] as usize;
-            let pj = plate_id[j] as usize;
-            if pi == pj {
-                continue;
-            }
-
-            let edge_vec = sub3(positions[j], positions[i]);
-            let edge_dir = normalize3(edge_vec);
-            let rel_v = sub3(attributes[pj].velocity, attributes[pi].velocity);
-            let v_rel_n = dot3(rel_v, edge_dir);
-            let is_divergent = v_rel_n < -classify_eps;
-
-            for &v in &[i, j] {
-                let pv = plate_id[v] as usize;
-                if !attributes[pv].is_ocean {
-                    continue;
-                }
-                has_boundary_seed[pv] = true;
-                if is_divergent {
-                    has_divergent_source[pv] = true;
-                    if crust_age_dist[v] > 0.0 {
-                        crust_age_dist[v] = 0.0;
-                        heap.push(BoundaryDistState {
-                            cost: 0.0,
-                            vertex: v,
-                            source_edge: v,
-                        });
-                    }
+            has_boundary_seed[pv] = true;
+            if is_divergent {
+                has_divergent_source[pv] = true;
+                if crust_age_dist[v] > 0.0 {
+                    crust_age_dist[v] = 0.0;
+                    heap.push(BoundaryDistState {
+                        cost: 0.0,
+                        vertex: v,
+                        source_edge: v,
+                    });
                 }
             }
         }
@@ -1398,8 +1392,9 @@ fn compute_plate_vertex_weight_and_age(
     for v in 0..v_count {
         let pid = plate_id[v] as usize;
         if !attributes[pid].is_ocean {
-            ocean_age_norm[v] = 0.0;
-            plate_weight[v] = attributes[pid].base_weight;
+            lith[v].age_norm = 0.0;
+            lith[v].weight = attributes[pid].base_weight;
+            lith[v].buoyancy = attributes[pid].base_height;
             continue;
         }
         let max_age = ocean_plate_max_age[pid].max(1e-4);
@@ -1408,11 +1403,17 @@ fn compute_plate_vertex_weight_and_age(
         } else {
             0.0
         };
-        ocean_age_norm[v] = age;
-        plate_weight[v] = attributes[pid].base_weight + 0.42 * age;
+        let weight = attributes[pid].base_weight + 0.42 * age;
+        // 海洋の標高は「海嶺で軽く高い → 老化で重く低い」を浮力で一元表現する。
+        let buoyancy = (-0.08 + 0.06 * (1.0 - age)) - 0.26 * (weight - 0.62);
+        lith[v] = VertexLithosphere {
+            age_norm: age,
+            weight,
+            buoyancy,
+        };
     }
 
-    (plate_weight, ocean_age_norm)
+    lith
 }
 
 fn apply_boundary_model(
@@ -1421,18 +1422,11 @@ fn apply_boundary_model(
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
-    vertex_plate_weight: &[f32],
+    vertex_lithosphere: &[VertexLithosphere],
+    boundary_edges: &[BoundaryEdge],
     height: &mut [f32],
     params: &TerrainParams,
 ) -> BoundaryFields {
-    let boundary_edges = extract_boundary_edges(
-        positions,
-        nbr_offsets,
-        nbrs,
-        plate_id,
-        attributes,
-        vertex_plate_weight,
-    );
     if boundary_edges.is_empty() {
         return BoundaryFields {
             preserve_strength: vec![0.0; height.len()],
@@ -1460,7 +1454,15 @@ fn apply_boundary_model(
                 let oblique_relief = 1.0 - params.boundary_obliquity_mix * edge.obliquity;
                 let conv_base = params.boundary_convergent_base_gain * edge.strength * oblique_relief;
 
-                if let Some(mode) = edge.convergent_mode {
+                let (convergent_mode, subduction_polarity) = classify_convergent_edge(
+                    edge.a,
+                    edge.b,
+                    edge.plate_a,
+                    edge.plate_b,
+                    attributes,
+                    vertex_lithosphere,
+                );
+                if let Some(mode) = convergent_mode {
                     match mode {
                         ConvergentMode::ContinentContinent => {
                             let w = band_weight(d, params.boundary_width_collision, params.boundary_anisotropy);
@@ -1472,7 +1474,7 @@ fn apply_boundary_model(
                             preserve_strength[v] = preserve_strength[v].max(0.80 * w);
                         }
                         ConvergentMode::OceanContinent | ConvergentMode::OceanOcean => {
-                            let (subducting, overriding) = match edge.subduction_polarity {
+                            let (subducting, overriding) = match subduction_polarity {
                                 SubductionPolarity::AUnderB => (edge.plate_a, edge.plate_b),
                                 SubductionPolarity::BUnderA => (edge.plate_b, edge.plate_a),
                                 SubductionPolarity::None => (usize::MAX, usize::MAX),
@@ -1572,7 +1574,6 @@ fn extract_boundary_edges(
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
-    vertex_plate_weight: &[f32],
 ) -> Vec<BoundaryEdge> {
     let mut edges = Vec::new();
     let classify_eps = 0.05;
@@ -1616,21 +1617,12 @@ fn extract_boundary_edges(
                 )
             };
 
-            let (convergent_mode, subduction_polarity) =
-                if matches!(boundary_type, BoundaryType::Convergent) {
-                    classify_convergent_edge(i, j, plate_a, plate_b, attributes, vertex_plate_weight)
-                } else {
-                    (None, SubductionPolarity::None)
-                };
-
             edges.push(BoundaryEdge {
                 a: i,
                 b: j,
                 plate_a,
                 plate_b,
                 boundary_type,
-                convergent_mode,
-                subduction_polarity,
                 strength: strength.max(0.05),
                 obliquity,
             });
@@ -1646,7 +1638,7 @@ fn classify_convergent_edge(
     plate_a: usize,
     plate_b: usize,
     attributes: &[PlateAttr],
-    vertex_plate_weight: &[f32],
+    vertex_lithosphere: &[VertexLithosphere],
 ) -> (Option<ConvergentMode>, SubductionPolarity) {
     let a_ocean = attributes[plate_a].is_ocean;
     let b_ocean = attributes[plate_b].is_ocean;
@@ -1658,8 +1650,8 @@ fn classify_convergent_edge(
         return (Some(ConvergentMode::OceanContinent), SubductionPolarity::BUnderA);
     }
     if a_ocean && b_ocean {
-        let a_weight = vertex_plate_weight[vertex_a];
-        let b_weight = vertex_plate_weight[vertex_b];
+        let a_weight = vertex_lithosphere[vertex_a].weight;
+        let b_weight = vertex_lithosphere[vertex_b].weight;
         let polarity = if a_weight >= b_weight {
             SubductionPolarity::AUnderB
         } else {
@@ -2222,25 +2214,27 @@ mod tests {
 
         let attributes =
             super::assign_plate_attributes(plate_count, &mut rng, params.ocean_plate_ratio);
-        let (vertex_plate_weight, oceanic_crust_age) = super::compute_plate_vertex_weight_and_age(
+        let boundary_edges =
+            super::extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
+        let vertex_lithosphere = super::compute_vertex_lithosphere(
             &positions,
             &nbr_offsets,
             &nbrs,
             &plate_id,
             &attributes,
+            &boundary_edges,
         );
         let mut height = vec![0.0; positions.len()];
         for v in 0..positions.len() {
             let pid = plate_id[v] as usize;
             let noise = rng.gen_range_f32(-0.03, 0.03);
-            let weight_bias = if attributes[pid].is_ocean {
-                let delta_w = vertex_plate_weight[v] - attributes[pid].base_weight;
-                -0.24 * delta_w + 0.03 * (1.0 - oceanic_crust_age[v])
+            let crust_base = if attributes[pid].is_ocean {
+                vertex_lithosphere[v].buoyancy
             } else {
-                0.0
+                attributes[pid].base_height
             };
             height[v] = super::clamp(
-                attributes[pid].base_height + weight_bias + 0.10 * phi[v] + noise,
+                crust_base + 0.10 * phi[v] + noise,
                 -1.2,
                 1.2,
             );
@@ -2252,7 +2246,8 @@ mod tests {
             &nbrs,
             &plate_id,
             &attributes,
-            &vertex_plate_weight,
+            &vertex_lithosphere,
+            &boundary_edges,
             &mut height,
             params,
         );
