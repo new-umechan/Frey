@@ -96,6 +96,13 @@ function createInitialRuntimeState(defaultRuntimeTickMs) {
         erosionAutomatonState: null,
         pendingRiverSteps: 0,
         terrainErosionDirty: false,
+        latestActivity: {
+            terrain: 0,
+            river: 1,
+            climate: 1,
+            ecology: 1,
+            civilization: 1,
+        },
         carry: {
             terrain: 0,
             river: 0,
@@ -736,6 +743,13 @@ async function bootstrap() {
         world.budgets = createInitialBudgets();
         worldState.accumulatorMs = 0;
         worldState.lastFrameTimeMs = null;
+        worldState.pendingRiverSteps = 0;
+        worldState.terrainErosionDirty = false;
+        worldState.latestActivity.terrain = 0;
+        worldState.latestActivity.river = 1;
+        worldState.latestActivity.climate = 1;
+        worldState.latestActivity.ecology = 1;
+        worldState.latestActivity.civilization = 1;
         for (const key of WORLD_SUBSYSTEM_KEYS) {
             worldState.carry[key] = 0;
             worldState.executedSteps[key] = 0;
@@ -856,6 +870,17 @@ async function bootstrap() {
         updateGeometryPositions();
     }
 
+    function estimateRiverActivitySignal(erosionState) {
+        if (!erosionState || !currentTerrainData) {
+            return 0;
+        }
+        const changedCount = Array.isArray(erosionState.recent_changed)
+            ? erosionState.recent_changed.length
+            : 0;
+        const cellCount = Math.max(1, currentTerrainData.heightData?.length ?? 1);
+        return Math.min(1, changedCount / cellCount);
+    }
+
     function runTerrainStep(steps) {
         if (!Number.isFinite(steps) || steps <= 0) {
             return;
@@ -879,6 +904,10 @@ async function bootstrap() {
             budgetCells,
         );
         worldState.executedSteps.river += 1;
+        worldState.latestActivity.river = Math.max(
+            worldState.latestActivity.river,
+            estimateRiverActivitySignal(worldState.erosionAutomatonState),
+        );
         worldState.terrainErosionDirty = true;
     }
 
@@ -958,6 +987,17 @@ async function bootstrap() {
         runClimateStep(world.budgets.climate);
         runEcologyStep(world.budgets.ecology);
         runCivilizationStep(world.budgets.civilization);
+
+        const riverQueuePressure = worldState.pendingRiverSteps > 0 ? 1 : 0;
+        worldTimeController.observeActivity(
+            0,
+            Math.max(worldState.latestActivity.river, riverQueuePressure),
+            0,
+            0,
+            0,
+        );
+        worldState.latestActivity.river = 0;
+        syncTimeStateFromRust();
 
         worldTimeController.step(1);
         world.tick = Math.max(0, Math.floor(worldTimeController.tick()));

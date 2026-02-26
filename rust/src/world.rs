@@ -112,10 +112,17 @@ pub fn era_for_tick(tick: u64) -> EraKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct WorldTime {
     pub tick: u64,
     pub era: EraKind,
+    pub era_enter_tick: u64,
+    pub ema_terrain_activity: f32,
+    pub ema_river_activity: f32,
+    pub ema_climate_activity: f32,
+    pub ema_ecology_activity: f32,
+    pub ema_civilization_activity: f32,
+    pub stable_ticks_in_era: u32,
 }
 
 impl Default for WorldTime {
@@ -129,6 +136,13 @@ impl WorldTime {
         Self {
             tick: 0,
             era: era_for_tick(0),
+            era_enter_tick: 0,
+            ema_terrain_activity: 1.0,
+            ema_river_activity: 1.0,
+            ema_climate_activity: 1.0,
+            ema_ecology_activity: 1.0,
+            ema_civilization_activity: 1.0,
+            stable_ticks_in_era: 0,
         }
     }
 
@@ -139,11 +153,115 @@ impl WorldTime {
     pub fn step(&mut self, ticks: u32) {
         let delta = ticks.max(1) as u64;
         self.tick = self.tick.saturating_add(delta);
-        self.era = era_for_tick(self.tick);
     }
 
     pub fn sync_era(&mut self) {
-        self.era = era_for_tick(self.tick);
+        self.set_era(era_for_tick(self.tick));
+    }
+
+    pub fn observe_activity(
+        &mut self,
+        terrain: f32,
+        river: f32,
+        climate: f32,
+        ecology: f32,
+        civilization: f32,
+    ) {
+        self.ema_terrain_activity = update_ema(self.ema_terrain_activity, terrain);
+        self.ema_river_activity = update_ema(self.ema_river_activity, river);
+        self.ema_climate_activity = update_ema(self.ema_climate_activity, climate);
+        self.ema_ecology_activity = update_ema(self.ema_ecology_activity, ecology);
+        self.ema_civilization_activity = update_ema(self.ema_civilization_activity, civilization);
+
+        if self.is_current_era_converged() {
+            self.stable_ticks_in_era = self.stable_ticks_in_era.saturating_add(1);
+        } else {
+            self.stable_ticks_in_era = 0;
+        }
+
+        if let Some(next_era) = self.next_era_if_ready() {
+            self.set_era(next_era);
+        }
+    }
+
+    fn set_era(&mut self, next_era: EraKind) {
+        if self.era == next_era {
+            return;
+        }
+        self.era = next_era;
+        self.era_enter_tick = self.tick;
+        self.stable_ticks_in_era = 0;
+    }
+
+    fn ticks_in_era(&self) -> u64 {
+        self.tick.saturating_sub(self.era_enter_tick)
+    }
+
+    fn next_era_if_ready(&self) -> Option<EraKind> {
+        if self.ticks_in_era() < min_ticks_before_transition(self.era) {
+            return None;
+        }
+        if self.stable_ticks_in_era < stable_ticks_required(self.era) {
+            return None;
+        }
+        match self.era {
+            EraKind::Crust => Some(EraKind::Environment),
+            EraKind::Environment => Some(EraKind::Life),
+            EraKind::Life => Some(EraKind::Civilization),
+            EraKind::Civilization => Some(EraKind::History),
+            EraKind::History => None,
+        }
+    }
+
+    fn is_current_era_converged(&self) -> bool {
+        let threshold = convergence_threshold(self.era);
+        match self.era {
+            EraKind::Crust => self.ema_terrain_activity <= threshold,
+            EraKind::Environment => self.ema_river_activity.max(self.ema_climate_activity) <= threshold,
+            EraKind::Life => self.ema_ecology_activity.max(self.ema_climate_activity) <= threshold,
+            EraKind::Civilization => self.ema_civilization_activity <= threshold,
+            EraKind::History => false,
+        }
+    }
+}
+
+fn update_ema(prev: f32, sample: f32) -> f32 {
+    let alpha = 0.15_f32;
+    let x = if sample.is_finite() {
+        sample.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    prev.mul_add(1.0 - alpha, alpha * x)
+}
+
+fn min_ticks_before_transition(era: EraKind) -> u64 {
+    match era {
+        EraKind::Crust => 8,
+        EraKind::Environment => 24,
+        EraKind::Life => 24,
+        EraKind::Civilization => 32,
+        EraKind::History => u64::MAX,
+    }
+}
+
+fn stable_ticks_required(era: EraKind) -> u32 {
+    match era {
+        EraKind::Crust => 6,
+        EraKind::Environment => 10,
+        EraKind::Life => 12,
+        EraKind::Civilization => 16,
+        EraKind::History => u32::MAX,
+    }
+}
+
+fn convergence_threshold(era: EraKind) -> f32 {
+    match era {
+        EraKind::Crust => 0.02,
+        EraKind::Environment => 0.03,
+        EraKind::Life => 0.02,
+        EraKind::Civilization => 0.015,
+        EraKind::History => 0.0,
     }
 }
 
@@ -172,10 +290,20 @@ mod tests {
 
         time.step(48);
         assert_eq!(time.tick, 48);
-        assert_eq!(time.era, EraKind::Environment);
+        assert_eq!(time.era, EraKind::Crust);
 
         time.reset();
         assert_eq!(time.tick, 0);
         assert_eq!(time.era, EraKind::Crust);
+    }
+
+    #[test]
+    fn convergence_can_advance_era() {
+        let mut time = WorldTime::new();
+        for _ in 0..64 {
+            time.observe_activity(0.0, 1.0, 1.0, 1.0, 1.0);
+            time.step(1);
+        }
+        assert_eq!(time.era, EraKind::Environment);
     }
 }

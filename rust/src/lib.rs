@@ -137,6 +137,19 @@ impl WorldTimeController {
         self.inner.step(ticks);
     }
 
+    #[wasm_bindgen(js_name = observeActivity)]
+    pub fn observe_activity_js(
+        &mut self,
+        terrain: f32,
+        river: f32,
+        climate: f32,
+        ecology: f32,
+        civilization: f32,
+    ) {
+        self.inner
+            .observe_activity(terrain, river, climate, ecology, civilization);
+    }
+
     #[wasm_bindgen(js_name = tick)]
     pub fn tick_js(&self) -> f64 {
         self.inner.tick as f64
