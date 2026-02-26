@@ -1,5 +1,10 @@
 import * as THREE from "three";
-import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
+import initWasm, {
+    generate_mesh,
+    generate_terrain,
+    init_erosion_automaton,
+    step_erosion_automaton,
+} from "./wasm/frey_wasm.js";
 import { collectAppElements } from "./app/dom.js";
 import { createGlobeScene, resizeViewport } from "./app/scene.js";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "./app/terrain-params.js";
@@ -133,6 +138,7 @@ async function bootstrap() {
         lastFrameTimeMs: null,
         runtimeTickMs: getEraScalePresetRuntimeTickMs(DEFAULT_ERA_SCALE),
         maxTicksPerFrame: 6,
+        erosionAutomatonState: null,
         carry: {
             terrain: 0,
             river: 0,
@@ -676,6 +682,56 @@ async function bootstrap() {
         }
     }
 
+    function computeRiverAsyncBudgetCells(riverWeight) {
+        if (!currentTerrainData || !Number.isFinite(riverWeight) || riverWeight <= 0) {
+            return 0;
+        }
+        const vertexBudgetBase = Math.max(64, Math.floor(currentTerrainData.heightData.length * 0.01));
+        return Math.max(1, Math.floor(vertexBudgetBase * riverWeight));
+    }
+
+    function applyErosionAutomatonStateToTerrain(erosionState) {
+        if (!currentTerrainData || !erosionState) {
+            return;
+        }
+
+        const nextHeight = new Float32Array(erosionState.height);
+        const nextRiverFlux = new Float32Array(erosionState.river_flux);
+        const nextRiverNext = new Int32Array(erosionState.river_next);
+        if (
+            nextHeight.length !== currentTerrainData.heightData.length ||
+            nextRiverFlux.length !== currentTerrainData.riverFlux.length ||
+            nextRiverNext.length !== currentTerrainData.riverNext.length
+        ) {
+            return;
+        }
+
+        currentTerrainData.heightData = nextHeight;
+        currentTerrainData.riverFlux = nextRiverFlux;
+        currentTerrainData.riverNext = nextRiverNext;
+
+        updateTerrainAttributes();
+        updateRiverMaskTexture();
+        updateGeometryPositions();
+    }
+
+    function stepRiverAsyncForCurrentTick(preset) {
+        if (!worldState.erosionAutomatonState || !preset) {
+            return;
+        }
+        const budgetCells = computeRiverAsyncBudgetCells(preset.weights.river ?? 0);
+        if (budgetCells <= 0) {
+            return;
+        }
+
+        worldState.erosionAutomatonState = step_erosion_automaton(
+            worldState.erosionAutomatonState,
+            budgetCells,
+        );
+        worldState.executedSteps.river += 1;
+        applyErosionAutomatonStateToTerrain(worldState.erosionAutomatonState);
+    }
+
     function runSubsystemStep(subsystemKey) {
         if (!currentTerrainData) {
             return;
@@ -690,8 +746,12 @@ async function bootstrap() {
         }
         const preset = getEraScalePreset(currentEraScale);
         worldState.tick += 1;
+        stepRiverAsyncForCurrentTick(preset);
 
         for (const subsystemKey of WORLD_SUBSYSTEM_KEYS) {
+            if (subsystemKey === "river") {
+                continue;
+            }
             const weight = preset.weights[subsystemKey] ?? 0;
             if (!Number.isFinite(weight) || weight <= 0) {
                 continue;
@@ -776,6 +836,7 @@ async function bootstrap() {
         }
 
         const terrain = generate_terrain(nextSeed, TERRAIN_PARAMS);
+        const erosionAutomatonState = init_erosion_automaton(nextSeed, TERRAIN_PARAMS);
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
         const riverFlux = new Float32Array(terrain.river_flux);
@@ -809,6 +870,7 @@ async function bootstrap() {
             vertexWeight,
             tectonicDebug,
         };
+        worldState.erosionAutomatonState = erosionAutomatonState;
         updateTerrainAttributes();
         updateRiverMaskTexture();
         updateGeometryPositions();
