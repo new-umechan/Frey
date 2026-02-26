@@ -14,37 +14,37 @@
 
 ```rust
 pub struct TerrainParams {
-    pub level: u32,                   // icosphere分割レベル（推奨 6）
-    pub harmonic_max_l: u32,                   // 球面調和次数（既定 4）
-    pub spectral_alpha: f32,                   // スペクトル減衰（既定 1.5）
-    pub plate_count_min: u32,          // 最小プレート数（既定 8）
-    pub plate_count_max: u32,          // 最大プレート数（既定 18）
-    pub ocean_plate_ratio: f32,       // 海洋プレート比率（既定 0.65）
-    pub boundary_band: f32,           // 境界帯域の閾値（既定 0.08）
-    pub boundary_convergent_base_gain: f32, // 収束境界の基礎地形係数
-    pub boundary_divergent_base_gain: f32,  // 発散境界の基礎地形係数
-    pub boundary_transform_relief_gain: f32,// 横ずれ境界の微地形係数
-    pub trench_gain: f32,             // 海溝の強さ
-    pub arc_gain: f32,                // 火山弧/島弧の強さ
-    pub collision_gain: f32,          // 大陸衝突帯の造山強度
-    pub rift_gain: f32,               // リフト沈降の強さ
-    pub boundary_trench_width: f32,   // 海溝帯の幅
-    pub boundary_arc_width: f32,      // 弧状隆起帯のオフセット幅
-    pub boundary_collision_width: f32,// 衝突造山帯の幅
-    pub boundary_rift_width: f32,     // リフト帯の幅
-    pub boundary_obliquity_mix: f32,  // 斜交収束/発散の緩和係数
-    pub boundary_distance_falloff: f32, // 境界距離減衰
-    pub boundary_anisotropy: f32,     // 境界帯の異方性
-    pub river_rain_base: f32,         // 降水ベース（既定 0.5）
-    pub river_accumulation_threshold: f32,   // 河川成立閾値（既定 0.015）
-    pub erosion_iterations: u32,            // 水食侵食反復（既定 12）
-    pub hydraulic_erosion_rate: f32,    // 侵食率（既定 0.020）
-    pub hydraulic_deposit_rate: f32,  // 堆積率（既定 0.35）
-    pub sediment_capacity_gain: f32,  // 土砂容量係数（既定 0.90）
-    pub erosion_min_slope: f32,       // 最小勾配（既定 0.002）
-    pub erosion_max_delta_per_iter: f32, // 1反復の最大変化量（既定 0.015）
-    pub coastal_deposit_rate: f32,    // 沿岸・浅海堆積率（既定 0.45）
-    pub shallow_sea_floor: f32,       // 浅海閾値（既定 -0.08）
+	pub level: u32,                   // icosphere分割レベル（推奨 6）
+	pub harmonic_max_l: u32,                   // 球面調和次数（既定 4）
+	pub spectral_alpha: f32,                   // スペクトル減衰（既定 1.5）
+	pub plate_count_min: u32,          // 最小プレート数（既定 8）
+	pub plate_count_max: u32,          // 最大プレート数（既定 18）
+	pub ocean_plate_ratio: f32,       // 海洋プレート比率（既定 0.65）
+	pub boundary_band: f32,           // 境界帯域の閾値（既定 0.08）
+	pub boundary_convergent_base_gain: f32, // 収束境界の基礎地形係数
+	pub boundary_divergent_base_gain: f32,  // 発散境界の基礎地形係数
+	pub boundary_transform_relief_gain: f32,// 横ずれ境界の微地形係数
+	pub trench_gain: f32,             // 海溝の強さ
+	pub arc_gain: f32,                // 火山弧/島弧の強さ
+	pub collision_gain: f32,          // 大陸衝突帯の造山強度
+	pub rift_gain: f32,               // リフト沈降の強さ
+	pub boundary_trench_width: f32,   // 海溝帯の幅
+	pub boundary_arc_width: f32,      // 弧状隆起帯のオフセット幅
+	pub boundary_collision_width: f32,// 衝突造山帯の幅
+	pub boundary_rift_width: f32,     // リフト帯の幅
+	pub boundary_obliquity_mix: f32,  // 斜交収束/発散の緩和係数
+	pub boundary_distance_falloff: f32, // 境界距離減衰
+	pub boundary_anisotropy: f32,     // 境界帯の異方性
+	pub river_rain_base: f32,         // 降水ベース（既定 0.5）
+	pub river_accumulation_threshold: f32,   // 河川成立閾値（既定 0.015）
+	pub erosion_iterations: u32,            // 水食侵食反復（既定 12）
+	pub hydraulic_erosion_rate: f32,    // 侵食率（既定 0.020）
+	pub hydraulic_deposit_rate: f32,  // 堆積率（既定 0.35）
+	pub sediment_capacity_gain: f32,  // 土砂容量係数（既定 0.90）
+	pub erosion_min_slope: f32,       // 最小勾配（既定 0.002）
+	pub erosion_max_delta_per_iter: f32, // 1反復の最大変化量（既定 0.015）
+	pub coastal_deposit_rate: f32,    // 沿岸・浅海堆積率（既定 0.45）
+	pub shallow_sea_floor: f32,       // 浅海閾値（既定 -0.08）
 }
 ```
 
@@ -54,10 +54,10 @@ JavaScript側から呼ぶ場合は、paramsの全フィールドを渡す。
 
 ```rust
 pub struct TerrainOutput {
-    pub height: Vec<f32>,         // len = V, [-1, 1]
-    pub plate_id: Vec<u32>,       // len = V, [0, num_plates)
-    pub river_flux: Vec<f32>,     // len = V, [0, 1]
-    pub river_next: Vec<i32>,     // len = V, -1 は海/終端
+	pub height: Vec<f32>,         // len = V, [-1, 1]
+	pub plate_id: Vec<u32>,       // len = V, [0, num_plates)
+	pub river_flux: Vec<f32>,     // len = V, [0, 1]
+	pub river_next: Vec<i32>,     // len = V, -1 は海/終端
 }
 ```
 
