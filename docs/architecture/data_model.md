@@ -15,29 +15,33 @@
 - 各サブシステムの更新頻度は、時代スケール制御で決める
 - `World` は「計算の調停役」であり、各サブシステムの内部ロジックは別モジュールへ分ける
 
-## 3. 構造（暫定）
+## 3. 構造（初版決定）
 
 ### 3.1 `World` 全体
 
 ```rust
 pub struct World {
-	pub tick: u64,
-	pub era: EraKind,
-	pub mesh: WorldMesh,
-	pub core: CoreCells,
-	pub layers: HashMap<LayerKind, CellLayer>,
-	pub budgets: SubsystemBudgets,
+    pub tick: u64,
+    pub era: EraKind,
+    pub mesh: WorldMesh,
+    pub core: CoreCells,
+    pub layers: HashMap<LayerKind, CellLayer>,
+    pub budgets: SubsystemBudgets,
 }
 ```
+
+初版では `layers` に `HashMap<LayerKind, CellLayer>` を採用する。
+理由は、期に応じた遅延生成と未生成状態の表現が簡単で、実装の立ち上がりが速いため。
+性能上の問題が出た場合は、固定スロット構造へ移行を検討する。
 
 ### 3.2 常時存在するコアレイヤー
 
 ```rust
 pub struct CoreCells {
-	pub height: Vec<f32>,
-	pub plate_id: Vec<u16>,
-	pub river_flux: Vec<f32>,
-	pub river_next: Vec<i32>,
+    pub height: Vec<f32>,
+    pub plate_id: Vec<u16>,
+    pub river_flux: Vec<f32>,
+    pub river_next: Vec<i32>,
 }
 ```
 
@@ -48,38 +52,38 @@ pub struct CoreCells {
 
 ```rust
 pub enum LayerKind {
-	Climate,
-	Ecology,
-	Civilization,
+    Climate,
+    Ecology,
+    Civilization,
 }
 ```
 
 ```rust
 pub enum CellLayer {
-	Climate(ClimateLayer),
-	Ecology(EcologyLayer),
-	Civilization(CivilizationLayer),
+    Climate(ClimateLayer),
+    Ecology(EcologyLayer),
+    Civilization(CivilizationLayer),
 }
 ```
 
 `CellLayer` を enum にすることで、`LayerKind` と実体の取り違えを防ぐ。
 
-### 3.4 各レイヤーの最小構造（暫定）
+### 3.4 各レイヤーの最小構造（初版）
 
 ```rust
 pub struct ClimateLayer {
-	pub temp: Vec<f32>,
-	pub rain: Vec<f32>,
+    pub temp: Vec<f32>,
+    pub rain: Vec<f32>,
 }
 
 pub struct EcologyLayer {
-	pub habitability: Vec<f32>,
-	pub productivity: Vec<f32>,
+    pub habitability: Vec<f32>,
+    pub productivity: Vec<f32>,
 }
 
 pub struct CivilizationLayer {
-	pub population: Vec<f32>,
-	pub state_id: Vec<u32>,
+    pub population: Vec<f32>,
+    pub state_id: Vec<u32>,
 }
 ```
 
@@ -92,9 +96,9 @@ pub struct CivilizationLayer {
 
 ```rust
 pub struct WorldMesh {
-	pub positions: Vec<[f32; 3]>,
-	pub nbr_offsets: Vec<u32>,
-	pub nbrs: Vec<u32>,
+    pub positions: Vec<[f32; 3]>,
+    pub nbr_offsets: Vec<u32>,
+    pub nbrs: Vec<u32>,
 }
 ```
 
@@ -144,18 +148,18 @@ pub struct WorldMesh {
 
 ```rust
 pub fn step_world(world: &mut World) {
-	world.budgets = compute_budgets(world.era, &world);
+    world.budgets = compute_budgets(world.era, &world);
 
-	ensure_required_layers(world);
+    ensure_required_layers(world);
 
-	run_terrain_step(world, world.budgets.terrain);
-	run_river_step(world, world.budgets.river);
-	run_climate_step(world, world.budgets.climate);
-	run_ecology_step(world, world.budgets.ecology);
-	run_civilization_step(world, world.budgets.civilization);
+    run_terrain_step(world, world.budgets.terrain);
+    run_river_step(world, world.budgets.river);
+    run_climate_step(world, world.budgets.climate);
+    run_ecology_step(world, world.budgets.ecology);
+    run_civilization_step(world, world.budgets.civilization);
 
-	update_era_transition(world);
-	world.tick += 1;
+    update_era_transition(world);
+    world.tick += 1;
 }
 ```
 
@@ -185,11 +189,11 @@ pub fn step_world(world: &mut World) {
 
 ```rust
 pub struct SubsystemBudgets {
-	pub terrain: u32,
-	pub river: u32,
-	pub climate: u32,
-	pub ecology: u32,
-	pub civilization: u32,
+    pub terrain: u32,
+    pub river: u32,
+    pub climate: u32,
+    pub ecology: u32,
+    pub civilization: u32,
 }
 ```
 
@@ -210,11 +214,21 @@ pub struct SubsystemBudgets {
 
 この順序により、既存の地形・河川資産を使いながら `World` の実行ループを先に成立させられる。
 
-## 10. 未決事項
+## 10. 決定事項と未決事項
+
+### 決定事項（初版）
+
+- `World` は `mesh + core + layers + era + budgets + tick` を持つ
+- `core` には地形・河川の常時必要状態を置く
+- `layers` は `HashMap<LayerKind, CellLayer>` とし、遅延生成を許可する
+- `CellLayer` は enum にして型安全を優先する
+- `river_next` は現行実装との整合のため `i32` を使う
+
+### 未決事項
 
 - `World` に河川非同期オートマトン状態を直接持つか、別オブジェクト参照にするか
 - `core.river_flux` / `core.river_next` と河川オートマトン内部状態の同期タイミング
-- `layers` を `HashMap` のままにするか、固定スロット構造にするか
+- `layers` を将来的に固定スロット構造へ移行するか
 - `state_id` を `CivilizationLayer` に置くか、文明グラフ側に分離するか
 - `tick` と各サブシステム内部時間の対応づけ方法
 
