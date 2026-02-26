@@ -3,6 +3,7 @@ mod core;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
 mod wasm_visuals;
+pub mod world;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

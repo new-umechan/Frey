@@ -24,6 +24,11 @@ const WORLD_SUBSYSTEM_KEYS = Object.freeze([
     "ecology",
     "civilization",
 ]);
+const LAYER_KIND = Object.freeze({
+    CLIMATE: "climate",
+    ECOLOGY: "ecology",
+    CIVILIZATION: "civilization",
+});
 const ERA_SCALE_PRESETS = Object.freeze({
     crust: {
         label: "地殻形成期",
@@ -56,6 +61,53 @@ const ERA_SCALE_PRESETS = Object.freeze({
         weights: { terrain: 0.02, river: 0.08, climate: 0.12, ecology: 0.1, civilization: 1.0 },
     },
 });
+
+function createEmptyCore() {
+    return null;
+}
+
+function createEmptyLayers() {
+    return {
+        [LAYER_KIND.CLIMATE]: null,
+        [LAYER_KIND.ECOLOGY]: null,
+        [LAYER_KIND.CIVILIZATION]: null,
+    };
+}
+
+function createInitialBudgets() {
+    return {
+        terrain: 0,
+        river: 0,
+        climate: 0,
+        ecology: 0,
+        civilization: 0,
+    };
+}
+
+function createInitialRuntimeState(defaultRuntimeTickMs) {
+    return {
+        isRunning: true,
+        accumulatorMs: 0,
+        lastFrameTimeMs: null,
+        runtimeTickMs: defaultRuntimeTickMs,
+        maxTicksPerFrame: 6,
+        erosionAutomatonState: null,
+        carry: {
+            terrain: 0,
+            river: 0,
+            climate: 0,
+            ecology: 0,
+            civilization: 0,
+        },
+        executedSteps: {
+            terrain: 0,
+            river: 0,
+            climate: 0,
+            ecology: 0,
+            civilization: 0,
+        },
+    };
+}
 
 async function bootstrap() {
     const {
@@ -117,7 +169,6 @@ async function bootstrap() {
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
-    let currentTerrainData = null;
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
     const hoverLocalPoint = new THREE.Vector3();
@@ -131,29 +182,22 @@ async function bootstrap() {
     let debugEnabled = debugToggleInput.checked;
     let currentRiverMaskTexture = null;
     let currentEraScale = DEFAULT_ERA_SCALE;
-    const worldState = {
+    const world = {
         tick: 0,
-        isRunning: true,
-        accumulatorMs: 0,
-        lastFrameTimeMs: null,
-        runtimeTickMs: getEraScalePresetRuntimeTickMs(DEFAULT_ERA_SCALE),
-        maxTicksPerFrame: 6,
-        erosionAutomatonState: null,
-        carry: {
-            terrain: 0,
-            river: 0,
-            climate: 0,
-            ecology: 0,
-            civilization: 0,
+        era: DEFAULT_ERA_SCALE,
+        mesh: {
+            positions: basePositions,
+            indices,
+            nbrOffsets: mesh.nbr_offsets ? new Uint32Array(mesh.nbr_offsets) : null,
+            nbrs: mesh.nbrs ? new Uint32Array(mesh.nbrs) : null,
         },
-        executedSteps: {
-            terrain: 0,
-            river: 0,
-            climate: 0,
-            ecology: 0,
-            civilization: 0,
-        },
+        core: createEmptyCore(),
+        layers: createEmptyLayers(),
+        budgets: createInitialBudgets(),
+        runtime: createInitialRuntimeState(getEraScalePresetRuntimeTickMs(DEFAULT_ERA_SCALE)),
     };
+    let currentTerrainData = world.core;
+    const worldState = world.runtime;
 
     const vertexCount = basePositions.length / 3;
     const terrainUv = buildTerrainUvFromPositions(basePositions);
@@ -673,13 +717,94 @@ async function bootstrap() {
     }
 
     function resetWorldProgress() {
-        worldState.tick = 0;
+        world.tick = 0;
+        world.era = currentEraScale;
+        world.budgets = createInitialBudgets();
         worldState.accumulatorMs = 0;
         worldState.lastFrameTimeMs = null;
         for (const key of WORLD_SUBSYSTEM_KEYS) {
             worldState.carry[key] = 0;
             worldState.executedSteps[key] = 0;
         }
+    }
+
+    function createClimateLayer(cellCount) {
+        return {
+            temp: new Float32Array(cellCount),
+            rain: new Float32Array(cellCount),
+        };
+    }
+
+    function createEcologyLayer(cellCount) {
+        return {
+            habitability: new Float32Array(cellCount),
+            productivity: new Float32Array(cellCount),
+        };
+    }
+
+    function createCivilizationLayer(cellCount) {
+        return {
+            population: new Float32Array(cellCount),
+            stateId: new Uint32Array(cellCount),
+        };
+    }
+
+    function getRequiredLayerKindsForEra(eraKey) {
+        switch (eraKey) {
+            case "history":
+                return [LAYER_KIND.CLIMATE, LAYER_KIND.ECOLOGY, LAYER_KIND.CIVILIZATION];
+            case "civilization":
+                return [LAYER_KIND.CLIMATE, LAYER_KIND.ECOLOGY, LAYER_KIND.CIVILIZATION];
+            case "life":
+                return [LAYER_KIND.CLIMATE, LAYER_KIND.ECOLOGY];
+            case "environment":
+                return [LAYER_KIND.CLIMATE];
+            case "crust":
+            default:
+                return [];
+        }
+    }
+
+    function ensureRequiredLayers(nextWorld) {
+        if (!nextWorld.core?.heightData) {
+            return;
+        }
+        const cellCount = nextWorld.core.heightData.length;
+        const requiredKinds = getRequiredLayerKindsForEra(nextWorld.era);
+        for (const layerKind of requiredKinds) {
+            if (nextWorld.layers[layerKind]) {
+                continue;
+            }
+            if (layerKind === LAYER_KIND.CLIMATE) {
+                nextWorld.layers[layerKind] = createClimateLayer(cellCount);
+                continue;
+            }
+            if (layerKind === LAYER_KIND.ECOLOGY) {
+                nextWorld.layers[layerKind] = createEcologyLayer(cellCount);
+                continue;
+            }
+            if (layerKind === LAYER_KIND.CIVILIZATION) {
+                nextWorld.layers[layerKind] = createCivilizationLayer(cellCount);
+            }
+        }
+    }
+
+    function computeBudgetsForCurrentTick(nextWorld, preset) {
+        const budgets = createInitialBudgets();
+        for (const subsystemKey of WORLD_SUBSYSTEM_KEYS) {
+            const weight = preset?.weights?.[subsystemKey] ?? 0;
+            if (!Number.isFinite(weight) || weight <= 0) {
+                continue;
+            }
+            nextWorld.runtime.carry[subsystemKey] += weight;
+            const steps = Math.floor(nextWorld.runtime.carry[subsystemKey]);
+            if (steps <= 0) {
+                continue;
+            }
+            nextWorld.runtime.carry[subsystemKey] -= steps;
+            budgets[subsystemKey] = steps;
+        }
+        nextWorld.budgets = budgets;
     }
 
     function computeRiverAsyncBudgetCells(riverWeight) {
@@ -715,6 +840,15 @@ async function bootstrap() {
         updateGeometryPositions();
     }
 
+    function runTerrainStep(steps) {
+        if (!Number.isFinite(steps) || steps <= 0) {
+            return;
+        }
+        for (let i = 0; i < steps; i += 1) {
+            runSubsystemStep("terrain");
+        }
+    }
+
     function stepRiverAsyncForCurrentTick(preset) {
         if (!worldState.erosionAutomatonState || !preset) {
             return;
@@ -732,6 +866,15 @@ async function bootstrap() {
         applyErosionAutomatonStateToTerrain(worldState.erosionAutomatonState);
     }
 
+    function runRiverStep(steps, preset) {
+        if (!Number.isFinite(steps) || steps <= 0) {
+            return;
+        }
+        for (let i = 0; i < steps; i += 1) {
+            stepRiverAsyncForCurrentTick(preset);
+        }
+    }
+
     function runSubsystemStep(subsystemKey) {
         if (!currentTerrainData) {
             return;
@@ -740,32 +883,49 @@ async function bootstrap() {
         // TODO: 実サブシステム更新をここに接続する。
     }
 
+    function runClimateStep(steps) {
+        if (!world.layers[LAYER_KIND.CLIMATE]) {
+            return;
+        }
+        for (let i = 0; i < steps; i += 1) {
+            runSubsystemStep("climate");
+        }
+    }
+
+    function runEcologyStep(steps) {
+        if (!world.layers[LAYER_KIND.ECOLOGY]) {
+            return;
+        }
+        for (let i = 0; i < steps; i += 1) {
+            runSubsystemStep("ecology");
+        }
+    }
+
+    function runCivilizationStep(steps) {
+        if (!world.layers[LAYER_KIND.CIVILIZATION]) {
+            return;
+        }
+        for (let i = 0; i < steps; i += 1) {
+            runSubsystemStep("civilization");
+        }
+    }
+
     function stepWorldTick() {
         if (!currentTerrainData) {
             return;
         }
         const preset = getEraScalePreset(currentEraScale);
-        worldState.tick += 1;
-        stepRiverAsyncForCurrentTick(preset);
+        world.era = currentEraScale;
+        computeBudgetsForCurrentTick(world, preset);
+        ensureRequiredLayers(world);
 
-        for (const subsystemKey of WORLD_SUBSYSTEM_KEYS) {
-            if (subsystemKey === "river") {
-                continue;
-            }
-            const weight = preset.weights[subsystemKey] ?? 0;
-            if (!Number.isFinite(weight) || weight <= 0) {
-                continue;
-            }
-            worldState.carry[subsystemKey] += weight;
-            const steps = Math.floor(worldState.carry[subsystemKey]);
-            if (steps <= 0) {
-                continue;
-            }
-            worldState.carry[subsystemKey] -= steps;
-            for (let i = 0; i < steps; i += 1) {
-                runSubsystemStep(subsystemKey);
-            }
-        }
+        runTerrainStep(world.budgets.terrain);
+        runRiverStep(world.budgets.river, preset);
+        runClimateStep(world.budgets.climate);
+        runEcologyStep(world.budgets.ecology);
+        runCivilizationStep(world.budgets.civilization);
+
+        world.tick += 1;
     }
 
     function advanceWorldLoop(nowMs) {
@@ -860,7 +1020,7 @@ async function bootstrap() {
             return;
         }
 
-        currentTerrainData = {
+        world.core = {
             heightData,
             plateId,
             riverFlux,
@@ -870,6 +1030,8 @@ async function bootstrap() {
             vertexWeight,
             tectonicDebug,
         };
+        currentTerrainData = world.core;
+        world.layers = createEmptyLayers();
         worldState.erosionAutomatonState = erosionAutomatonState;
         updateTerrainAttributes();
         updateRiverMaskTexture();
