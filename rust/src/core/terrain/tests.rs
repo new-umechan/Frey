@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::{generate_icosphere, generate_rivers, normalize_zscore, rng_from_seed};
+    use super::{
+        compute_lake_depth_map, generate_icosphere, generate_rivers, normalize_zscore, rng_from_seed,
+    };
     use crate::{TerrainOutput, TerrainParams};
 
     fn generate_for_test(seed: &str, params: &TerrainParams) -> TerrainOutput {
@@ -112,6 +114,7 @@ mod tests {
             params.river_rain_base,
             params.river_accum_threshold,
         );
+        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
         let vertex_weight = vertex_lithosphere
             .iter()
             .map(|lith| lith.weight)
@@ -134,6 +137,7 @@ mod tests {
             plate_id,
             river_flux,
             river_next,
+            lake_depth,
             vertex_weight,
             plate_is_ocean,
             plate_base_height,
@@ -172,6 +176,7 @@ mod tests {
         assert_eq!(output.plate_id.len(), v);
         assert_eq!(output.river_flux.len(), v);
         assert_eq!(output.river_next.len(), v);
+        assert_eq!(output.lake_depth.len(), v);
         assert!(output.height.iter().all(|h| *h >= -1.0 && *h <= 1.0));
     }
 
@@ -208,6 +213,32 @@ mod tests {
 
         super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, &params);
         assert_eq!(height, original);
+    }
+
+    #[test]
+    fn rivers_can_overflow_closed_basins_instead_of_terminating() {
+        let positions = vec![
+            [0.0, 0.0, 1.0],
+            [0.2, 0.0, 0.98],
+            [0.4, 0.0, 0.92],
+            [0.6, 0.0, 0.80],
+        ];
+        let nbr_offsets = vec![0, 1, 3, 5, 6];
+        let nbrs = vec![1, 0, 2, 1, 3, 2];
+        let height = vec![0.30, 0.50, 0.40, -0.10];
+
+        let (_river_flux, river_next) =
+            super::compute_river_flux_and_next(&positions, &nbr_offsets, &nbrs, &height, 0.5);
+        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
+
+        assert_eq!(river_next[0], 1);
+        assert_eq!(river_next[1], 2);
+        assert_eq!(river_next[2], 3);
+        assert_eq!(river_next[3], -1);
+        assert!(lake_depth[0] > 0.0);
+        assert_eq!(lake_depth[1], 0.0);
+        assert_eq!(lake_depth[2], 0.0);
+        assert_eq!(lake_depth[3], 0.0);
     }
 
     #[test]

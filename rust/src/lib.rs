@@ -93,6 +93,7 @@ pub struct TerrainOutput {
     pub plate_id: Vec<u32>,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
+    pub lake_depth: Vec<f32>,
     pub vertex_weight: Vec<f32>,
     pub plate_is_ocean: Vec<u8>,
     pub plate_base_height: Vec<f32>,

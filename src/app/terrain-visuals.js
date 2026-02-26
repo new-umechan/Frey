@@ -11,6 +11,7 @@ export function buildVertexColors(
     heightData,
     plateId,
     riverFlux,
+    lakeDepth,
     viewMode,
     debugEnabled = false,
     tectonicDebug = null,
@@ -20,6 +21,7 @@ export function buildVertexColors(
     for (let v = 0; v < heightData.length; v += 1) {
         const h = heightData[v];
         const river = riverFlux[v];
+        const lake = lakeDepth?.[v] ?? 0;
         let color;
 
         if (viewMode === "plates") {
@@ -36,6 +38,14 @@ export function buildVertexColors(
                 THREE.MathUtils.lerp(0.42, 0.56, t),
                 THREE.MathUtils.lerp(0.20, 0.48, t),
             );
+            if (lake > 0.0 && h < 0.55) {
+                const lakeDepthFactor = THREE.MathUtils.smoothstep(lake, 0.008, 0.050);
+                const lakeWaterFactor = THREE.MathUtils.smoothstep(river, 0.012, 0.080);
+                const lakeMix = 0.75 * lakeDepthFactor * lakeWaterFactor;
+                if (lakeMix > 0.01) {
+                    color.lerp(new THREE.Color("#2f82c7"), lakeMix);
+                }
+            }
             if (river > 0.10 && h < 0.45) {
                 color.lerp(new THREE.Color("#4ca3dd"), Math.min(0.35, river * 0.45));
             }

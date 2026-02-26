@@ -148,6 +148,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         params.river_rain_base,
         params.river_accum_threshold,
     );
+    let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
     let vertex_weight = vertex_lithosphere
         .iter()
         .map(|lith| lith.weight)
@@ -170,6 +171,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         plate_id,
         river_flux,
         river_next,
+        lake_depth,
         vertex_weight,
         plate_is_ocean,
         plate_base_height,

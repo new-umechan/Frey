@@ -557,6 +557,7 @@ async function bootstrap() {
             currentTerrainData.heightData,
             currentTerrainData.plateId,
             currentTerrainData.riverFlux,
+            currentTerrainData.lakeDepth,
             currentViewMode,
             debugEnabled,
             currentTerrainData.tectonicDebug,
@@ -604,6 +605,7 @@ async function bootstrap() {
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
         const riverFlux = new Float32Array(terrain.river_flux);
+        const lakeDepth = new Float32Array(terrain.lake_depth ?? heightData.length);
         const plateInfo = {
             isOcean: new Uint8Array(terrain.plate_is_ocean),
             baseHeight: new Float32Array(terrain.plate_base_height),
@@ -626,6 +628,7 @@ async function bootstrap() {
             heightData,
             plateId,
             riverFlux,
+            lakeDepth,
             plateInfo,
             vertexWeight,
             tectonicDebug,
