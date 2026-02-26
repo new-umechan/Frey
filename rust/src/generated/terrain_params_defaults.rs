@@ -38,6 +38,11 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         erosion_max_delta_per_iter: 0.015f32,
         coastal_deposit_rate: 0.45f32,
         shallow_sea_floor: -0.08f32,
+        continent_competence_noise_gain: 0.18f32,
+        continent_competence_large_scale: 3.4f32,
+        continent_competence_mid_scale: 7.8f32,
+        continent_competence_weight_gain: 0.08f32,
+        continent_foldability_from_competence: 0.65f32,
+        continent_erodibility_from_competence: 0.70f32,
     }
 }
-

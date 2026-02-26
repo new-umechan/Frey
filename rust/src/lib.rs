@@ -48,6 +48,12 @@ pub struct TerrainParams {
     pub erosion_max_delta_per_iter: f32,
     pub coastal_deposit_rate: f32,
     pub shallow_sea_floor: f32,
+    pub continent_competence_noise_gain: f32,
+    pub continent_competence_large_scale: f32,
+    pub continent_competence_mid_scale: f32,
+    pub continent_competence_weight_gain: f32,
+    pub continent_foldability_from_competence: f32,
+    pub continent_erodibility_from_competence: f32,
 }
 
 impl Default for TerrainParams {

@@ -35,7 +35,12 @@ export const TERRAIN_PARAMS = Object.freeze({
     erosion_max_delta_per_iter: 0.015,
     coastal_deposit_rate: 0.45,
     shallow_sea_floor: -0.08,
+    continent_competence_noise_gain: 0.18,
+    continent_competence_large_scale: 3.4,
+    continent_competence_mid_scale: 7.8,
+    continent_competence_weight_gain: 0.08,
+    continent_foldability_from_competence: 0.65,
+    continent_erodibility_from_competence: 0.70,
 });
 
 export const TERRAIN_LEVEL = TERRAIN_PARAMS.level;
-

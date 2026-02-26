@@ -262,6 +262,7 @@ fn apply_hydraulic_erosion(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
+    vertex_competence: &[f32],
     height: &mut [f32],
     params: &TerrainParams,
 ) {
@@ -303,9 +304,16 @@ fn apply_hydraulic_erosion(
             let local_slope = raw_drop / edge_len;
             let effective_slope = local_slope.max(params.erosion_min_slope);
             let capacity = params.sediment_capacity_gain * river_flux[i] * effective_slope;
+            let competence = vertex_competence.get(i).copied().unwrap_or(0.5);
+            let inverse_comp = 1.0 - clamp(competence, 0.0, 1.0);
+            let erodibility = lerp(
+                1.0,
+                inverse_comp,
+                clamp(params.continent_erodibility_from_competence, 0.0, 1.0),
+            );
 
             let erode_amount = clamp(
-                params.hydraulic_erode_rate * capacity,
+                params.hydraulic_erode_rate * capacity * erodibility,
                 0.0,
                 params.erosion_max_delta_per_iter,
             );

@@ -50,6 +50,7 @@ mod tests {
             &plate_id,
             &attributes,
             &boundary_edges,
+            params,
         );
         let mut height = vec![0.0; positions.len()];
         for v in 0..positions.len() {
@@ -87,7 +88,18 @@ mod tests {
             params.smooth_iter,
             params.smooth_lambda,
         );
-        super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, params);
+        let vertex_competence = vertex_lithosphere
+            .iter()
+            .map(|lith| lith.competence)
+            .collect::<Vec<_>>();
+        super::apply_hydraulic_erosion(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &vertex_competence,
+            &mut height,
+            params,
+        );
         super::postprocess_height(
             &nbr_offsets,
             &nbrs,
@@ -222,7 +234,15 @@ mod tests {
             ..TerrainParams::default()
         };
 
-        super::apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, &params);
+        let competence = vec![0.5; height.len()];
+        super::apply_hydraulic_erosion(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &competence,
+            &mut height,
+            &params,
+        );
         assert_eq!(height, original);
     }
 

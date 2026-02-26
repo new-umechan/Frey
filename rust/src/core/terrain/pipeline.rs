@@ -49,6 +49,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &plate_id,
         &attributes,
         &boundary_edges,
+        &params,
     );
     let plate_boundary_proximity =
         compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
@@ -104,6 +105,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &nbrs,
         &plate_id,
         &attributes,
+        &vertex_lithosphere,
         &boundary_edges,
         &mut height,
         &mut boundary_fields,
@@ -119,7 +121,18 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         params.smooth_lambda,
     );
 
-    apply_hydraulic_erosion(&positions, &nbr_offsets, &nbrs, &mut height, &params);
+    let vertex_competence = vertex_lithosphere
+        .iter()
+        .map(|lith| lith.competence)
+        .collect::<Vec<_>>();
+    apply_hydraulic_erosion(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &vertex_competence,
+        &mut height,
+        &params,
+    );
 
     postprocess_height(
         &nbr_offsets,
@@ -231,4 +244,14 @@ fn sanitize_params(params: &mut TerrainParams) {
     params.erosion_max_delta_per_iter = params.erosion_max_delta_per_iter.max(0.0);
     params.coastal_deposit_rate = clamp(params.coastal_deposit_rate, 0.0, 1.0);
     params.shallow_sea_floor = clamp(params.shallow_sea_floor, -1.0, 0.0);
+    params.continent_competence_noise_gain = clamp(params.continent_competence_noise_gain, 0.0, 0.5);
+    params.continent_competence_large_scale = params.continent_competence_large_scale.max(0.1);
+    params.continent_competence_mid_scale = params
+        .continent_competence_mid_scale
+        .max(params.continent_competence_large_scale + 0.1);
+    params.continent_competence_weight_gain = params.continent_competence_weight_gain.max(0.0);
+    params.continent_foldability_from_competence =
+        clamp(params.continent_foldability_from_competence, 0.0, 1.0);
+    params.continent_erodibility_from_competence =
+        clamp(params.continent_erodibility_from_competence, 0.0, 1.0);
 }

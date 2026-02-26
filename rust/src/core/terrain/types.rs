@@ -43,6 +43,7 @@ struct VertexLithosphere {
     age_norm: f32,
     weight: f32,
     buoyancy: f32,
+    competence: f32,
 }
 
 struct BoundaryFields {

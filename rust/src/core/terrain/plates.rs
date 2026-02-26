@@ -645,6 +645,7 @@ fn compute_vertex_lithosphere(
     plate_id: &[u32],
     attributes: &[PlateAttr],
     boundary_edges: &[BoundaryEdge],
+    params: &TerrainParams,
 ) -> Vec<VertexLithosphere> {
     const AGE_SPEED_REF: f32 = 0.65;
     const AGE_DIRECTIONAL_INFLUENCE: f32 = 0.35;
@@ -656,6 +657,7 @@ fn compute_vertex_lithosphere(
             age_norm: 0.0,
             weight: 0.0,
             buoyancy: 0.0,
+            competence: 0.5,
         };
         v_count
     ];
@@ -676,7 +678,30 @@ fn compute_vertex_lithosphere(
         let pid = plate_id[i] as usize;
         lith[i].weight = attributes[pid].base_weight;
         lith[i].buoyancy = attributes[pid].base_height;
+        lith[i].competence = 0.5;
     }
+
+    let mut continental_competence_raw = vec![0.0_f32; v_count];
+    for v in 0..v_count {
+        let pid = plate_id[v] as usize;
+        if attributes[pid].is_ocean {
+            continue;
+        }
+        continental_competence_raw[v] = sample_continental_competence_noise(
+            positions[v],
+            pid as u32,
+            params.continent_competence_large_scale,
+            params.continent_competence_mid_scale,
+        );
+    }
+    smooth_continental_field_by_plate(
+        nbr_offsets,
+        nbrs,
+        plate_id,
+        attributes,
+        &mut continental_competence_raw,
+        3,
+    );
 
     for edge in boundary_edges {
         let is_divergent = matches!(edge.boundary_type, BoundaryType::Divergent);
@@ -789,8 +814,16 @@ fn compute_vertex_lithosphere(
         let pid = plate_id[v] as usize;
         if !attributes[pid].is_ocean {
             lith[v].age_norm = 0.0;
-            lith[v].weight = attributes[pid].base_weight;
+            let competence = clamp(
+                0.5 + params.continent_competence_noise_gain * continental_competence_raw[v],
+                0.0,
+                1.0,
+            );
+            let weight = attributes[pid].base_weight
+                + params.continent_competence_weight_gain * (competence - 0.5);
+            lith[v].weight = weight;
             lith[v].buoyancy = attributes[pid].base_height;
+            lith[v].competence = competence;
             continue;
         }
         let max_age = ocean_plate_max_age[pid].max(1e-4);
@@ -806,8 +839,78 @@ fn compute_vertex_lithosphere(
             age_norm: age,
             weight,
             buoyancy,
+            competence: 0.5,
         };
     }
 
     lith
+}
+
+fn sample_continental_competence_noise(
+    pos: [f32; 3],
+    plate_seed: u32,
+    large_scale: f32,
+    mid_scale: f32,
+) -> f32 {
+    let axis_a = seeded_unit_vec(plate_seed ^ 0x85eb_ca6b);
+    let axis_b = seeded_unit_vec(plate_seed ^ 0xc2b2_ae35);
+    let axis_c = seeded_unit_vec(plate_seed ^ 0x27d4_eb2f);
+    let phase_a = std::f32::consts::TAU * hash01_u32(plate_seed ^ 0x517c_c1b7);
+    let phase_b = std::f32::consts::TAU * hash01_u32(plate_seed ^ 0x9e37_79b9);
+    let phase_c = std::f32::consts::TAU * hash01_u32(plate_seed ^ 0x94d0_49bb);
+
+    let large = (dot3(pos, axis_a) * large_scale + phase_a).sin();
+    let mid_primary = (dot3(pos, axis_b) * mid_scale + phase_b).sin();
+    let mid_secondary = (dot3(pos, axis_c) * (mid_scale * 1.37) + phase_c).sin();
+    let mixed = 0.70 * large + 0.20 * mid_primary + 0.10 * mid_secondary;
+    clamp(mixed, -1.0, 1.0)
+}
+
+fn smooth_continental_field_by_plate(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    attributes: &[PlateAttr],
+    field: &mut [f32],
+    iter: u32,
+) {
+    if iter == 0 || field.is_empty() {
+        return;
+    }
+    let mut buf = field.to_vec();
+    for _ in 0..iter {
+        for v in 0..field.len() {
+            let pid = plate_id[v] as usize;
+            if attributes[pid].is_ocean {
+                buf[v] = field[v];
+                continue;
+            }
+            let mut sum = field[v];
+            let mut wsum = 1.0_f32;
+            let start = nbr_offsets[v] as usize;
+            let end = nbr_offsets[v + 1] as usize;
+            for &n_u32 in &nbrs[start..end] {
+                let n = n_u32 as usize;
+                if plate_id[n] != plate_id[v] {
+                    continue;
+                }
+                sum += field[n];
+                wsum += 1.0;
+            }
+            buf[v] = sum / wsum;
+        }
+        field.copy_from_slice(&buf);
+    }
+}
+
+fn hash01_u32(seed: u32) -> f32 {
+    let s = ((seed as f32) * 12.9898 + 78.233).sin();
+    fract01(s * 43_758.547)
+}
+
+fn seeded_unit_vec(seed: u32) -> [f32; 3] {
+    let z = 2.0 * hash01_u32(seed ^ 0x68bc_21eb) - 1.0;
+    let phi = std::f32::consts::TAU * hash01_u32(seed ^ 0x02e5_be93);
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    [r * phi.cos(), z, r * phi.sin()]
 }

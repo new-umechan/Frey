@@ -273,6 +273,7 @@ fn apply_intraplate_fold_belts(
     nbrs: &[u32],
     plate_id: &[u32],
     attributes: &[PlateAttr],
+    vertex_lithosphere: &[VertexLithosphere],
     boundary_edges: &[BoundaryEdge],
     height: &mut [f32],
     boundary_fields: &mut BoundaryFields,
@@ -353,7 +354,13 @@ fn apply_intraplate_fold_belts(
         let weakness = 0.70 + 0.30 * trig_hash01(positions[v], (source_idx as u32) ^ 0x9e37_79b9);
         let uplift_bias = 0.22;
         let mode_gain = source.mode_gain;
-        let delta = fold_gain * mode_gain * stress_mag * weakness * (fold_pattern + uplift_bias);
+        let competence = vertex_lithosphere
+            .get(v)
+            .map(|lith| lith.competence)
+            .unwrap_or(0.5);
+        let foldability = foldability_from_competence(competence, params);
+        let delta =
+            fold_gain * mode_gain * stress_mag * weakness * foldability * (fold_pattern + uplift_bias);
         height[v] = clamp(height[v] + delta, -1.0, 1.0);
 
         let preserve = clamp(
@@ -363,6 +370,12 @@ fn apply_intraplate_fold_belts(
         );
         boundary_fields.preserve_strength[v] = boundary_fields.preserve_strength[v].max(preserve);
     }
+}
+
+fn foldability_from_competence(competence: f32, params: &TerrainParams) -> f32 {
+    let influence = clamp(params.continent_foldability_from_competence, 0.0, 1.0);
+    let inverse_comp = 1.0 - clamp(competence, 0.0, 1.0);
+    lerp(1.0, inverse_comp, influence)
 }
 
 fn extract_boundary_edges(
