@@ -231,6 +231,30 @@ body {
     font-size: 0.84rem;
 }
 
+.field-stack {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.field-label {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+}
+
+.select-field {
+    width: 100%;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 20%);
+    background: color-mix(in oklab, var(--panel), white 20%);
+    color: var(--ink);
+    padding: 0.45rem 0.55rem;
+    font: inherit;
+}
+
+.select-field:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
 #status-message {
     color: var(--ink);
     font-weight: 500;
@@ -255,6 +279,41 @@ body {
 }
 
 .stats-list dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.era-scale-summary {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid color-mix(in oklab, var(--line), transparent 18%);
+}
+
+.era-scale-summary > p {
+    margin: 0 0 0.45rem;
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.era-scale-weights {
+    margin: 0;
+    display: grid;
+    gap: 0.28rem;
+}
+
+.era-scale-weights > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: baseline;
+    font-size: 0.8rem;
+}
+
+.era-scale-weights dt {
+    color: var(--ink-soft);
+}
+
+.era-scale-weights dd {
     margin: 0;
     font-weight: 600;
 }

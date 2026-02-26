@@ -10,7 +10,35 @@ const LEVEL = TERRAIN_LEVEL;
 const DEFAULT_TERRAIN_SEED = "alpha";
 const DEFAULT_VIEW_MODE = "normal";
 const DEFAULT_SURFACE_MODE = "globe";
+const DEFAULT_ERA_SCALE = "crust";
 const PLATE_HOVER_POPUP_DELAY_MS = 450;
+const ERA_SCALE_PRESETS = Object.freeze({
+    crust: {
+        label: "地殻形成期",
+        tickLabel: "100万年",
+        weights: { terrain: 1.0, river: 0.05, climate: 0.0, ecology: 0.0, civilization: 0.0 },
+    },
+    environment: {
+        label: "環境形成期",
+        tickLabel: "1万年",
+        weights: { terrain: 0.3, river: 1.0, climate: 0.9, ecology: 0.15, civilization: 0.0 },
+    },
+    life: {
+        label: "生命誕生期",
+        tickLabel: "1000年",
+        weights: { terrain: 0.15, river: 0.5, climate: 0.6, ecology: 1.0, civilization: 0.05 },
+    },
+    civilization: {
+        label: "文明成立期",
+        tickLabel: "100年",
+        weights: { terrain: 0.08, river: 0.3, climate: 0.45, ecology: 0.5, civilization: 1.0 },
+    },
+    history: {
+        label: "歴史展開期",
+        tickLabel: "1年",
+        weights: { terrain: 0.02, river: 0.08, climate: 0.12, ecology: 0.1, civilization: 1.0 },
+    },
+});
 
 async function bootstrap() {
     const {
@@ -23,6 +51,9 @@ async function bootstrap() {
         statusMessage,
         plateHoverPopup,
         debugToggleInput,
+        eraScaleSelect,
+        eraScaleTickLabel,
+        eraScaleWeightFields,
         viewModeInputs,
         statFields,
     } = collectAppElements();
@@ -82,6 +113,7 @@ async function bootstrap() {
     let visiblePlateHoverId = null;
     let debugEnabled = debugToggleInput.checked;
     let currentRiverMaskTexture = null;
+    let currentEraScale = DEFAULT_ERA_SCALE;
 
     const vertexCount = basePositions.length / 3;
     const terrainUv = buildTerrainUvFromPositions(basePositions);
@@ -565,6 +597,33 @@ async function bootstrap() {
         terrainMaterial.setDebugEnabled(debugEnabled);
     }
 
+    function getEraScalePreset(key) {
+        if (Object.hasOwn(ERA_SCALE_PRESETS, key)) {
+            return ERA_SCALE_PRESETS[key];
+        }
+        return ERA_SCALE_PRESETS[DEFAULT_ERA_SCALE];
+    }
+
+    function renderEraScaleControls() {
+        const preset = getEraScalePreset(currentEraScale);
+        eraScaleSelect.value = currentEraScale;
+        eraScaleTickLabel.textContent = `1 Tick: ${preset.tickLabel}`;
+        eraScaleWeightFields.terrain.textContent = preset.weights.terrain.toFixed(2);
+        eraScaleWeightFields.river.textContent = preset.weights.river.toFixed(2);
+        eraScaleWeightFields.climate.textContent = preset.weights.climate.toFixed(2);
+        eraScaleWeightFields.ecology.textContent = preset.weights.ecology.toFixed(2);
+        eraScaleWeightFields.civilization.textContent = preset.weights.civilization.toFixed(2);
+    }
+
+    function setEraScale(nextEraScale) {
+        currentEraScale = Object.hasOwn(ERA_SCALE_PRESETS, nextEraScale)
+            ? nextEraScale
+            : DEFAULT_ERA_SCALE;
+        renderEraScaleControls();
+        const preset = getEraScalePreset(currentEraScale);
+        setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${preset.tickLabel}`);
+    }
+
     function setViewMode(nextMode) {
         const normalizedMode = nextMode === "plates" ? "plates" : "normal";
         currentViewMode = normalizedMode;
@@ -650,7 +709,8 @@ async function bootstrap() {
         statFields.plates.textContent = `${plateCount}`;
         statFields.land.textContent = `${(landRatio * 100).toFixed(1)}%`;
 
-        setStatus(`Ready (${currentSeed})`);
+        const eraPreset = getEraScalePreset(currentEraScale);
+        setStatus(`Ready (${currentSeed}) | ${eraPreset.label} / 1Tick=${eraPreset.tickLabel}`);
         seedInput.value = currentSeed;
         seedInput.removeAttribute("disabled");
         seedForm.querySelector("button")?.removeAttribute("disabled");
@@ -675,6 +735,9 @@ async function bootstrap() {
     canvas.addEventListener("pointercancel", hidePlateHoverPopup);
     debugToggleInput.addEventListener("change", () => {
         setDebugModeEnabled(debugToggleInput.checked);
+    });
+    eraScaleSelect.addEventListener("change", () => {
+        setEraScale(eraScaleSelect.value);
     });
 
     for (const input of viewModeInputs) {
@@ -751,6 +814,8 @@ async function bootstrap() {
     });
 
     await updateTerrain(DEFAULT_TERRAIN_SEED);
+    renderEraScaleControls();
+    setEraScale(DEFAULT_ERA_SCALE);
     onResize();
     hidePlateHoverPopup();
 

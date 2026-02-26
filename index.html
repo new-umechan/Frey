@@ -94,6 +94,29 @@
                                 </span>
                             </label>
                         </section>
+                        <section class="panel">
+                            <h2>Era Scale</h2>
+                            <label class="field-stack" for="era-scale-select">
+                                <span class="field-label">時代プリセット</span>
+                                <select id="era-scale-select" class="select-field">
+                                    <option value="crust">地殻形成期</option>
+                                    <option value="environment">環境形成期</option>
+                                    <option value="life">生命誕生期</option>
+                                    <option value="civilization">文明成立期</option>
+                                    <option value="history">歴史展開期</option>
+                                </select>
+                            </label>
+                            <div class="era-scale-summary" id="era-scale-summary" aria-live="polite">
+                                <p id="era-scale-tick-label">1 Tick: -</p>
+                                <dl class="era-scale-weights">
+                                    <div><dt>地形</dt><dd id="era-weight-terrain">-</dd></div>
+                                    <div><dt>河川</dt><dd id="era-weight-river">-</dd></div>
+                                    <div><dt>気候</dt><dd id="era-weight-climate">-</dd></div>
+                                    <div><dt>生態</dt><dd id="era-weight-ecology">-</dd></div>
+                                    <div><dt>文明</dt><dd id="era-weight-civilization">-</dd></div>
+                                </dl>
+                            </div>
+                        </section>
                         <section class="panel panel-note">
                             <h2>CONTROL</h2>
                             <p>ドラッグ: 回転</p>

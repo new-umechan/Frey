@@ -16,6 +16,8 @@ export function collectAppElements() {
     const statusMessage = requireElement("status-message", HTMLElement);
     const plateHoverPopup = requireElement("plate-hover-popup", HTMLDivElement);
     const debugToggleInput = requireElement("debug-mode-toggle", HTMLInputElement);
+    const eraScaleSelect = requireElement("era-scale-select", HTMLSelectElement);
+    const eraScaleTickLabel = requireElement("era-scale-tick-label", HTMLElement);
     const viewModeInputs = Array.from(
         document.querySelectorAll('input[name="view-mode"]'),
     ).filter((input) => input instanceof HTMLInputElement);
@@ -31,6 +33,13 @@ export function collectAppElements() {
         plates: requireElement("stat-plates", HTMLElement),
         land: requireElement("stat-land", HTMLElement),
     };
+    const eraScaleWeightFields = {
+        terrain: requireElement("era-weight-terrain", HTMLElement),
+        river: requireElement("era-weight-river", HTMLElement),
+        climate: requireElement("era-weight-climate", HTMLElement),
+        ecology: requireElement("era-weight-ecology", HTMLElement),
+        civilization: requireElement("era-weight-civilization", HTMLElement),
+    };
 
     return {
         appShell,
@@ -42,6 +51,9 @@ export function collectAppElements() {
         statusMessage,
         plateHoverPopup,
         debugToggleInput,
+        eraScaleSelect,
+        eraScaleTickLabel,
+        eraScaleWeightFields,
         viewModeInputs,
         statFields,
     };
