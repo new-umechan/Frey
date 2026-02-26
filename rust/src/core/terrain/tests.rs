@@ -131,10 +131,21 @@ mod tests {
             .iter()
             .map(|attr| attr.base_weight)
             .collect::<Vec<_>>();
+        let plate_count = {
+            let mut unique = std::collections::HashSet::with_capacity(plate_id.len());
+            for &pid in &plate_id {
+                unique.insert(pid);
+            }
+            unique.len() as u32
+        };
+        let land_count = height.iter().filter(|&&h| h > 0.0).count();
+        let land_ratio = land_count as f32 / (height.len().max(1) as f32);
 
         TerrainOutput {
             height,
             plate_id,
+            plate_count,
+            land_ratio,
             river_flux,
             river_next,
             lake_depth,

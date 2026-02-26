@@ -2,6 +2,7 @@
 mod core;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
+mod wasm_visuals;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -59,6 +60,8 @@ impl Default for TerrainParams {
 pub struct TerrainOutput {
     pub height: Vec<f32>,
     pub plate_id: Vec<u32>,
+    pub plate_count: u32,
+    pub land_ratio: f32,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
     pub lake_depth: Vec<f32>,
@@ -91,4 +94,20 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
     let output = core::build_terrain(&seed, params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
+}
+
+#[wasm_bindgen]
+pub fn build_render_positions(input_js: JsValue) -> Result<JsValue, JsValue> {
+    let positions = wasm_visuals::build_render_positions_from_js(input_js)
+        .map_err(|err| JsValue::from_str(&format!("failed to build render positions: {err}")))?;
+    serde_wasm_bindgen::to_value(&positions)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize render positions: {err}")))
+}
+
+#[wasm_bindgen]
+pub fn build_vertex_colors(input_js: JsValue) -> Result<JsValue, JsValue> {
+    let colors = wasm_visuals::build_vertex_colors_from_js(input_js)
+        .map_err(|err| JsValue::from_str(&format!("failed to build vertex colors: {err}")))?;
+    serde_wasm_bindgen::to_value(&colors)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize vertex colors: {err}")))
 }

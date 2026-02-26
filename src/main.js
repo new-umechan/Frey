@@ -7,7 +7,6 @@ import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "./app/terrain-params.js";
 import {
     buildRenderPositions,
     buildVertexColors,
-    summarizeTerrain,
 } from "./app/terrain-visuals.js";
 
 const LEVEL = TERRAIN_LEVEL;
@@ -603,7 +602,8 @@ async function bootstrap() {
         applyCurrentViewColors();
         hidePlateHoverPopup();
 
-        const { plateCount, landRatio } = summarizeTerrain(heightData, plateId);
+        const plateCount = Number.isFinite(terrain.plate_count) ? terrain.plate_count : 0;
+        const landRatio = Number.isFinite(terrain.land_ratio) ? terrain.land_ratio : 0;
 
         currentSeed = nextSeed;
         statFields.vertices.textContent = `${basePositions.length / 3}`;
