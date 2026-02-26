@@ -11,16 +11,16 @@ fn compute_spherical_coords(positions: &[[f32; 3]]) -> Vec<(f32, f32)> {
 
 fn evaluate_phi(
     spherical: &[(f32, f32)],
-    l_max: u32,
-    alpha: f32,
+    harmonic_max_l: u32,
+    spectral_alpha: f32,
     rng: &mut DeterministicRng,
 ) -> Vec<f32> {
-    let mut coeffs: Vec<Vec<f32>> = Vec::with_capacity((l_max + 1) as usize);
+    let mut coeffs: Vec<Vec<f32>> = Vec::with_capacity((harmonic_max_l + 1) as usize);
     coeffs.push(vec![0.0]);
     coeffs.push(vec![0.0, 0.0, 0.0]);
 
-    for l in 2..=l_max {
-        let sigma = 1.0 / (l as f32).powf(alpha);
+    for l in 2..=harmonic_max_l {
+        let sigma = 1.0 / (l as f32).powf(spectral_alpha);
         let len = (2 * l + 1) as usize;
         let mut arr = vec![0.0; len];
         for value in &mut arr {
@@ -33,7 +33,7 @@ fn evaluate_phi(
     let mut phi = vec![0.0; spherical.len()];
     for (i, (theta, lambda)) in spherical.iter().enumerate() {
         let mut sum = 0.0;
-        for l in 2..=l_max {
+        for l in 2..=harmonic_max_l {
             for m in -(l as i32)..=(l as i32) {
                 let c = coeffs[l as usize][(m + l as i32) as usize];
                 sum += c * real_spherical_harmonic(l as i32, m, *theta, *lambda);
@@ -151,15 +151,15 @@ fn generate_frequency_bands(
     spherical: &[(f32, f32)],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    l_max: u32,
-    alpha: f32,
+    harmonic_max_l: u32,
+    spectral_alpha: f32,
     rng: &mut DeterministicRng,
 ) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    let low_max = l_max.max(3).min(5);
-    let mid_max = (l_max + 3).max(low_max + 1).min(10);
+    let low_max = harmonic_max_l.max(3).min(5);
+    let mid_max = (harmonic_max_l + 3).max(low_max + 1).min(10);
 
-    let mut low = evaluate_phi_band(spherical, 2, low_max, alpha + 0.35, rng);
-    let mut mid = evaluate_phi_band(spherical, low_max + 1, mid_max, alpha, rng);
+    let mut low = evaluate_phi_band(spherical, 2, low_max, spectral_alpha + 0.35, rng);
+    let mut mid = evaluate_phi_band(spherical, low_max + 1, mid_max, spectral_alpha, rng);
     if mid.iter().all(|v| v.abs() < 1e-7) {
         mid = generate_smoothed_noise_band(spherical.len(), nbr_offsets, nbrs, 3, 1, rng);
     }
@@ -176,17 +176,17 @@ fn generate_frequency_bands(
 fn evaluate_phi_band(
     spherical: &[(f32, f32)],
     l_min: u32,
-    l_max: u32,
-    alpha: f32,
+    harmonic_max_l: u32,
+    spectral_alpha: f32,
     rng: &mut DeterministicRng,
 ) -> Vec<f32> {
-    if l_min > l_max {
+    if l_min > harmonic_max_l {
         return vec![0.0; spherical.len()];
     }
 
-    let mut coeffs: Vec<Vec<f32>> = vec![Vec::new(); (l_max + 1) as usize];
-    for l in l_min..=l_max {
-        let sigma = 1.0 / (l as f32).powf(alpha.max(0.1));
+    let mut coeffs: Vec<Vec<f32>> = vec![Vec::new(); (harmonic_max_l + 1) as usize];
+    for l in l_min..=harmonic_max_l {
+        let sigma = 1.0 / (l as f32).powf(spectral_alpha.max(0.1));
         let len = (2 * l + 1) as usize;
         let mut arr = vec![0.0; len];
         for value in &mut arr {
@@ -198,7 +198,7 @@ fn evaluate_phi_band(
     let mut out = vec![0.0; spherical.len()];
     for (i, (theta, lambda)) in spherical.iter().enumerate() {
         let mut sum = 0.0;
-        for l in l_min..=l_max {
+        for l in l_min..=harmonic_max_l {
             for m in -(l as i32)..=(l as i32) {
                 let c = coeffs[l as usize][(m + l as i32) as usize];
                 sum += c * real_spherical_harmonic(l as i32, m, *theta, *lambda);

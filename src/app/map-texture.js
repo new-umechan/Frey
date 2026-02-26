@@ -4,18 +4,18 @@ const MAP_TEX_WIDTH = 1024;
 const MAP_TEX_HEIGHT = 512;
 const MAP_BG = "#dfe5ec";
 
-function lonLatToMapUv(x, y, z) {
-    const invLen = 1 / Math.max(1e-6, Math.hypot(x, y, z));
-    const nx = x * invLen;
-    const ny = y * invLen;
-    const nz = z * invLen;
+function lonLatToMapUv(positionX, positionY, positionZ) {
+    const invLen = 1 / Math.max(1e-6, Math.hypot(positionX, positionY, positionZ));
+    const nx = positionX * invLen;
+    const ny = positionY * invLen;
+    const nz = positionZ * invLen;
     const u = Math.atan2(nz, nx) / (Math.PI * 2) + 0.5;
     const v = 0.5 - Math.asin(THREE.MathUtils.clamp(ny, -1, 1)) / Math.PI;
     return { u, v };
 }
 
-function wrapAwareU(a, b, c) {
-    const values = [a, b, c];
+function wrapAwareU(uValueA, uValueB, uValueC) {
+    const values = [uValueA, uValueB, uValueC];
     const min = Math.min(...values);
     const max = Math.max(...values);
     if (max - min <= 0.5) {
@@ -24,24 +24,33 @@ function wrapAwareU(a, b, c) {
     return values.map((u) => (u < 0.5 ? u + 1 : u));
 }
 
-function drawTriangle(ctx, ax, ay, bx, by, cx, cy, fillStyle) {
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.lineTo(cx, cy);
-    ctx.closePath();
-    ctx.fillStyle = fillStyle;
-    ctx.fill();
-    ctx.strokeStyle = fillStyle;
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 1.25;
-    ctx.stroke();
+function drawTriangle(
+    context2d,
+    pointAX,
+    pointAY,
+    pointBX,
+    pointBY,
+    pointCX,
+    pointCY,
+    fillStyle,
+) {
+    context2d.beginPath();
+    context2d.moveTo(pointAX, pointAY);
+    context2d.lineTo(pointBX, pointBY);
+    context2d.lineTo(pointCX, pointCY);
+    context2d.closePath();
+    context2d.fillStyle = fillStyle;
+    context2d.fill();
+    context2d.strokeStyle = fillStyle;
+    context2d.lineJoin = "round";
+    context2d.lineWidth = 1.25;
+    context2d.stroke();
 }
 
-function triangleColor(vertexColors, ia, ib, ic) {
-    const a3 = ia * 3;
-    const b3 = ib * 3;
-    const c3 = ic * 3;
+function triangleColor(vertexColors, vertexIndexA, vertexIndexB, vertexIndexC) {
+    const a3 = vertexIndexA * 3;
+    const b3 = vertexIndexB * 3;
+    const c3 = vertexIndexC * 3;
     const r = Math.round(((vertexColors[a3] + vertexColors[b3] + vertexColors[c3]) / 3) * 255);
     const g = Math.round(
         ((vertexColors[a3 + 1] + vertexColors[b3 + 1] + vertexColors[c3 + 1]) / 3) * 255,
@@ -52,8 +61,8 @@ function triangleColor(vertexColors, ia, ib, ic) {
     return `rgb(${r}, ${g}, ${b})`;
 }
 
-function vertexMapUv(basePositions, index) {
-    const i = index * 3;
+function vertexMapUv(basePositions, vertexIndex) {
+    const i = vertexIndex * 3;
     return lonLatToMapUv(basePositions[i], basePositions[i + 1], basePositions[i + 2]);
 }
 

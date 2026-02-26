@@ -3,12 +3,12 @@ fn smooth_heights(
     nbrs: &[u32],
     boundary_fields: &BoundaryFields,
     height: &mut [f32],
-    smooth_iter: u32,
-    smooth_lambda: f32,
+    smoothing_iterations: u32,
+    smoothing_lambda: f32,
 ) {
     let mut buffer = height.to_vec();
 
-    for _ in 0..smooth_iter {
+    for _ in 0..smoothing_iterations {
         for v in 0..height.len() {
             let start = nbr_offsets[v] as usize;
             let end = nbr_offsets[v + 1] as usize;
@@ -42,7 +42,7 @@ fn smooth_heights(
             };
             let coast_scale = if is_coast { 0.82 } else { 1.0 };
             let lambda = clamp(
-                smooth_lambda * boundary_scale * terrain_scale * coast_scale,
+                smoothing_lambda * boundary_scale * terrain_scale * coast_scale,
                 0.0,
                 1.0,
             );
@@ -266,8 +266,8 @@ fn apply_hydraulic_erosion(
     height: &mut [f32],
     params: &TerrainParams,
 ) {
-    if params.erosion_iter == 0
-        || params.hydraulic_erode_rate <= 0.0
+    if params.erosion_iterations == 0
+        || params.hydraulic_erosion_rate <= 0.0
         || params.erosion_max_delta_per_iter <= 0.0
     {
         return;
@@ -277,7 +277,7 @@ fn apply_hydraulic_erosion(
     let mut next_height = height.to_vec();
     let mut delta = vec![0.0; v_count];
 
-    for _ in 0..params.erosion_iter {
+    for _ in 0..params.erosion_iterations {
         let (river_flux, river_next) = compute_river_flux_and_next(
             positions,
             nbr_offsets,
@@ -313,7 +313,7 @@ fn apply_hydraulic_erosion(
             );
 
             let erode_amount = clamp(
-                params.hydraulic_erode_rate * capacity * erodibility,
+                params.hydraulic_erosion_rate * capacity * erodibility,
                 0.0,
                 params.erosion_max_delta_per_iter,
             );
@@ -585,13 +585,13 @@ fn generate_rivers(
     nbrs: &[u32],
     height: &[f32],
     river_rain_base: f32,
-    river_accum_threshold: f32,
+    river_accumulation_threshold: f32,
 ) -> (Vec<f32>, Vec<i32>) {
     let (mut river_flux, mut river_next) =
         compute_river_flux_and_next(positions, nbr_offsets, nbrs, height, river_rain_base);
 
     for i in 0..positions.len() {
-        if river_flux[i] < river_accum_threshold {
+        if river_flux[i] < river_accumulation_threshold {
             river_flux[i] = 0.0;
         }
         if height[i] <= 0.0 {

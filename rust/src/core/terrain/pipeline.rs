@@ -12,10 +12,10 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
     let (positions, indices) = generate_icosphere(params.level);
     let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
     let spherical = compute_spherical_coords(&positions);
-    let mut phi = evaluate_phi(&spherical, params.l_max, params.alpha, &mut rng);
+    let mut phi = evaluate_phi(&spherical, params.harmonic_max_l, params.spectral_alpha, &mut rng);
     normalize_zscore(&mut phi);
 
-    let plate_count = choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
+    let plate_count = choose_plate_count(params.plate_count_min, params.plate_count_max, &mut rng);
     let seeds = pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
     let growth_profiles = build_plate_growth_profiles(plate_count, &mut rng);
     let plate_cost_warp_basis =
@@ -57,8 +57,8 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &spherical,
         &nbr_offsets,
         &nbrs,
-        params.l_max,
-        params.alpha,
+        params.harmonic_max_l,
+        params.spectral_alpha,
         &mut rng,
     );
 
@@ -117,8 +117,8 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &nbrs,
         &boundary_fields,
         &mut height,
-        params.smooth_iter,
-        params.smooth_lambda,
+        params.smoothing_iterations,
+        params.smoothing_lambda,
     );
 
     let vertex_competence = vertex_lithosphere
@@ -159,7 +159,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &nbrs,
         &height,
         params.river_rain_base,
-        params.river_accum_threshold,
+        params.river_accumulation_threshold,
     );
     let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
     let vertex_weight = vertex_lithosphere
@@ -209,13 +209,13 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
 
 fn sanitize_params(params: &mut TerrainParams) {
     params.level = params.level.min(8);
-    params.l_max = params.l_max.max(2).min(8);
-    params.alpha = params.alpha.max(0.1);
-    if params.num_plates_min < 2 {
-        params.num_plates_min = 2;
+    params.harmonic_max_l = params.harmonic_max_l.max(2).min(8);
+    params.spectral_alpha = params.spectral_alpha.max(0.1);
+    if params.plate_count_min < 2 {
+        params.plate_count_min = 2;
     }
-    if params.num_plates_max < params.num_plates_min {
-        params.num_plates_max = params.num_plates_min;
+    if params.plate_count_max < params.plate_count_min {
+        params.plate_count_max = params.plate_count_min;
     }
     params.ocean_plate_ratio = clamp(params.ocean_plate_ratio, 0.0, 1.0);
     params.boundary_band = params.boundary_band.max(1e-3);
@@ -226,18 +226,18 @@ fn sanitize_params(params: &mut TerrainParams) {
     params.arc_gain = params.arc_gain.max(0.0);
     params.collision_gain = params.collision_gain.max(0.0);
     params.rift_gain = params.rift_gain.max(0.0);
-    params.boundary_width_trench = params.boundary_width_trench.max(1e-3);
-    params.boundary_width_arc = params.boundary_width_arc.max(1e-3);
-    params.boundary_width_collision = params.boundary_width_collision.max(1e-3);
-    params.boundary_width_rift = params.boundary_width_rift.max(1e-3);
+    params.boundary_trench_width = params.boundary_trench_width.max(1e-3);
+    params.boundary_arc_width = params.boundary_arc_width.max(1e-3);
+    params.boundary_collision_width = params.boundary_collision_width.max(1e-3);
+    params.boundary_rift_width = params.boundary_rift_width.max(1e-3);
     params.boundary_obliquity_mix = clamp(params.boundary_obliquity_mix, 0.0, 1.0);
     params.boundary_distance_falloff = params.boundary_distance_falloff.max(0.1);
     params.boundary_anisotropy = clamp(params.boundary_anisotropy, 0.0, 1.0);
-    params.smooth_lambda = clamp(params.smooth_lambda, 0.0, 1.0);
+    params.smoothing_lambda = clamp(params.smoothing_lambda, 0.0, 1.0);
     params.river_rain_base = params.river_rain_base.max(0.0);
-    params.river_accum_threshold = params.river_accum_threshold.max(0.0);
-    params.erosion_iter = params.erosion_iter.min(128);
-    params.hydraulic_erode_rate = params.hydraulic_erode_rate.max(0.0);
+    params.river_accumulation_threshold = params.river_accumulation_threshold.max(0.0);
+    params.erosion_iterations = params.erosion_iterations.min(128);
+    params.hydraulic_erosion_rate = params.hydraulic_erosion_rate.max(0.0);
     params.hydraulic_deposit_rate = clamp(params.hydraulic_deposit_rate, 0.0, 1.0);
     params.sediment_capacity_gain = params.sediment_capacity_gain.max(0.0);
     params.erosion_min_slope = params.erosion_min_slope.max(0.0);

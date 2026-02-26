@@ -11,10 +11,10 @@ mod tests {
         let (nbr_offsets, nbrs) = super::build_neighbors(positions.len(), &indices);
         let spherical = super::compute_spherical_coords(&positions);
 
-        let mut phi = super::evaluate_phi(&spherical, params.l_max, params.alpha, &mut rng);
+        let mut phi = super::evaluate_phi(&spherical, params.harmonic_max_l, params.spectral_alpha, &mut rng);
         normalize_zscore(&mut phi);
         let plate_count =
-            super::choose_plate_count(params.num_plates_min, params.num_plates_max, &mut rng);
+            super::choose_plate_count(params.plate_count_min, params.plate_count_max, &mut rng);
         let seeds =
             super::pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
         let growth_profiles = super::build_plate_growth_profiles(plate_count, &mut rng);
@@ -85,8 +85,8 @@ mod tests {
             &nbrs,
             &boundary_fields,
             &mut height,
-            params.smooth_iter,
-            params.smooth_lambda,
+            params.smoothing_iterations,
+            params.smoothing_lambda,
         );
         let vertex_competence = vertex_lithosphere
             .iter()
@@ -124,7 +124,7 @@ mod tests {
             &nbrs,
             &height,
             params.river_rain_base,
-            params.river_accum_threshold,
+            params.river_accumulation_threshold,
         );
         let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
         let vertex_weight = vertex_lithosphere
@@ -194,7 +194,7 @@ mod tests {
             level: 3,
             ..TerrainParams::default()
         };
-        let output = generate_for_test("alpha", &params);
+        let output = generate_for_test("spectral_alpha", &params);
         let v = output.height.len();
         assert_eq!(output.plate_id.len(), v);
         assert_eq!(output.river_flux.len(), v);
@@ -230,7 +230,7 @@ mod tests {
         let original = height.clone();
 
         let params = TerrainParams {
-            erosion_iter: 0,
+            erosion_iterations: 0,
             ..TerrainParams::default()
         };
 
@@ -327,7 +327,7 @@ mod tests {
             ..TerrainParams::default()
         };
 
-        for seed in ["alpha", "beta", "gamma", "delta"] {
+        for seed in ["spectral_alpha", "beta", "gamma", "delta"] {
             let output = generate_for_test(seed, &params);
             let plate_count = output.plate_is_ocean.len();
             let mut counts = vec![0usize; plate_count];
@@ -372,7 +372,7 @@ mod tests {
             ..TerrainParams::default()
         };
 
-        for seed in ["alpha", "beta", "gamma", "delta"] {
+        for seed in ["spectral_alpha", "beta", "gamma", "delta"] {
             let output = generate_for_test(seed, &params);
             let mut ocean_land = 0usize;
             let mut ocean_vertices = 0usize;

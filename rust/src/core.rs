@@ -25,6 +25,6 @@ pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     })
 }
 
-pub(crate) fn build_terrain(seed: &str, params: TerrainParams) -> TerrainOutput {
-    terrain::generate(seed, params)
+pub(crate) fn build_terrain(seed: &str, terrain_params: TerrainParams) -> TerrainOutput {
+    terrain::generate(seed, terrain_params)
 }

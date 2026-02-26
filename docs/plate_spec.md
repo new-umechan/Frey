@@ -15,10 +15,10 @@
 ```rust
 pub struct TerrainParams {
     pub level: u32,                   // icosphere分割レベル（推奨 6）
-    pub l_max: u32,                   // 球面調和次数（既定 4）
-    pub alpha: f32,                   // スペクトル減衰（既定 1.5）
-    pub num_plates_min: u32,          // 最小プレート数（既定 8）
-    pub num_plates_max: u32,          // 最大プレート数（既定 18）
+    pub harmonic_max_l: u32,                   // 球面調和次数（既定 4）
+    pub spectral_alpha: f32,                   // スペクトル減衰（既定 1.5）
+    pub plate_count_min: u32,          // 最小プレート数（既定 8）
+    pub plate_count_max: u32,          // 最大プレート数（既定 18）
     pub ocean_plate_ratio: f32,       // 海洋プレート比率（既定 0.65）
     pub boundary_band: f32,           // 境界帯域の閾値（既定 0.08）
     pub boundary_convergent_base_gain: f32, // 収束境界の基礎地形係数
@@ -28,19 +28,19 @@ pub struct TerrainParams {
     pub arc_gain: f32,                // 火山弧/島弧の強さ
     pub collision_gain: f32,          // 大陸衝突帯の造山強度
     pub rift_gain: f32,               // リフト沈降の強さ
-    pub boundary_width_trench: f32,   // 海溝帯の幅
-    pub boundary_width_arc: f32,      // 弧状隆起帯のオフセット幅
-    pub boundary_width_collision: f32,// 衝突造山帯の幅
-    pub boundary_width_rift: f32,     // リフト帯の幅
+    pub boundary_trench_width: f32,   // 海溝帯の幅
+    pub boundary_arc_width: f32,      // 弧状隆起帯のオフセット幅
+    pub boundary_collision_width: f32,// 衝突造山帯の幅
+    pub boundary_rift_width: f32,     // リフト帯の幅
     pub boundary_obliquity_mix: f32,  // 斜交収束/発散の緩和係数
     pub boundary_distance_falloff: f32, // 境界距離減衰
     pub boundary_anisotropy: f32,     // 境界帯の異方性
-    pub smooth_iter: u32,             // 平滑化反復（既定 6）
-    pub smooth_lambda: f32,           // 平滑化係数（既定 0.35）
+    pub smoothing_iterations: u32,             // 平滑化反復（既定 6）
+    pub smoothing_lambda: f32,           // 平滑化係数（既定 0.35）
     pub river_rain_base: f32,         // 降水ベース（既定 0.5）
-    pub river_accum_threshold: f32,   // 河川成立閾値（既定 0.015）
-    pub erosion_iter: u32,            // 水食侵食反復（既定 12）
-    pub hydraulic_erode_rate: f32,    // 侵食率（既定 0.020）
+    pub river_accumulation_threshold: f32,   // 河川成立閾値（既定 0.015）
+    pub erosion_iterations: u32,            // 水食侵食反復（既定 12）
+    pub hydraulic_erosion_rate: f32,    // 侵食率（既定 0.020）
     pub hydraulic_deposit_rate: f32,  // 堆積率（既定 0.35）
     pub sediment_capacity_gain: f32,  // 土砂容量係数（既定 0.90）
     pub erosion_min_slope: f32,       // 最小勾配（既定 0.002）
@@ -86,7 +86,7 @@ seedがearthの場合は生成を行わず、プリセット地形を返す。
 
 ```text
 phi(theta, lambda) = Σ_{l=2..L_max} Σ_{m=-l..l} c_lm * Y_lm(theta, lambda)
-c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
+c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^spectral_alpha
 ```
 
 評価後にz-score正規化する。
@@ -98,7 +98,7 @@ c_lm ~ Normal(0, sigma_l), sigma_l = 1 / l^alpha
 3. 制約が厳し過ぎて不足する場合は段階的に距離閾値を緩和する
 4. 極値不足時はfarthest-pointで補完（同様に距離制約を優先）
 5. 最後に不足が残る場合のみ乱数で補完
-6. プレート数はnum_plates_minからnum_plates_maxの範囲でseed依存に決定
+6. プレート数はplate_count_minからplate_count_maxの範囲でseed依存に決定
 
 意図:
 - seed近接による「小さいプレートが大きいプレート内に発生しやすい」状態を減らす
@@ -237,8 +237,8 @@ next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor 
 - 球面調和評価はO(V * L_max^2)
 - プレート分割の多源伝播はO(E log V)
 - 境界補正の減衰拡散はO(E)
-- 平滑化はO(smooth_iter * E)
-- 水食侵食は各反復で河川再計算を含み、おおむねO(erosion_iter * (V log V + E))
+- 平滑化はO(smoothing_iterations * E)
+- 水食侵食は各反復で河川再計算を含み、おおむねO(erosion_iterations * (V log V + E))
 - 河川集水は高さソートを含みO(V log V)
 
-L_max、smooth_iter、erosion_iterを固定した運用では、全体の支配項はおおむねV log Vになる。
+L_max、smoothing_iterations、erosion_iterationsを固定した運用では、全体の支配項はおおむねV log Vになる。

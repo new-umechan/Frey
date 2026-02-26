@@ -3,10 +3,10 @@
 
 export const TERRAIN_PARAMS = Object.freeze({
     level: 6,
-    l_max: 4,
-    alpha: 1.5,
-    num_plates_min: 8,
-    num_plates_max: 18,
+    harmonic_max_l: 4,
+    spectral_alpha: 1.5,
+    plate_count_min: 8,
+    plate_count_max: 18,
     ocean_plate_ratio: 0.65,
     boundary_band: 0.08,
     boundary_convergent_base_gain: 0.58,
@@ -16,19 +16,19 @@ export const TERRAIN_PARAMS = Object.freeze({
     arc_gain: 0.40,
     collision_gain: 0.44,
     rift_gain: 0.22,
-    boundary_width_trench: 0.11,
-    boundary_width_arc: 0.22,
-    boundary_width_collision: 0.30,
-    boundary_width_rift: 0.19,
+    boundary_trench_width: 0.11,
+    boundary_arc_width: 0.22,
+    boundary_collision_width: 0.30,
+    boundary_rift_width: 0.19,
     boundary_obliquity_mix: 0.50,
     boundary_distance_falloff: 1.0,
     boundary_anisotropy: 0.40,
-    smooth_iter: 3,
-    smooth_lambda: 0.16,
+    smoothing_iterations: 3,
+    smoothing_lambda: 0.16,
     river_rain_base: 0.5,
-    river_accum_threshold: 0.035,
-    erosion_iter: 12,
-    hydraulic_erode_rate: 0.02,
+    river_accumulation_threshold: 0.035,
+    erosion_iterations: 12,
+    hydraulic_erosion_rate: 0.02,
     hydraulic_deposit_rate: 0.35,
     sediment_capacity_gain: 0.9,
     erosion_min_slope: 0.002,
@@ -44,3 +44,4 @@ export const TERRAIN_PARAMS = Object.freeze({
 });
 
 export const TERRAIN_LEVEL = TERRAIN_PARAMS.level;
+

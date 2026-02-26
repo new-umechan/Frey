@@ -16,10 +16,10 @@ pub struct MeshOutput {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TerrainParams {
     pub level: u32,
-    pub l_max: u32,
-    pub alpha: f32,
-    pub num_plates_min: u32,
-    pub num_plates_max: u32,
+    pub harmonic_max_l: u32,
+    pub spectral_alpha: f32,
+    pub plate_count_min: u32,
+    pub plate_count_max: u32,
     pub ocean_plate_ratio: f32,
     pub boundary_band: f32,
     pub boundary_convergent_base_gain: f32,
@@ -29,19 +29,19 @@ pub struct TerrainParams {
     pub arc_gain: f32,
     pub collision_gain: f32,
     pub rift_gain: f32,
-    pub boundary_width_trench: f32,
-    pub boundary_width_arc: f32,
-    pub boundary_width_collision: f32,
-    pub boundary_width_rift: f32,
+    pub boundary_trench_width: f32,
+    pub boundary_arc_width: f32,
+    pub boundary_collision_width: f32,
+    pub boundary_rift_width: f32,
     pub boundary_obliquity_mix: f32,
     pub boundary_distance_falloff: f32,
     pub boundary_anisotropy: f32,
-    pub smooth_iter: u32,
-    pub smooth_lambda: f32,
+    pub smoothing_iterations: u32,
+    pub smoothing_lambda: f32,
     pub river_rain_base: f32,
-    pub river_accum_threshold: f32,
-    pub erosion_iter: u32,
-    pub hydraulic_erode_rate: f32,
+    pub river_accumulation_threshold: f32,
+    pub erosion_iterations: u32,
+    pub hydraulic_erosion_rate: f32,
     pub hydraulic_deposit_rate: f32,
     pub sediment_capacity_gain: f32,
     pub erosion_min_slope: f32,
@@ -90,14 +90,14 @@ pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
-    let params = if params_js.is_undefined() || params_js.is_null() {
+    let terrain_params = if params_js.is_undefined() || params_js.is_null() {
         TerrainParams::default()
     } else {
         serde_wasm_bindgen::from_value::<TerrainParams>(params_js)
             .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
     };
 
-    let output = core::build_terrain(&seed, params);
+    let output = core::build_terrain(&seed, terrain_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }
