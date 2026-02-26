@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
+import { createTerrainMaterial } from "./terrain-material.js";
 
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
@@ -40,11 +41,8 @@ export function createGlobeScene(canvas, indices) {
     const geometry = new THREE.BufferGeometry();
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-    const material = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.95,
-        metalness: 0.02,
-    });
+    const terrainMaterial = createTerrainMaterial();
+    const material = terrainMaterial.material;
 
     const sphere = new THREE.Mesh(geometry, material);
     scene.add(sphere);
@@ -80,15 +78,6 @@ export function createGlobeScene(canvas, indices) {
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
     scene.add(halo);
 
-    const mapPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(2, 1),
-        new THREE.MeshBasicMaterial({
-            color: "#d9e0e8",
-        }),
-    );
-    mapPlane.visible = false;
-    scene.add(mapPlane);
-
     return {
         scene,
         globeCamera,
@@ -100,7 +89,7 @@ export function createGlobeScene(canvas, indices) {
         sphere,
         wireframe,
         halo,
-        mapPlane,
+        terrainMaterial,
     };
 }
 

@@ -2,12 +2,9 @@ import * as THREE from "three";
 import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
 import { collectAppElements } from "./app/dom.js";
 import { createGlobeScene, resizeViewport } from "./app/scene.js";
-import { buildEquirectangularMapTexture } from "./app/map-texture.js";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "./app/terrain-params.js";
-import {
-    buildRenderPositions,
-    buildVertexColors,
-} from "./app/terrain-visuals.js";
+import { buildRenderPositions } from "./app/terrain-visuals.js";
+import { buildRiverMaskTexture, buildTerrainUvFromPositions } from "./app/river-mask.js";
 
 const LEVEL = TERRAIN_LEVEL;
 const DEFAULT_TERRAIN_SEED = "alpha";
@@ -61,7 +58,7 @@ async function bootstrap() {
         sphere,
         wireframe,
         halo,
-        mapPlane,
+        terrainMaterial,
     } = createGlobeScene(canvas, indices);
     let camera = globeCamera;
     let activeControls = globeControls;
@@ -84,21 +81,24 @@ async function bootstrap() {
     let pendingPlateHover = null;
     let visiblePlateHoverId = null;
     let debugEnabled = debugToggleInput.checked;
-    let currentMapTexture = null;
+    let currentRiverMaskTexture = null;
 
-    function updateMapTexture(vertexColors) {
-        const nextTexture = buildEquirectangularMapTexture(basePositions, indices, vertexColors);
-        const mapMaterial = mapPlane.material;
-        if (!(mapMaterial instanceof THREE.MeshBasicMaterial)) {
-            return;
-        }
-        if (currentMapTexture) {
-            currentMapTexture.dispose();
-        }
-        currentMapTexture = nextTexture;
-        mapMaterial.map = nextTexture;
-        mapMaterial.needsUpdate = true;
-    }
+    const vertexCount = basePositions.length / 3;
+    const terrainUv = buildTerrainUvFromPositions(basePositions);
+    geometry.setAttribute("terrainUv", new THREE.BufferAttribute(terrainUv, 2));
+    geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainRiverFlux", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainPlateId", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainDebugTrench", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainDebugArc", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainDebugBackarc", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute(
+        "terrainDebugOceanOceanArc",
+        new THREE.BufferAttribute(new Float32Array(vertexCount), 1),
+    );
+    terrainMaterial.setViewMode(currentViewMode);
+    terrainMaterial.setDebugEnabled(debugEnabled);
 
     function updateGeometryPositions() {
         if (!currentTerrainData) {
@@ -126,10 +126,9 @@ async function bootstrap() {
             globeControls.enabled = false;
             mapControls.enabled = true;
             mapControls.enablePan = true;
-            sphere.visible = false;
+            sphere.visible = true;
             wireframe.visible = false;
             halo.visible = false;
-            mapPlane.visible = true;
             return;
         }
 
@@ -143,7 +142,6 @@ async function bootstrap() {
         sphere.visible = true;
         wireframe.visible = debugEnabled;
         halo.visible = true;
-        mapPlane.visible = false;
         globeControls.update();
     }
 
@@ -227,7 +225,7 @@ async function bootstrap() {
         debugEnabled = Boolean(nextEnabled);
         debugToggleInput.checked = debugEnabled;
         wireframe.visible = debugEnabled && currentSurfaceMode === "globe";
-        applyCurrentViewColors();
+        applyTerrainMaterialState();
 
         if (!plateHoverPopup.hidden && pendingPlateHover) {
             showPlateHoverPopup(
@@ -514,21 +512,57 @@ async function bootstrap() {
         );
     }
 
-    function applyCurrentViewColors() {
+    function updateTerrainAttributes() {
         if (!currentTerrainData) {
             return;
         }
-        const colors = buildVertexColors(
-            currentTerrainData.heightData,
-            currentTerrainData.plateId,
-            currentTerrainData.riverFlux,
-            currentTerrainData.lakeDepth,
-            currentViewMode,
-            debugEnabled,
-            currentTerrainData.tectonicDebug,
+        geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(currentTerrainData.heightData, 1));
+        geometry.setAttribute(
+            "terrainRiverFlux",
+            new THREE.BufferAttribute(currentTerrainData.riverFlux, 1),
         );
-        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-        updateMapTexture(colors);
+        geometry.setAttribute(
+            "terrainPlateId",
+            new THREE.BufferAttribute(Float32Array.from(currentTerrainData.plateId), 1),
+        );
+        geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(currentTerrainData.lakeDepth, 1));
+        geometry.setAttribute(
+            "terrainDebugTrench",
+            new THREE.BufferAttribute(currentTerrainData.tectonicDebug.trench, 1),
+        );
+        geometry.setAttribute(
+            "terrainDebugArc",
+            new THREE.BufferAttribute(currentTerrainData.tectonicDebug.arc, 1),
+        );
+        geometry.setAttribute(
+            "terrainDebugBackarc",
+            new THREE.BufferAttribute(currentTerrainData.tectonicDebug.backarc, 1),
+        );
+        geometry.setAttribute(
+            "terrainDebugOceanOceanArc",
+            new THREE.BufferAttribute(currentTerrainData.tectonicDebug.oceanOceanArc, 1),
+        );
+    }
+
+    function updateRiverMaskTexture() {
+        if (!currentTerrainData) {
+            return;
+        }
+        const nextTexture = buildRiverMaskTexture(
+            basePositions,
+            currentTerrainData.riverNext,
+            currentTerrainData.riverFlux,
+        );
+        if (currentRiverMaskTexture) {
+            currentRiverMaskTexture.dispose();
+        }
+        currentRiverMaskTexture = nextTexture;
+        terrainMaterial.setRiverMaskTexture(nextTexture);
+    }
+
+    function applyTerrainMaterialState() {
+        terrainMaterial.setViewMode(currentViewMode);
+        terrainMaterial.setDebugEnabled(debugEnabled);
     }
 
     function setViewMode(nextMode) {
@@ -537,7 +571,7 @@ async function bootstrap() {
         for (const input of viewModeInputs) {
             input.checked = input.value === normalizedMode;
         }
-        applyCurrentViewColors();
+        applyTerrainMaterialState();
         if (normalizedMode !== "plates") {
             hidePlateHoverPopup();
         }
@@ -570,6 +604,7 @@ async function bootstrap() {
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
         const riverFlux = new Float32Array(terrain.river_flux);
+        const riverNext = new Int32Array(terrain.river_next);
         const lakeDepth = new Float32Array(terrain.lake_depth ?? heightData.length);
         const plateInfo = {
             isOcean: new Uint8Array(terrain.plate_is_ocean),
@@ -593,13 +628,16 @@ async function bootstrap() {
             heightData,
             plateId,
             riverFlux,
+            riverNext,
             lakeDepth,
             plateInfo,
             vertexWeight,
             tectonicDebug,
         };
+        updateTerrainAttributes();
+        updateRiverMaskTexture();
         updateGeometryPositions();
-        applyCurrentViewColors();
+        applyTerrainMaterialState();
         hidePlateHoverPopup();
 
         const plateCount = Number.isFinite(terrain.plate_count) ? terrain.plate_count : 0;
