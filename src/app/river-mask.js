@@ -2,8 +2,10 @@ import * as THREE from "three";
 
 const RIVER_MASK_WIDTH = 2048;
 const RIVER_MASK_HEIGHT = 1024;
-const RIVER_DRAW_WIDTH_PX = 2.0;
 const RIVER_MIN_FLUX = 0.10;
+const RIVER_WIDTH_MIN_PX = 1.0;
+const RIVER_WIDTH_MAX_PX = 4.5;
+const RIVER_WIDTH_GAMMA = 0.55;
 
 function lonLatToMapUv(x, y, z) {
     const invLen = 1 / Math.max(1e-6, Math.hypot(x, y, z));
@@ -102,6 +104,14 @@ export function buildRiverMaskTexture(basePositions, riverNext, riverFlux) {
         if (!Number.isFinite(riverFlux[i]) || riverFlux[i] < RIVER_MIN_FLUX) {
             continue;
         }
+        const fluxNorm = THREE.MathUtils.clamp(
+            (riverFlux[i] - RIVER_MIN_FLUX) / (1 - RIVER_MIN_FLUX),
+            0,
+            1,
+        );
+        const widthPx =
+            RIVER_WIDTH_MIN_PX +
+            (RIVER_WIDTH_MAX_PX - RIVER_WIDTH_MIN_PX) * Math.pow(fluxNorm, RIVER_WIDTH_GAMMA);
 
         const a = i * 3;
         const b = next * 3;
@@ -115,7 +125,7 @@ export function buildRiverMaskTexture(basePositions, riverNext, riverFlux) {
             uv0.v * canvas.height,
             u1 * canvas.width,
             uv1.v * canvas.height,
-            RIVER_DRAW_WIDTH_PX,
+            widthPx,
             canvas.width,
         );
     }
