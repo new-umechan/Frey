@@ -178,9 +178,39 @@ fn apply_boundary_model(
                                     0.08 * conv_base * params.arc_gain * backarc_shoulder_w * dist_scale;
                                 debug_backarc_strength[v] =
                                     debug_backarc_strength[v].max((edge.strength * backarc_w).min(1.0));
+
+                                let plateau_center = backarc_center
+                                    + params.boundary_width_arc
+                                        * lerp(1.35, 0.90, subduction_angle)
+                                        * (0.95 + 0.15 * edge.obliquity);
+                                let plateau_w = ring_weight(
+                                    d,
+                                    plateau_center,
+                                    params.boundary_width_arc * lerp(2.10, 1.45, subduction_angle),
+                                );
+                                let plateau_inner_shadow = band_weight(
+                                    d,
+                                    params.boundary_width_trench
+                                        * trench_width_scale
+                                        * (1.55 + 0.15 * edge.obliquity),
+                                    params.boundary_anisotropy * 0.45,
+                                );
+                                let plateau_gain = if matches!(mode, ConvergentMode::OceanOcean) {
+                                    0.12
+                                } else {
+                                    0.18
+                                };
+                                let plateau_uplift = conv_base
+                                    * params.arc_gain
+                                    * plateau_gain
+                                    * plateau_w
+                                    * dist_scale
+                                    * (1.0 - 0.55 * plateau_inner_shadow);
+                                delta[v] += plateau_uplift;
                                 preserve_strength[v] =
                                     preserve_strength[v]
-                                        .max(0.85 * forearc_w.max(arc_apply_w).max(backarc_w));
+                                        .max(0.85 * forearc_w.max(arc_apply_w).max(backarc_w))
+                                        .max(0.55 * plateau_w);
                             }
                         }
                     }
