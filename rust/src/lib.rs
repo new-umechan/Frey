@@ -79,6 +79,27 @@ pub struct TerrainOutput {
     pub debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ErosionAutomatonState {
+    pub positions: Vec<[f32; 3]>,
+    pub nbr_offsets: Vec<u32>,
+    pub nbrs: Vec<u32>,
+    pub height: Vec<f32>,
+    pub water: Vec<f32>,
+    pub sediment: Vec<f32>,
+    pub armor: Vec<f32>,
+    pub rain: Vec<f32>,
+    pub river_flux: Vec<f32>,
+    pub river_next: Vec<i32>,
+    pub active_queue: Vec<u32>,
+    pub active_head: usize,
+    pub in_queue: Vec<u8>,
+    pub rain_cursor: usize,
+    pub tick: u64,
+    pub recent_changed: Vec<u32>,
+    pub params: TerrainParams,
+}
+
 #[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
     let output = core::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
@@ -98,6 +119,32 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
     let output = core::build_terrain(&seed, terrain_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
+}
+
+#[wasm_bindgen]
+pub fn init_erosion_automaton(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
+    let terrain_params = if params_js.is_undefined() || params_js.is_null() {
+        TerrainParams::default()
+    } else {
+        serde_wasm_bindgen::from_value::<TerrainParams>(params_js)
+            .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
+    };
+
+    let state = core::build_erosion_automaton(&seed, terrain_params);
+    serde_wasm_bindgen::to_value(&state)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize erosion automaton: {err}")))
+}
+
+#[wasm_bindgen]
+pub fn step_erosion_automaton(state_js: JsValue, budget_cells: u32) -> Result<JsValue, JsValue> {
+    let mut state = serde_wasm_bindgen::from_value::<ErosionAutomatonState>(state_js)
+        .map_err(|err| JsValue::from_str(&format!("invalid erosion automaton state: {err}")))?;
+    core::step_erosion_automaton(&mut state, budget_cells);
+    serde_wasm_bindgen::to_value(&state).map_err(|err| {
+        JsValue::from_str(&format!(
+            "failed to serialize stepped erosion automaton state: {err}"
+        ))
+    })
 }
 
 #[wasm_bindgen]

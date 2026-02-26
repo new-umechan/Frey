@@ -1,5 +1,5 @@
 use crate::MeshOutput;
-use crate::{TerrainOutput, TerrainParams};
+use crate::{ErosionAutomatonState, TerrainOutput, TerrainParams};
 
 #[path = "core/geom.rs"]
 mod geom;
@@ -27,4 +27,12 @@ pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
 
 pub(crate) fn build_terrain(seed: &str, terrain_params: TerrainParams) -> TerrainOutput {
     terrain::generate(seed, terrain_params)
+}
+
+pub(crate) fn build_erosion_automaton(seed: &str, terrain_params: TerrainParams) -> ErosionAutomatonState {
+    terrain::init_async_erosion_automaton(seed, terrain_params)
+}
+
+pub(crate) fn step_erosion_automaton(state: &mut ErosionAutomatonState, budget_cells: u32) {
+    terrain::step_async_erosion_automaton(state, budget_cells);
 }
