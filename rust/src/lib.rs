@@ -1,5 +1,7 @@
 #[path = "core.rs"]
 mod core;
+#[path = "generated/terrain_params_defaults.rs"]
+mod terrain_params_defaults;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -49,41 +51,7 @@ pub struct TerrainParams {
 
 impl Default for TerrainParams {
     fn default() -> Self {
-        Self {
-            level: 6,
-            l_max: 4,
-            alpha: 1.5,
-            num_plates_min: 8,
-            num_plates_max: 18,
-            ocean_plate_ratio: 0.65,
-            boundary_band: 0.08,
-            boundary_convergent_base_gain: 0.65,
-            boundary_divergent_base_gain: 0.40,
-            boundary_transform_relief_gain: 0.10,
-            trench_gain: 0.42,
-            arc_gain: 0.36,
-            collision_gain: 0.52,
-            rift_gain: 0.30,
-            boundary_width_trench: 0.11,
-            boundary_width_arc: 0.24,
-            boundary_width_collision: 0.32,
-            boundary_width_rift: 0.20,
-            boundary_obliquity_mix: 0.55,
-            boundary_distance_falloff: 1.0,
-            boundary_anisotropy: 0.45,
-            smooth_iter: 6,
-            smooth_lambda: 0.35,
-            river_rain_base: 0.5,
-            river_accum_threshold: 0.015,
-            erosion_iter: 12,
-            hydraulic_erode_rate: 0.020,
-            hydraulic_deposit_rate: 0.35,
-            sediment_capacity_gain: 0.90,
-            erosion_min_slope: 0.002,
-            erosion_max_delta_per_iter: 0.015,
-            coastal_deposit_rate: 0.45,
-            shallow_sea_floor: -0.08,
-        }
+        terrain_params_defaults::build_default_terrain_params()
     }
 }
 

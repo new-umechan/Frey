@@ -3,52 +3,18 @@ import initWasm, { generate_mesh, generate_terrain } from "./wasm/frey_wasm.js";
 import { collectAppElements } from "./app/dom.js";
 import { createGlobeScene, resizeViewport } from "./app/scene.js";
 import { buildEquirectangularMapTexture } from "./app/map-texture.js";
+import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "./app/terrain-params.js";
 import {
     buildRenderPositions,
     buildVertexColors,
     summarizeTerrain,
 } from "./app/terrain-visuals.js";
 
-const LEVEL = 6;
+const LEVEL = TERRAIN_LEVEL;
 const DEFAULT_TERRAIN_SEED = "alpha";
 const DEFAULT_VIEW_MODE = "normal";
 const DEFAULT_SURFACE_MODE = "globe";
 const PLATE_HOVER_POPUP_DELAY_MS = 450;
-const TERRAIN_PARAMS = {
-    level: LEVEL,
-    l_max: 4,
-    alpha: 1.5,
-    num_plates_min: 8,
-    num_plates_max: 18,
-    ocean_plate_ratio: 0.65,
-    boundary_band: 0.08,
-    boundary_convergent_base_gain: 0.58,
-    boundary_divergent_base_gain: 0.34,
-    boundary_transform_relief_gain: 0.08,
-    trench_gain: 0.34,
-    arc_gain: 0.40,
-    collision_gain: 0.44,
-    rift_gain: 0.22,
-    boundary_width_trench: 0.11,
-    boundary_width_arc: 0.22,
-    boundary_width_collision: 0.30,
-    boundary_width_rift: 0.19,
-    boundary_obliquity_mix: 0.50,
-    boundary_distance_falloff: 1.0,
-    boundary_anisotropy: 0.40,
-    smooth_iter: 3,
-    smooth_lambda: 0.16,
-    river_rain_base: 0.5,
-    river_accum_threshold: 0.035,
-    erosion_iter: 12,
-    hydraulic_erode_rate: 0.02,
-    hydraulic_deposit_rate: 0.35,
-    sediment_capacity_gain: 0.9,
-    erosion_min_slope: 0.002,
-    erosion_max_delta_per_iter: 0.015,
-    coastal_deposit_rate: 0.45,
-    shallow_sea_floor: -0.08,
-};
 
 async function bootstrap() {
     const {

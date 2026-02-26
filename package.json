@@ -4,11 +4,13 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "node scripts/dev-hotreload.mjs",
+        "terrain-params:sync": "node scripts/sync-terrain-params.mjs",
+        "dev": "npm run terrain-params:sync && node scripts/dev-hotreload.mjs",
         "build": "npm run wasm:build && vite build",
         "preview": "vite preview",
-        "wasm:build": "wasm-pack build rust --target web --out-dir ../src/wasm --release",
-        "wasm:build:dev": "wasm-pack build rust --target web --out-dir ../src/wasm --dev"
+        "wasm:build": "npm run terrain-params:sync && wasm-pack build rust --target web --out-dir ../src/wasm --release",
+        "wasm:build:dev": "npm run terrain-params:sync && wasm-pack build rust --target web --out-dir ../src/wasm --dev",
+        "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../src/wasm --dev"
     },
     "dependencies": {
         "three": "^0.180.0"

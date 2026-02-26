@@ -20,11 +20,12 @@
 ## Teck Stack
 
 - Web + WASM
-- Rust（計算コア）
+- Rust: 計算コア
+- Vite: 開発サーバー
 - JavaScript（レンダリングとUI）
 - Three.js（現状の描画）
 
 ## Development
 
-`npm run dev`で開発サーバーを起動できる。
-開発中にrust/ディレクトリ配下（.rsファイルやCargo.toml）を編集すると、WASMを自動で再ビルドしてViteの画面に反映される。
+`npm run dev`で開発サバーを起動できる。
+開発中にrust/や、config/配下を編集すると、WASMを自動で再ビルドしてViteの画面に反映される。
