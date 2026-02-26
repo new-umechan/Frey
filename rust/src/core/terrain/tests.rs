@@ -68,7 +68,7 @@ mod tests {
             );
         }
 
-        let boundary_fields = super::apply_boundary_model(
+        let _boundary_fields = super::apply_boundary_model(
             &positions,
             &nbr_offsets,
             &nbrs,
@@ -80,14 +80,6 @@ mod tests {
             params,
         );
 
-        super::smooth_heights(
-            &nbr_offsets,
-            &nbrs,
-            &boundary_fields,
-            &mut height,
-            params.smoothing_iterations,
-            params.smoothing_lambda,
-        );
         let vertex_competence = vertex_lithosphere
             .iter()
             .map(|lith| lith.competence)

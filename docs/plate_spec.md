@@ -35,8 +35,6 @@ pub struct TerrainParams {
     pub boundary_obliquity_mix: f32,  // 斜交収束/発散の緩和係数
     pub boundary_distance_falloff: f32, // 境界距離減衰
     pub boundary_anisotropy: f32,     // 境界帯の異方性
-    pub smoothing_iterations: u32,             // 平滑化反復（既定 6）
-    pub smoothing_lambda: f32,           // 平滑化係数（既定 0.35）
     pub river_rain_base: f32,         // 降水ベース（既定 0.5）
     pub river_accumulation_threshold: f32,   // 河川成立閾値（既定 0.015）
     pub erosion_iterations: u32,            // 水食侵食反復（既定 12）
@@ -168,13 +166,9 @@ next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor 
 
 境界影響は固定 hop 拡散ではなく、最近傍境界への距離（弦長近似）で減衰させる。
 
-### 4.8 平滑化
+### 4.8 水食侵食（簡易）
 
-ラプラシアン平滑化を反復適用する。境界特徴量の強い領域では平滑化係数を下げ、海溝・山脈・弧状帯のコントラストを保つ。
-
-### 4.9 水食侵食（簡易）
-
-平滑化後の地形に対し、球面メッシュ上のセル型水食侵食を適用する。
+境界補正・褶曲帯適用後の地形に対し、球面メッシュ上のセル型水食侵食を適用する。
 
 1. 各反復で暫定河川（river_next, river_flux）を再計算する
 2. 陸セル（height > 0）のみを侵食対象にする
@@ -185,12 +179,12 @@ next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor 
 
 湖・内陸盆地の溢流や海底全体の侵食は、この段階では扱わない。
 
-### 4.10 海面再調整と後処理
+### 4.9 海面再調整と後処理
 
 固定sea_levelではなく、分位点から海面を再推定して全体の海陸バランスを調整する。
 その後、海岸付近と低標高域に抑制をかけ、海岸線の山脈化や標高差の過剰を防ぐ。
 
-### 4.11 河川生成
+### 4.10 河川生成
 
 1. 緯度依存の降水を計算
 2. 最急降下先をriver_nextとして設定
@@ -237,8 +231,7 @@ next_cost = prev_cost + step_cost * direction_factor * phi_factor * warp_factor 
 - 球面調和評価はO(V * L_max^2)
 - プレート分割の多源伝播はO(E log V)
 - 境界補正の減衰拡散はO(E)
-- 平滑化はO(smoothing_iterations * E)
 - 水食侵食は各反復で河川再計算を含み、おおむねO(erosion_iterations * (V log V + E))
 - 河川集水は高さソートを含みO(V log V)
 
-L_max、smoothing_iterations、erosion_iterationsを固定した運用では、全体の支配項はおおむねV log Vになる。
+L_max、erosion_iterationsを固定した運用では、全体の支配項はおおむねV log Vになる。

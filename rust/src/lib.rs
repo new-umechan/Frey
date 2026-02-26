@@ -36,8 +36,6 @@ pub struct TerrainParams {
     pub boundary_obliquity_mix: f32,
     pub boundary_distance_falloff: f32,
     pub boundary_anisotropy: f32,
-    pub smoothing_iterations: u32,
-    pub smoothing_lambda: f32,
     pub river_rain_base: f32,
     pub river_accumulation_threshold: f32,
     pub erosion_iterations: u32,

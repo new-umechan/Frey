@@ -77,7 +77,7 @@ impl DeterministicRng {
 
 pub(super) fn rng_from_seed(seed: &str, terrain_params: &TerrainParams) -> DeterministicRng {
     let canonical = format!(
-        "{{\"harmonic_max_l\":{},\"spectral_alpha\":{:.8},\"plate_count_min\":{},\"plate_count_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"boundary_convergent_base_gain\":{:.8},\"boundary_divergent_base_gain\":{:.8},\"boundary_transform_relief_gain\":{:.8},\"trench_gain\":{:.8},\"arc_gain\":{:.8},\"collision_gain\":{:.8},\"rift_gain\":{:.8},\"boundary_trench_width\":{:.8},\"boundary_arc_width\":{:.8},\"boundary_collision_width\":{:.8},\"boundary_rift_width\":{:.8},\"boundary_obliquity_mix\":{:.8},\"boundary_distance_falloff\":{:.8},\"boundary_anisotropy\":{:.8},\"smoothing_iterations\":{},\"smoothing_lambda\":{:.8},\"river_rain_base\":{:.8},\"river_accumulation_threshold\":{:.8},\"erosion_iterations\":{},\"hydraulic_erosion_rate\":{:.8},\"hydraulic_deposit_rate\":{:.8},\"sediment_capacity_gain\":{:.8},\"erosion_min_slope\":{:.8},\"erosion_max_delta_per_iter\":{:.8},\"coastal_deposit_rate\":{:.8},\"shallow_sea_floor\":{:.8}}}",
+        "{{\"harmonic_max_l\":{},\"spectral_alpha\":{:.8},\"plate_count_min\":{},\"plate_count_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"boundary_convergent_base_gain\":{:.8},\"boundary_divergent_base_gain\":{:.8},\"boundary_transform_relief_gain\":{:.8},\"trench_gain\":{:.8},\"arc_gain\":{:.8},\"collision_gain\":{:.8},\"rift_gain\":{:.8},\"boundary_trench_width\":{:.8},\"boundary_arc_width\":{:.8},\"boundary_collision_width\":{:.8},\"boundary_rift_width\":{:.8},\"boundary_obliquity_mix\":{:.8},\"boundary_distance_falloff\":{:.8},\"boundary_anisotropy\":{:.8},\"river_rain_base\":{:.8},\"river_accumulation_threshold\":{:.8},\"erosion_iterations\":{},\"hydraulic_erosion_rate\":{:.8},\"hydraulic_deposit_rate\":{:.8},\"sediment_capacity_gain\":{:.8},\"erosion_min_slope\":{:.8},\"erosion_max_delta_per_iter\":{:.8},\"coastal_deposit_rate\":{:.8},\"shallow_sea_floor\":{:.8}}}",
         terrain_params.harmonic_max_l,
         terrain_params.spectral_alpha,
         terrain_params.plate_count_min,
@@ -98,8 +98,6 @@ pub(super) fn rng_from_seed(seed: &str, terrain_params: &TerrainParams) -> Deter
         terrain_params.boundary_obliquity_mix,
         terrain_params.boundary_distance_falloff,
         terrain_params.boundary_anisotropy,
-        terrain_params.smoothing_iterations,
-        terrain_params.smoothing_lambda,
         terrain_params.river_rain_base,
         terrain_params.river_accumulation_threshold,
         terrain_params.erosion_iterations,

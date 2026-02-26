@@ -112,15 +112,6 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         &params,
     );
 
-    smooth_heights(
-        &nbr_offsets,
-        &nbrs,
-        &boundary_fields,
-        &mut height,
-        params.smoothing_iterations,
-        params.smoothing_lambda,
-    );
-
     let vertex_competence = vertex_lithosphere
         .iter()
         .map(|lith| lith.competence)
@@ -233,7 +224,6 @@ fn sanitize_params(params: &mut TerrainParams) {
     params.boundary_obliquity_mix = clamp(params.boundary_obliquity_mix, 0.0, 1.0);
     params.boundary_distance_falloff = params.boundary_distance_falloff.max(0.1);
     params.boundary_anisotropy = clamp(params.boundary_anisotropy, 0.0, 1.0);
-    params.smoothing_lambda = clamp(params.smoothing_lambda, 0.0, 1.0);
     params.river_rain_base = params.river_rain_base.max(0.0);
     params.river_accumulation_threshold = params.river_accumulation_threshold.max(0.0);
     params.erosion_iterations = params.erosion_iterations.min(128);

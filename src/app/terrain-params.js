@@ -23,8 +23,6 @@ export const TERRAIN_PARAMS = Object.freeze({
     boundary_obliquity_mix: 0.50,
     boundary_distance_falloff: 1.0,
     boundary_anisotropy: 0.40,
-    smoothing_iterations: 3,
-    smoothing_lambda: 0.16,
     river_rain_base: 0.5,
     river_accumulation_threshold: 0.035,
     erosion_iterations: 12,

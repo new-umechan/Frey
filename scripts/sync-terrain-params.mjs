@@ -31,8 +31,6 @@ const SCHEMA = [
     ["boundary_obliquity_mix", "f32"],
     ["boundary_distance_falloff", "f32"],
     ["boundary_anisotropy", "f32"],
-    ["smoothing_iterations", "u32"],
-    ["smoothing_lambda", "f32"],
     ["river_rain_base", "f32"],
     ["river_accumulation_threshold", "f32"],
     ["erosion_iterations", "u32"],
