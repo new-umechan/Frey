@@ -92,7 +92,10 @@ function createInitialRuntimeState(defaultRuntimeTickMs) {
         lastFrameTimeMs: null,
         runtimeTickMs: defaultRuntimeTickMs,
         maxTicksPerFrame: 6,
+        maxRiverStepsPerFrame: 1,
         erosionAutomatonState: null,
+        pendingRiverSteps: 0,
+        terrainErosionDirty: false,
         carry: {
             terrain: 0,
             river: 0,
@@ -737,6 +740,8 @@ async function bootstrap() {
             worldState.carry[key] = 0;
             worldState.executedSteps[key] = 0;
         }
+        worldState.pendingRiverSteps = 0;
+        worldState.terrainErosionDirty = false;
     }
 
     function createClimateLayer(cellCount) {
@@ -874,15 +879,32 @@ async function bootstrap() {
             budgetCells,
         );
         worldState.executedSteps.river += 1;
-        applyErosionAutomatonStateToTerrain(worldState.erosionAutomatonState);
+        worldState.terrainErosionDirty = true;
     }
 
-    function runRiverStep(steps, preset) {
+    function enqueueRiverStep(steps) {
         if (!Number.isFinite(steps) || steps <= 0) {
             return;
         }
-        for (let i = 0; i < steps; i += 1) {
+        worldState.pendingRiverSteps += steps;
+    }
+
+    function drainRiverAsyncQueue(preset) {
+        if (!preset || worldState.pendingRiverSteps <= 0) {
+            return;
+        }
+
+        const maxRiverStepsPerFrame = Math.max(1, worldState.maxRiverStepsPerFrame ?? 1);
+        let drained = 0;
+        while (worldState.pendingRiverSteps > 0 && drained < maxRiverStepsPerFrame) {
             stepRiverAsyncForCurrentTick(preset);
+            worldState.pendingRiverSteps -= 1;
+            drained += 1;
+        }
+
+        if (worldState.terrainErosionDirty) {
+            applyErosionAutomatonStateToTerrain(worldState.erosionAutomatonState);
+            worldState.terrainErosionDirty = false;
         }
     }
 
@@ -932,7 +954,7 @@ async function bootstrap() {
         ensureRequiredLayers(world);
 
         runTerrainStep(world.budgets.terrain);
-        runRiverStep(world.budgets.river, preset);
+        enqueueRiverStep(world.budgets.river);
         runClimateStep(world.budgets.climate);
         runEcologyStep(world.budgets.ecology);
         runCivilizationStep(world.budgets.civilization);
@@ -971,6 +993,9 @@ async function bootstrap() {
         if (ticksProcessed >= worldState.maxTicksPerFrame) {
             worldState.accumulatorMs = Math.min(worldState.accumulatorMs, worldState.runtimeTickMs);
         }
+
+        const preset = getEraScalePreset(currentEraScale);
+        drainRiverAsyncQueue(preset);
     }
 
     function setViewMode(nextMode) {
@@ -1072,6 +1097,8 @@ async function bootstrap() {
         currentTerrainData = world.core;
         world.layers = createEmptyLayers();
         worldState.erosionAutomatonState = erosionAutomatonState;
+        worldState.pendingRiverSteps = 0;
+        worldState.terrainErosionDirty = false;
         updateTerrainAttributes();
         updateRiverMaskTexture();
         updateGeometryPositions();
