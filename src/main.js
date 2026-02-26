@@ -12,30 +12,42 @@ const DEFAULT_VIEW_MODE = "normal";
 const DEFAULT_SURFACE_MODE = "globe";
 const DEFAULT_ERA_SCALE = "crust";
 const PLATE_HOVER_POPUP_DELAY_MS = 450;
+const WORLD_SUBSYSTEM_KEYS = Object.freeze([
+    "terrain",
+    "river",
+    "climate",
+    "ecology",
+    "civilization",
+]);
 const ERA_SCALE_PRESETS = Object.freeze({
     crust: {
         label: "地殻形成期",
         tickLabel: "100万年",
+        runtimeTickMs: 220,
         weights: { terrain: 1.0, river: 0.05, climate: 0.0, ecology: 0.0, civilization: 0.0 },
     },
     environment: {
         label: "環境形成期",
         tickLabel: "1万年",
+        runtimeTickMs: 150,
         weights: { terrain: 0.3, river: 1.0, climate: 0.9, ecology: 0.15, civilization: 0.0 },
     },
     life: {
         label: "生命誕生期",
         tickLabel: "1000年",
+        runtimeTickMs: 110,
         weights: { terrain: 0.15, river: 0.5, climate: 0.6, ecology: 1.0, civilization: 0.05 },
     },
     civilization: {
         label: "文明成立期",
         tickLabel: "100年",
+        runtimeTickMs: 90,
         weights: { terrain: 0.08, river: 0.3, climate: 0.45, ecology: 0.5, civilization: 1.0 },
     },
     history: {
         label: "歴史展開期",
         tickLabel: "1年",
+        runtimeTickMs: 70,
         weights: { terrain: 0.02, river: 0.08, climate: 0.12, ecology: 0.1, civilization: 1.0 },
     },
 });
@@ -114,6 +126,28 @@ async function bootstrap() {
     let debugEnabled = debugToggleInput.checked;
     let currentRiverMaskTexture = null;
     let currentEraScale = DEFAULT_ERA_SCALE;
+    const worldState = {
+        tick: 0,
+        isRunning: true,
+        accumulatorMs: 0,
+        lastFrameTimeMs: null,
+        runtimeTickMs: getEraScalePresetRuntimeTickMs(DEFAULT_ERA_SCALE),
+        maxTicksPerFrame: 6,
+        carry: {
+            terrain: 0,
+            river: 0,
+            climate: 0,
+            ecology: 0,
+            civilization: 0,
+        },
+        executedSteps: {
+            terrain: 0,
+            river: 0,
+            climate: 0,
+            ecology: 0,
+            civilization: 0,
+        },
+    };
 
     const vertexCount = basePositions.length / 3;
     const terrainUv = buildTerrainUvFromPositions(basePositions);
@@ -597,6 +631,13 @@ async function bootstrap() {
         terrainMaterial.setDebugEnabled(debugEnabled);
     }
 
+    function getEraScalePresetRuntimeTickMs(key) {
+        const preset = Object.hasOwn(ERA_SCALE_PRESETS, key)
+            ? ERA_SCALE_PRESETS[key]
+            : ERA_SCALE_PRESETS[DEFAULT_ERA_SCALE];
+        return Number.isFinite(preset.runtimeTickMs) ? preset.runtimeTickMs : 120;
+    }
+
     function getEraScalePreset(key) {
         if (Object.hasOwn(ERA_SCALE_PRESETS, key)) {
             return ERA_SCALE_PRESETS[key];
@@ -619,9 +660,84 @@ async function bootstrap() {
         currentEraScale = Object.hasOwn(ERA_SCALE_PRESETS, nextEraScale)
             ? nextEraScale
             : DEFAULT_ERA_SCALE;
+        worldState.runtimeTickMs = getEraScalePresetRuntimeTickMs(currentEraScale);
         renderEraScaleControls();
         const preset = getEraScalePreset(currentEraScale);
         setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${preset.tickLabel}`);
+    }
+
+    function resetWorldProgress() {
+        worldState.tick = 0;
+        worldState.accumulatorMs = 0;
+        worldState.lastFrameTimeMs = null;
+        for (const key of WORLD_SUBSYSTEM_KEYS) {
+            worldState.carry[key] = 0;
+            worldState.executedSteps[key] = 0;
+        }
+    }
+
+    function runSubsystemStep(subsystemKey) {
+        if (!currentTerrainData) {
+            return;
+        }
+        worldState.executedSteps[subsystemKey] += 1;
+        // TODO: 実サブシステム更新をここに接続する。
+    }
+
+    function stepWorldTick() {
+        if (!currentTerrainData) {
+            return;
+        }
+        const preset = getEraScalePreset(currentEraScale);
+        worldState.tick += 1;
+
+        for (const subsystemKey of WORLD_SUBSYSTEM_KEYS) {
+            const weight = preset.weights[subsystemKey] ?? 0;
+            if (!Number.isFinite(weight) || weight <= 0) {
+                continue;
+            }
+            worldState.carry[subsystemKey] += weight;
+            const steps = Math.floor(worldState.carry[subsystemKey]);
+            if (steps <= 0) {
+                continue;
+            }
+            worldState.carry[subsystemKey] -= steps;
+            for (let i = 0; i < steps; i += 1) {
+                runSubsystemStep(subsystemKey);
+            }
+        }
+    }
+
+    function advanceWorldLoop(nowMs) {
+        if (!Number.isFinite(nowMs)) {
+            return;
+        }
+        if (worldState.lastFrameTimeMs === null) {
+            worldState.lastFrameTimeMs = nowMs;
+            return;
+        }
+
+        const frameDeltaMs = Math.min(nowMs - worldState.lastFrameTimeMs, 250);
+        worldState.lastFrameTimeMs = nowMs;
+
+        if (!worldState.isRunning || !currentTerrainData) {
+            return;
+        }
+
+        worldState.accumulatorMs += frameDeltaMs;
+        let ticksProcessed = 0;
+        while (
+            worldState.accumulatorMs >= worldState.runtimeTickMs &&
+            ticksProcessed < worldState.maxTicksPerFrame
+        ) {
+            stepWorldTick();
+            worldState.accumulatorMs -= worldState.runtimeTickMs;
+            ticksProcessed += 1;
+        }
+
+        if (ticksProcessed >= worldState.maxTicksPerFrame) {
+            worldState.accumulatorMs = Math.min(worldState.accumulatorMs, worldState.runtimeTickMs);
+        }
     }
 
     function setViewMode(nextMode) {
@@ -703,6 +819,7 @@ async function bootstrap() {
         const landRatio = Number.isFinite(terrain.land_ratio) ? terrain.land_ratio : 0;
 
         currentSeed = nextSeed;
+        resetWorldProgress();
         statFields.vertices.textContent = `${basePositions.length / 3}`;
         statFields.level.textContent = `${LEVEL}`;
         statFields.seed.textContent = currentSeed;
@@ -819,13 +936,14 @@ async function bootstrap() {
     onResize();
     hidePlateHoverPopup();
 
-    function render() {
+    function frame(nowMs) {
+        advanceWorldLoop(nowMs);
         activeControls.update();
         renderer.render(scene, camera);
-        requestAnimationFrame(render);
+        requestAnimationFrame(frame);
     }
 
-    render();
+    requestAnimationFrame(frame);
 }
 
 bootstrap().catch((error) => {
