@@ -107,10 +107,45 @@ pub struct CrustTerrainAutomaton {
 }
 
 #[wasm_bindgen]
+pub struct WorldTimeController {
+    inner: world::WorldTime,
+}
+
+#[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
     let output = core::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
+}
+
+#[wasm_bindgen]
+impl WorldTimeController {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WorldTimeController {
+        WorldTimeController {
+            inner: world::WorldTime::new(),
+        }
+    }
+
+    #[wasm_bindgen(js_name = reset)]
+    pub fn reset_js(&mut self) {
+        self.inner.reset();
+    }
+
+    #[wasm_bindgen(js_name = step)]
+    pub fn step_js(&mut self, ticks: u32) {
+        self.inner.step(ticks);
+    }
+
+    #[wasm_bindgen(js_name = tick)]
+    pub fn tick_js(&self) -> f64 {
+        self.inner.tick as f64
+    }
+
+    #[wasm_bindgen(js_name = eraKey)]
+    pub fn era_key_js(&self) -> String {
+        self.inner.era.as_key().to_string()
+    }
 }
 
 #[wasm_bindgen]

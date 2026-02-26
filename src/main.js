@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import initWasm, {
+    CrustTerrainAutomaton,
+    WorldTimeController,
     generate_mesh,
-    generate_terrain,
     init_erosion_automaton,
     step_erosion_automaton,
 } from "./wasm/frey_wasm.js";
@@ -182,6 +183,7 @@ async function bootstrap() {
     let debugEnabled = debugToggleInput.checked;
     let currentRiverMaskTexture = null;
     let currentEraScale = DEFAULT_ERA_SCALE;
+    const worldTimeController = new WorldTimeController();
     const world = {
         tick: 0,
         era: DEFAULT_ERA_SCALE,
@@ -695,6 +697,15 @@ async function bootstrap() {
         return ERA_SCALE_PRESETS[DEFAULT_ERA_SCALE];
     }
 
+    function syncTimeStateFromRust() {
+        const nextEraScale = worldTimeController.eraKey();
+        if (nextEraScale !== currentEraScale) {
+            setEraScale(nextEraScale);
+        }
+        world.tick = Math.max(0, Math.floor(worldTimeController.tick()));
+        world.era = currentEraScale;
+    }
+
     function renderEraScaleControls() {
         const preset = getEraScalePreset(currentEraScale);
         eraScaleSelect.value = currentEraScale;
@@ -717,8 +728,8 @@ async function bootstrap() {
     }
 
     function resetWorldProgress() {
-        world.tick = 0;
-        world.era = currentEraScale;
+        worldTimeController.reset();
+        syncTimeStateFromRust();
         world.budgets = createInitialBudgets();
         worldState.accumulatorMs = 0;
         worldState.lastFrameTimeMs = null;
@@ -914,6 +925,7 @@ async function bootstrap() {
         if (!currentTerrainData) {
             return;
         }
+        syncTimeStateFromRust();
         const preset = getEraScalePreset(currentEraScale);
         world.era = currentEraScale;
         computeBudgetsForCurrentTick(world, preset);
@@ -925,7 +937,8 @@ async function bootstrap() {
         runEcologyStep(world.budgets.ecology);
         runCivilizationStep(world.budgets.civilization);
 
-        world.tick += 1;
+        worldTimeController.step(1);
+        world.tick = Math.max(0, Math.floor(worldTimeController.tick()));
     }
 
     function advanceWorldLoop(nowMs) {
@@ -985,17 +998,43 @@ async function bootstrap() {
     async function updateTerrain(seed) {
         const token = ++generationToken;
         const nextSeed = seed.trim() || DEFAULT_TERRAIN_SEED;
+        const waitNextFrame = () =>
+            new Promise((resolve) => requestAnimationFrame(resolve));
 
         setStatus(`Generating terrain for "${nextSeed}"...`);
         seedForm.querySelector("button")?.setAttribute("disabled", "disabled");
         seedInput.setAttribute("disabled", "disabled");
 
-        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await waitNextFrame();
         if (token !== generationToken) {
             return;
         }
 
-        const terrain = generate_terrain(nextSeed, TERRAIN_PARAMS);
+        let terrain;
+        const crustTerrainAutomaton = new CrustTerrainAutomaton(nextSeed, TERRAIN_PARAMS);
+        try {
+            let stepCount = 0;
+            while (!crustTerrainAutomaton.isDone()) {
+                if (token !== generationToken) {
+                    return;
+                }
+                if (stepCount % 2 === 0) {
+                    setStatus(
+                        `Generating terrain for "${nextSeed}"... (${crustTerrainAutomaton.phaseName()})`,
+                    );
+                    await waitNextFrame();
+                    if (token !== generationToken) {
+                        return;
+                    }
+                }
+                crustTerrainAutomaton.step(256);
+                stepCount += 1;
+            }
+            terrain = crustTerrainAutomaton.finish();
+        } finally {
+            crustTerrainAutomaton.free();
+        }
+
         const erosionAutomatonState = init_erosion_automaton(nextSeed, TERRAIN_PARAMS);
         const heightData = new Float32Array(terrain.height);
         const plateId = new Uint32Array(terrain.plate_id);
@@ -1078,6 +1117,10 @@ async function bootstrap() {
         setDebugModeEnabled(debugToggleInput.checked);
     });
     eraScaleSelect.addEventListener("change", () => {
+        if (eraScaleSelect.disabled) {
+            renderEraScaleControls();
+            return;
+        }
         setEraScale(eraScaleSelect.value);
     });
 
@@ -1155,6 +1198,9 @@ async function bootstrap() {
     });
 
     await updateTerrain(DEFAULT_TERRAIN_SEED);
+    eraScaleSelect.setAttribute("disabled", "disabled");
+    eraScaleSelect.setAttribute("aria-disabled", "true");
+    eraScaleSelect.title = "時代プリセットは進行状況に応じて自動切り替えされます。";
     renderEraScaleControls();
     setEraScale(DEFAULT_ERA_SCALE);
     onResize();
