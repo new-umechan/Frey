@@ -148,3 +148,42 @@ impl PartialEq for BoundaryDistState {
             && self.cost == other.cost
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum CrustUpdatePhase {
+    InitMeshAndNoise,
+    BuildPlateField,
+    BuildBaseHeight,
+    ApplyBoundaryRelief,
+    ApplyCrustErosion,
+    PostprocessSurface,
+    ApplyHotspots,
+    BuildHydrology,
+    Done,
+}
+
+pub(crate) struct CrustTerrainUpdateState {
+    phase: CrustUpdatePhase,
+    params: TerrainParams,
+    rng: DeterministicRng,
+    positions: Vec<[f32; 3]>,
+    indices: Vec<u32>,
+    nbr_offsets: Vec<u32>,
+    nbrs: Vec<u32>,
+    spherical: Vec<(f32, f32)>,
+    phi: Vec<f32>,
+    plate_count_target: usize,
+    plate_id: Vec<u32>,
+    attributes: Vec<PlateAttr>,
+    boundary_edges: Vec<BoundaryEdge>,
+    vertex_lithosphere: Vec<VertexLithosphere>,
+    plate_boundary_proximity: Vec<f32>,
+    band_low: Vec<f32>,
+    band_mid: Vec<f32>,
+    band_high: Vec<f32>,
+    height: Vec<f32>,
+    boundary_fields: Option<BoundaryFields>,
+    river_flux: Vec<f32>,
+    river_next: Vec<i32>,
+    lake_depth: Vec<f32>,
+}

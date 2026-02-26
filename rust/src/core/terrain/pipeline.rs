@@ -7,186 +7,335 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
         return earth_preset(&positions, &nbr_offsets, &nbrs, params.river_rain_base);
     }
 
-    let mut rng = rng_from_seed(seed, &params);
-
-    let (positions, indices) = generate_icosphere(params.level);
-    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let spherical = compute_spherical_coords(&positions);
-    let mut phi = evaluate_phi(&spherical, params.harmonic_max_l, params.spectral_alpha, &mut rng);
-    normalize_zscore(&mut phi);
-
-    let plate_count = choose_plate_count(params.plate_count_min, params.plate_count_max, &mut rng);
-    let seeds = pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
-    let growth_profiles = build_plate_growth_profiles(plate_count, &mut rng);
-    let plate_cost_warp_basis =
-        generate_plate_cost_warp_basis(positions.len(), &nbr_offsets, &nbrs, &mut rng);
-    let mut plate_id = partition_plates(
-        &positions,
-        &phi,
-        &plate_cost_warp_basis,
-        &nbr_offsets,
-        &nbrs,
-        &seeds,
-        &growth_profiles,
-        params.boundary_band,
-    );
-    plate_id = compact_plate_ids(plate_id, plate_count);
-    cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
-    plate_id = compact_plate_ids(plate_id, plate_count);
-    let attributes = assign_plate_attributes(
-        &plate_id,
-        plate_count,
-        &phi,
-        &mut rng,
-        params.ocean_plate_ratio,
-    );
-    let boundary_edges =
-        extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
-    let vertex_lithosphere = compute_vertex_lithosphere(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &plate_id,
-        &attributes,
-        &boundary_edges,
-        &params,
-    );
-    let plate_boundary_proximity =
-        compute_plate_boundary_proximity(&nbr_offsets, &nbrs, &plate_id, 3);
-    let (band_low, band_mid, band_high) = generate_frequency_bands(
-        &spherical,
-        &nbr_offsets,
-        &nbrs,
-        params.harmonic_max_l,
-        params.spectral_alpha,
-        &mut rng,
-    );
-
-    let mut height = vec![0.0; positions.len()];
-    for v in 0..positions.len() {
-        let pid = plate_id[v] as usize;
-        let boundary_w = plate_boundary_proximity[v];
-        let land_ocean_scale = if attributes[pid].is_ocean { 0.85 } else { 1.0 };
-        let low_amp = 0.12;
-        let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
-        let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
-        let jitter = rng.gen_range_f32(-0.008, 0.008);
-        let crust_base = if attributes[pid].is_ocean {
-            vertex_lithosphere[v].buoyancy
-        } else {
-            attributes[pid].base_height
-        };
-        height[v] = clamp(
-            crust_base
-                + 0.08 * phi[v]
-                + low_amp * band_low[v]
-                + mid_amp * band_mid[v]
-                + high_amp * band_high[v]
-                + jitter,
-            -1.2,
-            1.2,
-        );
+    let mut state = init_crust_update_state(seed, params);
+    while state.phase != CrustUpdatePhase::Done {
+        step_crust_update(&mut state);
     }
+    finalize_crust_update_state(state)
+}
 
-    let mut boundary_fields = apply_boundary_model(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &plate_id,
-        &attributes,
-        &vertex_lithosphere,
-        &boundary_edges,
-        &mut height,
-        &params,
-    );
-    apply_intraplate_fold_belts(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &plate_id,
-        &attributes,
-        &vertex_lithosphere,
-        &boundary_edges,
-        &mut height,
-        &mut boundary_fields,
-        &params,
-    );
+pub(super) fn init_crust_update_state(seed: &str, params: TerrainParams) -> CrustTerrainUpdateState {
+    CrustTerrainUpdateState {
+        phase: CrustUpdatePhase::InitMeshAndNoise,
+        rng: rng_from_seed(seed, &params),
+        params,
+        positions: Vec::new(),
+        indices: Vec::new(),
+        nbr_offsets: Vec::new(),
+        nbrs: Vec::new(),
+        spherical: Vec::new(),
+        phi: Vec::new(),
+        plate_count_target: 0,
+        plate_id: Vec::new(),
+        attributes: Vec::new(),
+        boundary_edges: Vec::new(),
+        vertex_lithosphere: Vec::new(),
+        plate_boundary_proximity: Vec::new(),
+        band_low: Vec::new(),
+        band_mid: Vec::new(),
+        band_high: Vec::new(),
+        height: Vec::new(),
+        boundary_fields: None,
+        river_flux: Vec::new(),
+        river_next: Vec::new(),
+        lake_depth: Vec::new(),
+    }
+}
 
-    let vertex_competence = vertex_lithosphere
-        .iter()
-        .map(|lith| lith.competence)
-        .collect::<Vec<_>>();
-    apply_hydraulic_erosion(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &vertex_competence,
-        &mut height,
-        &params,
-    );
+pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
+    match state.phase {
+        CrustUpdatePhase::InitMeshAndNoise => {
+            let (positions, indices) = generate_icosphere(state.params.level);
+            let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+            let spherical = compute_spherical_coords(&positions);
+            let mut phi = evaluate_phi(
+                &spherical,
+                state.params.harmonic_max_l,
+                state.params.spectral_alpha,
+                &mut state.rng,
+            );
+            normalize_zscore(&mut phi);
 
-    postprocess_height(
-        &nbr_offsets,
-        &nbrs,
-        &mut height,
-        &plate_id,
-        &attributes,
-        clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
-    );
+            state.positions = positions;
+            state.indices = indices;
+            state.nbr_offsets = nbr_offsets;
+            state.nbrs = nbrs;
+            state.spherical = spherical;
+            state.phi = phi;
+            state.phase = CrustUpdatePhase::BuildPlateField;
+        }
+        CrustUpdatePhase::BuildPlateField => {
+            let plate_count = choose_plate_count(
+                state.params.plate_count_min,
+                state.params.plate_count_max,
+                &mut state.rng,
+            );
+            let seeds = pick_plate_seeds(
+                &state.phi,
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                plate_count,
+                &mut state.rng,
+            );
+            let growth_profiles = build_plate_growth_profiles(plate_count, &mut state.rng);
+            let plate_cost_warp_basis = generate_plate_cost_warp_basis(
+                state.positions.len(),
+                &state.nbr_offsets,
+                &state.nbrs,
+                &mut state.rng,
+            );
+            let mut plate_id = partition_plates(
+                &state.positions,
+                &state.phi,
+                &plate_cost_warp_basis,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &seeds,
+                &growth_profiles,
+                state.params.boundary_band,
+            );
+            plate_id = compact_plate_ids(plate_id, plate_count);
+            cleanup_plate_components(&state.nbr_offsets, &state.nbrs, &mut plate_id, plate_count);
+            plate_id = compact_plate_ids(plate_id, plate_count);
 
-    apply_hotspot_island_chains(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &plate_id,
-        &attributes,
-        &mut height,
-        &mut rng,
-    );
+            let attributes = assign_plate_attributes(
+                &plate_id,
+                plate_count,
+                &state.phi,
+                &mut state.rng,
+                state.params.ocean_plate_ratio,
+            );
+            let boundary_edges = extract_boundary_edges(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &plate_id,
+                &attributes,
+            );
+            let vertex_lithosphere = compute_vertex_lithosphere(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &plate_id,
+                &attributes,
+                &boundary_edges,
+                &state.params,
+            );
+            let plate_boundary_proximity =
+                compute_plate_boundary_proximity(&state.nbr_offsets, &state.nbrs, &plate_id, 3);
+            let (band_low, band_mid, band_high) = generate_frequency_bands(
+                &state.spherical,
+                &state.nbr_offsets,
+                &state.nbrs,
+                state.params.harmonic_max_l,
+                state.params.spectral_alpha,
+                &mut state.rng,
+            );
 
-    let (river_flux, river_next) = generate_rivers(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &height,
-        params.river_rain_base,
-        params.river_accumulation_threshold,
-    );
-    let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
-    let vertex_weight = vertex_lithosphere
+            state.plate_count_target = plate_count;
+            state.plate_id = plate_id;
+            state.attributes = attributes;
+            state.boundary_edges = boundary_edges;
+            state.vertex_lithosphere = vertex_lithosphere;
+            state.plate_boundary_proximity = plate_boundary_proximity;
+            state.band_low = band_low;
+            state.band_mid = band_mid;
+            state.band_high = band_high;
+            state.phase = CrustUpdatePhase::BuildBaseHeight;
+        }
+        CrustUpdatePhase::BuildBaseHeight => {
+            let mut height = vec![0.0; state.positions.len()];
+            for v in 0..state.positions.len() {
+                let pid = state.plate_id[v] as usize;
+                let boundary_w = state.plate_boundary_proximity[v];
+                let land_ocean_scale = if state.attributes[pid].is_ocean { 0.85 } else { 1.0 };
+                let low_amp = 0.12;
+                let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
+                let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
+                let jitter = state.rng.gen_range_f32(-0.008, 0.008);
+                let crust_base = if state.attributes[pid].is_ocean {
+                    state.vertex_lithosphere[v].buoyancy
+                } else {
+                    state.attributes[pid].base_height
+                };
+                height[v] = clamp(
+                    crust_base
+                        + 0.08 * state.phi[v]
+                        + low_amp * state.band_low[v]
+                        + mid_amp * state.band_mid[v]
+                        + high_amp * state.band_high[v]
+                        + jitter,
+                    -1.2,
+                    1.2,
+                );
+            }
+            state.height = height;
+            state.phase = CrustUpdatePhase::ApplyBoundaryRelief;
+        }
+        CrustUpdatePhase::ApplyBoundaryRelief => {
+            let mut boundary_fields = apply_boundary_model(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &state.plate_id,
+                &state.attributes,
+                &state.vertex_lithosphere,
+                &state.boundary_edges,
+                &mut state.height,
+                &state.params,
+            );
+            apply_intraplate_fold_belts(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &state.plate_id,
+                &state.attributes,
+                &state.vertex_lithosphere,
+                &state.boundary_edges,
+                &mut state.height,
+                &mut boundary_fields,
+                &state.params,
+            );
+            state.boundary_fields = Some(boundary_fields);
+            state.phase = CrustUpdatePhase::ApplyCrustErosion;
+        }
+        CrustUpdatePhase::ApplyCrustErosion => {
+            let vertex_competence = state
+                .vertex_lithosphere
+                .iter()
+                .map(|lith| lith.competence)
+                .collect::<Vec<_>>();
+            apply_hydraulic_erosion(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &vertex_competence,
+                &mut state.height,
+                &state.params,
+            );
+            state.phase = CrustUpdatePhase::PostprocessSurface;
+        }
+        CrustUpdatePhase::PostprocessSurface => {
+            postprocess_height(
+                &state.nbr_offsets,
+                &state.nbrs,
+                &mut state.height,
+                &state.plate_id,
+                &state.attributes,
+                clamp(state.params.ocean_plate_ratio + 0.04, 0.55, 0.78),
+            );
+            state.phase = CrustUpdatePhase::ApplyHotspots;
+        }
+        CrustUpdatePhase::ApplyHotspots => {
+            apply_hotspot_island_chains(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &state.plate_id,
+                &state.attributes,
+                &mut state.height,
+                &mut state.rng,
+            );
+            state.phase = CrustUpdatePhase::BuildHydrology;
+        }
+        CrustUpdatePhase::BuildHydrology => {
+            let (river_flux, river_next) = generate_rivers(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &state.height,
+                state.params.river_rain_base,
+                state.params.river_accumulation_threshold,
+            );
+            let lake_depth =
+                compute_lake_depth_map(&state.positions, &state.nbr_offsets, &state.nbrs, &state.height);
+            state.river_flux = river_flux;
+            state.river_next = river_next;
+            state.lake_depth = lake_depth;
+            state.phase = CrustUpdatePhase::Done;
+        }
+        CrustUpdatePhase::Done => {}
+    }
+}
+
+pub(super) fn step_crust_update_budget(state: &mut CrustTerrainUpdateState, budget_ticks: u32) {
+    let ticks = budget_ticks.max(1);
+    for _ in 0..ticks {
+        if crust_update_is_done(state) {
+            return;
+        }
+        step_crust_update(state);
+    }
+}
+
+pub(super) fn crust_update_is_done(state: &CrustTerrainUpdateState) -> bool {
+    state.phase == CrustUpdatePhase::Done
+}
+
+pub(super) fn crust_update_phase_name(state: &CrustTerrainUpdateState) -> &'static str {
+    match state.phase {
+        CrustUpdatePhase::InitMeshAndNoise => "init_mesh_and_noise",
+        CrustUpdatePhase::BuildPlateField => "build_plate_field",
+        CrustUpdatePhase::BuildBaseHeight => "build_base_height",
+        CrustUpdatePhase::ApplyBoundaryRelief => "apply_boundary_relief",
+        CrustUpdatePhase::ApplyCrustErosion => "apply_crust_erosion",
+        CrustUpdatePhase::PostprocessSurface => "postprocess_surface",
+        CrustUpdatePhase::ApplyHotspots => "apply_hotspots",
+        CrustUpdatePhase::BuildHydrology => "build_hydrology",
+        CrustUpdatePhase::Done => "done",
+    }
+}
+
+pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) -> TerrainOutput {
+    let boundary_fields = state
+        .boundary_fields
+        .take()
+        .unwrap_or(BoundaryFields {
+            preserve_strength: vec![0.0; state.positions.len()],
+            debug_trench_strength: vec![0.0; state.positions.len()],
+            debug_arc_strength: vec![0.0; state.positions.len()],
+            debug_backarc_strength: vec![0.0; state.positions.len()],
+            debug_ocean_ocean_arc_strength: vec![0.0; state.positions.len()],
+        });
+    let vertex_weight = state
+        .vertex_lithosphere
         .iter()
         .map(|lith| lith.weight)
         .collect::<Vec<_>>();
-    let plate_is_ocean = attributes
+    let plate_is_ocean = state
+        .attributes
         .iter()
         .map(|attr| u8::from(attr.is_ocean))
         .collect::<Vec<_>>();
-    let plate_base_height = attributes
+    let plate_base_height = state
+        .attributes
         .iter()
         .map(|attr| attr.base_height)
         .collect::<Vec<_>>();
-    let plate_base_weight = attributes
+    let plate_base_weight = state
+        .attributes
         .iter()
         .map(|attr| attr.base_weight)
         .collect::<Vec<_>>();
     let plate_count = {
-        let mut unique = std::collections::HashSet::with_capacity(plate_id.len());
-        for &pid in &plate_id {
+        let mut unique = std::collections::HashSet::with_capacity(state.plate_id.len());
+        for &pid in &state.plate_id {
             unique.insert(pid);
         }
         unique.len() as u32
     };
-    let land_count = height.iter().filter(|&&h| h > 0.0).count();
-    let land_ratio = land_count as f32 / (height.len().max(1) as f32);
+    let land_count = state.height.iter().filter(|&&h| h > 0.0).count();
+    let land_ratio = land_count as f32 / (state.height.len().max(1) as f32);
 
     TerrainOutput {
-        height,
-        plate_id,
+        height: state.height,
+        plate_id: state.plate_id,
         plate_count,
         land_ratio,
-        river_flux,
-        river_next,
-        lake_depth,
+        river_flux: state.river_flux,
+        river_next: state.river_next,
+        lake_depth: state.lake_depth,
         vertex_weight,
         plate_is_ocean,
         plate_base_height,
@@ -198,7 +347,7 @@ pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
     }
 }
 
-fn sanitize_params(params: &mut TerrainParams) {
+pub(super) fn sanitize_params(params: &mut TerrainParams) {
     params.level = params.level.min(8);
     params.harmonic_max_l = params.harmonic_max_l.max(2).min(8);
     params.spectral_alpha = params.spectral_alpha.max(0.1);

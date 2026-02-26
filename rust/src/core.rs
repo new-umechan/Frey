@@ -11,6 +11,7 @@ mod rng;
 mod terrain;
 
 use self::mesh::{flatten_positions, generate_icosphere};
+pub(crate) use self::terrain::CrustTerrainUpdateState;
 
 pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     if level > 8 {
@@ -27,6 +28,27 @@ pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
 
 pub(crate) fn build_terrain(seed: &str, terrain_params: TerrainParams) -> TerrainOutput {
     terrain::generate(seed, terrain_params)
+}
+
+pub(crate) fn init_crust_terrain_update(seed: &str, mut terrain_params: TerrainParams) -> CrustTerrainUpdateState {
+    terrain::sanitize_params(&mut terrain_params);
+    terrain::init_crust_update_state(seed, terrain_params)
+}
+
+pub(crate) fn step_crust_terrain_update(state: &mut CrustTerrainUpdateState, budget_ticks: u32) {
+    terrain::step_crust_update_budget(state, budget_ticks);
+}
+
+pub(crate) fn crust_terrain_update_is_done(state: &CrustTerrainUpdateState) -> bool {
+    terrain::crust_update_is_done(state)
+}
+
+pub(crate) fn crust_terrain_update_phase_name(state: &CrustTerrainUpdateState) -> &'static str {
+    terrain::crust_update_phase_name(state)
+}
+
+pub(crate) fn finish_crust_terrain_update(state: CrustTerrainUpdateState) -> TerrainOutput {
+    terrain::finalize_crust_update_state(state)
 }
 
 pub(crate) fn build_erosion_automaton(seed: &str, terrain_params: TerrainParams) -> ErosionAutomatonState {

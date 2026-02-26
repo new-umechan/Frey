@@ -102,6 +102,11 @@ pub struct ErosionAutomatonState {
 }
 
 #[wasm_bindgen]
+pub struct CrustTerrainAutomaton {
+    inner: Option<core::CrustTerrainUpdateState>,
+}
+
+#[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
     let output = core::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
     serde_wasm_bindgen::to_value(&output)
@@ -120,6 +125,66 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
     let output = core::build_terrain(&seed, terrain_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
+}
+
+#[wasm_bindgen]
+impl CrustTerrainAutomaton {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: String, params_js: JsValue) -> Result<CrustTerrainAutomaton, JsValue> {
+        let terrain_params = if params_js.is_undefined() || params_js.is_null() {
+            TerrainParams::default()
+        } else {
+            serde_wasm_bindgen::from_value::<TerrainParams>(params_js)
+                .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
+        };
+
+        Ok(Self {
+            inner: Some(core::init_crust_terrain_update(&seed, terrain_params)),
+        })
+    }
+
+    #[wasm_bindgen(js_name = step)]
+    pub fn step_js(&mut self, budget_ticks: u32) -> bool {
+        if let Some(state) = self.inner.as_mut() {
+            core::step_crust_terrain_update(state, budget_ticks);
+            return core::crust_terrain_update_is_done(state);
+        }
+        true
+    }
+
+    #[wasm_bindgen(js_name = isDone)]
+    pub fn is_done_js(&self) -> bool {
+        self.inner
+            .as_ref()
+            .map(core::crust_terrain_update_is_done)
+            .unwrap_or(true)
+    }
+
+    #[wasm_bindgen(js_name = phaseName)]
+    pub fn phase_name_js(&self) -> String {
+        self.inner
+            .as_ref()
+            .map(core::crust_terrain_update_phase_name)
+            .unwrap_or("finished")
+            .to_string()
+    }
+
+    #[wasm_bindgen(js_name = finish)]
+    pub fn finish_js(&mut self) -> Result<JsValue, JsValue> {
+        let Some(state) = self.inner.take() else {
+            return Err(JsValue::from_str("crust terrain automaton already finished"));
+        };
+        if !core::crust_terrain_update_is_done(&state) {
+            self.inner = Some(state);
+            return Err(JsValue::from_str("crust terrain automaton is not done yet"));
+        }
+        let output = core::finish_crust_terrain_update(state);
+        serde_wasm_bindgen::to_value(&output).map_err(|err| {
+            JsValue::from_str(&format!(
+                "failed to serialize crust terrain automaton output: {err}"
+            ))
+        })
+    }
 }
 
 #[wasm_bindgen]
