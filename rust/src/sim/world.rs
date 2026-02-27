@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
 use crate::ErosionAutomatonState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EraKind {
@@ -30,6 +30,8 @@ pub struct World {
     pub era: EraKind,
     pub mesh: WorldMesh,
     pub core: CoreCells,
+    #[serde(default = "default_target_sea_ratio")]
+    pub target_sea_ratio: f32,
     pub layers: HashMap<LayerKind, CellLayer>,
     pub budgets: SubsystemBudgets,
     pub river_erosion_state: Option<ErosionAutomatonState>,
@@ -93,18 +95,28 @@ pub struct SubsystemBudgets {
 
 impl World {
     pub fn new(mesh: WorldMesh, core: CoreCells) -> Self {
+        let target_sea_ratio = if core.height.is_empty() {
+            0.62
+        } else {
+            let sea_count = core.height.iter().filter(|&&h| h <= 0.0).count();
+            sea_count as f32 / core.height.len() as f32
+        };
         Self {
             tick: 0,
             era: EraKind::Crust,
             mesh,
             core,
+            target_sea_ratio,
             layers: HashMap::new(),
             budgets: SubsystemBudgets::default(),
             river_erosion_state: None,
         }
     }
 
-    pub fn attach_river_erosion_state(&mut self, state: ErosionAutomatonState) -> Result<(), String> {
+    pub fn attach_river_erosion_state(
+        &mut self,
+        state: ErosionAutomatonState,
+    ) -> Result<(), String> {
         let expected = self.core.height.len();
         if state.height.len() != expected
             || state.river_flux.len() != expected
@@ -235,7 +247,9 @@ impl WorldTime {
         let threshold = convergence_threshold(self.era);
         match self.era {
             EraKind::Crust => self.ema_terrain_activity <= threshold,
-            EraKind::Environment => self.ema_river_activity.max(self.ema_climate_activity) <= threshold,
+            EraKind::Environment => {
+                self.ema_river_activity.max(self.ema_climate_activity) <= threshold
+            }
             EraKind::Life => self.ema_ecology_activity.max(self.ema_climate_activity) <= threshold,
             EraKind::Civilization => self.ema_civilization_activity <= threshold,
             EraKind::History => false,
@@ -281,6 +295,10 @@ fn convergence_threshold(era: EraKind) -> f32 {
         EraKind::Civilization => 0.015,
         EraKind::History => 0.0,
     }
+}
+
+fn default_target_sea_ratio() -> f32 {
+    0.62
 }
 
 #[cfg(test)]
@@ -331,5 +349,4 @@ mod tests {
         time.step(0);
         assert_eq!(time.tick, 0);
     }
-
 }

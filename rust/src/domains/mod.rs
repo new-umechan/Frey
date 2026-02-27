@@ -1,6 +1,6 @@
+use crate::common::mesh::{flatten_positions, generate_icosphere};
 use crate::MeshOutput;
 use crate::{ErosionAutomatonState, TerrainOutput, TerrainParams};
-use crate::common::mesh::{flatten_positions, generate_icosphere};
 
 mod terrain;
 
@@ -23,7 +23,10 @@ pub(crate) fn build_terrain(seed: &str, terrain_params: TerrainParams) -> Terrai
     terrain::generate(seed, terrain_params)
 }
 
-pub(crate) fn init_crust_terrain_update(seed: &str, mut terrain_params: TerrainParams) -> CrustTerrainUpdateState {
+pub(crate) fn init_crust_terrain_update(
+    seed: &str,
+    mut terrain_params: TerrainParams,
+) -> CrustTerrainUpdateState {
     terrain::sanitize_params(&mut terrain_params);
     terrain::init_crust_update_state(seed, terrain_params)
 }
@@ -44,7 +47,10 @@ pub(crate) fn finish_crust_terrain_update(state: CrustTerrainUpdateState) -> Ter
     terrain::finalize_crust_update_state(state)
 }
 
-pub(crate) fn build_erosion_automaton(seed: &str, terrain_params: TerrainParams) -> ErosionAutomatonState {
+pub(crate) fn build_erosion_automaton(
+    seed: &str,
+    terrain_params: TerrainParams,
+) -> ErosionAutomatonState {
     terrain::init_async_erosion_automaton(seed, terrain_params)
 }
 

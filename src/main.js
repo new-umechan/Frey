@@ -35,8 +35,8 @@ const ERA_SCALE_PRESETS = Object.freeze({
     crust: {
         label: "地殻形成期",
         tickLabel: "100万年",
-        runtimeTickMs: 220,
-        weights: { terrain: 1.0, river: 0.05, climate: 0.0, ecology: 0.0, civilization: 0.0 },
+        runtimeTickMs: 70,
+        weights: { terrain: 4.0, river: 0.25, climate: 0.0, ecology: 0.0, civilization: 0.0 },
     },
     environment: {
         label: "環境形成期",
@@ -80,26 +80,47 @@ const SUBSYSTEM_ACTIVITY_STEP_BASELINE = Object.freeze({
 const SUBSYSTEM_ACTIVITY_WEIGHT_MIX = RUNTIME_PARAMS.activity_weight_mix;
 const SUBSYSTEM_ACTIVITY_QUEUE_PRESSURE_GAIN = RUNTIME_PARAMS.activity_queue_pressure_gain;
 const PLATE_MOTION_SPEED_BY_ERA = Object.freeze({
-    crust: 0.0015,
-    environment: 0.001,
-    life: 0.0007,
-    civilization: 0.0005,
-    history: 0.00035,
+    crust: 0.00045,
+    environment: 0.00030,
+    life: 0.00020,
+    civilization: 0.00014,
+    history: 0.00010,
 });
 const PLATE_MOTION_REMAP_INTERVAL_BY_ERA = Object.freeze({
-    crust: 3,
-    environment: 6,
-    life: 10,
-    civilization: 14,
-    history: 18,
+    crust: 4,
+    environment: 7,
+    life: 12,
+    civilization: 18,
+    history: 24,
 });
 const PLATE_MOTION_ACTIVITY_GAIN = 10.0;
+const LAND_RATIO_RECOVERY_BY_ERA = Object.freeze({
+    crust: 0.22,
+    environment: 0.16,
+    life: 0.11,
+    civilization: 0.08,
+    history: 0.06,
+});
+const LAND_RATIO_FLOOR_BY_ERA = Object.freeze({
+    crust: 0.94,
+    environment: 0.90,
+    life: 0.86,
+    civilization: 0.82,
+    history: 0.80,
+});
+const RIVER_BUDGET_SCALE_BY_ERA = Object.freeze({
+    crust: 0.08,
+    environment: 0.22,
+    life: 0.40,
+    civilization: 0.55,
+    history: 0.70,
+});
 const TERRAIN_DYNAMICS_BY_ERA = Object.freeze({
-    crust: { diffusion: 0.02, uplift: 0.013, subsidence: 0.008, fluvial: 0.0024, coastline: 0.012 },
-    environment: { diffusion: 0.014, uplift: 0.008, subsidence: 0.0056, fluvial: 0.0032, coastline: 0.010 },
-    life: { diffusion: 0.009, uplift: 0.0046, subsidence: 0.0033, fluvial: 0.0033, coastline: 0.0075 },
-    civilization: { diffusion: 0.0064, uplift: 0.0028, subsidence: 0.0021, fluvial: 0.0028, coastline: 0.006 },
-    history: { diffusion: 0.0048, uplift: 0.002, subsidence: 0.0014, fluvial: 0.0024, coastline: 0.0052 },
+    crust: { diffusion: 0.034, uplift: 0.025, subsidence: 0.011, fluvial: 0.0034, coastline: 0.016 },
+    environment: { diffusion: 0.021, uplift: 0.013, subsidence: 0.0067, fluvial: 0.0039, coastline: 0.012 },
+    life: { diffusion: 0.013, uplift: 0.007, subsidence: 0.0042, fluvial: 0.0035, coastline: 0.0085 },
+    civilization: { diffusion: 0.009, uplift: 0.0040, subsidence: 0.0027, fluvial: 0.0029, coastline: 0.0065 },
+    history: { diffusion: 0.0065, uplift: 0.0028, subsidence: 0.0018, fluvial: 0.0024, coastline: 0.0056 },
 });
 
 function createEmptyCore() {
@@ -130,8 +151,8 @@ function createInitialRuntimeState(defaultRuntimeTickMs) {
         accumulatorMs: 0,
         lastFrameTimeMs: null,
         runtimeTickMs: defaultRuntimeTickMs,
-        maxTicksPerFrame: 6,
-        maxRiverStepsPerFrame: 1,
+        maxTicksPerFrame: 20,
+        maxRiverStepsPerFrame: 4,
         erosionAutomatonState: null,
         pendingRiverSteps: 0,
         terrainErosionDirty: false,
@@ -259,6 +280,10 @@ async function bootstrap() {
     let debugEnabled = debugToggleInput.checked;
     let currentRiverMaskTexture = null;
     let currentEraScale = DEFAULT_ERA_SCALE;
+    let terrainDeltaAccum = 0;
+    let plateReassignAccum = 0;
+    let terrainSkipNoNeighbors = 0;
+    let terrainSkipNoPlateMotion = 0;
     const worldTimeController = new WorldTimeController();
     const world = {
         tick: 0,
@@ -1068,8 +1093,9 @@ async function bootstrap() {
         if (!currentTerrainData || !Number.isFinite(riverWeight) || riverWeight <= 0) {
             return 0;
         }
+        const scale = RIVER_BUDGET_SCALE_BY_ERA[currentEraScale] ?? RIVER_BUDGET_SCALE_BY_ERA.crust;
         const vertexBudgetBase = Math.max(64, Math.floor(currentTerrainData.heightData.length * 0.01));
-        return Math.max(1, Math.floor(vertexBudgetBase * riverWeight));
+        return Math.max(1, Math.floor(vertexBudgetBase * riverWeight * scale));
     }
 
     function applyErosionAutomatonStateToTerrain(erosionState) {
@@ -1088,9 +1114,18 @@ async function bootstrap() {
             return;
         }
 
+        const landPreserveDelta = applyLandRatioFloor(
+            nextHeight,
+            currentTerrainData.plateId,
+            currentTerrainData.plateInfo?.isOcean,
+            currentTerrainData.targetLandRatio,
+        );
         currentTerrainData.heightData = nextHeight;
         currentTerrainData.riverFlux = nextRiverFlux;
         currentTerrainData.riverNext = nextRiverNext;
+        if (landPreserveDelta > 0) {
+            syncTerrainHeightToErosionState();
+        }
 
         updateTerrainAttributes();
         updateRiverMaskTexture();
@@ -1187,6 +1222,53 @@ async function bootstrap() {
         return clamp01(Math.max(raw, stepBaseline) * weightFactor);
     }
 
+    function applyLandRatioFloor(heightData, plateId, plateIsOcean, targetLandRatio) {
+        if (!heightData || !plateId || !plateIsOcean || !Number.isFinite(targetLandRatio) || targetLandRatio <= 0) {
+            return 0;
+        }
+        const cellCount = Math.min(heightData.length, plateId.length);
+        if (cellCount <= 0) {
+            return 0;
+        }
+
+        let landCount = 0;
+        for (let i = 0; i < cellCount; i += 1) {
+            if (heightData[i] > 0) {
+                landCount += 1;
+            }
+        }
+        const currentLandRatio = landCount / Math.max(1, cellCount);
+        const floorScale = LAND_RATIO_FLOOR_BY_ERA[currentEraScale] ?? LAND_RATIO_FLOOR_BY_ERA.crust;
+        const floorLandRatio = targetLandRatio * floorScale;
+        const landDeficit = Math.max(0, floorLandRatio - currentLandRatio);
+        if (landDeficit <= 0) {
+            return 0;
+        }
+
+        const recoveryGain = LAND_RATIO_RECOVERY_BY_ERA[currentEraScale] ?? LAND_RATIO_RECOVERY_BY_ERA.crust;
+        let deltaAbs = 0;
+        for (let i = 0; i < cellCount; i += 1) {
+            const pid = plateId[i];
+            if (!Number.isInteger(pid) || pid < 0 || pid >= plateIsOcean.length || plateIsOcean[pid] > 0) {
+                continue;
+            }
+            const h = heightData[i];
+            const coastalBoost = Math.max(0, 1 - Math.min(1, Math.abs(h) / 0.30));
+            const uplift = landDeficit * recoveryGain * (0.30 + coastalBoost);
+            if (uplift <= 0) {
+                continue;
+            }
+            const raised = Math.min(1.2, h + uplift);
+            const changed = raised - h;
+            if (Math.abs(changed) < 1e-8) {
+                continue;
+            }
+            heightData[i] = raised;
+            deltaAbs += Math.abs(changed);
+        }
+        return deltaAbs;
+    }
+
     function syncTerrainHeightToErosionState() {
         const erosionState = worldState.erosionAutomatonState;
         const heightData = currentTerrainData?.heightData;
@@ -1209,10 +1291,18 @@ async function bootstrap() {
     function updateTerrainCoreStep() {
         const heightData = currentTerrainData?.heightData;
         const plateId = currentTerrainData?.plateId;
+        const plateIsOcean = currentTerrainData?.plateInfo?.isOcean;
         const riverFlux = currentTerrainData?.riverFlux;
-        const nbrOffsets = world.mesh?.nbrOffsets;
-        const nbrs = world.mesh?.nbrs;
-        if (!heightData || !plateId || !riverFlux || !nbrOffsets || !nbrs) {
+        const targetLandRatio = currentTerrainData?.targetLandRatio;
+        const erosionNbrOffsets = worldState.erosionAutomatonState?.nbr_offsets;
+        const erosionNbrs = worldState.erosionAutomatonState?.nbrs;
+        const nbrOffsets = world.mesh?.nbrOffsets ?? erosionNbrOffsets ?? null;
+        const nbrs = world.mesh?.nbrs ?? erosionNbrs ?? null;
+        if (!heightData || !plateId || !riverFlux) {
+            return;
+        }
+        if (!nbrOffsets || !nbrs) {
+            terrainSkipNoNeighbors += 1;
             return;
         }
         const cellCount = heightData.length;
@@ -1225,6 +1315,12 @@ async function bootstrap() {
             return;
         }
 
+        if (!plateMotionState) {
+            plateMotionState = createPlateMotionState(currentSeed);
+            if (!plateMotionState) {
+                terrainSkipNoPlateMotion += 1;
+            }
+        }
         const movedVertices = updatePlateMotionStep();
         const dynamics = TERRAIN_DYNAMICS_BY_ERA[currentEraScale] ?? TERRAIN_DYNAMICS_BY_ERA.crust;
         const nextHeight = new Float32Array(heightData);
@@ -1266,7 +1362,17 @@ async function bootstrap() {
             const boundaryRatio = boundaryCount / nbrCount;
             const shorelineRatio = shorelineEdgeCount / nbrCount;
             const flux = Math.max(0, riverFlux[i]);
-            const fluvialErode = Math.log1p(flux) * dynamics.fluvial * Math.max(0, current + 0.08);
+            const isOceanPlate =
+                !!plateIsOcean &&
+                currentPlate >= 0 &&
+                currentPlate < plateIsOcean.length &&
+                plateIsOcean[currentPlate] > 0;
+            const fluvialScale = isOceanPlate ? 0.22 : 1.0;
+            const fluvialErode =
+                Math.log1p(flux) * dynamics.fluvial * fluvialScale * Math.max(0, current + 0.08);
+            const buoyancyDelta = isOceanPlate
+                ? -dynamics.subsidence * 0.04
+                : dynamics.uplift * 0.18;
             const tectonicDelta =
                 (boundaryRatio * dynamics.uplift - (1 - boundaryRatio) * dynamics.subsidence * 0.35) *
                 (current > 0 ? 1 : 0.45);
@@ -1274,7 +1380,7 @@ async function bootstrap() {
             const coastalBand = Math.max(0, 1 - Math.min(1, Math.abs(current) / 0.14));
             const coastlineDelta =
                 (meanNbrHeight - current) * dynamics.coastline * shorelineRatio * coastalBand;
-            const delta = diffusionDelta + tectonicDelta + coastlineDelta - fluvialErode;
+            const delta = diffusionDelta + tectonicDelta + coastlineDelta + buoyancyDelta - fluvialErode;
             const next = Math.min(1.2, Math.max(-1.2, current + delta));
             const changed = next - current;
             if (Math.abs(changed) < 1e-8) {
@@ -1284,8 +1390,11 @@ async function bootstrap() {
             deltaAbsSum += Math.abs(changed);
         }
 
+        deltaAbsSum += applyLandRatioFloor(nextHeight, plateId, plateIsOcean, targetLandRatio);
+
         if (deltaAbsSum <= 0) {
             if (movedVertices > 0) {
+                plateReassignAccum += movedVertices;
                 worldState.terrainCoreDirty = true;
                 recordSubsystemActivity(
                     "terrain",
@@ -1296,6 +1405,8 @@ async function bootstrap() {
         }
         currentTerrainData.heightData = nextHeight;
         syncTerrainHeightToErosionState();
+        terrainDeltaAccum += deltaAbsSum;
+        plateReassignAccum += movedVertices;
         worldState.terrainCoreDirty = true;
         const deformationSignal =
             deltaAbsSum / Math.max(1, cellCount) * SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.terrain;
@@ -1565,6 +1676,17 @@ async function bootstrap() {
 
         worldTimeController.step(1);
         world.tick = Math.max(0, Math.floor(worldTimeController.tick()));
+
+        if (world.tick > 0 && world.tick % 8 === 0) {
+            const preset = getEraScalePreset(currentEraScale);
+            setStatus(
+                `Running (${currentSeed}) | ${preset.label} / 1Tick=${preset.tickLabel} | tick=${world.tick} | terrainΔ=${terrainDeltaAccum.toExponential(2)} | plateReassign=${plateReassignAccum} | skipNbr=${terrainSkipNoNeighbors} | skipMotion=${terrainSkipNoPlateMotion}`,
+            );
+            terrainDeltaAccum = 0;
+            plateReassignAccum = 0;
+            terrainSkipNoNeighbors = 0;
+            terrainSkipNoPlateMotion = 0;
+        }
     }
 
     function advanceWorldLoop(nowMs) {
@@ -1697,6 +1819,7 @@ async function bootstrap() {
             plateInfo,
             vertexWeight,
             tectonicDebug,
+            targetLandRatio: Number.isFinite(terrain.land_ratio) ? terrain.land_ratio : 0.0,
         };
         currentTerrainData = world.core;
         plateMotionState = createPlateMotionState(nextSeed);

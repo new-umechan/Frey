@@ -326,7 +326,7 @@ fn apply_intraplate_fold_belts(
             continue;
         }
 
-        let plate_velocity = project_to_tangent(attributes[pid].velocity, positions[v]);
+        let plate_velocity = local_plate_velocity(&attributes[pid], pid, positions[v]);
         let comp_dir = normalize3(plate_velocity);
         if length3(comp_dir) <= 1e-5 {
             continue;
@@ -405,7 +405,9 @@ fn extract_boundary_edges(
 
             let edge_vec = sub3(positions[j], positions[i]);
             let edge_dir = normalize3(edge_vec);
-            let rel_v = sub3(attributes[plate_b].velocity, attributes[plate_a].velocity);
+            let vel_a = local_plate_velocity(&attributes[plate_a], plate_a, positions[i]);
+            let vel_b = local_plate_velocity(&attributes[plate_b], plate_b, positions[j]);
+            let rel_v = sub3(vel_b, vel_a);
             let v_rel_n = dot3(rel_v, edge_dir);
             let v_rel_t_vec = sub3(rel_v, mul3(edge_dir, v_rel_n));
             let v_rel_t = length3(v_rel_t_vec);

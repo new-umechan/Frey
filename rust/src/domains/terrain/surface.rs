@@ -116,7 +116,7 @@ fn apply_hotspot_island_chains(
         let pid = plate_id[source] as usize;
         let source_pos = positions[source];
 
-        let mut tangent = project_to_tangent(attributes[pid].velocity, source_pos);
+        let mut tangent = local_plate_velocity(&attributes[pid], pid, source_pos);
         if length3(tangent) <= 1e-5 {
             tangent = project_to_tangent(random_unit_vector3(rng), source_pos);
         }

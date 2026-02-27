@@ -1,15 +1,15 @@
 mod common;
 mod domains;
+pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
-pub mod sim;
 mod types;
 mod wasm;
 pub use sim::world;
 
-use wasm_bindgen::prelude::*;
 pub use crate::types::{ErosionAutomatonState, MeshOutput, TerrainOutput, TerrainParams};
 pub use crate::wasm::world_time::WorldTimeController;
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct CrustTerrainAutomaton {
@@ -82,7 +82,9 @@ impl CrustTerrainAutomaton {
     #[wasm_bindgen(js_name = finish)]
     pub fn finish_js(&mut self) -> Result<JsValue, JsValue> {
         let Some(state) = self.inner.take() else {
-            return Err(JsValue::from_str("crust terrain automaton already finished"));
+            return Err(JsValue::from_str(
+                "crust terrain automaton already finished",
+            ));
         };
         if !domains::crust_terrain_update_is_done(&state) {
             self.inner = Some(state);

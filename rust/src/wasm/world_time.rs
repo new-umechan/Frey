@@ -34,12 +34,17 @@ enum ControllerLayerKind {
 
 #[derive(Clone)]
 enum ControllerLayerData {
-    Climate { temp: Vec<f32>, rain: Vec<f32> },
+    Climate {
+        temp: Vec<f32>,
+        rain: Vec<f32>,
+    },
     Ecology {
         habitability: Vec<f32>,
         productivity: Vec<f32>,
     },
-    Civilization { population: Vec<f32> },
+    Civilization {
+        population: Vec<f32>,
+    },
 }
 
 impl ControllerLayerKind {
@@ -72,10 +77,9 @@ impl ControllerLayerData {
             },
             ControllerLayerKind::Ecology => Self::Ecology {
                 habitability: vec![time.ema_ecology_activity],
-                productivity: vec![
-                    (time.ema_ecology_activity * 0.6 + time.ema_climate_activity * 0.4)
-                        .clamp(0.0, 1.0),
-                ],
+                productivity: vec![(time.ema_ecology_activity * 0.6
+                    + time.ema_climate_activity * 0.4)
+                    .clamp(0.0, 1.0)],
             },
             ControllerLayerKind::Civilization => Self::Civilization {
                 population: vec![time.ema_civilization_activity],
@@ -181,7 +185,9 @@ impl WorldTimeController {
                 let Some(ControllerLayerData::Climate { temp, .. }) =
                     self.layers.get(&ControllerLayerKind::Climate)
                 else {
-                    return Err(JsValue::from_str("layer is not generated yet: climate.temp"));
+                    return Err(JsValue::from_str(
+                        "layer is not generated yet: climate.temp",
+                    ));
                 };
                 Ok(temp.clone())
             }
@@ -189,7 +195,9 @@ impl WorldTimeController {
                 let Some(ControllerLayerData::Climate { rain, .. }) =
                     self.layers.get(&ControllerLayerKind::Climate)
                 else {
-                    return Err(JsValue::from_str("layer is not generated yet: climate.rain"));
+                    return Err(JsValue::from_str(
+                        "layer is not generated yet: climate.rain",
+                    ));
                 };
                 Ok(rain.clone())
             }

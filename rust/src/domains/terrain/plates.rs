@@ -296,6 +296,35 @@ fn random_unit_vector3(rng: &mut DeterministicRng) -> [f32; 3] {
     }
 }
 
+fn local_plate_velocity(attr: &PlateAttr, plate: usize, position: [f32; 3]) -> [f32; 3] {
+    let base = project_to_tangent(attr.velocity, position);
+    let base_mag = length3(base);
+
+    let blend = 0.5 + 0.5 * clamp(dot3(position, attr.drift_mix_axis), -1.0, 1.0);
+    let mixed_axis = normalize3(add3(
+        mul3(attr.drift_axis_primary, 1.0 - blend),
+        mul3(attr.drift_axis_secondary, blend),
+    ));
+    let drift_axis = project_to_tangent(mixed_axis, position);
+    let drift_mag = length3(drift_axis);
+
+    let seed = plate as u32;
+    let local_hash = 2.0 * trig_hash01(position, seed ^ 0x9e37_79b9) - 1.0;
+    let local_scale = attr.drift_variability * local_hash;
+
+    if drift_mag <= 1e-6 {
+        return base;
+    }
+    let drift_dir = mul3(drift_axis, 1.0 / drift_mag);
+    let mixed = add3(base, mul3(drift_dir, base_mag * local_scale));
+    let tangent = project_to_tangent(mixed, position);
+    if length3(tangent) <= 1e-6 {
+        base
+    } else {
+        tangent
+    }
+}
+
 fn partition_plates(
     positions: &[[f32; 3]],
     phi: &[f32],
@@ -602,6 +631,10 @@ fn assign_plate_attributes(
         let dir = rng.gen_range_f32(0.0, 2.0 * std::f32::consts::PI);
         let speed = rng.gen_range_f32(0.3, 1.0);
         let velocity = [speed * dir.cos(), speed * dir.sin(), 0.0];
+        let drift_axis_primary = random_unit_vector3(rng);
+        let drift_axis_secondary = random_unit_vector3(rng);
+        let drift_mix_axis = random_unit_vector3(rng);
+        let drift_variability = rng.gen_range_f32(0.06, 0.32);
         let mean_phi = if plate_counts[pid] > 0 {
             plate_phi_sum[pid] / plate_counts[pid] as f32
         } else {
@@ -630,6 +663,10 @@ fn assign_plate_attributes(
         attrs.push(PlateAttr {
             is_ocean,
             velocity,
+            drift_axis_primary,
+            drift_axis_secondary,
+            drift_mix_axis,
+            drift_variability,
             base_height,
             base_weight,
         });
@@ -777,7 +814,8 @@ fn compute_vertex_lithosphere(
             let edge_tangent = project_to_tangent(edge_vec, positions[state.vertex]);
             let edge_dir = normalize3(edge_tangent);
 
-            let plate_vel_tangent = project_to_tangent(attributes[pid].velocity, positions[state.vertex]);
+            let plate_vel_tangent =
+                local_plate_velocity(&attributes[pid], pid, positions[state.vertex]);
             let plate_vel_dir = normalize3(plate_vel_tangent);
             let dir_alignment = dot3(edge_dir, plate_vel_dir);
             let dir_weight = if length3(plate_vel_tangent) <= 1e-6 {

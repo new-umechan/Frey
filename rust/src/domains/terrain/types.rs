@@ -2,6 +2,10 @@
 struct PlateAttr {
     is_ocean: bool,
     velocity: [f32; 3],
+    drift_axis_primary: [f32; 3],
+    drift_axis_secondary: [f32; 3],
+    drift_mix_axis: [f32; 3],
+    drift_variability: f32,
     base_height: f32,
     base_weight: f32,
 }
