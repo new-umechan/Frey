@@ -140,3 +140,22 @@ pub fn build_vertex_colors(input_js: JsValue) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&colors)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize vertex colors: {err}")))
 }
+
+#[wasm_bindgen]
+pub fn apply_land_ratio_floor(input_js: JsValue) -> Result<JsValue, JsValue> {
+    let output = wasm::terrain_ops::apply_land_ratio_floor_from_js(input_js)
+        .map_err(|err| JsValue::from_str(&format!("failed to apply land ratio floor: {err}")))?;
+    serde_wasm_bindgen::to_value(&output).map_err(|err| {
+        JsValue::from_str(&format!(
+            "failed to serialize apply_land_ratio_floor output: {err}"
+        ))
+    })
+}
+
+#[wasm_bindgen]
+pub fn step_layers_bundle(input_js: JsValue) -> Result<JsValue, JsValue> {
+    let output = wasm::layers::step_layers_bundle_from_js(input_js)
+        .map_err(|err| JsValue::from_str(&format!("failed to step layers bundle: {err}")))?;
+    serde_wasm_bindgen::to_value(&output)
+        .map_err(|err| JsValue::from_str(&format!("failed to serialize layers bundle output: {err}")))
+}

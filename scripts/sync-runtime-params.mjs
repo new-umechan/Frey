@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
 const YAML_PATH = path.join(ROOT_DIR, "config", "runtime.yaml");
-const JS_OUT_PATH = path.join(ROOT_DIR, "src", "app", "runtime-params.js");
+const JS_OUT_PATH = path.join(ROOT_DIR, "src", "interface", "params", "runtime.js");
 
 const SCHEMA = [
     ["activity.signal_gain.terrain", "activity_signal_gain_terrain"],

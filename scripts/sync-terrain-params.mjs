@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
 const YAML_PATH = path.join(ROOT_DIR, "config", "terrain.yaml");
-const JS_OUT_PATH = path.join(ROOT_DIR, "src", "app", "terrain-params.js");
+const JS_OUT_PATH = path.join(ROOT_DIR, "src", "interface", "params", "terrain.js");
 const RUST_OUT_PATH = path.join(ROOT_DIR, "rust", "src", "generated", "terrain_params_defaults.rs");
 
 const SCHEMA = [

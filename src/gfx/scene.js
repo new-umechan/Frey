@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
-import { createTerrainMaterial } from "./terrain-material.js";
+import { createTerrainMaterial } from "./materials/terrain.js";
 
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
