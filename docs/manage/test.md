@@ -98,3 +98,15 @@ let metrics = world.metrics();
 - 大きな変更のあと
 - サブシステム接続（河川 -> 気候 -> 生態 -> 文明）の節目
 - 時代スケール制御の変更後
+
+## API受け入れ観点（Checkpoint / Layer / Tick）
+
+実装時の受け入れ確認として、次を最低ラインにする。
+
+1. `save_checkpoint` 実行後、`list_checkpoints` に新規idが追加される
+2. `load_checkpoint` 実行後、tickとeraが保存時点へ戻る
+3. 不正idで `load_checkpoint` を呼んだ場合、例外になる
+4. `get_layer` は既知kindに対してFloat32Arrayを返す
+5. 未生成レイヤーkindと不正kindは例外になる
+6. `tick()` は `step(1)` ごとに単調増加する
+7. `tick()` は時代名ではなく累積管理Tickカウンタを返す
