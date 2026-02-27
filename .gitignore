@@ -3,5 +3,6 @@ dist/
 src/wasm/
 
 rust/target/
+debug/snapshots/
 
 docs/manage/todo.md

@@ -122,6 +122,9 @@ const TERRAIN_DYNAMICS_BY_ERA = Object.freeze({
     civilization: { diffusion: 0.009, uplift: 0.0040, subsidence: 0.0027, fluvial: 0.0029, coastline: 0.0065 },
     history: { diffusion: 0.0065, uplift: 0.0028, subsidence: 0.0018, fluvial: 0.0024, coastline: 0.0056 },
 });
+const DEBUG_SNAPSHOT_TICKS = Object.freeze([300]);
+const DEBUG_SNAPSHOT_TOPK_LIMIT = 128;
+const TERRAIN_HEIGHT_CLAMP = 1.2;
 
 function createEmptyCore() {
     return null;
@@ -302,6 +305,8 @@ async function bootstrap() {
     let currentTerrainData = world.core;
     const worldState = world.runtime;
     let plateMotionState = null;
+    const debugSnapshotTickSet = new Set(DEBUG_SNAPSHOT_TICKS);
+    const debugSnapshotSavedTicks = new Set();
 
     const vertexCount = basePositions.length / 3;
     const terrainUv = buildTerrainUvFromPositions(basePositions);
@@ -990,6 +995,7 @@ async function bootstrap() {
     function resetWorldProgress() {
         worldTimeController.reset();
         syncTimeStateFromRust();
+        debugSnapshotSavedTicks.clear();
         world.budgets = createInitialBudgets();
         worldState.accumulatorMs = 0;
         worldState.lastFrameTimeMs = null;
@@ -1258,7 +1264,7 @@ async function bootstrap() {
             if (uplift <= 0) {
                 continue;
             }
-            const raised = Math.min(1.2, h + uplift);
+            const raised = Math.min(TERRAIN_HEIGHT_CLAMP, h + uplift);
             const changed = raised - h;
             if (Math.abs(changed) < 1e-8) {
                 continue;
@@ -1381,7 +1387,7 @@ async function bootstrap() {
             const coastlineDelta =
                 (meanNbrHeight - current) * dynamics.coastline * shorelineRatio * coastalBand;
             const delta = diffusionDelta + tectonicDelta + coastlineDelta + buoyancyDelta - fluvialErode;
-            const next = Math.min(1.2, Math.max(-1.2, current + delta));
+            const next = Math.min(TERRAIN_HEIGHT_CLAMP, Math.max(-TERRAIN_HEIGHT_CLAMP, current + delta));
             const changed = next - current;
             if (Math.abs(changed) < 1e-8) {
                 continue;
@@ -1674,8 +1680,14 @@ async function bootstrap() {
         worldState.latestActivity.civilization = 0;
         syncTimeStateFromRust();
 
+        const nextTick = world.tick + 1;
+        const prevHeightForSnapshot = debugSnapshotTickSet.has(nextTick) && currentTerrainData?.heightData
+            ? currentTerrainData.heightData.slice()
+            : null;
+
         worldTimeController.step(1);
         world.tick = Math.max(0, Math.floor(worldTimeController.tick()));
+        maybeSaveDebugSnapshot(world.tick, prevHeightForSnapshot);
 
         if (world.tick > 0 && world.tick % 8 === 0) {
             const preset = getEraScalePreset(currentEraScale);
@@ -1687,6 +1699,169 @@ async function bootstrap() {
             terrainSkipNoNeighbors = 0;
             terrainSkipNoPlateMotion = 0;
         }
+    }
+
+    function maybeSaveDebugSnapshot(tick, prevHeightForSnapshot = null) {
+        if (!import.meta.env.DEV) {
+            return;
+        }
+        if (!Number.isInteger(tick) || tick < 0) {
+            return;
+        }
+        if (!debugSnapshotTickSet.has(tick)) {
+            return;
+        }
+        if (debugSnapshotSavedTicks.has(tick)) {
+            return;
+        }
+        if (!currentTerrainData) {
+            return;
+        }
+
+        debugSnapshotSavedTicks.add(tick);
+        void postDebugSnapshot(tick, prevHeightForSnapshot);
+    }
+
+    async function postDebugSnapshot(tick, prevHeightForSnapshot = null) {
+        const payload = buildDebugSnapshotPayload(tick, prevHeightForSnapshot);
+        if (!payload) {
+            return;
+        }
+
+        try {
+            const response = await fetch("/__debug/snapshot", {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const result = await response.json().catch(() => null);
+            const fileLabel = typeof result?.file === "string" ? result.file : "debug/snapshots/latest.json";
+            setStatus(`Snapshot saved at tick=${tick}: ${fileLabel}`);
+        } catch (error) {
+            console.warn("[debug-snapshot] failed to save", error);
+            setStatus(`Snapshot save failed at tick=${tick}`);
+        }
+    }
+
+    function buildDebugSnapshotPayload(tick, prevHeightForSnapshot = null) {
+        if (!currentTerrainData) {
+            return null;
+        }
+
+        const heightData = currentTerrainData.heightData;
+        const plateId = currentTerrainData.plateId;
+        const riverFlux = currentTerrainData.riverFlux;
+        if (!heightData || !plateId || !riverFlux) {
+            return null;
+        }
+
+        const cellCount = Math.min(
+            heightData.length,
+            plateId.length,
+            riverFlux.length,
+        );
+        if (cellCount <= 0) {
+            return null;
+        }
+
+        let seaCount = 0;
+        let maxHeight = -Infinity;
+        let minHeight = Infinity;
+        let sumHeight = 0;
+        let sumRiverFlux = 0;
+        let highlandCount = 0;
+        let clampCount = 0;
+        for (let i = 0; i < cellCount; i += 1) {
+            const h = heightData[i];
+            sumHeight += h;
+            sumRiverFlux += riverFlux[i];
+            if (h <= 0) {
+                seaCount += 1;
+            }
+            if (h >= 0.45) {
+                highlandCount += 1;
+            }
+            if (Math.abs(h) >= TERRAIN_HEIGHT_CLAMP - 1e-4) {
+                clampCount += 1;
+            }
+            if (h > maxHeight) {
+                maxHeight = h;
+            }
+            if (h < minHeight) {
+                minHeight = h;
+            }
+        }
+
+        const plateCount = currentTerrainData.plateInfo?.isOcean?.length ?? 0;
+        const plateCellCounts = new Array(plateCount).fill(0);
+        for (let i = 0; i < cellCount; i += 1) {
+            const pid = plateId[i];
+            if (Number.isInteger(pid) && pid >= 0 && pid < plateCount) {
+                plateCellCounts[pid] += 1;
+            }
+        }
+
+        const hasPrev = !!prevHeightForSnapshot && prevHeightForSnapshot.length >= cellCount;
+        const topChanges = [];
+        let deltaAbsSum = 0;
+        let deltaAbsMax = 0;
+        for (let i = 0; i < cellCount; i += 1) {
+            const prev = hasPrev ? prevHeightForSnapshot[i] : heightData[i];
+            const delta = heightData[i] - prev;
+            const absDelta = Math.abs(delta);
+            deltaAbsSum += absDelta;
+            if (absDelta > deltaAbsMax) {
+                deltaAbsMax = absDelta;
+            }
+            topChanges.push({
+                i,
+                p: plateId[i],
+                h: Number(heightData[i].toFixed(5)),
+                dh: Number(delta.toFixed(5)),
+                rf: Number(riverFlux[i].toFixed(5)),
+            });
+        }
+        topChanges.sort((a, b) => Math.abs(b.dh) - Math.abs(a.dh));
+        const topKChanges = topChanges.slice(0, DEBUG_SNAPSHOT_TOPK_LIMIT);
+
+        return {
+            type: "terrain-debug-snapshot",
+            version: 1,
+            createdAt: new Date().toISOString(),
+            tick,
+            seed: currentSeed,
+            era: currentEraScale,
+            mesh: {
+                vertexCount: cellCount,
+                neighborEdgeCount: world.mesh?.nbrs?.length ?? worldState.erosionAutomatonState?.nbrs?.length ?? 0,
+                level: LEVEL,
+            },
+            stats: {
+                seaRatio: seaCount / cellCount,
+                landRatio: 1 - seaCount / cellCount,
+                targetLandRatio: Number.isFinite(currentTerrainData.targetLandRatio)
+                    ? currentTerrainData.targetLandRatio
+                    : null,
+                highlandRatio: highlandCount / cellCount,
+                minHeight,
+                maxHeight,
+                meanHeight: sumHeight / cellCount,
+                meanRiverFlux: sumRiverFlux / cellCount,
+                meanAbsHeightDelta: deltaAbsSum / cellCount,
+                maxAbsHeightDelta: deltaAbsMax,
+                clampRatio: clampCount / cellCount,
+                plateCount,
+            },
+            plateStats: {
+                cellCounts: plateCellCounts,
+            },
+            topKChanges,
+        };
     }
 
     function advanceWorldLoop(nowMs) {
