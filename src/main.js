@@ -125,6 +125,18 @@ const TERRAIN_DYNAMICS_BY_ERA = Object.freeze({
 const DEBUG_SNAPSHOT_TICKS = Object.freeze([300]);
 const DEBUG_SNAPSHOT_TOPK_LIMIT = 128;
 const TERRAIN_HEIGHT_CLAMP = 1.2;
+const TERRAIN_UPLIFT_SATURATION_SOFT = 0.42;
+const TERRAIN_UPLIFT_SATURATION_HARD = 0.74;
+const TERRAIN_OCEAN_DIFFUSION_SCALE = 0.42;
+const TERRAIN_OCEAN_MAX_SUBSIDENCE = 0.0035;
+const TERRAIN_STRESS_MEMORY_DECAY = 0.86;
+const TERRAIN_STRESS_MEMORY_GAIN = 0.14;
+const TERRAIN_EARLY_OCEAN_GUARD_TICK = 96;
+const TERRAIN_OCEAN_MAX_DROP_EARLY = 0.00045;
+const TERRAIN_OCEAN_MAX_DROP_LATE = 0.0014;
+const PLATE_REMAP_MAX_FRACTION = 0.018;
+const PLATE_REMAP_DOMINANCE_CAP = 0.34;
+const PLATE_REMAP_SWITCH_MARGIN = 0.055;
 
 function createEmptyCore() {
     return null;
@@ -160,6 +172,7 @@ function createInitialRuntimeState(defaultRuntimeTickMs) {
         pendingRiverSteps: 0,
         terrainErosionDirty: false,
         terrainCoreDirty: false,
+        terrainDynamics: null,
         latestActivity: {
             terrain: 0,
             river: 1,
@@ -208,6 +221,10 @@ function normalizeVec3(x, y, z) {
 
 function dotVec3(ax, ay, az, bx, by, bz) {
     return ax * bx + ay * by + az * bz;
+}
+
+function lengthVec3(x, y, z) {
+    return Math.hypot(x, y, z);
 }
 
 async function bootstrap() {
@@ -424,18 +441,35 @@ async function bootstrap() {
         const plateId = currentTerrainData.plateId;
         const vertexWeight = currentTerrainData.vertexWeight;
         const cellCount = plateId.length;
+        const currentCounts = new Uint32Array(plateCount);
+        for (let i = 0; i < cellCount; i += 1) {
+            const pid = plateId[i];
+            if (Number.isInteger(pid) && pid >= 0 && pid < plateCount) {
+                currentCounts[pid] += 1;
+            }
+        }
+        const nextCounts = new Uint32Array(currentCounts);
+        const maxCellsPerPlate = Math.max(1, Math.floor(cellCount * PLATE_REMAP_DOMINANCE_CAP));
+        const minCellsPerPlate = Math.max(1, Math.floor(cellCount * 0.01));
+        const maxChanges = Math.max(1, Math.floor(cellCount * PLATE_REMAP_MAX_FRACTION));
+        const candidates = [];
         let changedCount = 0;
         for (let i = 0; i < cellCount; i += 1) {
             const base = i * 3;
             const vx = basePositions[base] ?? 0;
             const vy = basePositions[base + 1] ?? 0;
             const vz = basePositions[base + 2] ?? 1;
+            const currentPid = plateId[i];
             let bestPid = 0;
             let bestDot = -Infinity;
             let secondDot = -Infinity;
+            let currentDot = -Infinity;
             for (let pid = 0; pid < plateCount; pid += 1) {
                 const c = pid * 3;
                 const score = dotVec3(vx, vy, vz, centroids[c], centroids[c + 1], centroids[c + 2]);
+                if (pid === currentPid) {
+                    currentDot = score;
+                }
                 if (score > bestDot) {
                     secondDot = bestDot;
                     bestDot = score;
@@ -446,14 +480,46 @@ async function bootstrap() {
                     secondDot = score;
                 }
             }
-            if (plateId[i] !== bestPid) {
-                plateId[i] = bestPid;
-                changedCount += 1;
+            const confidence = Math.min(1, Math.max(0, (bestDot - secondDot) * 8));
+            if (
+                currentPid !== bestPid &&
+                Number.isFinite(currentDot) &&
+                bestDot - currentDot > PLATE_REMAP_SWITCH_MARGIN
+            ) {
+                candidates.push({
+                    i,
+                    fromPid: currentPid,
+                    toPid: bestPid,
+                    gain: bestDot - currentDot,
+                });
             }
             if (vertexWeight && i < vertexWeight.length) {
-                const confidence = Math.min(1, Math.max(0, (bestDot - secondDot) * 8));
                 vertexWeight[i] = confidence;
             }
+        }
+
+        candidates.sort((a, b) => b.gain - a.gain);
+        for (let i = 0; i < candidates.length; i += 1) {
+            if (changedCount >= maxChanges) {
+                break;
+            }
+            const cand = candidates[i];
+            if (cand.fromPid < 0 || cand.fromPid >= plateCount || cand.toPid < 0 || cand.toPid >= plateCount) {
+                continue;
+            }
+            if (nextCounts[cand.fromPid] <= minCellsPerPlate) {
+                continue;
+            }
+            if (nextCounts[cand.toPid] >= maxCellsPerPlate) {
+                continue;
+            }
+            if (plateId[cand.i] !== cand.fromPid) {
+                continue;
+            }
+            plateId[cand.i] = cand.toPid;
+            nextCounts[cand.fromPid] -= 1;
+            nextCounts[cand.toPid] += 1;
+            changedCount += 1;
         }
         return changedCount;
     }
@@ -1014,6 +1080,7 @@ async function bootstrap() {
         worldState.pendingRiverSteps = 0;
         worldState.terrainErosionDirty = false;
         worldState.terrainCoreDirty = false;
+        worldState.terrainDynamics = null;
     }
 
     function createClimateLayer(cellCount) {
@@ -1213,6 +1280,17 @@ async function bootstrap() {
         return Math.min(1, Math.max(0, value));
     }
 
+    function smoothstep(edge0, edge1, x) {
+        if (!Number.isFinite(x)) {
+            return 0;
+        }
+        if (edge1 <= edge0) {
+            return x >= edge1 ? 1 : 0;
+        }
+        const t = clamp01((x - edge0) / (edge1 - edge0));
+        return t * t * (3 - 2 * t);
+    }
+
     function recordSubsystemActivity(subsystemKey, signal) {
         const normalized = clamp01(signal);
         const prev = clamp01(worldState.latestActivity[subsystemKey] ?? 0);
@@ -1259,6 +1337,9 @@ async function bootstrap() {
                 continue;
             }
             const h = heightData[i];
+            if (h <= -0.08) {
+                continue;
+            }
             const coastalBoost = Math.max(0, 1 - Math.min(1, Math.abs(h) / 0.30));
             const uplift = landDeficit * recoveryGain * (0.30 + coastalBoost);
             if (uplift <= 0) {
@@ -1294,6 +1375,50 @@ async function bootstrap() {
         erosionState.height = Array.from(heightData);
     }
 
+    function ensureTerrainDynamicsState(cellCount, plateId, plateIsOcean, heightData) {
+        const state = worldState.terrainDynamics;
+        if (
+            state &&
+            state.oceanAgeNorm?.length === cellCount &&
+            state.targetBuoyancy?.length === cellCount &&
+            state.upliftMemory?.length === cellCount &&
+            state.isOceanCell?.length === cellCount
+        ) {
+            return state;
+        }
+
+        const oceanAgeNorm = new Float32Array(cellCount);
+        const targetBuoyancy = new Float32Array(cellCount);
+        const upliftMemory = new Float32Array(cellCount);
+        const isOceanCell = new Uint8Array(cellCount);
+
+        for (let i = 0; i < cellCount; i += 1) {
+            const pid = plateId[i];
+            const byPlate =
+                !!plateIsOcean &&
+                Number.isInteger(pid) &&
+                pid >= 0 &&
+                pid < plateIsOcean.length &&
+                plateIsOcean[pid] > 0;
+            const ocean = byPlate || heightData[i] <= 0;
+            if (!ocean) {
+                continue;
+            }
+            isOceanCell[i] = 1;
+            const seedAge = clamp01(Math.abs(heightData[i]) / 0.22);
+            oceanAgeNorm[i] = seedAge;
+            targetBuoyancy[i] = -0.03 - 0.20 * seedAge;
+        }
+
+        worldState.terrainDynamics = {
+            oceanAgeNorm,
+            targetBuoyancy,
+            upliftMemory,
+            isOceanCell,
+        };
+        return worldState.terrainDynamics;
+    }
+
     function updateTerrainCoreStep() {
         const heightData = currentTerrainData?.heightData;
         const plateId = currentTerrainData?.plateId;
@@ -1321,6 +1446,8 @@ async function bootstrap() {
             return;
         }
 
+        const terrainDynamics = ensureTerrainDynamicsState(cellCount, plateId, plateIsOcean, heightData);
+
         if (!plateMotionState) {
             plateMotionState = createPlateMotionState(currentSeed);
             if (!plateMotionState) {
@@ -1329,6 +1456,11 @@ async function bootstrap() {
         }
         const movedVertices = updatePlateMotionStep();
         const dynamics = TERRAIN_DYNAMICS_BY_ERA[currentEraScale] ?? TERRAIN_DYNAMICS_BY_ERA.crust;
+        const plateVelocities = plateMotionState?.velocities ?? null;
+        const earlyOceanGuard = 1 - clamp01(world.tick / TERRAIN_EARLY_OCEAN_GUARD_TICK);
+        const oceanStepDropCap =
+            TERRAIN_OCEAN_MAX_DROP_EARLY +
+            (1 - earlyOceanGuard) * (TERRAIN_OCEAN_MAX_DROP_LATE - TERRAIN_OCEAN_MAX_DROP_EARLY);
         const nextHeight = new Float32Array(heightData);
         let deltaAbsSum = 0;
         for (let i = 0; i < cellCount; i += 1) {
@@ -1343,7 +1475,29 @@ async function bootstrap() {
             let nbrHeightSum = 0;
             let boundaryCount = 0;
             let shorelineEdgeCount = 0;
+            let slopeAbsSum = 0;
+            let convergentStrength = 0;
+            let divergentStrength = 0;
+            let shearStrength = 0;
+            let intraplateRiftStrength = 0;
             const currentPlate = plateId[i];
+            const vi = currentPlate * 3;
+            const velIx =
+                plateVelocities && vi >= 0 && vi + 2 < plateVelocities.length
+                    ? plateVelocities[vi]
+                    : 0;
+            const velIy =
+                plateVelocities && vi >= 0 && vi + 2 < plateVelocities.length
+                    ? plateVelocities[vi + 1]
+                    : 0;
+            const velIz =
+                plateVelocities && vi >= 0 && vi + 2 < plateVelocities.length
+                    ? plateVelocities[vi + 2]
+                    : 0;
+            const base = i * 3;
+            const px = basePositions[base] ?? 0;
+            const py = basePositions[base + 1] ?? 0;
+            const pz = basePositions[base + 2] ?? 0;
             for (let cursor = start; cursor < end; cursor += 1) {
                 const n = nbrs[cursor];
                 if (!Number.isInteger(n) || n < 0 || n >= cellCount) {
@@ -1351,8 +1505,51 @@ async function bootstrap() {
                 }
                 nbrCount += 1;
                 nbrHeightSum += heightData[n];
+                slopeAbsSum += Math.abs(heightData[n] - current);
                 if (plateId[n] !== currentPlate) {
                     boundaryCount += 1;
+                }
+                const nb = n * 3;
+                const nx = basePositions[nb] ?? 0;
+                const ny = basePositions[nb + 1] ?? 0;
+                const nz = basePositions[nb + 2] ?? 0;
+                let ex = nx - px;
+                let ey = ny - py;
+                let ez = nz - pz;
+                const elen = lengthVec3(ex, ey, ez);
+                if (elen > 1e-8) {
+                    ex /= elen;
+                    ey /= elen;
+                    ez /= elen;
+                    const npid = plateId[n];
+                    const vn = npid * 3;
+                    const velNx =
+                        plateVelocities && vn >= 0 && vn + 2 < plateVelocities.length
+                            ? plateVelocities[vn]
+                            : velIx;
+                    const velNy =
+                        plateVelocities && vn >= 0 && vn + 2 < plateVelocities.length
+                            ? plateVelocities[vn + 1]
+                            : velIy;
+                    const velNz =
+                        plateVelocities && vn >= 0 && vn + 2 < plateVelocities.length
+                            ? plateVelocities[vn + 2]
+                            : velIz;
+                    const relX = velNx - velIx;
+                    const relY = velNy - velIy;
+                    const relZ = velNz - velIz;
+                    const relNormal = relX * ex + relY * ey + relZ * ez;
+                    const relMag = lengthVec3(relX, relY, relZ);
+                    if (npid !== currentPlate) {
+                        if (relNormal > 0) {
+                            convergentStrength += relNormal;
+                        } else {
+                            divergentStrength += -relNormal;
+                        }
+                        shearStrength += Math.max(0, relMag - Math.abs(relNormal));
+                    } else if (relNormal < 0) {
+                        intraplateRiftStrength += -relNormal;
+                    }
                 }
                 const isCurrentLand = current > 0;
                 const isNeighborLand = heightData[n] > 0;
@@ -1367,27 +1564,88 @@ async function bootstrap() {
             const meanNbrHeight = nbrHeightSum / nbrCount;
             const boundaryRatio = boundaryCount / nbrCount;
             const shorelineRatio = shorelineEdgeCount / nbrCount;
+            const meanSlope = slopeAbsSum / nbrCount;
+            const conv = convergentStrength / nbrCount;
+            const div = divergentStrength / nbrCount;
+            const shear = shearStrength / nbrCount;
+            const intraRift = intraplateRiftStrength / nbrCount;
             const flux = Math.max(0, riverFlux[i]);
             const isOceanPlate =
                 !!plateIsOcean &&
                 currentPlate >= 0 &&
                 currentPlate < plateIsOcean.length &&
                 plateIsOcean[currentPlate] > 0;
-            const fluvialScale = isOceanPlate ? 0.22 : 1.0;
+            const isOceanCell = terrainDynamics.isOceanCell[i] > 0 || isOceanPlate || current <= 0;
+            terrainDynamics.isOceanCell[i] = isOceanCell ? 1 : 0;
+
+            const upliftCap = 1 - smoothstep(
+                TERRAIN_UPLIFT_SATURATION_SOFT,
+                TERRAIN_UPLIFT_SATURATION_HARD,
+                Math.max(0, current),
+            );
+            const boundaryUplift = dynamics.uplift * (isOceanCell ? 0.40 : 1.0) * upliftCap * (0.45 * boundaryRatio + 0.55 * conv * 2.8);
+            const backgroundSubsidence = dynamics.subsidence
+                * (isOceanCell ? 0.16 + 0.28 * (1 - earlyOceanGuard) : 0.32)
+                * (0.35 + 0.65 * div * 3.2);
+            const stress = conv * 1.2 - div * 0.9 + shear * 0.35;
+            terrainDynamics.upliftMemory[i] =
+                terrainDynamics.upliftMemory[i] * TERRAIN_STRESS_MEMORY_DECAY +
+                stress * TERRAIN_STRESS_MEMORY_GAIN;
+            const memoryDelta =
+                terrainDynamics.upliftMemory[i] * (isOceanCell ? 0.0022 : 0.0038) * upliftCap;
+
+            const oceanFluvialGuard = 0.12 + 0.88 * (1 - earlyOceanGuard);
+            const fluvialScale = isOceanPlate ? 0.03 * oceanFluvialGuard : 1.0;
+            const estuarySuppression = 1 - shorelineRatio * 0.75;
             const fluvialErode =
-                Math.log1p(flux) * dynamics.fluvial * fluvialScale * Math.max(0, current + 0.08);
-            const buoyancyDelta = isOceanPlate
-                ? -dynamics.subsidence * 0.04
-                : dynamics.uplift * 0.18;
-            const tectonicDelta =
-                (boundaryRatio * dynamics.uplift - (1 - boundaryRatio) * dynamics.subsidence * 0.35) *
-                (current > 0 ? 1 : 0.45);
-            const diffusionDelta = (meanNbrHeight - current) * dynamics.diffusion;
+                Math.log1p(flux) * dynamics.fluvial * fluvialScale * estuarySuppression * Math.max(0, current + 0.08);
+            let marineBuoyancyDelta = 0;
+            if (isOceanCell) {
+                const prevAge = terrainDynamics.oceanAgeNorm[i];
+                const ageGrow = boundaryRatio * 0.10 + (1 - boundaryRatio) * 0.022;
+                const ageReset = shorelineRatio * 0.06;
+                const ageNext = clamp01(prevAge + ageGrow - ageReset);
+                terrainDynamics.oceanAgeNorm[i] = ageNext;
+                const target = -0.03 - 0.20 * ageNext;
+                terrainDynamics.targetBuoyancy[i] = target;
+                const maxMarineSubsidence =
+                    TERRAIN_OCEAN_MAX_SUBSIDENCE * (0.12 + 0.88 * (1 - earlyOceanGuard));
+                marineBuoyancyDelta =
+                    clamp01(Math.abs(target - current) / 0.3) *
+                    Math.max(
+                        -maxMarineSubsidence,
+                        Math.min(maxMarineSubsidence, (target - current) * 0.08),
+                    );
+            }
+
+            const diffusionScale = isOceanCell ? TERRAIN_OCEAN_DIFFUSION_SCALE : 1.0;
+            const slopeGain = 0.45 + clamp01(meanSlope / 0.12) * 0.55;
+            const diffusionDelta = (meanNbrHeight - current) * dynamics.diffusion * diffusionScale * slopeGain;
             const coastalBand = Math.max(0, 1 - Math.min(1, Math.abs(current) / 0.14));
             const coastlineDelta =
                 (meanNbrHeight - current) * dynamics.coastline * shorelineRatio * coastalBand;
-            const delta = diffusionDelta + tectonicDelta + coastlineDelta + buoyancyDelta - fluvialErode;
-            const next = Math.min(TERRAIN_HEIGHT_CLAMP, Math.max(-TERRAIN_HEIGHT_CLAMP, current + delta));
+            const continentalRiftDelta =
+                !isOceanCell
+                    ? -Math.min(0.0038, (intraRift * 0.8 + div * 0.6) * dynamics.subsidence * (1 - boundaryRatio))
+                    : 0;
+            const highlandRelax = Math.max(0, current - TERRAIN_UPLIFT_SATURATION_SOFT);
+            const isostaticDelta = -highlandRelax * highlandRelax * (isOceanCell ? 0.002 : 0.0035);
+            const tectonicDelta = boundaryUplift - backgroundSubsidence + memoryDelta;
+            const delta =
+                diffusionDelta +
+                tectonicDelta +
+                coastlineDelta +
+                continentalRiftDelta +
+                marineBuoyancyDelta +
+                isostaticDelta -
+                fluvialErode;
+            let next = Math.min(TERRAIN_HEIGHT_CLAMP, Math.max(-TERRAIN_HEIGHT_CLAMP, current + delta));
+            if (isOceanCell) {
+                const minNext = current - oceanStepDropCap;
+                if (next < minNext) {
+                    next = minNext;
+                }
+            }
             const changed = next - current;
             if (Math.abs(changed) < 1e-8) {
                 continue;
@@ -1981,6 +2239,8 @@ async function bootstrap() {
                 terrain.debug_ocean_ocean_arc_strength ?? heightData.length,
             ),
         };
+        const vertexAgeNorm = new Float32Array(terrain.vertex_age_norm ?? heightData.length);
+        const vertexBuoyancy = new Float32Array(terrain.vertex_buoyancy ?? heightData.length);
         if (token !== generationToken) {
             return;
         }
@@ -2002,6 +2262,30 @@ async function bootstrap() {
         worldState.erosionAutomatonState = erosionAutomatonState;
         worldState.pendingRiverSteps = 0;
         worldState.terrainErosionDirty = false;
+        worldState.terrainDynamics = {
+            oceanAgeNorm: vertexAgeNorm.length === heightData.length
+                ? vertexAgeNorm
+                : new Float32Array(heightData.length),
+            targetBuoyancy: vertexBuoyancy.length === heightData.length
+                ? vertexBuoyancy
+                : new Float32Array(heightData.length),
+            upliftMemory: new Float32Array(heightData.length),
+            isOceanCell: (() => {
+                const mask = new Uint8Array(heightData.length);
+                for (let i = 0; i < heightData.length; i += 1) {
+                    const pid = plateId[i];
+                    const oceanByPlate =
+                        Number.isInteger(pid) &&
+                        pid >= 0 &&
+                        pid < plateInfo.isOcean.length &&
+                        plateInfo.isOcean[pid] > 0;
+                    if (oceanByPlate || heightData[i] <= 0) {
+                        mask[i] = 1;
+                    }
+                }
+                return mask;
+            })(),
+        };
         updateTerrainAttributes();
         updateRiverMaskTexture();
         updateGeometryPositions();

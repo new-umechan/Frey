@@ -42,6 +42,13 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         continent_competence_weight_gain: 0.08f32,
         continent_foldability_from_competence: 0.65f32,
         continent_erodibility_from_competence: 0.70f32,
+        tectonic_uplift_gain: 0.065f32,
+        uplift_saturation_soft: 0.45f32,
+        uplift_saturation_hard: 0.75f32,
+        marine_subsidence_gain: 0.018f32,
+        age_advection_gain: 0.035f32,
+        nonlinear_diffusion_gain: 0.020f32,
+        isostatic_relax_gain: 0.012f32,
     }
 }
 

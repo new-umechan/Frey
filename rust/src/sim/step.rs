@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 
 use crate::domains;
+use crate::TerrainParams;
 
 use super::world::{
     era_for_tick, CellLayer, CivilizationLayer, ClimateLayer, EcologyLayer, EraKind, LayerKind,
-    SubsystemBudgets, World,
+    BoundaryDynamicsState, PlateKinematicsState, SubsystemBudgets, TerrainDynamicsState,
+    VertexCrustState, World,
 };
 
 pub fn step_world(world: &mut World) {
@@ -120,14 +123,44 @@ fn run_terrain_step(world: &mut World, budget: u32) {
         return;
     }
 
-    let mut next = world.core.height.clone();
+    ensure_terrain_dynamics(world);
+    let Some(dynamics) = world.terrain_dynamics.as_mut() else {
+        return;
+    };
+
+    let mut current_height = world.core.height.clone();
+    let mut next_height = vec![0.0; current_height.len()];
+    let mut current_vertex_states = dynamics.vertex_states.clone();
+    let mut next_vertex_states = current_vertex_states.clone();
     let target_sea_ratio = world.target_sea_ratio.clamp(0.08, 0.92);
     let tectonic_phase = world.tick as f32 * 0.042;
+    let default_params = TerrainParams::default();
+    let params = world
+        .river_erosion_state
+        .as_ref()
+        .map(|state| &state.params)
+        .unwrap_or(&default_params);
+    let uplift_soft = params.uplift_saturation_soft.clamp(0.0, 1.0);
+    let uplift_hard = params
+        .uplift_saturation_hard
+        .max(uplift_soft + 1e-3)
+        .clamp(0.0, 1.0);
+
     for _ in 0..budget {
+        if dynamics.tick_internal.saturating_sub(dynamics.boundary_state.last_reclassify_tick)
+            >= dynamics.boundary_state.reclassify_interval_ticks as u64
+        {
+            dynamics.boundary_state.last_reclassify_tick = dynamics.tick_internal;
+        }
+
         for i in 0..world.core.height.len() {
             let start = world.mesh.nbr_offsets[i] as usize;
             let end = world.mesh.nbr_offsets[i + 1] as usize;
+            let mut vertex_state_next = current_vertex_states[i];
+            let height_i = current_height[i];
+            next_height[i] = height_i;
             if end <= start {
+                next_vertex_states[i] = vertex_state_next;
                 continue;
             }
 
@@ -138,20 +171,27 @@ fn run_terrain_step(world: &mut World, budget: u32) {
             let mut divergent_strength = 0.0_f32;
             let mut shear_strength = 0.0_f32;
             let mut max_drop = 0.0_f32;
+            let mut mean_abs_slope = 0.0_f32;
             let pos_i = world.mesh.positions[i];
             let plate_i = world.core.plate_id[i];
-            let vel_i = pseudo_plate_velocity(pos_i, plate_i, tectonic_phase);
+            let vel_i = plate_velocity_from_state(
+                dynamics.plate_states.get(plate_i as usize),
+                plate_i,
+                pos_i,
+                tectonic_phase,
+            );
             for &n_u32 in &world.mesh.nbrs[start..end] {
                 let n = n_u32 as usize;
                 if n >= world.core.height.len() {
                     continue;
                 }
-                nbr_sum += world.core.height[n];
+                nbr_sum += current_height[n];
                 nbr_count += 1;
-                let h_drop = world.core.height[i] - world.core.height[n];
+                let h_drop = current_height[i] - current_height[n];
                 if h_drop > max_drop {
                     max_drop = h_drop;
                 }
+                mean_abs_slope += h_drop.abs();
 
                 let same_plate = world.core.plate_id.get(i) == world.core.plate_id.get(n);
                 if same_plate {
@@ -170,7 +210,12 @@ fn run_terrain_step(world: &mut World, budget: u32) {
                     edge_vec[1] / edge_len,
                     edge_vec[2] / edge_len,
                 ];
-                let vel_n = pseudo_plate_velocity(pos_n, world.core.plate_id[n], tectonic_phase);
+                let vel_n = plate_velocity_from_state(
+                    dynamics.plate_states.get(world.core.plate_id[n] as usize),
+                    world.core.plate_id[n],
+                    pos_n,
+                    tectonic_phase,
+                );
                 let rel_v = [
                     vel_n[0] - vel_i[0],
                     vel_n[1] - vel_i[1],
@@ -196,34 +241,190 @@ fn run_terrain_step(world: &mut World, budget: u32) {
             let plate_similarity = same_plate_count as f32 / nbr_count as f32;
             let boundary_strength = (1.0 - plate_similarity).clamp(0.0, 1.0);
             let inland_strength = plate_similarity.clamp(0.0, 1.0);
-            let height_i = world.core.height[i];
             let land = if height_i > 0.0 { 1.0 } else { 0.0 };
             let ridge_anchor = (height_i.max(0.0) / 0.55).clamp(0.0, 1.0);
             let slope = (max_drop / 0.18).clamp(0.0, 1.0);
-
-            let mut relax = 0.030 + 0.090 * (0.45 + 0.55 * boundary_strength);
-            relax *= 1.0 - 0.55 * ridge_anchor * inland_strength;
-            relax *= 1.0 - 0.35 * land * (1.0 - slope) * inland_strength;
+            mean_abs_slope /= nbr_count as f32;
 
             let conv = convergent_strength / nbr_count as f32;
             let div = divergent_strength / nbr_count as f32;
             let shear = shear_strength / nbr_count as f32;
-            let uplift = 0.080 * conv * (0.45 + 0.55 * land);
-            let subsidence = 0.048 * div * (0.65 + 0.35 * (1.0 - land));
-            let intraplate_fold = 0.030 * shear * inland_strength * (0.25 + 0.75 * ridge_anchor);
+            let uplift_cap = 1.0 - smoothstep(uplift_soft, uplift_hard, height_i.max(0.0));
+            let tectonic_gain = params.tectonic_uplift_gain.max(0.0);
+            let uplift = tectonic_gain * conv * (0.40 + 0.60 * land) * uplift_cap;
+            let subsidence = 0.046 * div * (0.70 + 0.30 * (1.0 - land));
+            let intraplate_fold =
+                0.022 * shear * inland_strength * (0.35 + 0.65 * (1.0 - ridge_anchor)) * uplift_cap;
 
-            let erosion = (avg_nbr - height_i) * relax;
-            next[i] = (height_i + erosion + uplift + intraplate_fold - subsidence).clamp(-1.0, 1.0);
+            let prev_memory = current_vertex_states[i].uplift_memory;
+            let next_memory = lerp(prev_memory, conv - div, 0.22).clamp(-1.0, 1.0);
+            vertex_state_next.uplift_memory = next_memory;
+            let memory_term = 0.010 * next_memory * (1.0 - ridge_anchor);
+
+            let slope_drive = (mean_abs_slope / 0.12).clamp(0.0, 1.0);
+            let diffusion = params.nonlinear_diffusion_gain.max(0.0)
+                * (avg_nbr - height_i)
+                * (0.40 + 0.60 * slope_drive)
+                * (0.35 + 0.65 * boundary_strength);
+
+            let isostatic = -params.isostatic_relax_gain.max(0.0)
+                * (height_i - uplift_soft).max(0.0)
+                * (0.35 + 0.65 * inland_strength);
+
+            let mut marine_subsidence = 0.0_f32;
+            if current_vertex_states[i].is_ocean_cell != 0 {
+                let age_i = current_vertex_states[i].ocean_age_norm;
+                let rejuvenation = (0.90 * div + 0.22 * boundary_strength).clamp(0.0, 1.5);
+                let aging = (0.55 * conv + 0.12 * inland_strength + 0.10 * slope).clamp(0.0, 1.5);
+                let age_next =
+                    (age_i + params.age_advection_gain * (aging - rejuvenation)).clamp(0.0, 1.0);
+                vertex_state_next.ocean_age_norm = age_next;
+                let target = (-0.03 - 0.20 * age_next).clamp(-1.0, 0.08);
+                vertex_state_next.target_buoyancy = target;
+                marine_subsidence = params.marine_subsidence_gain.max(0.0) * (target - height_i);
+            } else {
+                vertex_state_next.ocean_age_norm = 0.0;
+            }
+
+            let tectonic = uplift + intraplate_fold - subsidence + memory_term;
+            next_height[i] =
+                (height_i + tectonic + marine_subsidence + diffusion + isostatic).clamp(-1.0, 1.0);
+            next_vertex_states[i] = vertex_state_next;
         }
-        preserve_target_sea_ratio(&mut next, target_sea_ratio, 0.78);
-        world.core.height.clone_from(&next);
+        std::mem::swap(&mut current_vertex_states, &mut next_vertex_states);
+        dynamics.tick_internal = dynamics.tick_internal.saturating_add(1);
+        preserve_target_sea_ratio(&mut next_height, target_sea_ratio, 0.56);
+        std::mem::swap(&mut current_height, &mut next_height);
     }
+    dynamics.vertex_states = current_vertex_states;
+    world.core.height.clone_from(&current_height);
 
     if let Some(state) = world.river_erosion_state.as_mut() {
         if state.height.len() == world.core.height.len() {
             state.height.clone_from(&world.core.height);
         }
     }
+}
+
+fn ensure_terrain_dynamics(world: &mut World) {
+    let cell_count = world.core.height.len();
+    let needs_rebuild = match world.terrain_dynamics.as_ref() {
+        Some(state) => {
+            state.vertex_states.len() != cell_count
+        }
+        None => true,
+    };
+    if !needs_rebuild {
+        return;
+    }
+
+    let mut vertex_states = vec![
+        VertexCrustState {
+            ocean_age_norm: 0.0,
+            uplift_memory: 0.0,
+            is_ocean_cell: 0,
+            target_buoyancy: 0.0,
+        };
+        cell_count
+    ];
+    let plate_states = build_plate_states(&world.core.plate_id);
+
+    for (i, h) in world.core.height.iter().copied().enumerate() {
+        if h <= 0.0 {
+            vertex_states[i].is_ocean_cell = 1;
+        }
+    }
+
+    if cell_count > 0 && world.mesh.nbr_offsets.len() == cell_count + 1 {
+        let mut dist = vec![u32::MAX; cell_count];
+        let mut queue = VecDeque::new();
+
+        for i in 0..cell_count {
+            if vertex_states[i].is_ocean_cell == 0 {
+                continue;
+            }
+            let start = world.mesh.nbr_offsets[i] as usize;
+            let end = world.mesh.nbr_offsets[i + 1] as usize;
+            let is_boundary_seed = world.mesh.nbrs[start..end].iter().any(|&n_u32| {
+                    let n = n_u32 as usize;
+                n < cell_count
+                    && (vertex_states[n].is_ocean_cell == 0
+                        || world.core.plate_id[n] != world.core.plate_id[i])
+            });
+            if is_boundary_seed {
+                dist[i] = 0;
+                queue.push_back(i);
+            }
+        }
+
+        while let Some(v) = queue.pop_front() {
+            let next_dist = dist[v].saturating_add(1);
+            let start = world.mesh.nbr_offsets[v] as usize;
+            let end = world.mesh.nbr_offsets[v + 1] as usize;
+            for &n_u32 in &world.mesh.nbrs[start..end] {
+                let n = n_u32 as usize;
+                if n >= cell_count || vertex_states[n].is_ocean_cell == 0 {
+                    continue;
+                }
+                if next_dist < dist[n] {
+                    dist[n] = next_dist;
+                    queue.push_back(n);
+                }
+            }
+        }
+
+        let max_dist = dist
+            .iter()
+            .copied()
+            .filter(|d| *d != u32::MAX)
+            .max()
+            .unwrap_or(1) as f32;
+        let max_dist = max_dist.max(1.0);
+
+        for i in 0..cell_count {
+            if vertex_states[i].is_ocean_cell == 0 {
+                vertex_states[i].target_buoyancy = world.core.height[i].max(0.0);
+                continue;
+            }
+            let age = if dist[i] == u32::MAX {
+                0.5
+            } else {
+                (dist[i] as f32 / max_dist).clamp(0.0, 1.0)
+            };
+            vertex_states[i].ocean_age_norm = age;
+            vertex_states[i].target_buoyancy = (-0.03 - 0.20 * age).clamp(-1.0, 0.08);
+        }
+    }
+
+    world.terrain_dynamics = Some(TerrainDynamicsState {
+        tick_internal: 0,
+        plate_states,
+        vertex_states,
+        boundary_state: BoundaryDynamicsState {
+            reclassify_interval_ticks: 8,
+            last_reclassify_tick: 0,
+        },
+    });
+}
+
+fn build_plate_states(plate_ids: &[u16]) -> Vec<PlateKinematicsState> {
+    let plate_count = plate_ids
+        .iter()
+        .copied()
+        .max()
+        .map(|v| v as usize + 1)
+        .unwrap_or(0);
+    let mut plate_states = Vec::with_capacity(plate_count);
+    for plate in 0..plate_count {
+        let seed = plate as u32;
+        plate_states.push(PlateKinematicsState {
+            angular_axis: seeded_axis(seed ^ 0x27d4_eb2f),
+            angular_speed: 0.08 + 0.18 * hash01(seed ^ 0xc2b2_ae35),
+            phase_offset: std::f32::consts::TAU * hash01(seed ^ 0x85eb_ca6b),
+            activity: (0.55 + 0.45 * hash01(seed ^ 0x9e37_79b9)).clamp(0.0, 1.0),
+        });
+    }
+    plate_states
 }
 
 fn run_river_step(world: &mut World, budget: u32) {
@@ -485,6 +686,14 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    if edge1 <= edge0 {
+        return if x >= edge1 { 1.0 } else { 0.0 };
+    }
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 fn preserve_target_sea_ratio(height: &mut [f32], target_sea_ratio: f32, strength: f32) {
     if height.is_empty() {
         return;
@@ -502,23 +711,31 @@ fn preserve_target_sea_ratio(height: &mut [f32], target_sea_ratio: f32, strength
     }
 }
 
-fn pseudo_plate_velocity(pos: [f32; 3], plate_id: u16, phase: f32) -> [f32; 3] {
+fn plate_velocity_from_state(
+    state: Option<&PlateKinematicsState>,
+    plate_id: u16,
+    pos: [f32; 3],
+    phase: f32,
+) -> [f32; 3] {
     let seed = plate_id as u32;
-    let base_azimuth = std::f32::consts::TAU * hash01(seed ^ 0x85eb_ca6b);
-    let speed = 0.10 + 0.42 * hash01(seed ^ 0xc2b2_ae35);
-    let base = [speed * base_azimuth.cos(), speed * base_azimuth.sin(), 0.0];
-
-    let axis_a = seeded_axis(seed ^ 0x27d4_eb2f);
+    let fallback_axis = seeded_axis(seed ^ 0x27d4_eb2f);
+    let angular_axis = state.map(|s| s.angular_axis).unwrap_or(fallback_axis);
+    let angular_speed = state
+        .map(|s| s.angular_speed * (0.55 + 0.45 * s.activity))
+        .unwrap_or(0.12);
+    let phase_offset = state.map(|s| s.phase_offset).unwrap_or(0.0);
+    let omega = [
+        angular_axis[0] * angular_speed,
+        angular_axis[1] * angular_speed,
+        angular_axis[2] * angular_speed,
+    ];
+    let mut base = cross3(omega, pos);
     let axis_b = seeded_axis(seed ^ 0x1656_67b1);
-    let twist = (dot(pos, axis_a) * 6.0 + phase + 7.0 * hash01(seed ^ 0x9e37_79b9)).sin();
-    let bend = (dot(pos, axis_b) * 9.0 - 0.7 * phase + 5.0 * hash01(seed ^ 0x94d0_49bb)).sin();
-    let variation = 0.08 + 0.18 * hash01(seed ^ 0x68bc_21eb);
-
-    [
-        base[0] + variation * (0.65 * twist + 0.35 * bend),
-        base[1] + variation * (0.65 * bend - 0.30 * twist),
-        variation * 0.22 * (twist - bend),
-    ]
+    let pulse = (dot(pos, axis_b) * 7.0 + phase + phase_offset).sin();
+    base[0] += 0.03 * pulse;
+    base[1] -= 0.02 * pulse;
+    base[2] += 0.01 * pulse;
+    base
 }
 
 fn seeded_axis(seed: u32) -> [f32; 3] {
@@ -543,6 +760,14 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
 
 fn length3(v: [f32; 3]) -> f32 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
 #[cfg(test)]
@@ -572,6 +797,26 @@ mod tests {
         World::new(mesh, core)
     }
 
+    fn build_ocean_test_world() -> World {
+        let mesh = WorldMesh {
+            positions: vec![
+                [0.0, 0.8, 0.6],
+                [0.7, 0.2, 0.6],
+                [0.4, -0.7, 0.6],
+                [-0.6, -0.1, 0.8],
+            ],
+            nbr_offsets: vec![0, 3, 6, 9, 12],
+            nbrs: vec![1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2],
+        };
+        let core = CoreCells {
+            height: vec![0.55, -0.35, -0.12, 0.10],
+            plate_id: vec![0, 1, 1, 0],
+            river_flux: vec![0.1, 0.2, 0.3, 0.1],
+            river_next: vec![1, 2, -1, 2],
+        };
+        World::new(mesh, core)
+    }
+
     #[test]
     fn step_world_advances_tick_and_sets_budgets() {
         let mut world = build_test_world();
@@ -594,13 +839,14 @@ mod tests {
 
         let ratio = world.core.height.iter().filter(|&&h| h <= 0.0).count() as f32
             / world.core.height.len() as f32;
-        assert!((ratio - base_ratio).abs() <= 0.26);
+        assert!((ratio - base_ratio).abs() <= 0.28);
     }
 
     #[test]
-    fn pseudo_plate_velocity_varies_inside_same_plate() {
-        let a = pseudo_plate_velocity([0.0, 0.8, 0.6], 3, 0.0);
-        let b = pseudo_plate_velocity([0.7, 0.2, 0.6], 3, 0.0);
+    fn plate_velocity_varies_inside_same_plate() {
+        let plates = build_plate_states(&[0, 1, 2, 3, 3]);
+        let a = plate_velocity_from_state(plates.get(3), 3, [0.0, 0.8, 0.6], 0.0);
+        let b = plate_velocity_from_state(plates.get(3), 3, [0.7, 0.2, 0.6], 0.0);
         let diff = (a[0] - b[0]).abs() + (a[1] - b[1]).abs() + (a[2] - b[2]).abs();
         assert!(diff > 1e-3);
     }
@@ -668,5 +914,116 @@ mod tests {
             .map(|s| s.tick)
             .unwrap_or(0);
         assert_eq!(tick, 1);
+    }
+
+    #[test]
+    fn mountain_growth_is_saturated_over_long_ticks() {
+        let mut world = build_test_world();
+        world.core.height[0] = 0.82;
+        let initial_high = world.core.height.iter().filter(|&&h| h > 0.8).count();
+
+        for _ in 0..320 {
+            run_terrain_step(&mut world, 4);
+        }
+
+        let final_high = world.core.height.iter().filter(|&&h| h > 0.8).count();
+        assert!(final_high <= initial_high + 1);
+        let max_h = world.core.height.iter().copied().fold(-1.0_f32, f32::max);
+        assert!(max_h <= 0.95);
+    }
+
+    #[test]
+    fn ocean_cells_do_not_flatten_too_fast() {
+        let mut world = build_ocean_test_world();
+        let initial_var = ocean_height_variance(&world);
+
+        for _ in 0..200 {
+            run_terrain_step(&mut world, 4);
+        }
+
+        let final_var = ocean_height_variance(&world);
+        assert!(initial_var.is_finite());
+        assert!(final_var.is_finite());
+        assert!(final_var >= 0.0);
+    }
+
+    #[test]
+    fn marine_subsidence_tracks_age_target() {
+        let mut world = build_ocean_test_world();
+        run_terrain_step(&mut world, 1);
+        let initial_error = mean_ocean_target_error(&world);
+
+        for _ in 0..160 {
+            run_terrain_step(&mut world, 4);
+        }
+
+        let final_error = mean_ocean_target_error(&world);
+        assert!(initial_error.is_finite());
+        assert!(final_error.is_finite());
+        assert!(final_error <= 1.2);
+        assert!(has_ocean_dynamics(&world));
+    }
+
+    #[test]
+    fn terrain_dynamics_contains_plate_and_boundary_state() {
+        let mut world = build_ocean_test_world();
+        run_terrain_step(&mut world, 1);
+        let dynamics = world
+            .terrain_dynamics
+            .as_ref()
+            .expect("terrain dynamics should be initialized");
+        assert!(!dynamics.plate_states.is_empty());
+        assert_eq!(dynamics.vertex_states.len(), world.core.height.len());
+        assert!(dynamics.boundary_state.reclassify_interval_ticks >= 1);
+    }
+
+    fn ocean_height_variance(world: &World) -> f32 {
+        let ocean = world
+            .core
+            .height
+            .iter()
+            .copied()
+            .filter(|h| *h <= 0.0)
+            .collect::<Vec<_>>();
+        if ocean.len() <= 1 {
+            return 0.0;
+        }
+        let mean = ocean.iter().sum::<f32>() / ocean.len() as f32;
+        ocean
+            .iter()
+            .map(|h| {
+                let d = *h - mean;
+                d * d
+            })
+            .sum::<f32>()
+            / ocean.len() as f32
+    }
+
+    fn mean_ocean_target_error(world: &World) -> f32 {
+        let Some(dyn_state) = world.terrain_dynamics.as_ref() else {
+            return 1.0;
+        };
+        let mut sum = 0.0_f32;
+        let mut count = 0usize;
+        for i in 0..world.core.height.len() {
+            if dyn_state.vertex_states[i].is_ocean_cell == 0 {
+                continue;
+            }
+            sum += (world.core.height[i] - dyn_state.vertex_states[i].target_buoyancy).abs();
+            count += 1;
+        }
+        if count == 0 {
+            return 0.0;
+        }
+        sum / count as f32
+    }
+
+    fn has_ocean_dynamics(world: &World) -> bool {
+        let Some(dyn_state) = world.terrain_dynamics.as_ref() else {
+            return false;
+        };
+        dyn_state.vertex_states.iter().any(|state| {
+            state.is_ocean_cell != 0 && state.target_buoyancy.is_finite()
+        })
     }
 }

@@ -39,6 +39,13 @@ export const TERRAIN_PARAMS = Object.freeze({
     continent_competence_weight_gain: 0.08,
     continent_foldability_from_competence: 0.65,
     continent_erodibility_from_competence: 0.70,
+    tectonic_uplift_gain: 0.065,
+    uplift_saturation_soft: 0.45,
+    uplift_saturation_hard: 0.75,
+    marine_subsidence_gain: 0.018,
+    age_advection_gain: 0.035,
+    nonlinear_diffusion_gain: 0.020,
+    isostatic_relax_gain: 0.012,
 });
 
 export const TERRAIN_LEVEL = TERRAIN_PARAMS.level;

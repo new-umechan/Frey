@@ -123,6 +123,14 @@ mod tests {
             .iter()
             .map(|lith| lith.weight)
             .collect::<Vec<_>>();
+        let vertex_age_norm = vertex_lithosphere
+            .iter()
+            .map(|lith| lith.age_norm)
+            .collect::<Vec<_>>();
+        let vertex_buoyancy = vertex_lithosphere
+            .iter()
+            .map(|lith| lith.buoyancy)
+            .collect::<Vec<_>>();
         let plate_is_ocean = attributes
             .iter()
             .map(|attr| u8::from(attr.is_ocean))
@@ -157,6 +165,8 @@ mod tests {
             plate_is_ocean,
             plate_base_height,
             plate_base_weight,
+            vertex_age_norm,
+            vertex_buoyancy,
             debug_trench_strength: vec![0.0; positions.len()],
             debug_arc_strength: vec![0.0; positions.len()],
             debug_backarc_strength: vec![0.0; positions.len()],

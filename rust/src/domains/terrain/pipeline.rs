@@ -303,6 +303,16 @@ pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) ->
         .iter()
         .map(|lith| lith.weight)
         .collect::<Vec<_>>();
+    let vertex_age_norm = state
+        .vertex_lithosphere
+        .iter()
+        .map(|lith| lith.age_norm)
+        .collect::<Vec<_>>();
+    let vertex_buoyancy = state
+        .vertex_lithosphere
+        .iter()
+        .map(|lith| lith.buoyancy)
+        .collect::<Vec<_>>();
     let plate_is_ocean = state
         .attributes
         .iter()
@@ -340,6 +350,8 @@ pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) ->
         plate_is_ocean,
         plate_base_height,
         plate_base_weight,
+        vertex_age_norm,
+        vertex_buoyancy,
         debug_trench_strength: boundary_fields.debug_trench_strength,
         debug_arc_strength: boundary_fields.debug_arc_strength,
         debug_backarc_strength: boundary_fields.debug_backarc_strength,
@@ -393,4 +405,17 @@ pub(super) fn sanitize_params(params: &mut TerrainParams) {
         clamp(params.continent_foldability_from_competence, 0.0, 1.0);
     params.continent_erodibility_from_competence =
         clamp(params.continent_erodibility_from_competence, 0.0, 1.0);
+    params.tectonic_uplift_gain = params.tectonic_uplift_gain.max(0.0);
+    params.uplift_saturation_soft = clamp(params.uplift_saturation_soft, 0.0, 1.0);
+    params.uplift_saturation_hard = clamp(
+        params
+            .uplift_saturation_hard
+            .max(params.uplift_saturation_soft + 1e-3),
+        0.0,
+        1.0,
+    );
+    params.marine_subsidence_gain = params.marine_subsidence_gain.max(0.0);
+    params.age_advection_gain = params.age_advection_gain.max(0.0);
+    params.nonlinear_diffusion_gain = params.nonlinear_diffusion_gain.max(0.0);
+    params.isostatic_relax_gain = params.isostatic_relax_gain.max(0.0);
 }

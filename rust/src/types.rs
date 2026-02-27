@@ -46,6 +46,13 @@ pub struct TerrainParams {
     pub continent_competence_weight_gain: f32,
     pub continent_foldability_from_competence: f32,
     pub continent_erodibility_from_competence: f32,
+    pub tectonic_uplift_gain: f32,
+    pub uplift_saturation_soft: f32,
+    pub uplift_saturation_hard: f32,
+    pub marine_subsidence_gain: f32,
+    pub age_advection_gain: f32,
+    pub nonlinear_diffusion_gain: f32,
+    pub isostatic_relax_gain: f32,
 }
 
 impl Default for TerrainParams {
@@ -67,6 +74,8 @@ pub struct TerrainOutput {
     pub plate_is_ocean: Vec<u8>,
     pub plate_base_height: Vec<f32>,
     pub plate_base_weight: Vec<f32>,
+    pub vertex_age_norm: Vec<f32>,
+    pub vertex_buoyancy: Vec<f32>,
     pub debug_trench_strength: Vec<f32>,
     pub debug_arc_strength: Vec<f32>,
     pub debug_backarc_strength: Vec<f32>,

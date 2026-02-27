@@ -47,6 +47,13 @@ const SCHEMA = [
     ["continent.continent_competence_weight_gain", "continent_competence_weight_gain", "f32"],
     ["continent.continent_foldability_from_competence", "continent_foldability_from_competence", "f32"],
     ["continent.continent_erodibility_from_competence", "continent_erodibility_from_competence", "f32"],
+    ["time_dynamics.tectonic_uplift_gain", "tectonic_uplift_gain", "f32"],
+    ["time_dynamics.uplift_saturation_soft", "uplift_saturation_soft", "f32"],
+    ["time_dynamics.uplift_saturation_hard", "uplift_saturation_hard", "f32"],
+    ["time_dynamics.marine_subsidence_gain", "marine_subsidence_gain", "f32"],
+    ["time_dynamics.age_advection_gain", "age_advection_gain", "f32"],
+    ["time_dynamics.nonlinear_diffusion_gain", "nonlinear_diffusion_gain", "f32"],
+    ["time_dynamics.isostatic_relax_gain", "isostatic_relax_gain", "f32"],
 ];
 
 function stripInlineComment(value) {

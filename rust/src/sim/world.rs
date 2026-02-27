@@ -35,6 +35,8 @@ pub struct World {
     pub layers: HashMap<LayerKind, CellLayer>,
     pub budgets: SubsystemBudgets,
     pub river_erosion_state: Option<ErosionAutomatonState>,
+    #[serde(default)]
+    pub terrain_dynamics: Option<TerrainDynamicsState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,6 +52,40 @@ pub struct CoreCells {
     pub plate_id: Vec<u16>,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TerrainDynamicsState {
+    #[serde(default)]
+    pub tick_internal: u64,
+    #[serde(default)]
+    pub plate_states: Vec<PlateKinematicsState>,
+    #[serde(default)]
+    pub vertex_states: Vec<VertexCrustState>,
+    #[serde(default)]
+    pub boundary_state: BoundaryDynamicsState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlateKinematicsState {
+    pub angular_axis: [f32; 3],
+    pub angular_speed: f32,
+    pub phase_offset: f32,
+    pub activity: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VertexCrustState {
+    pub ocean_age_norm: f32,
+    pub uplift_memory: f32,
+    pub is_ocean_cell: u8,
+    pub target_buoyancy: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct BoundaryDynamicsState {
+    pub reclassify_interval_ticks: u32,
+    pub last_reclassify_tick: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -110,6 +146,7 @@ impl World {
             layers: HashMap::new(),
             budgets: SubsystemBudgets::default(),
             river_erosion_state: None,
+            terrain_dynamics: None,
         }
     }
 
