@@ -9,12 +9,15 @@ const configDir = path.join(rootDir, "config");
 
 let buildRunning = false;
 let buildQueued = false;
-let syncRunning = false;
-let syncQueued = false;
+let syncTerrainRunning = false;
+let syncTerrainQueued = false;
+let syncRuntimeRunning = false;
+let syncRuntimeQueued = false;
 let viteProcess = null;
 let shutdownRequested = false;
 let debounceTimer = null;
-let syncDebounceTimer = null;
+let syncTerrainDebounceTimer = null;
+let syncRuntimeDebounceTimer = null;
 
 function runCommand(command, args, options = {}) {
     return new Promise((resolve) => {
@@ -56,14 +59,14 @@ async function buildWasm() {
 }
 
 async function syncTerrainParams() {
-    if (syncRunning) {
-        syncQueued = true;
+    if (syncTerrainRunning) {
+        syncTerrainQueued = true;
         return;
     }
 
-    syncRunning = true;
+    syncTerrainRunning = true;
     console.log("[dev] syncing terrain params...");
-    const result = await runCommand("npm", ["run", "terrain-params:sync"]);
+    const result = await runCommand("npm", ["run", "terrain:sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] terrain params sync failed (code: ${result.code ?? "null"})`);
@@ -71,11 +74,35 @@ async function syncTerrainParams() {
         console.log("[dev] terrain params sync complete");
     }
 
-    syncRunning = false;
+    syncTerrainRunning = false;
 
-    if (syncQueued && !shutdownRequested) {
-        syncQueued = false;
+    if (syncTerrainQueued && !shutdownRequested) {
+        syncTerrainQueued = false;
         await syncTerrainParams();
+    }
+}
+
+async function syncRuntimeParams() {
+    if (syncRuntimeRunning) {
+        syncRuntimeQueued = true;
+        return;
+    }
+
+    syncRuntimeRunning = true;
+    console.log("[dev] syncing runtime params...");
+    const result = await runCommand("npm", ["run", "runtime:sync"]);
+
+    if (result.code !== 0) {
+        console.error(`[dev] runtime params sync failed (code: ${result.code ?? "null"})`);
+    } else {
+        console.log("[dev] runtime params sync complete");
+    }
+
+    syncRuntimeRunning = false;
+
+    if (syncRuntimeQueued && !shutdownRequested) {
+        syncRuntimeQueued = false;
+        await syncRuntimeParams();
     }
 }
 
@@ -119,18 +146,35 @@ function scheduleBuild(filename) {
 }
 
 function scheduleTerrainParamsSync(filename) {
-    if (filename !== "terrain-params.yaml") {
+    if (filename !== "terrain.yaml") {
         return;
     }
 
-    if (syncDebounceTimer) {
-        clearTimeout(syncDebounceTimer);
+    if (syncTerrainDebounceTimer) {
+        clearTimeout(syncTerrainDebounceTimer);
     }
 
-    syncDebounceTimer = setTimeout(() => {
-        syncDebounceTimer = null;
+    syncTerrainDebounceTimer = setTimeout(() => {
+        syncTerrainDebounceTimer = null;
         if (!shutdownRequested) {
             void syncTerrainParams();
+        }
+    }, 150);
+}
+
+function scheduleRuntimeParamsSync(filename) {
+    if (filename !== "runtime.yaml") {
+        return;
+    }
+
+    if (syncRuntimeDebounceTimer) {
+        clearTimeout(syncRuntimeDebounceTimer);
+    }
+
+    syncRuntimeDebounceTimer = setTimeout(() => {
+        syncRuntimeDebounceTimer = null;
+        if (!shutdownRequested) {
+            void syncRuntimeParams();
         }
     }, 150);
 }
@@ -153,6 +197,7 @@ function startConfigWatcher() {
     const watcher = watch(configDir, { recursive: true }, (_eventType, filename) => {
         if (typeof filename === "string") {
             scheduleTerrainParamsSync(filename);
+            scheduleRuntimeParamsSync(filename);
         }
     });
 
@@ -172,7 +217,12 @@ function stopChild(child) {
 }
 
 async function main() {
-    const syncInitial = await runCommand("npm", ["run", "terrain-params:sync"]);
+    const runtimeSyncInitial = await runCommand("npm", ["run", "runtime:sync"]);
+    if (runtimeSyncInitial.code !== 0) {
+        process.exit(runtimeSyncInitial.code ?? 1);
+    }
+
+    const syncInitial = await runCommand("npm", ["run", "terrain:sync"]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }
@@ -196,9 +246,13 @@ async function main() {
             clearTimeout(debounceTimer);
             debounceTimer = null;
         }
-        if (syncDebounceTimer) {
-            clearTimeout(syncDebounceTimer);
-            syncDebounceTimer = null;
+        if (syncTerrainDebounceTimer) {
+            clearTimeout(syncTerrainDebounceTimer);
+            syncTerrainDebounceTimer = null;
+        }
+        if (syncRuntimeDebounceTimer) {
+            clearTimeout(syncRuntimeDebounceTimer);
+            syncRuntimeDebounceTimer = null;
         }
         rustWatcher.close();
         configWatcher.close();

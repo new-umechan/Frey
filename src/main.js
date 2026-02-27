@@ -9,6 +9,7 @@ import initWasm, {
 import { collectAppElements } from "./app/dom.js";
 import { createGlobeScene, resizeViewport } from "./app/scene.js";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "./app/terrain-params.js";
+import { RUNTIME_PARAMS } from "./app/runtime-params.js";
 import { buildRenderPositions } from "./app/terrain-visuals.js";
 import { buildRiverMaskTexture, buildTerrainUvFromPositions } from "./app/river-mask.js";
 
@@ -63,21 +64,21 @@ const ERA_SCALE_PRESETS = Object.freeze({
     },
 });
 const SUBSYSTEM_ACTIVITY_SIGNAL_GAIN = Object.freeze({
-    terrain: 24.0,
-    river: 1.0,
-    climate: 3.5,
-    ecology: 3.5,
-    civilization: 1.0,
+    terrain: RUNTIME_PARAMS.activity_signal_gain_terrain,
+    river: RUNTIME_PARAMS.activity_signal_gain_river,
+    climate: RUNTIME_PARAMS.activity_signal_gain_climate,
+    ecology: RUNTIME_PARAMS.activity_signal_gain_ecology,
+    civilization: RUNTIME_PARAMS.activity_signal_gain_civilization,
 });
 const SUBSYSTEM_ACTIVITY_STEP_BASELINE = Object.freeze({
-    terrain: 0.06,
-    river: 0.08,
-    climate: 0.04,
-    ecology: 0.03,
-    civilization: 0.02,
+    terrain: RUNTIME_PARAMS.activity_step_baseline_terrain,
+    river: RUNTIME_PARAMS.activity_step_baseline_river,
+    climate: RUNTIME_PARAMS.activity_step_baseline_climate,
+    ecology: RUNTIME_PARAMS.activity_step_baseline_ecology,
+    civilization: RUNTIME_PARAMS.activity_step_baseline_civilization,
 });
-const SUBSYSTEM_ACTIVITY_WEIGHT_MIX = 0.45;
-const SUBSYSTEM_ACTIVITY_QUEUE_PRESSURE_GAIN = 0.35;
+const SUBSYSTEM_ACTIVITY_WEIGHT_MIX = RUNTIME_PARAMS.activity_weight_mix;
+const SUBSYSTEM_ACTIVITY_QUEUE_PRESSURE_GAIN = RUNTIME_PARAMS.activity_queue_pressure_gain;
 
 function createEmptyCore() {
     return null;

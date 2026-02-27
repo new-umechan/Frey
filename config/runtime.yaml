@@ -1,0 +1,17 @@
+activity:
+  signal_gain:
+    terrain: 24.0
+    river: 1.0
+    climate: 3.5
+    ecology: 3.5
+    civilization: 1.0
+
+  step_baseline:
+    terrain: 0.06
+    river: 0.08
+    climate: 0.04
+    ecology: 0.03
+    civilization: 0.02
+
+  weight_mix: 0.45
+  queue_pressure_gain: 0.35

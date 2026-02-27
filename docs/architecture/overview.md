@@ -199,4 +199,5 @@ after          : 変更後の値
 `docs/manage/test.md` 具体的な機能の流れのメモ
 
 ## 設定
-地形生成: config/terrain-params.yaml
+地形生成: config/terrain.yaml
+ランタイム制御（活動量観測・収束判定の調整）: config/runtime.yaml

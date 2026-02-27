@@ -4,12 +4,15 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "terrain-params:sync": "node scripts/sync-terrain-params.mjs",
-        "dev": "npm run terrain-params:sync && node scripts/dev-hotreload.mjs",
-        "build": "npm run wasm:build && vite build",
+        "runtime:sync": "node scripts/sync-runtime-params.mjs",
+        "terrain:sync": "node scripts/sync-terrain-params.mjs",
+        "runtime-params:sync": "npm run runtime:sync",
+        "terrain-params:sync": "npm run terrain:sync",
+        "dev": "npm run runtime:sync && npm run terrain:sync && node scripts/dev-hotreload.mjs",
+        "build": "npm run runtime:sync && npm run wasm:build && vite build",
         "preview": "vite preview",
-        "wasm:build": "npm run terrain-params:sync && wasm-pack build rust --target web --out-dir ../src/wasm --release",
-        "wasm:build:dev": "npm run terrain-params:sync && wasm-pack build rust --target web --out-dir ../src/wasm --dev",
+        "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --release",
+        "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../src/wasm --dev"
     },
     "dependencies": {

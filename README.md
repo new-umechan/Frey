@@ -29,4 +29,6 @@ docs/README.mdに仕様の全体像をメモ
 ## Development
 
 `npm run dev`で開発サバーを起動できる。
-開発中にrust/や、config/配下を編集すると、WASMを自動で再ビルドしてViteの画面に反映される。
+開発中に`rust/`を編集するとWASMを自動で再ビルドしてVite画面に反映される。
+`config/terrain.yaml`編集時は地形パラメータを同期し、必要な再ビルドが走る。
+`config/runtime.yaml`編集時はランタイム制御パラメータを同期し、Vite画面へ反映される。

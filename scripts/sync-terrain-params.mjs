@@ -5,48 +5,48 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
-const YAML_PATH = path.join(ROOT_DIR, "config", "terrain-params.yaml");
+const YAML_PATH = path.join(ROOT_DIR, "config", "terrain.yaml");
 const JS_OUT_PATH = path.join(ROOT_DIR, "src", "app", "terrain-params.js");
 const RUST_OUT_PATH = path.join(ROOT_DIR, "rust", "src", "generated", "terrain_params_defaults.rs");
 
 const SCHEMA = [
-    ["level", "u32"],
-    ["harmonic_max_l", "u32"],
-    ["spectral_alpha", "f32"],
-    ["plate_count_min", "u32"],
-    ["plate_count_max", "u32"],
-    ["ocean_plate_ratio", "f32"],
-    ["boundary_band", "f32"],
-    ["boundary_convergent_base_gain", "f32"],
-    ["boundary_divergent_base_gain", "f32"],
-    ["boundary_transform_relief_gain", "f32"],
-    ["trench_gain", "f32"],
-    ["arc_gain", "f32"],
-    ["collision_gain", "f32"],
-    ["rift_gain", "f32"],
-    ["boundary_trench_width", "f32"],
-    ["boundary_arc_width", "f32"],
-    ["boundary_collision_width", "f32"],
-    ["boundary_rift_width", "f32"],
-    ["boundary_obliquity_mix", "f32"],
-    ["boundary_distance_falloff", "f32"],
-    ["boundary_anisotropy", "f32"],
-    ["river_rain_base", "f32"],
-    ["river_accumulation_threshold", "f32"],
-    ["erosion_iterations", "u32"],
-    ["hydraulic_erosion_rate", "f32"],
-    ["hydraulic_deposit_rate", "f32"],
-    ["sediment_capacity_gain", "f32"],
-    ["erosion_min_slope", "f32"],
-    ["erosion_max_delta_per_iter", "f32"],
-    ["coastal_deposit_rate", "f32"],
-    ["shallow_sea_floor", "f32"],
-    ["continent_competence_noise_gain", "f32"],
-    ["continent_competence_large_scale", "f32"],
-    ["continent_competence_mid_scale", "f32"],
-    ["continent_competence_weight_gain", "f32"],
-    ["continent_foldability_from_competence", "f32"],
-    ["continent_erodibility_from_competence", "f32"],
+    ["mesh.level", "level", "u32"],
+    ["spectral.harmonic_max_l", "harmonic_max_l", "u32"],
+    ["spectral.spectral_alpha", "spectral_alpha", "f32"],
+    ["plates.plate_count_min", "plate_count_min", "u32"],
+    ["plates.plate_count_max", "plate_count_max", "u32"],
+    ["plates.ocean_plate_ratio", "ocean_plate_ratio", "f32"],
+    ["boundary.boundary_band", "boundary_band", "f32"],
+    ["boundary.boundary_convergent_base_gain", "boundary_convergent_base_gain", "f32"],
+    ["boundary.boundary_divergent_base_gain", "boundary_divergent_base_gain", "f32"],
+    ["boundary.boundary_transform_relief_gain", "boundary_transform_relief_gain", "f32"],
+    ["boundary.trench_gain", "trench_gain", "f32"],
+    ["boundary.arc_gain", "arc_gain", "f32"],
+    ["boundary.collision_gain", "collision_gain", "f32"],
+    ["boundary.rift_gain", "rift_gain", "f32"],
+    ["boundary.boundary_trench_width", "boundary_trench_width", "f32"],
+    ["boundary.boundary_arc_width", "boundary_arc_width", "f32"],
+    ["boundary.boundary_collision_width", "boundary_collision_width", "f32"],
+    ["boundary.boundary_rift_width", "boundary_rift_width", "f32"],
+    ["boundary.boundary_obliquity_mix", "boundary_obliquity_mix", "f32"],
+    ["boundary.boundary_distance_falloff", "boundary_distance_falloff", "f32"],
+    ["boundary.boundary_anisotropy", "boundary_anisotropy", "f32"],
+    ["river.river_rain_base", "river_rain_base", "f32"],
+    ["river.river_accumulation_threshold", "river_accumulation_threshold", "f32"],
+    ["river.erosion_iterations", "erosion_iterations", "u32"],
+    ["river.hydraulic_erosion_rate", "hydraulic_erosion_rate", "f32"],
+    ["river.hydraulic_deposit_rate", "hydraulic_deposit_rate", "f32"],
+    ["river.sediment_capacity_gain", "sediment_capacity_gain", "f32"],
+    ["river.erosion_min_slope", "erosion_min_slope", "f32"],
+    ["river.erosion_max_delta_per_iter", "erosion_max_delta_per_iter", "f32"],
+    ["river.coastal_deposit_rate", "coastal_deposit_rate", "f32"],
+    ["river.shallow_sea_floor", "shallow_sea_floor", "f32"],
+    ["continent.continent_competence_noise_gain", "continent_competence_noise_gain", "f32"],
+    ["continent.continent_competence_large_scale", "continent_competence_large_scale", "f32"],
+    ["continent.continent_competence_mid_scale", "continent_competence_mid_scale", "f32"],
+    ["continent.continent_competence_weight_gain", "continent_competence_weight_gain", "f32"],
+    ["continent.continent_foldability_from_competence", "continent_foldability_from_competence", "f32"],
+    ["continent.continent_erodibility_from_competence", "continent_erodibility_from_competence", "f32"],
 ];
 
 function stripInlineComment(value) {
@@ -71,14 +71,18 @@ function stripInlineComment(value) {
     return value.trim();
 }
 
-function parseFlatYamlScalars(text) {
+function parseYamlNumericScalars(text) {
     const result = new Map();
     const lines = text.split(/\r?\n/);
+    const stack = [];
 
     lines.forEach((line, index) => {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) {
             return;
+        }
+        if (/\t/.test(line)) {
+            throw new Error(`Invalid YAML line ${index + 1}: tab indentation is not supported`);
         }
 
         const colonIndex = line.indexOf(":");
@@ -86,38 +90,50 @@ function parseFlatYamlScalars(text) {
             throw new Error(`Invalid YAML line ${index + 1}: missing ":"`);
         }
 
-        const key = line.slice(0, colonIndex).trim();
+        const indent = line.length - line.trimStart().length;
+        if (indent % 2 !== 0) {
+            throw new Error(`Invalid YAML line ${index + 1}: indentation must use 2-space units`);
+        }
+        while (stack.length > 0 && indent <= stack[stack.length - 1].indent) {
+            stack.pop();
+        }
+
+        const localKey = line.slice(0, colonIndex).trim();
         const rawValue = stripInlineComment(line.slice(colonIndex + 1));
-        if (!key) {
+        if (!localKey) {
             throw new Error(`Invalid YAML line ${index + 1}: empty key`);
         }
+
         if (!rawValue) {
-            throw new Error(`Invalid YAML line ${index + 1}: empty value for "${key}"`);
+            stack.push({ key: localKey, indent });
+            return;
         }
-        if (result.has(key)) {
-            throw new Error(`Duplicate key "${key}" at line ${index + 1}`);
+
+        const keyPath = [...stack.map((entry) => entry.key), localKey].join(".");
+        if (result.has(keyPath)) {
+            throw new Error(`Duplicate key "${keyPath}" at line ${index + 1}`);
         }
 
         const isNumberLiteral = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(rawValue);
         if (!isNumberLiteral) {
             throw new Error(
-                `Unsupported value for "${key}" at line ${index + 1}: expected numeric scalar`,
+                `Unsupported value for "${keyPath}" at line ${index + 1}: expected numeric scalar`,
             );
         }
 
         const value = Number(rawValue);
         if (!Number.isFinite(value)) {
-            throw new Error(`Invalid numeric value for "${key}" at line ${index + 1}`);
+            throw new Error(`Invalid numeric value for "${keyPath}" at line ${index + 1}`);
         }
 
-        result.set(key, { raw: rawValue, value });
+        result.set(keyPath, { raw: rawValue, value });
     });
 
     return result;
 }
 
 function validateAgainstSchema(parsed) {
-    const schemaKeys = new Set(SCHEMA.map(([key]) => key));
+    const schemaKeys = new Set(SCHEMA.map(([pathKey]) => pathKey));
     const parsedKeys = new Set(parsed.keys());
 
     for (const key of schemaKeys) {
@@ -132,10 +148,10 @@ function validateAgainstSchema(parsed) {
         }
     }
 
-    for (const [key, rustType] of SCHEMA) {
-        const entry = parsed.get(key);
+    for (const [pathKey, _outKey, rustType] of SCHEMA) {
+        const entry = parsed.get(pathKey);
         if (rustType === "u32" && !Number.isInteger(entry.value)) {
-            throw new Error(`Key "${key}" must be an integer for Rust type u32`);
+            throw new Error(`Key "${pathKey}" must be an integer for Rust type u32`);
         }
     }
 }
@@ -143,12 +159,12 @@ function validateAgainstSchema(parsed) {
 function buildJsModule(parsed) {
     const lines = [];
     lines.push("// AUTO-GENERATED by scripts/sync-terrain-params.mjs");
-    lines.push("// Source: config/terrain-params.yaml");
+    lines.push("// Source: config/terrain.yaml");
     lines.push("");
     lines.push("export const TERRAIN_PARAMS = Object.freeze({");
 
-    for (const [key] of SCHEMA) {
-        lines.push(`    ${key}: ${parsed.get(key).raw},`);
+    for (const [pathKey, outKey] of SCHEMA) {
+        lines.push(`    ${outKey}: ${parsed.get(pathKey).raw},`);
     }
 
     lines.push("});");
@@ -168,15 +184,15 @@ function rustLiteral(raw, rustType) {
 function buildRustModule(parsed) {
     const lines = [];
     lines.push("// AUTO-GENERATED by scripts/sync-terrain-params.mjs");
-    lines.push("// Source: config/terrain-params.yaml");
+    lines.push("// Source: config/terrain.yaml");
     lines.push("");
     lines.push("use crate::TerrainParams;");
     lines.push("");
     lines.push("pub(crate) fn build_default_terrain_params() -> TerrainParams {");
     lines.push("    TerrainParams {");
 
-    for (const [key, rustType] of SCHEMA) {
-        lines.push(`        ${key}: ${rustLiteral(parsed.get(key).raw, rustType)},`);
+    for (const [pathKey, outKey, rustType] of SCHEMA) {
+        lines.push(`        ${outKey}: ${rustLiteral(parsed.get(pathKey).raw, rustType)},`);
     }
 
     lines.push("    }");
@@ -201,7 +217,7 @@ function writeFileIfChanged(filePath, nextContent) {
 
 function main() {
     const yamlText = fs.readFileSync(YAML_PATH, "utf8");
-    const parsed = parseFlatYamlScalars(yamlText);
+    const parsed = parseYamlNumericScalars(yamlText);
     validateAgainstSchema(parsed);
 
     const jsChanged = writeFileIfChanged(JS_OUT_PATH, buildJsModule(parsed));
