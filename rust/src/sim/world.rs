@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use crate::ErosionAutomatonState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EraKind {
@@ -31,6 +32,7 @@ pub struct World {
     pub core: CoreCells,
     pub layers: HashMap<LayerKind, CellLayer>,
     pub budgets: SubsystemBudgets,
+    pub river_erosion_state: Option<ErosionAutomatonState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,162 +100,24 @@ impl World {
             core,
             layers: HashMap::new(),
             budgets: SubsystemBudgets::default(),
+            river_erosion_state: None,
         }
     }
-}
 
-pub fn step_world(world: &mut World) {
-    world.budgets = compute_budgets(world.era);
-    ensure_required_layers(world);
-    run_terrain_step(world, world.budgets.terrain);
-    run_river_step(world, world.budgets.river);
-    run_climate_step(world, world.budgets.climate);
-    run_ecology_step(world, world.budgets.ecology);
-    run_civilization_step(world, world.budgets.civilization);
-    update_era_transition(world);
-    world.tick = world.tick.saturating_add(1);
-}
-
-fn compute_budgets(era: EraKind) -> SubsystemBudgets {
-    match era {
-        EraKind::Crust => SubsystemBudgets {
-            terrain: 4,
-            river: 1,
-            climate: 0,
-            ecology: 0,
-            civilization: 0,
-        },
-        EraKind::Environment => SubsystemBudgets {
-            terrain: 2,
-            river: 4,
-            climate: 3,
-            ecology: 1,
-            civilization: 0,
-        },
-        EraKind::Life => SubsystemBudgets {
-            terrain: 1,
-            river: 2,
-            climate: 3,
-            ecology: 4,
-            civilization: 1,
-        },
-        EraKind::Civilization => SubsystemBudgets {
-            terrain: 1,
-            river: 1,
-            climate: 2,
-            ecology: 2,
-            civilization: 4,
-        },
-        EraKind::History => SubsystemBudgets {
-            terrain: 0,
-            river: 1,
-            climate: 1,
-            ecology: 1,
-            civilization: 4,
-        },
+    pub fn attach_river_erosion_state(&mut self, state: ErosionAutomatonState) -> Result<(), String> {
+        let expected = self.core.height.len();
+        if state.height.len() != expected
+            || state.river_flux.len() != expected
+            || state.river_next.len() != expected
+        {
+            return Err("river erosion state length does not match core cell count".to_string());
+        }
+        self.core.height = state.height.clone();
+        self.core.river_flux = state.river_flux.clone();
+        self.core.river_next = state.river_next.clone();
+        self.river_erosion_state = Some(state);
+        Ok(())
     }
-}
-
-fn ensure_required_layers(world: &mut World) {
-    let cell_count = world.core.height.len();
-    if world.era == EraKind::Environment
-        || world.era == EraKind::Life
-        || world.era == EraKind::Civilization
-        || world.era == EraKind::History
-    {
-        world.layers.entry(LayerKind::Climate).or_insert_with(|| {
-            CellLayer::Climate(ClimateLayer {
-                temp: vec![0.5; cell_count],
-                rain: vec![0.0; cell_count],
-            })
-        });
-    }
-    if world.era == EraKind::Life || world.era == EraKind::Civilization || world.era == EraKind::History {
-        world.layers.entry(LayerKind::Ecology).or_insert_with(|| {
-            CellLayer::Ecology(EcologyLayer {
-                habitability: vec![0.0; cell_count],
-                productivity: vec![0.0; cell_count],
-            })
-        });
-    }
-    if world.era == EraKind::Civilization || world.era == EraKind::History {
-        world.layers.entry(LayerKind::Civilization).or_insert_with(|| {
-            CellLayer::Civilization(CivilizationLayer {
-                population: vec![0.0; cell_count],
-                state_id: vec![0; cell_count],
-            })
-        });
-    }
-}
-
-fn run_terrain_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let delta = (budget as f32) * 0.0001;
-    for h in &mut world.core.height {
-        *h = (*h + delta).clamp(-1.0, 1.0);
-    }
-}
-
-fn run_river_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let gain = (budget as f32) * 0.01;
-    for flux in &mut world.core.river_flux {
-        *flux = (*flux + gain).max(0.0);
-    }
-}
-
-fn run_climate_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let Some(CellLayer::Climate(climate)) = world.layers.get_mut(&LayerKind::Climate) else {
-        return;
-    };
-    let budget_scale = (budget as f32) * 0.01;
-    for (temp, rain) in climate.temp.iter_mut().zip(climate.rain.iter_mut()) {
-        *temp = (*temp + budget_scale * 0.1).clamp(0.0, 1.0);
-        *rain = (*rain + budget_scale).clamp(0.0, 1.0);
-    }
-}
-
-fn run_ecology_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let Some(CellLayer::Ecology(ecology)) = world.layers.get_mut(&LayerKind::Ecology) else {
-        return;
-    };
-    let budget_scale = (budget as f32) * 0.01;
-    for (habitability, productivity) in ecology
-        .habitability
-        .iter_mut()
-        .zip(ecology.productivity.iter_mut())
-    {
-        *habitability = (*habitability + budget_scale * 0.5).clamp(0.0, 1.0);
-        *productivity = (*productivity + budget_scale * 0.3).clamp(0.0, 1.0);
-    }
-}
-
-fn run_civilization_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let Some(CellLayer::Civilization(civilization)) = world.layers.get_mut(&LayerKind::Civilization) else {
-        return;
-    };
-    let growth = (budget as f32) * 0.1;
-    for population in &mut civilization.population {
-        *population = (*population + growth).max(0.0);
-    }
-}
-
-fn update_era_transition(world: &mut World) {
-    let next_tick = world.tick.saturating_add(1);
-    world.era = era_for_tick(next_tick);
 }
 
 pub fn era_for_tick(tick: u64) -> EraKind {
@@ -421,24 +285,7 @@ fn convergence_threshold(era: EraKind) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        era_for_tick, step_world, CellLayer, CoreCells, EraKind, LayerKind, World, WorldMesh, WorldTime,
-    };
-
-    fn build_test_world() -> World {
-        let mesh = WorldMesh {
-            positions: vec![[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]],
-            nbr_offsets: vec![0, 2, 4, 6],
-            nbrs: vec![1, 2, 0, 2, 0, 1],
-        };
-        let core = CoreCells {
-            height: vec![0.0, 0.1, -0.1],
-            plate_id: vec![0, 1, 1],
-            river_flux: vec![0.0, 0.2, 0.4],
-            river_next: vec![1, 2, -1],
-        };
-        World::new(mesh, core)
-    }
+    use super::{era_for_tick, EraKind, WorldTime};
 
     #[test]
     fn era_transitions_follow_thresholds() {
@@ -485,47 +332,4 @@ mod tests {
         assert_eq!(time.tick, 0);
     }
 
-    #[test]
-    fn step_world_advances_tick_and_sets_budgets() {
-        let mut world = build_test_world();
-        assert_eq!(world.tick, 0);
-        assert_eq!(world.era, EraKind::Crust);
-
-        step_world(&mut world);
-
-        assert_eq!(world.tick, 1);
-        assert_eq!(world.era, EraKind::Crust);
-        assert_eq!(world.budgets.terrain, 4);
-        assert_eq!(world.budgets.river, 1);
-    }
-
-    #[test]
-    fn step_world_generates_required_layers_by_era() {
-        let mut world = build_test_world();
-        world.era = EraKind::Life;
-
-        step_world(&mut world);
-
-        assert!(matches!(
-            world.layers.get(&LayerKind::Climate),
-            Some(CellLayer::Climate(_))
-        ));
-        assert!(matches!(
-            world.layers.get(&LayerKind::Ecology),
-            Some(CellLayer::Ecology(_))
-        ));
-        assert!(world.layers.get(&LayerKind::Civilization).is_none());
-    }
-
-    #[test]
-    fn step_world_transitions_era_on_tick_boundary() {
-        let mut world = build_test_world();
-        world.tick = 47;
-        world.era = EraKind::Crust;
-
-        step_world(&mut world);
-
-        assert_eq!(world.tick, 48);
-        assert_eq!(world.era, EraKind::Environment);
-    }
 }

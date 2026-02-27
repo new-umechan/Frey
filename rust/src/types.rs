@@ -7,7 +7,7 @@ pub struct MeshOutput {
     pub(crate) indices: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct TerrainParams {
     pub level: u32,
     pub harmonic_max_l: u32,
@@ -73,7 +73,7 @@ pub struct TerrainOutput {
     pub debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct ErosionAutomatonState {
     pub positions: Vec<[f32; 3]>,
     pub nbr_offsets: Vec<u32>,
