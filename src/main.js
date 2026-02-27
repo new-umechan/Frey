@@ -62,6 +62,22 @@ const ERA_SCALE_PRESETS = Object.freeze({
         weights: { terrain: 0.02, river: 0.08, climate: 0.12, ecology: 0.1, civilization: 1.0 },
     },
 });
+const SUBSYSTEM_ACTIVITY_SIGNAL_GAIN = Object.freeze({
+    terrain: 24.0,
+    river: 1.0,
+    climate: 3.5,
+    ecology: 3.5,
+    civilization: 1.0,
+});
+const SUBSYSTEM_ACTIVITY_STEP_BASELINE = Object.freeze({
+    terrain: 0.06,
+    river: 0.08,
+    climate: 0.04,
+    ecology: 0.03,
+    civilization: 0.02,
+});
+const SUBSYSTEM_ACTIVITY_WEIGHT_MIX = 0.45;
+const SUBSYSTEM_ACTIVITY_QUEUE_PRESSURE_GAIN = 0.35;
 
 function createEmptyCore() {
     return null;
@@ -907,9 +923,10 @@ async function bootstrap() {
             budgetCells,
         );
         worldState.executedSteps.river += 1;
-        worldState.latestActivity.river = Math.max(
-            worldState.latestActivity.river,
-            estimateRiverActivitySignal(worldState.erosionAutomatonState),
+        recordSubsystemActivity(
+            "river",
+            estimateRiverActivitySignal(worldState.erosionAutomatonState) *
+                SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.river,
         );
         worldState.terrainErosionDirty = true;
     }
@@ -949,10 +966,17 @@ async function bootstrap() {
 
     function recordSubsystemActivity(subsystemKey, signal) {
         const normalized = clamp01(signal);
-        worldState.latestActivity[subsystemKey] = Math.max(
-            worldState.latestActivity[subsystemKey] ?? 0,
-            normalized,
-        );
+        const prev = clamp01(worldState.latestActivity[subsystemKey] ?? 0);
+        worldState.latestActivity[subsystemKey] = clamp01(prev + normalized * (1 - prev));
+    }
+
+    function buildObservedActivityForTick(subsystemKey, preset) {
+        const raw = clamp01(worldState.latestActivity[subsystemKey] ?? 0);
+        const steps = Math.max(0, world.budgets?.[subsystemKey] ?? 0);
+        const stepBaseline = clamp01((SUBSYSTEM_ACTIVITY_STEP_BASELINE[subsystemKey] ?? 0) * steps);
+        const weight = clamp01(preset?.weights?.[subsystemKey] ?? 0);
+        const weightFactor = 1 - SUBSYSTEM_ACTIVITY_WEIGHT_MIX + weight * SUBSYSTEM_ACTIVITY_WEIGHT_MIX;
+        return clamp01(Math.max(raw, stepBaseline) * weightFactor);
     }
 
     function updateTerrainCoreStep() {
@@ -988,7 +1012,10 @@ async function bootstrap() {
             return;
         }
         worldState.terrainCoreDirty = true;
-        recordSubsystemActivity("terrain", deltaAbsSum / Math.max(1, cellCount) * 24);
+        recordSubsystemActivity(
+            "terrain",
+            deltaAbsSum / Math.max(1, cellCount) * SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.terrain,
+        );
     }
 
     function updateClimateLayerStep() {
@@ -1028,7 +1055,10 @@ async function bootstrap() {
             deltaAbsSum += Math.abs(nextTemp - prevTemp) + Math.abs(nextRain - prevRain);
         }
 
-        recordSubsystemActivity("climate", deltaAbsSum / Math.max(1, cellCount * 2) * 3.5);
+        recordSubsystemActivity(
+            "climate",
+            deltaAbsSum / Math.max(1, cellCount * 2) * SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.climate,
+        );
     }
 
     function updateEcologyLayerStep() {
@@ -1084,7 +1114,10 @@ async function bootstrap() {
                 Math.abs(nextProductivity - prevProductivity);
         }
 
-        recordSubsystemActivity("ecology", deltaAbsSum / Math.max(1, cellCount * 2) * 3.5);
+        recordSubsystemActivity(
+            "ecology",
+            deltaAbsSum / Math.max(1, cellCount * 2) * SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.ecology,
+        );
     }
 
     function updateCivilizationLayerStep() {
@@ -1143,7 +1176,10 @@ async function bootstrap() {
 
         const populationSignal = populationDeltaSum / Math.max(1, cellCount) * 4;
         const politySignal = polityChangeCount / Math.max(1, cellCount);
-        recordSubsystemActivity("civilization", Math.max(populationSignal, politySignal * 6));
+        recordSubsystemActivity(
+            "civilization",
+            Math.max(populationSignal, politySignal * 6) * SUBSYSTEM_ACTIVITY_SIGNAL_GAIN.civilization,
+        );
     }
 
     function runSubsystemStep(subsystemKey) {
@@ -1217,13 +1253,20 @@ async function bootstrap() {
             worldState.terrainCoreDirty = false;
         }
 
-        const riverQueuePressure = worldState.pendingRiverSteps > 0 ? 1 : 0;
+        const terrainActivity = buildObservedActivityForTick("terrain", preset);
+        const riverActivity = buildObservedActivityForTick("river", preset);
+        const climateActivity = buildObservedActivityForTick("climate", preset);
+        const ecologyActivity = buildObservedActivityForTick("ecology", preset);
+        const civilizationActivity = buildObservedActivityForTick("civilization", preset);
+        const riverQueuePressure = clamp01(
+            worldState.pendingRiverSteps * SUBSYSTEM_ACTIVITY_QUEUE_PRESSURE_GAIN,
+        );
         worldTimeController.observeActivity(
-            worldState.latestActivity.terrain,
-            Math.max(worldState.latestActivity.river, riverQueuePressure),
-            worldState.latestActivity.climate,
-            worldState.latestActivity.ecology,
-            worldState.latestActivity.civilization,
+            terrainActivity,
+            Math.max(riverActivity, riverQueuePressure),
+            climateActivity,
+            ecologyActivity,
+            civilizationActivity,
         );
         worldState.latestActivity.terrain = 0;
         worldState.latestActivity.river = 0;
