@@ -96,6 +96,7 @@ function createInitialRuntimeState(defaultRuntimeTickMs) {
         erosionAutomatonState: null,
         pendingRiverSteps: 0,
         terrainErosionDirty: false,
+        terrainCoreDirty: false,
         latestActivity: {
             terrain: 0,
             river: 1,
@@ -745,6 +746,7 @@ async function bootstrap() {
         worldState.lastFrameTimeMs = null;
         worldState.pendingRiverSteps = 0;
         worldState.terrainErosionDirty = false;
+        worldState.terrainCoreDirty = false;
         worldState.latestActivity.terrain = 0;
         worldState.latestActivity.river = 1;
         worldState.latestActivity.climate = 1;
@@ -756,6 +758,7 @@ async function bootstrap() {
         }
         worldState.pendingRiverSteps = 0;
         worldState.terrainErosionDirty = false;
+        worldState.terrainCoreDirty = false;
     }
 
     function createClimateLayer(cellCount) {
@@ -937,12 +940,232 @@ async function bootstrap() {
         }
     }
 
+    function clamp01(value) {
+        if (!Number.isFinite(value)) {
+            return 0;
+        }
+        return Math.min(1, Math.max(0, value));
+    }
+
+    function recordSubsystemActivity(subsystemKey, signal) {
+        const normalized = clamp01(signal);
+        worldState.latestActivity[subsystemKey] = Math.max(
+            worldState.latestActivity[subsystemKey] ?? 0,
+            normalized,
+        );
+    }
+
+    function updateTerrainCoreStep() {
+        const heightData = currentTerrainData?.heightData;
+        const plateId = currentTerrainData?.plateId;
+        const baseHeight = currentTerrainData?.plateInfo?.baseHeight;
+        if (!heightData || !plateId || !baseHeight) {
+            return;
+        }
+        const cellCount = heightData.length;
+        if (cellCount <= 0 || plateId.length < cellCount) {
+            return;
+        }
+
+        let deltaAbsSum = 0;
+        const relaxGain = 0.0022;
+        for (let i = 0; i < cellCount; i += 1) {
+            const plateIndex = plateId[i];
+            const target = baseHeight[plateIndex];
+            if (!Number.isFinite(target)) {
+                continue;
+            }
+            const current = heightData[i];
+            const delta = (target - current) * relaxGain;
+            if (!Number.isFinite(delta) || Math.abs(delta) < 1e-8) {
+                continue;
+            }
+            heightData[i] = current + delta;
+            deltaAbsSum += Math.abs(delta);
+        }
+
+        if (deltaAbsSum <= 0) {
+            return;
+        }
+        worldState.terrainCoreDirty = true;
+        recordSubsystemActivity("terrain", deltaAbsSum / Math.max(1, cellCount) * 24);
+    }
+
+    function updateClimateLayerStep() {
+        const climateLayer = world.layers[LAYER_KIND.CLIMATE];
+        if (!climateLayer || !currentTerrainData?.heightData || !currentTerrainData?.riverFlux) {
+            return;
+        }
+
+        const { temp, rain } = climateLayer;
+        const { heightData, riverFlux } = currentTerrainData;
+        const cellCount = Math.min(temp.length, rain.length, heightData.length, riverFlux.length);
+        if (cellCount <= 0) {
+            return;
+        }
+
+        let deltaAbsSum = 0;
+        const relaxGain = 0.16;
+        for (let i = 0; i < cellCount; i += 1) {
+            const baseIndex = i * 3;
+            const latAbs = Math.min(1, Math.abs(basePositions[baseIndex + 1] ?? 0));
+            const height = heightData[i];
+            const flux = Math.max(0, riverFlux[i]);
+            const fluxWet = clamp01(Math.log1p(flux) * 0.38);
+            const oceanic = height <= 0 ? 1 : 0.25;
+
+            const targetTemp = clamp01(1 - latAbs * 0.95 - Math.max(0, height) * 0.7);
+            const targetRain = clamp01(
+                (1 - latAbs) * 0.35 + fluxWet * 0.4 + oceanic * 0.3 - Math.max(0, height) * 0.2,
+            );
+
+            const prevTemp = temp[i];
+            const prevRain = rain[i];
+            const nextTemp = prevTemp + (targetTemp - prevTemp) * relaxGain;
+            const nextRain = prevRain + (targetRain - prevRain) * relaxGain;
+            temp[i] = nextTemp;
+            rain[i] = nextRain;
+            deltaAbsSum += Math.abs(nextTemp - prevTemp) + Math.abs(nextRain - prevRain);
+        }
+
+        recordSubsystemActivity("climate", deltaAbsSum / Math.max(1, cellCount * 2) * 3.5);
+    }
+
+    function updateEcologyLayerStep() {
+        const ecologyLayer = world.layers[LAYER_KIND.ECOLOGY];
+        const climateLayer = world.layers[LAYER_KIND.CLIMATE];
+        const heightData = currentTerrainData?.heightData;
+        if (!ecologyLayer || !climateLayer || !heightData) {
+            return;
+        }
+
+        const { habitability, productivity } = ecologyLayer;
+        const { temp, rain } = climateLayer;
+        const cellCount = Math.min(
+            habitability.length,
+            productivity.length,
+            temp.length,
+            rain.length,
+            heightData.length,
+        );
+        if (cellCount <= 0) {
+            return;
+        }
+
+        let deltaAbsSum = 0;
+        const relaxGain = 0.2;
+        for (let i = 0; i < cellCount; i += 1) {
+            const height = heightData[i];
+            const isLand = height > 0;
+            const localTemp = clamp01(temp[i]);
+            const localRain = clamp01(rain[i]);
+
+            const temperatureSuitability = clamp01(1 - Math.abs(localTemp - 0.62) * 1.9);
+            const moistureSuitability = clamp01(localRain * 1.05);
+            const terrainPenalty = isLand ? 1 : 0;
+            const targetHabitability = clamp01(
+                temperatureSuitability * 0.55 + moistureSuitability * 0.45,
+            ) * terrainPenalty;
+            const targetProductivity = clamp01(
+                targetHabitability * (localRain * 0.65 + localTemp * 0.35),
+            );
+
+            const prevHabitability = habitability[i];
+            const prevProductivity = productivity[i];
+            const nextHabitability =
+                prevHabitability + (targetHabitability - prevHabitability) * relaxGain;
+            const nextProductivity =
+                prevProductivity + (targetProductivity - prevProductivity) * relaxGain;
+
+            habitability[i] = nextHabitability;
+            productivity[i] = nextProductivity;
+            deltaAbsSum +=
+                Math.abs(nextHabitability - prevHabitability) +
+                Math.abs(nextProductivity - prevProductivity);
+        }
+
+        recordSubsystemActivity("ecology", deltaAbsSum / Math.max(1, cellCount * 2) * 3.5);
+    }
+
+    function updateCivilizationLayerStep() {
+        const civilizationLayer = world.layers[LAYER_KIND.CIVILIZATION];
+        const ecologyLayer = world.layers[LAYER_KIND.ECOLOGY];
+        const heightData = currentTerrainData?.heightData;
+        if (!civilizationLayer || !ecologyLayer || !heightData) {
+            return;
+        }
+
+        const { population, stateId } = civilizationLayer;
+        const { habitability, productivity } = ecologyLayer;
+        const cellCount = Math.min(
+            population.length,
+            stateId.length,
+            habitability.length,
+            productivity.length,
+            heightData.length,
+        );
+        if (cellCount <= 0) {
+            return;
+        }
+
+        let populationDeltaSum = 0;
+        let polityChangeCount = 0;
+        const relaxGain = 0.08;
+        for (let i = 0; i < cellCount; i += 1) {
+            const isLand = heightData[i] > 0;
+            const carrying = isLand
+                ? clamp01(habitability[i] * 0.7 + productivity[i] * 0.3)
+                : 0;
+            const prevPopulation = population[i];
+            let nextPopulation = prevPopulation + (carrying - prevPopulation) * relaxGain;
+            if (carrying > 0.42 && nextPopulation < 0.02) {
+                nextPopulation = 0.02;
+            }
+            if (!isLand || carrying < 0.05) {
+                nextPopulation = 0;
+            }
+            nextPopulation = clamp01(nextPopulation);
+            population[i] = nextPopulation;
+            populationDeltaSum += Math.abs(nextPopulation - prevPopulation);
+
+            const prevStateId = stateId[i];
+            let nextStateId = prevStateId;
+            if (nextPopulation > 0.18 && prevStateId === 0) {
+                nextStateId = i + 1;
+            } else if (nextPopulation < 0.03 && prevStateId !== 0) {
+                nextStateId = 0;
+            }
+            if (nextStateId !== prevStateId) {
+                stateId[i] = nextStateId;
+                polityChangeCount += 1;
+            }
+        }
+
+        const populationSignal = populationDeltaSum / Math.max(1, cellCount) * 4;
+        const politySignal = polityChangeCount / Math.max(1, cellCount);
+        recordSubsystemActivity("civilization", Math.max(populationSignal, politySignal * 6));
+    }
+
     function runSubsystemStep(subsystemKey) {
         if (!currentTerrainData) {
             return;
         }
         worldState.executedSteps[subsystemKey] += 1;
-        // TODO: 実サブシステム更新をここに接続する。
+        if (subsystemKey === "terrain") {
+            updateTerrainCoreStep();
+            return;
+        }
+        if (subsystemKey === "climate") {
+            updateClimateLayerStep();
+            return;
+        }
+        if (subsystemKey === "ecology") {
+            updateEcologyLayerStep();
+            return;
+        }
+        if (subsystemKey === "civilization") {
+            updateCivilizationLayerStep();
+        }
     }
 
     function runClimateStep(steps) {
@@ -988,15 +1211,25 @@ async function bootstrap() {
         runEcologyStep(world.budgets.ecology);
         runCivilizationStep(world.budgets.civilization);
 
+        if (worldState.terrainCoreDirty) {
+            updateTerrainAttributes();
+            updateGeometryPositions();
+            worldState.terrainCoreDirty = false;
+        }
+
         const riverQueuePressure = worldState.pendingRiverSteps > 0 ? 1 : 0;
         worldTimeController.observeActivity(
-            0,
+            worldState.latestActivity.terrain,
             Math.max(worldState.latestActivity.river, riverQueuePressure),
-            0,
-            0,
-            0,
+            worldState.latestActivity.climate,
+            worldState.latestActivity.ecology,
+            worldState.latestActivity.civilization,
         );
+        worldState.latestActivity.terrain = 0;
         worldState.latestActivity.river = 0;
+        worldState.latestActivity.climate = 0;
+        worldState.latestActivity.ecology = 0;
+        worldState.latestActivity.civilization = 0;
         syncTimeStateFromRust();
 
         worldTimeController.step(1);
