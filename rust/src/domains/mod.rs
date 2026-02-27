@@ -1,16 +1,9 @@
 use crate::MeshOutput;
 use crate::{ErosionAutomatonState, TerrainOutput, TerrainParams};
+use crate::common::mesh::{flatten_positions, generate_icosphere};
 
-#[path = "core/geom.rs"]
-mod geom;
-#[path = "core/mesh.rs"]
-mod mesh;
-#[path = "core/rng.rs"]
-mod rng;
-#[path = "core/terrain.rs"]
 mod terrain;
 
-use self::mesh::{flatten_positions, generate_icosphere};
 pub(crate) use self::terrain::CrustTerrainUpdateState;
 
 pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {

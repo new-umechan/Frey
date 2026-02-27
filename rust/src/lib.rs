@@ -1,164 +1,26 @@
-#[path = "core.rs"]
-mod core;
+mod common;
+mod domains;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
-mod wasm_visuals;
-pub mod world;
+pub mod sim;
+mod types;
+mod wasm;
+pub use sim::world;
 
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-
-#[derive(Serialize)]
-pub struct MeshOutput {
-    positions: Vec<f32>,
-    indices: Vec<u32>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TerrainParams {
-    pub level: u32,
-    pub harmonic_max_l: u32,
-    pub spectral_alpha: f32,
-    pub plate_count_min: u32,
-    pub plate_count_max: u32,
-    pub ocean_plate_ratio: f32,
-    pub boundary_band: f32,
-    pub boundary_convergent_base_gain: f32,
-    pub boundary_divergent_base_gain: f32,
-    pub boundary_transform_relief_gain: f32,
-    pub trench_gain: f32,
-    pub arc_gain: f32,
-    pub collision_gain: f32,
-    pub rift_gain: f32,
-    pub boundary_trench_width: f32,
-    pub boundary_arc_width: f32,
-    pub boundary_collision_width: f32,
-    pub boundary_rift_width: f32,
-    pub boundary_obliquity_mix: f32,
-    pub boundary_distance_falloff: f32,
-    pub boundary_anisotropy: f32,
-    pub river_rain_base: f32,
-    pub river_accumulation_threshold: f32,
-    pub erosion_iterations: u32,
-    pub hydraulic_erosion_rate: f32,
-    pub hydraulic_deposit_rate: f32,
-    pub sediment_capacity_gain: f32,
-    pub erosion_min_slope: f32,
-    pub erosion_max_delta_per_iter: f32,
-    pub coastal_deposit_rate: f32,
-    pub shallow_sea_floor: f32,
-    pub continent_competence_noise_gain: f32,
-    pub continent_competence_large_scale: f32,
-    pub continent_competence_mid_scale: f32,
-    pub continent_competence_weight_gain: f32,
-    pub continent_foldability_from_competence: f32,
-    pub continent_erodibility_from_competence: f32,
-}
-
-impl Default for TerrainParams {
-    fn default() -> Self {
-        terrain_params_defaults::build_default_terrain_params()
-    }
-}
-
-#[derive(Serialize)]
-pub struct TerrainOutput {
-    pub height: Vec<f32>,
-    pub plate_id: Vec<u32>,
-    pub plate_count: u32,
-    pub land_ratio: f32,
-    pub river_flux: Vec<f32>,
-    pub river_next: Vec<i32>,
-    pub lake_depth: Vec<f32>,
-    pub vertex_weight: Vec<f32>,
-    pub plate_is_ocean: Vec<u8>,
-    pub plate_base_height: Vec<f32>,
-    pub plate_base_weight: Vec<f32>,
-    pub debug_trench_strength: Vec<f32>,
-    pub debug_arc_strength: Vec<f32>,
-    pub debug_backarc_strength: Vec<f32>,
-    pub debug_ocean_ocean_arc_strength: Vec<f32>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ErosionAutomatonState {
-    pub positions: Vec<[f32; 3]>,
-    pub nbr_offsets: Vec<u32>,
-    pub nbrs: Vec<u32>,
-    pub height: Vec<f32>,
-    pub water: Vec<f32>,
-    pub sediment: Vec<f32>,
-    pub armor: Vec<f32>,
-    pub rain: Vec<f32>,
-    pub river_flux: Vec<f32>,
-    pub river_next: Vec<i32>,
-    pub active_queue: Vec<u32>,
-    pub active_head: usize,
-    pub in_queue: Vec<u8>,
-    pub rain_cursor: usize,
-    pub tick: u64,
-    pub recent_changed: Vec<u32>,
-    pub params: TerrainParams,
-}
+pub use crate::types::{ErosionAutomatonState, MeshOutput, TerrainOutput, TerrainParams};
+pub use crate::wasm::world_time::WorldTimeController;
 
 #[wasm_bindgen]
 pub struct CrustTerrainAutomaton {
-    inner: Option<core::CrustTerrainUpdateState>,
-}
-
-#[wasm_bindgen]
-pub struct WorldTimeController {
-    inner: world::WorldTime,
+    inner: Option<domains::CrustTerrainUpdateState>,
 }
 
 #[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
-    let output = core::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
+    let output = domains::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
-}
-
-#[wasm_bindgen]
-impl WorldTimeController {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> WorldTimeController {
-        WorldTimeController {
-            inner: world::WorldTime::new(),
-        }
-    }
-
-    #[wasm_bindgen(js_name = reset)]
-    pub fn reset_js(&mut self) {
-        self.inner.reset();
-    }
-
-    #[wasm_bindgen(js_name = step)]
-    pub fn step_js(&mut self, ticks: u32) {
-        self.inner.step(ticks);
-    }
-
-    #[wasm_bindgen(js_name = observeActivity)]
-    pub fn observe_activity_js(
-        &mut self,
-        terrain: f32,
-        river: f32,
-        climate: f32,
-        ecology: f32,
-        civilization: f32,
-    ) {
-        self.inner
-            .observe_activity(terrain, river, climate, ecology, civilization);
-    }
-
-    #[wasm_bindgen(js_name = tick)]
-    pub fn tick_js(&self) -> f64 {
-        self.inner.tick as f64
-    }
-
-    #[wasm_bindgen(js_name = eraKey)]
-    pub fn era_key_js(&self) -> String {
-        self.inner.era.as_key().to_string()
-    }
 }
 
 #[wasm_bindgen]
@@ -170,7 +32,7 @@ pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsV
             .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
     };
 
-    let output = core::build_terrain(&seed, terrain_params);
+    let output = domains::build_terrain(&seed, terrain_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }
@@ -187,15 +49,15 @@ impl CrustTerrainAutomaton {
         };
 
         Ok(Self {
-            inner: Some(core::init_crust_terrain_update(&seed, terrain_params)),
+            inner: Some(domains::init_crust_terrain_update(&seed, terrain_params)),
         })
     }
 
     #[wasm_bindgen(js_name = step)]
     pub fn step_js(&mut self, budget_ticks: u32) -> bool {
         if let Some(state) = self.inner.as_mut() {
-            core::step_crust_terrain_update(state, budget_ticks);
-            return core::crust_terrain_update_is_done(state);
+            domains::step_crust_terrain_update(state, budget_ticks);
+            return domains::crust_terrain_update_is_done(state);
         }
         true
     }
@@ -204,7 +66,7 @@ impl CrustTerrainAutomaton {
     pub fn is_done_js(&self) -> bool {
         self.inner
             .as_ref()
-            .map(core::crust_terrain_update_is_done)
+            .map(domains::crust_terrain_update_is_done)
             .unwrap_or(true)
     }
 
@@ -212,7 +74,7 @@ impl CrustTerrainAutomaton {
     pub fn phase_name_js(&self) -> String {
         self.inner
             .as_ref()
-            .map(core::crust_terrain_update_phase_name)
+            .map(domains::crust_terrain_update_phase_name)
             .unwrap_or("finished")
             .to_string()
     }
@@ -222,11 +84,11 @@ impl CrustTerrainAutomaton {
         let Some(state) = self.inner.take() else {
             return Err(JsValue::from_str("crust terrain automaton already finished"));
         };
-        if !core::crust_terrain_update_is_done(&state) {
+        if !domains::crust_terrain_update_is_done(&state) {
             self.inner = Some(state);
             return Err(JsValue::from_str("crust terrain automaton is not done yet"));
         }
-        let output = core::finish_crust_terrain_update(state);
+        let output = domains::finish_crust_terrain_update(state);
         serde_wasm_bindgen::to_value(&output).map_err(|err| {
             JsValue::from_str(&format!(
                 "failed to serialize crust terrain automaton output: {err}"
@@ -244,7 +106,7 @@ pub fn init_erosion_automaton(seed: String, params_js: JsValue) -> Result<JsValu
             .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
     };
 
-    let state = core::build_erosion_automaton(&seed, terrain_params);
+    let state = domains::build_erosion_automaton(&seed, terrain_params);
     serde_wasm_bindgen::to_value(&state)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize erosion automaton: {err}")))
 }
@@ -253,7 +115,7 @@ pub fn init_erosion_automaton(seed: String, params_js: JsValue) -> Result<JsValu
 pub fn step_erosion_automaton(state_js: JsValue, budget_cells: u32) -> Result<JsValue, JsValue> {
     let mut state = serde_wasm_bindgen::from_value::<ErosionAutomatonState>(state_js)
         .map_err(|err| JsValue::from_str(&format!("invalid erosion automaton state: {err}")))?;
-    core::step_erosion_automaton(&mut state, budget_cells);
+    domains::step_erosion_automaton(&mut state, budget_cells);
     serde_wasm_bindgen::to_value(&state).map_err(|err| {
         JsValue::from_str(&format!(
             "failed to serialize stepped erosion automaton state: {err}"
@@ -263,7 +125,7 @@ pub fn step_erosion_automaton(state_js: JsValue, budget_cells: u32) -> Result<Js
 
 #[wasm_bindgen]
 pub fn build_render_positions(input_js: JsValue) -> Result<JsValue, JsValue> {
-    let positions = wasm_visuals::build_render_positions_from_js(input_js)
+    let positions = wasm::visuals::build_render_positions_from_js(input_js)
         .map_err(|err| JsValue::from_str(&format!("failed to build render positions: {err}")))?;
     serde_wasm_bindgen::to_value(&positions)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize render positions: {err}")))
@@ -271,7 +133,7 @@ pub fn build_render_positions(input_js: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn build_vertex_colors(input_js: JsValue) -> Result<JsValue, JsValue> {
-    let colors = wasm_visuals::build_vertex_colors_from_js(input_js)
+    let colors = wasm::visuals::build_vertex_colors_from_js(input_js)
         .map_err(|err| JsValue::from_str(&format!("failed to build vertex colors: {err}")))?;
     serde_wasm_bindgen::to_value(&colors)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize vertex colors: {err}")))

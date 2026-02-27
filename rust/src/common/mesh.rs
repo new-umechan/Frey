@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use super::geom::normalize;
 
-pub(super) fn flatten_positions(positions: &[[f32; 3]]) -> Vec<f32> {
+pub(crate) fn flatten_positions(positions: &[[f32; 3]]) -> Vec<f32> {
     positions
         .iter()
         .flat_map(|v| [v[0], v[1], v[2]])
         .collect::<Vec<f32>>()
 }
 
-pub(super) fn build_neighbors(vertex_count: usize, indices: &[u32]) -> (Vec<u32>, Vec<u32>) {
+pub(crate) fn build_neighbors(vertex_count: usize, indices: &[u32]) -> (Vec<u32>, Vec<u32>) {
     let mut adj = vec![Vec::<u32>::new(); vertex_count];
 
     for tri in indices.chunks_exact(3) {
@@ -42,7 +42,7 @@ fn add_undirected_edge(adj: &mut [Vec<u32>], a: u32, b: u32) {
     adj[b as usize].push(a);
 }
 
-pub(super) fn generate_icosphere(level: u32) -> (Vec<[f32; 3]>, Vec<u32>) {
+pub(crate) fn generate_icosphere(level: u32) -> (Vec<[f32; 3]>, Vec<u32>) {
     let phi = (1.0 + 5.0_f32.sqrt()) / 2.0;
     let mut positions = vec![
         [-1.0, phi, 0.0],

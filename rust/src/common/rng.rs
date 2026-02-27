@@ -1,6 +1,6 @@
 use crate::TerrainParams;
 
-pub(super) struct DeterministicRng {
+pub(crate) struct DeterministicRng {
     state: u64,
     cached_normal: Option<f32>,
 }
@@ -35,7 +35,7 @@ impl DeterministicRng {
         v as f32 / 16_777_216.0
     }
 
-    pub(super) fn gen_range_f32(&mut self, min: f32, max: f32) -> f32 {
+    pub(crate) fn gen_range_f32(&mut self, min: f32, max: f32) -> f32 {
         if min >= max {
             min
         } else {
@@ -43,7 +43,7 @@ impl DeterministicRng {
         }
     }
 
-    pub(super) fn gen_range_u32_inclusive(&mut self, min: u32, max: u32) -> u32 {
+    pub(crate) fn gen_range_u32_inclusive(&mut self, min: u32, max: u32) -> u32 {
         if min >= max {
             min
         } else {
@@ -51,7 +51,7 @@ impl DeterministicRng {
         }
     }
 
-    pub(super) fn gen_range_usize(&mut self, min: usize, max: usize) -> usize {
+    pub(crate) fn gen_range_usize(&mut self, min: usize, max: usize) -> usize {
         if min >= max {
             min
         } else {
@@ -59,7 +59,7 @@ impl DeterministicRng {
         }
     }
 
-    pub(super) fn standard_normal(&mut self) -> f32 {
+    pub(crate) fn standard_normal(&mut self) -> f32 {
         if let Some(v) = self.cached_normal.take() {
             return v;
         }
@@ -75,7 +75,7 @@ impl DeterministicRng {
     }
 }
 
-pub(super) fn rng_from_seed(seed: &str, terrain_params: &TerrainParams) -> DeterministicRng {
+pub(crate) fn rng_from_seed(seed: &str, terrain_params: &TerrainParams) -> DeterministicRng {
     let canonical = format!(
         "{{\"harmonic_max_l\":{},\"spectral_alpha\":{:.8},\"plate_count_min\":{},\"plate_count_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"boundary_convergent_base_gain\":{:.8},\"boundary_divergent_base_gain\":{:.8},\"boundary_transform_relief_gain\":{:.8},\"trench_gain\":{:.8},\"arc_gain\":{:.8},\"collision_gain\":{:.8},\"rift_gain\":{:.8},\"boundary_trench_width\":{:.8},\"boundary_arc_width\":{:.8},\"boundary_collision_width\":{:.8},\"boundary_rift_width\":{:.8},\"boundary_obliquity_mix\":{:.8},\"boundary_distance_falloff\":{:.8},\"boundary_anisotropy\":{:.8},\"river_rain_base\":{:.8},\"river_accumulation_threshold\":{:.8},\"erosion_iterations\":{},\"hydraulic_erosion_rate\":{:.8},\"hydraulic_deposit_rate\":{:.8},\"sediment_capacity_gain\":{:.8},\"erosion_min_slope\":{:.8},\"erosion_max_delta_per_iter\":{:.8},\"coastal_deposit_rate\":{:.8},\"shallow_sea_floor\":{:.8}}}",
         terrain_params.harmonic_max_l,
