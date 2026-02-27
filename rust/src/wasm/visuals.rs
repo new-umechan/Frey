@@ -284,8 +284,8 @@ fn build_render_positions_native(input: RenderPositionsInput) -> Result<Vec<f32>
         let x = positions[i];
         let y = positions[i + 1];
         let z = positions[i + 2];
-        let render_height = if h > 0.0 { h } else { 0.0 };
-        let radius = 1.0 + render_height * 0.04;
+        let render_height = h.clamp(-0.12, 1.2);
+        let radius = 1.0 + render_height * 0.08;
 
         if is_map_mode {
             let len = (x * x + y * y + z * z).sqrt().max(1e-6);

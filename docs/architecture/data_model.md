@@ -213,8 +213,8 @@ pub struct SubsystemBudgets {
 
 現状コードとの接続は、次の順で進める。
 
-1. `World` に河川非同期オートマトン状態を保持する
-2. `run_river_step` から非同期stepを呼ぶ
+1. `World` に河川オートマトン状態を保持する
+2. `run_river_step` からstepを呼ぶ
 3. `Climate` / `Ecology` / `Civilization` はダミー更新で枠組みだけ接続する
 4. その後、各レイヤーの実更新を段階的に実装する
 
@@ -233,7 +233,7 @@ pub struct SubsystemBudgets {
 
 ### 未決事項
 
-- `World` に河川非同期オートマトン状態を直接持つか、別オブジェクト参照にするか
+- `World` に河川オートマトン状態を直接持つか、別オブジェクト参照にするか
 - 時間発展地形の内部状態を `World` に直接持つか、別オブジェクト参照にするか
 - `core.river_flux` / `core.river_next` と河川オートマトン内部状態の同期タイミング
 - `layers` を将来的に固定スロット構造へ移行するか
