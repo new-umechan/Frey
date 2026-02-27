@@ -151,7 +151,7 @@ impl WorldTime {
     }
 
     pub fn step(&mut self, ticks: u32) {
-        let delta = ticks.max(1) as u64;
+        let delta = ticks as u64;
         self.tick = self.tick.saturating_add(delta);
     }
 
@@ -305,5 +305,12 @@ mod tests {
             time.step(1);
         }
         assert_eq!(time.era, EraKind::Environment);
+    }
+
+    #[test]
+    fn step_with_zero_does_not_advance_tick() {
+        let mut time = WorldTime::new();
+        time.step(0);
+        assert_eq!(time.tick, 0);
     }
 }
