@@ -10,6 +10,18 @@ Freyの仕様メモと設計ドキュメントをまとめる場所。
 4. `docs/core/` 配下の各仕様
 5. `docs/interface/` 配下の各仕様
 
+### 世界地形シミュレーション再設計（4点セット）
+
+1. `docs/core/redesign/README.md`
+2. `docs/core/redesign/01_common_foundation.md`
+3. `docs/core/redesign/02_plate_rigid_rotation.md`
+4. `docs/core/redesign/03_vertical_velocity_u.md`
+5. `docs/core/redesign/04_topography_evolution_equation.md`
+6. `docs/core/redesign/05_erosion_stream_power_diffusion.md`
+7. `docs/core/redesign/06_climate_precip_k_modulation.md`
+8. `docs/core/redesign/07_coupling_execution.md`
+9. `docs/core/redesign/08_calibration_validation.md`
+
 ## ディレクトリ構成
 
 ### `config/`
