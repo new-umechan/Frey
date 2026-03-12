@@ -49,6 +49,25 @@ continent:
 
 time_dynamics:
   tectonic_uplift_gain: 0.065
+  plate_motion_gain: 1.0
+  boundary_reclassify_interval: 4
+  river_rebuild_interval_min: 1
+  river_rebuild_interval_max: 8
+  river_activity_high_threshold: 0.030
+  river_activity_low_threshold: 0.005
+  uplift_rate_gain: 0.030
+  subsidence_rate_gain: 0.022
+  stress_relaxation_rate: 0.15
+  isostasy_rate: 0.012
+  subduction_age_coupling: 0.50
+  subduction_initiation_threshold: 0.55
+  subduction_density_threshold: 0.62
+  mantle_heat_input: 0.010
+  mantle_heat_loss: 0.008
+  mantle_diffusion_rate: 0.15
+  plume_threshold: 0.76
+  plume_gain: 0.030
+  plume_heat_release_rate: 0.65
   uplift_saturation_soft: 0.45
   uplift_saturation_hard: 0.75
   marine_subsidence_gain: 0.018

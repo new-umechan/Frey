@@ -1,10 +1,8 @@
-# プレート地形（時間発展版）仕様
+# プレート地形仕様
 
 ## 1. 目的
 
 入力seedとparamsから、プレート運動に整合する初期地殻状態を生成し、その後の世界時間Tickに応じて地形を更新できるようにする。
-
-本仕様は、従来の「一度だけ地形を生成する」仕様を拡張し、地殻形成期以降も地形が低頻度で継続更新される前提を定義する。
 
 ## 2. 設計方針
 
@@ -12,14 +10,182 @@
 - 地形出力とは別に、地殻内部状態を永続化する
 - 1 Tickごとの更新は増分更新にする
 - 時代スケール制御により、地形更新の頻度と内部反復数を変えられるようにする
-- 既存の一発生成APIは互換用途として残す
+- 地形の状態名（大地溝帯）などは保持せず、ルールから地形が発生するようにする
 
-## 3. 用語
+### 2.1 採用モデル
+連続体力学を元にすると重いため、応力伝播モデルを用いて作る。
+また、長期的なスケールの再現（ウィルソンサイクル、5億年単位）には
+マントル熱ダイナミクスを再現すること
 
-- 初期化: seedとparamsから初期地殻状態を構築する処理
-- 地殻状態: プレート運動、境界活動、地殻属性、標高更新に必要な内部状態
-- 地形スナップショット: 描画や他サブシステム参照用の `height` などの出力
-- 地形内部Tick: 地形サブシステム内の更新ステップ。`World` のTickとは一致しなくてよい
+大陸地殻は熱が逃げにくく、海洋地殻は熱が逃げやすいように。
+
+弾性波方程式を解くのではなく弾性薄板モデルを用いる
+
+### 2.2 マントルとプレートの交互作用
+
+以下は実際の式ではなく、動きの理解の参考のため。
+
+毎tick
+	mantle_heat[cell] += heat_input  # 定数
+	mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
+
+crust_typeによる放熱率
+	大陸地殻: discharge_rate = 0.1  # 熱が逃げにくい
+	海洋地殻: discharge_rate = 1.0  # 熱が逃げやすい
+
+プルーム発生
+if mantle_heat[cell] > plume_threshold:
+    uplift_force[cell] = (mantle_heat - plume_threshold) * plume_gain
+    mantle_heat[cell] *= heat_release_rate  # 熱を放出
+
+注)ここで使われている式の説明
+heat_input: 定数
+discharge_rate: 大陸/海洋で2値
+plume_threshold: 分裂トリガーの閾値
+plume_gain: プルーム力の強さ
+heat_release_rate: プルーム発生時の放熱率
+
+### 2.3 処理の流れ
+1. マントル熱場の更新
+	- 熱蓄積・放熱
+	- プルーム判定 → uplift_force生成
+        ↓
+2. 境界タイプ判定・再分類
+        ↓
+3. プレート運動方程式でωを更新
+        ↓
+4. 応力伝播（弾性薄板モデル）
+   - 境界タイプ別に圧縮・引張・せん断応力を生成
+   - uplift_forceも応力として追加
+        ↓
+5. 境界で応力テンソルを生成
+		↓
+6. 火山モデル
+        ↓
+7. 各セルの標高・地殻厚を更新
+        ↓
+8. 侵食・堆積・河川更新（詳細はdocs/core/errosion.md）
+        ↓
+9. 活動量メトリクス更新
+
+## 3. 具体的な仕様
+
+### 3.0 プレートの動き
+
+τの各項を境界タイプごとに条件付きで計算
+
+```text
+I * dω/dt = τ_slab + τ_ridge + τ_mantle + τ_collision
+```
+
+τ_slab     = Σ(Subduction境界の辺) slab_pull_per_edge
+τ_ridge    = Σ(Ridge/Rift境界の辺) ridge_push_per_edge
+τ_collision = Σ(Collision境界の辺) collision_resistance_per_edge
+τ_mantle   = -ω * plate_area * mantle_drag  # 全プレート共通
+
+PassiveMarginは力を生成しないので、そのプレートはτ_mantleによる減衰だけで動く。つまり慣性で動き続けて、徐々に減速する。
+
+
+### 3.1 プレート分裂、合体
+
+#### 3.1.1 フェーズ
+
+フェーズ1: 大地溝帯
+  - uplift_forceが発生（大陸にホットスポットが形成される）
+  - 標高が下がり、地溝帯地形が形成される
+  - boundary_typeは「pre-rift」
+
+フェーズ2: 海洋誕生
+  - riftingセルが「oceanic_young」に変わる
+  - 海嶺として登録される
+  - 両側のplate_idが分離される
+  - リッジプッシュ開始
+
+フェーズ3: 海洋拡大
+  - 海嶺から両側に対称的にoceanic地殻が付加される
+  - 海洋地殻の年齢・密度が時間とともに増加
+
+#### 3.1.2 フェーズ遷移条件
+
+フェーズ1→2（大地溝帯→海洋誕生）
+riftingセルの平均標高 < rift_to_ocean_height_threshold
+かつ
+riftingセルが海面下に達した割合 > rift_ocean_ratio_threshold
+地溝帯が十分に沈降して海水が入り込んだら海洋誕生
+
+フェーズ2→3（海洋誕生→海洋拡大）
+ridge_cellsの両側plate_idが確定している
+かつ
+両側プレートの相対発散速度 > ridge_spread_threshold
+海嶺が安定して、両側が離れ始めたら拡大フェーズへ。
+
+#### 3.1.3 ウィルソンサイクル上の状態
+
+あくまでも名称をつけているだけで、この状態が保存されているわけではない。
+
+大地溝帯: stress > 0（引張）かつ thickness が薄くなっている地域
+海洋誕生: Continental → Oceanic への crust_type 変化（標高が海面下に達したとき）
+海嶺: 発散境界辺のうち、両側が若い海洋地殻（age が低い）
+沈み込み: 収束境界で density が高い海洋地殻が隣接大陸と接している状態
+
+### 3.2 マントル熱場の仕様
+
+これを地殻成形期には毎回計算する。
+期の比に応じて、計算回数は疎にする
+1. 熱蓄積・放熱
+2. 熱拡散
+3. プルームの処理
+
+熱拡散はとなりのセルのみ計算する。
+
+```rust
+mantle_heat[cell] += heat_input
+mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
+for neighbor in neighbors[cell]:
+    heat_diff += (mantle_heat[neighbor] - mantle_heat[cell]) * diffusion_rate
+mantle_heat[cell] += heat_diff
+```
+
+### 3.3 応力伝播モデルの仕様
+
+境界で発生した応力が、隣接セルへ減衰しながら伝播する。
+
+```rust
+stress[cell] += boundary_stress * attenuation(distance) * (1 / rigidity[cell])
+```
+boundary_stress: 境界タイプ（収束・発散・横ずれ）から生成
+attenuation(distance): 距離に応じた減衰
+rigidity: 地殻の硬さ。硬いほど応力が伝わりにくい
+
+境界タイプ別の境界応力:
+- Subduction / Collision: 圧縮応力を与える
+- Ridge / Rift: 引張応力を与える
+- Transform: せん断応力を与える
+- PassiveMargin: 境界応力はほぼゼロ（必要なら微小ノイズのみ）
+
+PassiveMargin補足:
+- 大陸棚での堆積は地形側の長期更新で扱う
+- 応力源としては中立に扱う
+
+#### 応力の形式
+
+2x2行列として保持
+```rust
+struct StressTensor {
+	xx: f32,  // 東西方向の応力
+	yy: f32,  // 南北方向の応力
+	xy: f32,  // せん断応力
+}
+```
+
+#### 伝播
+D * ∇⁴w = q(x,y)
+
+D: 地殻の曲げ剛性（rigidityから導出）
+w: 地殻の撓み（変位）
+q: 外力（境界応力・プルーム力）
+
+### 3.4 火山モデルの仕様
 
 ## 4. 入出力と状態
 
@@ -30,11 +196,10 @@
 
 既存の `TerrainParams` を基本としつつ、時間発展のために以下の追加パラメータ群を持てるようにする。
 
-- `tectonic_dt`: 地形内部Tickの時間幅
 - `plate_motion_gain`: プレート速度スケール
 - `boundary_reclassify_interval`: 境界の再分類間隔
-- `river_rebuild_interval_min`: 河川再計算の最短内部Tick間隔
-- `river_rebuild_interval_max`: 河川再計算の最長内部Tick間隔
+- `river_rebuild_interval_min`: 河川再計算の最短Tick間隔
+- `river_rebuild_interval_max`: 河川再計算の最長Tick間隔
 - `river_activity_high_threshold`: 高活動時の河川更新閾値
 - `river_activity_low_threshold`: 低活動時の河川更新閾値
 - `uplift_rate_gain`: 造山の増分係数
@@ -42,6 +207,8 @@
 - `stress_relaxation_rate`: 応力緩和係数
 - `isostasy_rate`: アイソスタシー緩和係数
 - `subduction_age_coupling`: 海洋地殻年齢と沈み込み強度の連動係数
+- `subduction_initiation_threshold`: PassiveMarginから沈み込み開始へ移行する最小海洋地殻年齢
+- `subduction_density_threshold`: PassiveMarginから沈み込み開始へ移行する最小密度
 
 注意:
 - 既存の境界係数や侵食係数はそのまま使い、時間発展では「1回適用の強さ」ではなく「単位時間あたりの増分率」として解釈する。
@@ -73,7 +240,6 @@ pub struct TerrainOutput {
 ```rust
 pub struct TectonicTerrainState {
     pub mesh: SharedMeshRef,
-    pub tick_internal: u64,
     pub params: TerrainParams,
 
     pub plate_state: Vec<PlateState>,
@@ -84,8 +250,19 @@ pub struct TectonicTerrainState {
     pub plate_id: Vec<u32>,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
+	pub mantle_heat: Vec<f32>,  // セルごとの熱量 [0, 1]正規化
 
     pub cached_metrics: TerrainStepMetrics,
+}
+
+struct VertexCrustState {
+    crust_type: CrustType,  // Continental / Oceanic のみ
+    thickness: f32,
+    density: f32,
+    age: f32,
+    stress: f32,           // 引張(+) / 圧縮(-)
+    temperature: f32,      // マントル熱場から受け取る
+    rigidity: f32,         // 地殻の硬さ
 }
 ```
 
@@ -112,21 +289,12 @@ pub struct TectonicTerrainState {
 
 ### 5.2 更新API
 
-- `step_tectonic_terrain(state, budget_ticks) -> TerrainStepMetrics`
+- `step_tectonic_terrain(state) -> TerrainStepMetrics`
 
 役割:
-- 地形内部Tickを `budget_ticks` 回だけ進める
+- 1回の地形更新を実行する
 - 状態を破壊的更新する（巻き戻し対応は後述のチェックポイント保存で担保する）
 - 活動量などのメトリクスを返す
-
-`budget_ticks` の定義:
-- 単位は「地形内部Tickの回数」
-- 物理時間換算は `budget_ticks * tectonic_dt`
-- `World` から呼ぶ場合、`world.budgets.terrain` をそのまま `budget_ticks` として渡す
-
-重要:
-- `budget_ticks` は実行時間(ms)ではなく、決定的再現のための論理ステップ数である
-- 比較実験や巻き戻し再生では、`budget_ticks` の列を入力条件として扱う
 
 ### 5.3 スナップショット取得API
 
@@ -150,11 +318,10 @@ pub struct TectonicTerrainState {
 
 要件:
 - 地形内部状態の完全復元ができること
-- 同一チェックポイントから同一 `budget_ticks` 列を再生したとき決定的に一致すること
+- 同一チェックポイントから同一更新列を再生したとき決定的に一致すること
 - `TerrainOutput` だけで復元しようとしないこと
 
 最低限チェックポイントへ含める項目:
-- `tick_internal`
 - プレート運動状態（角速度、活動度、種別）
 - 頂点地殻状態（年齢、厚さ、応力など）
 - 動的境界状態
@@ -171,16 +338,7 @@ pub struct TectonicTerrainState {
 - 分岐操作の直前/直後は、上記間隔に関係なく追加チェックポイントを作ってよい
 - 地形モジュールは自動で定期チェックポイントを作成しない
 
-### 5.5 互換API
-
-既存の一発生成APIは、次の糖衣として残してよい。
-
-- `generate_terrain(seed, params)`
-  - `init_tectonic_terrain` を呼ぶ
-  - 所定回数の `step_tectonic_terrain` を実行する（または0回）
-  - `snapshot_tectonic_terrain` を返す
-
-## 6. 初期化フェーズ（従来仕様の再定義）
+## 6. 初期化フェーズ
 
 初期化は「完成地形を作る」ではなく、「時間発展可能な初期地殻状態を作る」処理として扱う。
 
@@ -242,24 +400,15 @@ pub struct TectonicTerrainState {
 
 どちらでも、時間発展の本体は後続のTick更新で行う。
 
-## 7. Tick更新フェーズ（新設）
+## 7. Tick更新フェーズ
 
-地形サブシステムは、`World` の1 Tickあたりに0回以上の内部Tickを実行する。
+地形サブシステムは、`World` の1 Tickごとに1回の地形更新を実行する。
 
 `World` との単位対応:
 - `World.tick` は時代ごとの管理時間単位
-- `world.budgets.terrain` は、その `World.tick` 中に実行する地形内部Tick回数
-- したがって地形の進行時間は `world.budgets.terrain * tectonic_dt`
+- 地形更新は `World.tick` に同期して1回実行する
 
-初版では、`compute_budgets(world.era, world)` は整数 `terrain` 予算を返す。
-例（暫定）:
-- 地殻形成期: `terrain = 8..32`
-- 環境形成期: `terrain = 1..8`
-- 生命/文明/歴史期: `terrain = 0..2`
-
-上記の具体値は調整対象だが、単位は常に「内部Tick回数」に固定する。
-
-### 7.1 更新順序（1地形内部Tick）
+### 7.1 更新順序（1回の地形更新）
 
 1. プレート運動更新
 2. 境界再抽出/再分類（必要間隔で）
@@ -284,11 +433,36 @@ pub struct TectonicTerrainState {
 
 境界辺ごとに、両プレートの相対運動から毎回または一定間隔で分類する。
 
-分類の基本:
+```rust
+enum BoundaryType {
+	// 発散
+	Ridge,           // 海嶺（海洋地殻生成）
+	Rift,            // 大地溝帯（分裂途中）
+	
+	// 収束
+	Subduction,      // 海洋プレートが沈み込む
+	Collision,       // 大陸同士の衝突
+	
+	// 横ずれ
+	Transform,       // トランスフォーム断層
+	
+	// 中立
+	PassiveMargin,   // 受動的大陸縁辺（沈み込みなし）
+}
+```
 
-- 法線方向相対速度 > `+eps`: 収束
-- 法線方向相対速度 < `-eps`: 発散
-- それ以外: 横ずれ
+PassiveMarginの応力への影響
+- 境界応力はほぼゼロ
+- 堆積物が大陸棚に積み重なる（将来の地形に影響）
+- 将来的にSubductionに転換する可能性がある（大西洋がいずれ閉じるように）
+
+転換条件（PassiveMargin → Subduction）:
+```text
+oceanic_crust.age > subduction_initiation_threshold
+and
+oceanic_crust.density > subduction_density_threshold
+```
+上記を満たした境界は、再分類時にSubductionとして扱ってよい。
 
 補足:
 - 海洋/大陸の組み合わせ判定はプレート属性から求める
@@ -312,7 +486,7 @@ pub struct TectonicTerrainState {
 
 適用則:
 - 境界距離減衰を使う
-- 1内部Tickの変化量に上限を設ける
+- 1回の地形更新あたりの変化量に上限を設ける
 - 応力や地殻厚の状態に応じて効率を変える
 
 ### 7.5 応力緩和とアイソスタシー
@@ -326,49 +500,9 @@ pub struct TectonicTerrainState {
 - 境界近傍の過剰な標高スパイクを抑える
 - 長期的に自然な地形変形へ寄せる
 
-### 7.6 侵食・堆積（時間発展版）
-
-侵食は従来の同期一括処理ではなく、地形内部Tickに応じて増分適用する。
-
-- 毎内部Tickに少量実行する
-- または `budget_ticks` 内で一定回数だけ実行する
-- 変化量上限を守る
-- 河川再計算頻度を地形更新頻度と独立に調整してよい
-
-### 7.7 河川更新
-
-河川は地形更新の影響を受けるため、定期的に再計算する。
-
-本仕様では、実装時の迷いを避けるため、初版の判定ルールを固定する。
-
-河川再計算判定タイミング:
-- 各地形内部Tickの終端で判定する
-
-使用する指標（直近内部Tickまたは `step_tectonic_terrain` 内の集計値）:
-- `terrain_activity`: 正規化された標高総変化量
-- `boundary_activity`: 正規化された境界活動量
-
-合成指標:
-- `river_driver = max(terrain_activity, boundary_activity)`
-
-再計算間隔ルール（初版）:
-- `river_driver >= river_activity_high_threshold` の間は、`river_rebuild_interval_min` ごとに再計算
-- `river_driver <= river_activity_low_threshold` の間は、`river_rebuild_interval_max` ごとに再計算
-- その中間は線形補間した間隔を使う
-
-強制再計算条件:
-- 海陸反転セル数が閾値を超えたとき
-- `step_tectonic_terrain` 呼び出しの最終内部Tick
-
-初期既定値（暫定）:
-- `river_rebuild_interval_min = 1`
-- `river_rebuild_interval_max = 8`
-- `river_activity_high_threshold = 0.03`
-- `river_activity_low_threshold = 0.005`
-
 ### 7.8 活動量メトリクス
 
-時代遷移判定や予算配分のため、毎内部Tickまたは毎 `step_tectonic_terrain` 呼び出しで活動量を記録する。
+時代遷移判定や予算配分のため、毎 `step_tectonic_terrain` 呼び出しで活動量を記録する。
 
 例:
 - 標高総変化量
@@ -381,30 +515,6 @@ pub struct TectonicTerrainState {
 - `terrain_activity` は `sum(abs(delta_height)) / V` を基準に正規化する
 - `boundary_activity` は境界辺ごとの相対速度指標の平均または総和を正規化する
 - 正規化後の値域目標は `[0, 1]`
-
-## 8. `plate_id` の時間発展モード
-
-`plate_id` の扱いは段階導入できるように、仕様上2モードを定義する。
-
-### 8.1 モードA（固定プレート領域）
-
-- 初期化時の `plate_id` を固定する
-- 境界タイプと境界活動度のみ時間更新する
-- 地形は十分に動くが、境界線そのものはセル単位では移動しない
-
-用途:
-- 実装初期
-- 高速動作
-- 既存実装との互換性重視
-
-### 8.2 モードB（動的プレート領域）
-
-- 一定間隔で `plate_id` を再割当する
-- プレート境界の前進・後退を表現する
-- 地殻年齢、地殻種別、沈み込み履歴の更新ルールが必要
-
-注意:
-- モードBは複雑度が高いので、モードAを先に成立させる
 
 ## 9. `World` との接続
 
@@ -422,14 +532,11 @@ pub struct TectonicTerrainState {
 - 差分保存を行う場合も、地形内部状態の差分または再生可能なイベント列を保存する
 - `TerrainOutput` のみを保存して地形内部状態を再構築する運用は不可とする
 
-## 10. 決定性ルール（時間発展版）
+## 10. 決定性ルール
 
 - 初期化は seed + params に対して決定的である
 - Tick更新は、同じ初期状態・同じ更新順序・同じ予算配分なら決定的である
 - 活動量メトリクスも再現可能であることを目標とする
-
-注意:
-- 予算制御で間引き頻度を変えると結果が変わるため、比較時は更新スケジュールも入力条件として扱う
 
 ## 11. バリデーション基準
 
@@ -443,7 +550,6 @@ pub struct TectonicTerrainState {
 ### 11.2 動的整合性
 
 - 境界分類が相対速度と矛盾しない
-- 1内部Tickの標高変化量上限を超えない
 - 応力/年齢/厚さが負値などの不正値にならない
 - 河川ループは終端化または修正される
 
@@ -451,16 +557,3 @@ pub struct TectonicTerrainState {
 
 - 同一seed + params + 更新スケジュールで再現する
 - `plate_id` 固定モードでは初期 `plate_id` が一致する
-
-## 12. 段階導入方針（推奨）
-
-1. モードA（固定 `plate_id`）で、境界再分類 + 地形増分更新 + 侵食の時間発展を導入する
-2. 地殻年齢と沈み込み強度の連動を追加する
-3. モードB（動的 `plate_id`）を導入する
-4. `World` の時代スケール制御と完全統合する
-
-## 13. 既存仕様からの移行メモ
-
-- 従来の「プレート地形生成仕様」は、本仕様の初期化フェーズとして読み替える
-- 一発生成APIはデバッグ、プリセット生成、比較実験に残す
-- 実運用では、地殻形成期以降も低頻度で `step_tectonic_terrain` を継続実行する

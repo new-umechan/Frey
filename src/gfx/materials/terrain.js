@@ -6,7 +6,13 @@ function srgbHexToLinearRgb(hex) {
 }
 
 function viewModeToNumber(mode) {
-    return mode === "plates" ? 1 : 0;
+    if (mode === "plates") {
+        return 1;
+    }
+    if (mode === "mantle") {
+        return 2;
+    }
+    return 0;
 }
 
 export function createTerrainMaterial() {
@@ -46,6 +52,7 @@ export function createTerrainMaterial() {
                 `#include <common>
 attribute float terrainHeight;
 attribute float terrainRiverFlux;
+attribute float terrainMantleHeat;
 attribute float terrainPlateId;
 attribute float terrainLakeDepth;
 attribute float terrainDebugTrench;
@@ -55,6 +62,7 @@ attribute float terrainDebugOceanOceanArc;
 attribute vec2 terrainUv;
 varying float vTerrainHeight;
 varying float vTerrainRiverFlux;
+varying float vTerrainMantleHeat;
 varying float vTerrainPlateId;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
@@ -68,6 +76,7 @@ varying vec2 vTerrainUv;`,
                 `#include <begin_vertex>
 vTerrainHeight = terrainHeight;
 vTerrainRiverFlux = terrainRiverFlux;
+vTerrainMantleHeat = terrainMantleHeat;
 vTerrainPlateId = terrainPlateId;
 vTerrainLakeDepth = terrainLakeDepth;
 vTerrainDebugTrench = terrainDebugTrench;
@@ -94,6 +103,7 @@ uniform vec3 uDebugArcColor;
 uniform vec3 uDebugOceanOceanArcColor;
 varying float vTerrainHeight;
 varying float vTerrainRiverFlux;
+varying float vTerrainMantleHeat;
 varying float vTerrainPlateId;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
@@ -140,6 +150,25 @@ vec3 freyPlateModeColor(float plateId, float h) {
     float saturation = 0.58;
     float lightness = h > 0.0 ? 0.54 : 0.38;
     return hslToRgb(hue, saturation, lightness);
+}
+
+vec3 freyMantleModeColor(float heat01) {
+    float t = clamp(heat01, 0.0, 1.0);
+    vec3 c0 = vec3(0.004, 0.004, 0.016);
+    vec3 c1 = vec3(0.224, 0.047, 0.329);
+    vec3 c2 = vec3(0.573, 0.149, 0.404);
+    vec3 c3 = vec3(0.867, 0.326, 0.251);
+    vec3 c4 = vec3(0.988, 0.998, 0.644);
+    if (t < 0.25) {
+        return mix(c0, c1, t / 0.25);
+    }
+    if (t < 0.5) {
+        return mix(c1, c2, (t - 0.25) / 0.25);
+    }
+    if (t < 0.75) {
+        return mix(c2, c3, (t - 0.5) / 0.25);
+    }
+    return mix(c3, c4, (t - 0.75) / 0.25);
 }
 
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverFlux, float riverMask) {
@@ -195,7 +224,9 @@ vec3 freyApplyDebugOverlay(vec3 color) {
                 `#include <color_fragment>
 float riverMaskTex = texture2D(uRiverMask, vec2(fract(vTerrainUv.x), clamp(vTerrainUv.y, 0.0, 1.0))).r;
 vec3 terrainColor;
-if (uViewMode > 0.5) {
+if (uViewMode > 1.5) {
+    terrainColor = freyMantleModeColor(vTerrainMantleHeat);
+} else if (uViewMode > 0.5) {
     terrainColor = freyPlateModeColor(vTerrainPlateId, vTerrainHeight);
     if (vTerrainHeight <= 0.0) {
         terrainColor = mix(terrainColor, uSeaPlateMixColor, 0.25);
@@ -216,7 +247,7 @@ diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v2";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v3";
 
     const controller = {
         material,

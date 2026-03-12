@@ -184,10 +184,7 @@ impl WorldSimController {
         let plate_id = terrain
             .plate_id
             .iter()
-            .map(|&v| {
-                u16::try_from(v)
-                    .map_err(|_| JsValue::from_str("plate id exceeds u16 range"))
-            })
+            .map(|&v| u16::try_from(v).map_err(|_| JsValue::from_str("plate id exceeds u16 range")))
             .collect::<Result<Vec<_>, _>>()?;
 
         let core = world::CoreCells {
@@ -261,11 +258,7 @@ impl WorldSimController {
     }
 
     #[wasm_bindgen(js_name = set_simulation_rate)]
-    pub fn set_simulation_rate_js(
-        &mut self,
-        world_id: String,
-        rate: f32,
-    ) -> Result<(), JsValue> {
+    pub fn set_simulation_rate_js(&mut self, world_id: String, rate: f32) -> Result<(), JsValue> {
         if !rate.is_finite() {
             return Err(JsValue::from_str("rate must be finite"));
         }
@@ -328,6 +321,24 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: Some(sample_i32(&world_ref.core.river_next, stride)),
             },
+            "mantle_heat" => {
+                let default_mantle_heat = vec![0.5; world_ref.core.height.len()];
+                let mantle_heat = world_ref
+                    .terrain_dynamics
+                    .as_ref()
+                    .map(|dynamics| dynamics.mantle_heat.as_slice())
+                    .filter(|data| data.len() == world_ref.core.height.len())
+                    .unwrap_or(default_mantle_heat.as_slice());
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: mantle_heat.len() as u32,
+                    sampled_count: sampled_len(mantle_heat.len(), stride),
+                    f32_data: Some(sample_f32(mantle_heat, stride)),
+                    u32_data: None,
+                    i32_data: None,
+                }
+            }
             _ => {
                 return Err(JsValue::from_str(&format!(
                     "invalid field kind: {field_kind}"
@@ -377,8 +388,16 @@ impl WorldSimController {
             land_ratio: land_cells as f32 / cell_count,
             mean_height: sum_height / cell_count,
             mean_river_flux: sum_flux / cell_count,
-            max_height: if max_height.is_finite() { max_height } else { 0.0 },
-            min_height: if min_height.is_finite() { min_height } else { 0.0 },
+            max_height: if max_height.is_finite() {
+                max_height
+            } else {
+                0.0
+            },
+            min_height: if min_height.is_finite() {
+                min_height
+            } else {
+                0.0
+            },
             max_river_flux: max_flux,
         };
 
@@ -467,9 +486,11 @@ impl WorldSimController {
             let idx = op.cell_id as usize;
             let ok = match op.field.as_str() {
                 "height" => apply_f32(&mut managed.world.core.height, idx, op.value as f32),
-                "river_flux" => {
-                    apply_f32(&mut managed.world.core.river_flux, idx, (op.value as f32).max(0.0))
-                }
+                "river_flux" => apply_f32(
+                    &mut managed.world.core.river_flux,
+                    idx,
+                    (op.value as f32).max(0.0),
+                ),
                 "river_next" => apply_i32(&mut managed.world.core.river_next, idx, op.value as i32),
                 "plate_id" => {
                     if op.value < 0.0 || op.value > u16::MAX as f64 {
@@ -498,14 +519,17 @@ impl WorldSimController {
             applied,
             rejected,
         };
-        serde_wasm_bindgen::to_value(&result)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize intervention result: {err}")))
+        serde_wasm_bindgen::to_value(&result).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize intervention result: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = fork_world)]
     pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
         if !tick.is_finite() || tick < 0.0 {
-            return Err(JsValue::from_str("tick must be a non-negative finite value"));
+            return Err(JsValue::from_str(
+                "tick must be a non-negative finite value",
+            ));
         }
         let tick_u64 = tick.round() as u64;
         let (snapshot, source_rate, source_params) = {
@@ -568,17 +592,17 @@ impl WorldSimController {
             world_id,
             tick: tick as f64,
         };
-        serde_wasm_bindgen::to_value(&result)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize checkpoint result: {err}")))
+        serde_wasm_bindgen::to_value(&result).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize checkpoint result: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = load_checkpoint)]
     pub fn load_checkpoint_js(&mut self, snapshot_id: String) -> Result<JsValue, JsValue> {
-        let snapshot = self
-            .snapshots
-            .get(&snapshot_id)
-            .cloned()
-            .ok_or_else(|| JsValue::from_str(&format!("checkpoint not found: {snapshot_id}")))?;
+        let snapshot =
+            self.snapshots.get(&snapshot_id).cloned().ok_or_else(|| {
+                JsValue::from_str(&format!("checkpoint not found: {snapshot_id}"))
+            })?;
 
         let world_id = self.next_world_id();
         let mut history = BTreeMap::new();
@@ -739,9 +763,7 @@ mod tests {
         controller
             .step_world_js(world_id.clone(), 3)
             .expect("step world");
-        let metrics = controller
-            .get_metrics_js(world_id)
-            .expect("get metrics");
+        let metrics = controller.get_metrics_js(world_id).expect("get metrics");
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert!(metrics_data.tick >= 1.0);

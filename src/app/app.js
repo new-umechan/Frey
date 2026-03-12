@@ -31,7 +31,7 @@ import { saveDebugSnapshotIfNeeded } from "../sim/debug/snapshot.js";
 
 function getFieldData(controller, worldId, fieldKind) {
     const response = controller.get_field(worldId, fieldKind, 1);
-    if (fieldKind === "height" || fieldKind === "river_flux") {
+    if (fieldKind === "height" || fieldKind === "river_flux" || fieldKind === "mantle_heat") {
         return new Float32Array(response?.f32_data ?? []);
     }
     if (fieldKind === "plate_id") {
@@ -79,6 +79,7 @@ function buildCoreFromController({
     plateId,
     riverFlux,
     riverNext,
+    mantleHeat,
     plateInfo,
     targetLandRatio,
 }) {
@@ -97,6 +98,7 @@ function buildCoreFromController({
         plateId,
         riverFlux,
         riverNext,
+        mantleHeat,
         lakeDepth: new Float32Array(cellCount),
         plateInfo,
         vertexWeight,
@@ -207,6 +209,7 @@ export async function createApp() {
     geometry.setAttribute("terrainUv", new THREE.BufferAttribute(terrainUv, 2));
     geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainRiverFlux", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainMantleHeat", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainPlateId", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainDebugTrench", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
@@ -326,6 +329,7 @@ export async function createApp() {
         const riverFlux = getFieldData(worldSimController, worldId, "river_flux");
         const plateId = getFieldData(worldSimController, worldId, "plate_id");
         const riverNext = getFieldData(worldSimController, worldId, "river_next");
+        const mantleHeat = getFieldData(worldSimController, worldId, "mantle_heat");
 
         const plateInfo = buildPlateInfoFromStats(plateStats);
         const core = buildCoreFromController({
@@ -333,6 +337,7 @@ export async function createApp() {
             plateId,
             riverFlux,
             riverNext,
+            mantleHeat,
             plateInfo,
             targetLandRatio: metrics.land_ratio,
         });
@@ -425,7 +430,7 @@ export async function createApp() {
     }
 
     function setViewMode(nextMode) {
-        const normalizedMode = nextMode === "plates" ? "plates" : "normal";
+        const normalizedMode = nextMode === "plates" || nextMode === "mantle" ? nextMode : "normal";
         currentViewMode = normalizedMode;
         for (const input of viewModeInputs) {
             input.checked = input.value === normalizedMode;

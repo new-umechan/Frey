@@ -25,7 +25,7 @@ export const LAYER_KIND = Object.freeze({
 export const ERA_SCALE_PRESETS = Object.freeze({
     crust: {
         label: "地殻形成期",
-        tickLabel: "100万年",
+        tickLabel: "500万年",
         runtimeTickMs: 70,
         weights: { terrain: 4.0, river: 0.25, climate: 0.0, ecology: 0.0, civilization: 0.0 },
     },

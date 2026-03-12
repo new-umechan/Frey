@@ -33,6 +33,10 @@ export function createTerrainVisualController({
             new THREE.BufferAttribute(currentTerrainData.riverFlux, 1),
         );
         geometry.setAttribute(
+            "terrainMantleHeat",
+            new THREE.BufferAttribute(currentTerrainData.mantleHeat, 1),
+        );
+        geometry.setAttribute(
             "terrainPlateId",
             new THREE.BufferAttribute(Float32Array.from(currentTerrainData.plateId), 1),
         );

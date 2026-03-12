@@ -85,6 +85,12 @@ export function setupUiControls({
             return;
         }
 
+        if (event.key === "3") {
+            event.preventDefault();
+            onViewModeChange("mantle");
+            return;
+        }
+
         if (event.key.toLowerCase() === "t") {
             event.preventDefault();
             seedInput.focus();

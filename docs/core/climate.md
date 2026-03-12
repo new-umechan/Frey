@@ -1,8 +1,6 @@
 # Climateの詳細仕様
 
-現行の再設計版は次を正本とする。
 
-- `docs/core/redesign/06_climate_precip_k_modulation.md`
 
 関連:
 

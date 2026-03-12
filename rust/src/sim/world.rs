@@ -57,35 +57,91 @@ pub struct CoreCells {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrainDynamicsState {
     #[serde(default)]
-    pub tick_internal: u64,
+    pub update_index: u64,
     #[serde(default)]
     pub plate_states: Vec<PlateKinematicsState>,
     #[serde(default)]
     pub vertex_states: Vec<VertexCrustState>,
     #[serde(default)]
     pub boundary_state: BoundaryDynamicsState,
+    #[serde(default)]
+    pub mantle_heat: Vec<f32>,
+    #[serde(default)]
+    pub cached_metrics: TerrainStepMetrics,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlateKinematicsState {
     pub angular_axis: [f32; 3],
     pub angular_speed: f32,
+    #[serde(default)]
     pub phase_offset: f32,
     pub activity: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct VertexCrustState {
-    pub ocean_age_norm: f32,
-    pub uplift_memory: f32,
-    pub is_ocean_cell: u8,
-    pub target_buoyancy: f32,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CrustType {
+    #[default]
+    Continental,
+    Oceanic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum BoundaryType {
+    Ridge,
+    Rift,
+    Subduction,
+    Collision,
+    Transform,
+    #[default]
+    PassiveMargin,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct StressTensor {
+    pub xx: f32,
+    pub yy: f32,
+    pub xy: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VertexCrustState {
+    #[serde(default)]
+    pub crust_type: CrustType,
+    #[serde(default = "default_thickness")]
+    pub thickness: f32,
+    #[serde(default = "default_density")]
+    pub density: f32,
+    #[serde(default)]
+    pub age: f32,
+    #[serde(default)]
+    pub stress: f32,
+    #[serde(default)]
+    pub temperature: f32,
+    #[serde(default = "default_rigidity")]
+    pub rigidity: f32,
+    #[serde(default)]
+    pub stress_tensor: StressTensor,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct BoundaryDynamicsState {
+    #[serde(default = "default_reclassify_interval")]
     pub reclassify_interval_ticks: u32,
-    pub last_reclassify_tick: u64,
+    #[serde(default)]
+    pub steps_since_reclassify: u32,
+    #[serde(default)]
+    pub dominant_type: Vec<BoundaryType>,
+    #[serde(default)]
+    pub activity: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct TerrainStepMetrics {
+    pub terrain_activity: f32,
+    pub boundary_activity: f32,
+    pub uplift_rate: f32,
+    pub subsidence_rate: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -336,6 +392,22 @@ fn convergence_threshold(era: EraKind) -> f32 {
 
 fn default_target_sea_ratio() -> f32 {
     0.62
+}
+
+fn default_thickness() -> f32 {
+    0.6
+}
+
+fn default_density() -> f32 {
+    0.5
+}
+
+fn default_rigidity() -> f32 {
+    0.7
+}
+
+fn default_reclassify_interval() -> u32 {
+    4
 }
 
 #[cfg(test)]
