@@ -7,8 +7,9 @@ Freyの仕様メモと設計ドキュメントをまとめる場所。
 1. `docs/architecture/overview.md`
 2. `docs/architecture/phase_control.md`
 3. `docs/architecture/data_model.md`
-4. `docs/core/` 配下の各仕様
-5. `docs/interface/` 配下の各仕様
+4. `docs/architecture/module_boundaries.md`
+5. `docs/core/` 配下の各仕様
+6. `docs/interface/` 配下の各仕様
 
 ### 世界地形シミュレーション再設計（4点セット）
 
@@ -33,11 +34,12 @@ Freyの仕様メモと設計ドキュメントをまとめる場所。
 
 ### `docs/architecture/`
 
-全体構成、時代スケール制御、Worldの責務など、上位設計を置く。
+歴史シミュレータの全体構成、共有 `World State`、時間制御を置く。
 
-- `overview.md`: 全体像、時代の考え方、並列進行の方針
-- `phase_control.md`: 時代スケール制御、遷移、更新比率の方針
-- `data_model.md`: `World` / `core` / `layers` などの構造メモ
+- `overview.md`: 設計思想、`Exec / Geology / Climate / Ecology / Civilization`、共有 `World State`、更新DAG
+- `phase_control.md`: tick、時代、予算、時代遷移
+- `data_model.md`: `World State` と `Exec State` の役割分担
+- `module_boundaries.md`: 各モジュールが何を読み、何を書くか。河川の責務分担を含む
 
 ### `docs/core/`
 
@@ -68,6 +70,11 @@ UIとWASM APIなど、外部との接続仕様を置く。
 - `core`: 何を計算するか（入力、状態量、更新則）
 - `interface`: 外からどう使うか（UI/API）
 - `manage`: 作業メモ、運用メモ
+
+補足:
+
+- `architecture` では実装上の補助構造より、共有状態と更新順の原則を優先して記述する
+- 画面エントリーポイントや描画接着の詳細は `architecture` の主対象ではない
 
 ## 注意
 
