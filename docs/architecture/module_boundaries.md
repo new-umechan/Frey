@@ -5,7 +5,8 @@
 この文書は、各モジュールが `World State` の何を読み、何を書き、何を書かないかを定義する。
 
 各モジュールは他モジュールへ直接依存しない。
-共有面は `World State` のみである。
+モジュール間の共有面は `World State` である。
+進行管理入力は `Exec State` である。
 
 ## `Exec`
 
@@ -19,7 +20,7 @@
 - 次tick
 - 時代
 - `SubsystemBudgets`
-- フィードバックのステージング結果
+- `FeedbackQueue` の適用結果
 - 履歴とスナップショット
 
 ### 書かないもの
@@ -29,6 +30,7 @@
 ### 補足
 
 `Exec` は進行管理だけを担当する。
+`FeedbackQueue` を tick開始時に `World State` へ適用する責務も持つ。
 個別の自然法則や社会法則は持たない。
 
 ## `Geology`
@@ -60,6 +62,7 @@
 ### 補足
 
 地形を書き換える責任は `Geology` に一本化する。
+地殻形成期に `Climate` や `Ecology` が未有効な間は、降水に簡易な初期降水分布、流量に 0、流域植生に なし を既定値として使う。
 
 ## `Climate`
 
@@ -137,7 +140,7 @@
 - 取水
 - ダム
 - 汚染
-- 環境へのフィードバック要求
+- `FeedbackQueue` への環境フィードバック要求
 
 ### 書かないもの
 
@@ -148,6 +151,7 @@
 ### 補足
 
 `Civilization` は環境へ影響を与えうるが、その影響は次tickへ遅延させる。
+tick N では `FeedbackQueue` に書き込むだけで、その場では適用しない。
 同一tick内で `Geology` や `Climate` を逆流更新しない。
 
 ## tick内依存
@@ -172,6 +176,11 @@ FEEDBACK_EDGES = {
     Civilization: [Geology, Climate, Ecology],
 }
 ```
+
+処理は2段階に分ける。
+
+- tick N で `Civilization` が `FeedbackQueue` に書く
+- tick N+1 の開始時に `Exec` が `FeedbackQueue` を `World State` に適用する
 
 これにより、依存グラフはDAGのまま保たれる。
 

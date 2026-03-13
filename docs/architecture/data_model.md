@@ -33,7 +33,7 @@ tick進行や履歴管理のための状態は `Exec State` に置く。
 
 ### `Exec State`
 
-`Exec State` は、世界を進めるための管理状態である。
+`Exec State` は、世界を進めるための進行管理状態である。
 各モジュールの対象世界そのものではない。
 
 例:
@@ -43,7 +43,7 @@ tick進行や履歴管理のための状態は `Exec State` に置く。
 - `Tick.real_years`
 - `SubsystemBudgets`
 - 更新順序
-- フィードバックのステージング
+- `FeedbackQueue`
 - 履歴
 - スナップショット
 - 再生速度
@@ -105,7 +105,7 @@ ExecState = {
 ## 更新器との関係
 
 更新器はステートレスに保つ。
-つまり、更新器自身は長寿命の内部状態を持たず、`World State` と `Exec State` を引数として受け取り、次の状態を書き戻すだけにする。
+つまり、更新器自身は長寿命の内部状態を持たず、共有状態としての `World State` と進行管理入力としての `Exec State` を引数として受け取り、次の状態を書き戻すだけにする。
 
 ```python
 def update_geology(world_state, exec_state): ...
@@ -113,6 +113,9 @@ def update_climate(world_state, exec_state): ...
 def update_ecology(world_state, exec_state): ...
 def update_civilization(world_state, exec_state): ...
 ```
+
+`FeedbackQueue` は `Exec State` に置く。
+tick N で `Civilization` がここに環境影響を書き込み、tick N+1 の開始時に `Exec` が `World State` へ適用する。
 
 ## 現行実装との差分
 

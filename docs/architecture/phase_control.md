@@ -49,6 +49,13 @@ class Tick:
 | 文明成立期 | `Civilization` を初回有効化 |
 | 歴史展開期 | 既存状態をすべて保持したまま運用 |
 
+地殻形成期では、`Climate` と `Ecology` がまだ有効でなくても `Geology` が未初期化値を読まないようにする。
+この時期の既定入力は次の通り。
+
+- 降水は、地殻形成期向けの簡易な初期降水分布を使う
+- 流量は 0 とする
+- 流域植生は なし とする
+
 ## 予算配分
 
 `SubsystemBudgets` は、各モジュールに与える内部更新回数の近似である。
@@ -85,17 +92,19 @@ EPOCH_TRANSITIONS = {
 
 1tickの標準順序は次の通り。
 
-1. `Geology`
-2. `Climate`
-3. `Ecology`
-4. `Civilization`
-5. フィードバック適用
-6. 時代遷移判定
+1. tick開始時に `FeedbackQueue` の内容を `World State` に適用する
+2. `Geology`
+3. `Climate`
+4. `Ecology`
+5. `Civilization`
+6. `Civilization` が環境影響を `FeedbackQueue` に格納する
+7. 時代遷移判定
 
 補足:
 
 - 同一tick内の依存はDAGで保証する
-- `Civilization` から環境への副作用は、次tick用にステージングしてから適用する
+- `FeedbackQueue` への格納は tick N の末尾で行う
+- `FeedbackQueue` の適用は tick N+1 の開始時に行う
 - 同一tick内で逆向きの即時反映は行わない
 
 ## 将来の拡張候補

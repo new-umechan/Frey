@@ -23,7 +23,7 @@ Exec
 ```
 
 - `Exec`
-  - tick進行、予算配分、時代遷移、履歴、フィードバック適用を担当する
+  - tick進行、予算配分、時代遷移、履歴、`FeedbackQueue` の適用タイミング管理を担当する
 - `Geology`
   - 地形の変化が遅く蓄積する領域を担当する
 - `Climate`
@@ -37,6 +37,7 @@ Exec
 
 モジュール間の直接依存は持たない。
 すべてのモジュールは共有の `World State` を読み書きする。
+すべての更新器は進行管理入力として `Exec State` を参照する。
 更新器はステートレスに保つ。
 
 ```text
@@ -53,7 +54,8 @@ Exec
 ```
 
 ここでいう `World State` は、各セルが持つ現在値の集合である。
-各モジュールは他モジュールの内部実装を知らず、`World State` だけを共有面として使う。
+各モジュールは他モジュールの内部実装を知らず、`World State` を共有面として使う。
+`Exec State` は、`Tick.real_years`、`SubsystemBudgets`、現在の時代、`FeedbackQueue` などの進行管理情報を与える。
 
 ## 更新順序
 
@@ -80,7 +82,8 @@ FEEDBACK_EDGES = {
 - `Climate` は地形条件を読んで更新する
 - `Ecology` は地形と気候を読んで更新する
 - `Civilization` は地形、気候、生態を読んで更新する
-- `Civilization` が環境へ与える影響は、その場で逆流させず、次tick用に遅延させる
+- tick N では `Civilization` が環境影響を `FeedbackQueue` に書く
+- tick N+1 の開始時に `Exec` が `FeedbackQueue` を `World State` に適用する
 
 ## 河川の扱い
 
