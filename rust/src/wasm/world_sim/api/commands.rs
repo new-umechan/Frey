@@ -4,14 +4,15 @@ use wasm_bindgen::prelude::*;
 
 use crate::domains::types::TerrainParams;
 
+use super::common::{
+    history_tick_not_available_error, validate_checkpoint_tick, validate_integer_tick,
+    validate_non_negative_tick, world_not_found_error,
+};
 use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
-use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState, HISTORY_SNAPSHOT_INTERVAL};
+use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
 use super::super::types::{
-    CheckpointResult,
-    ForkWorldResult,
-    InterventionOp,
-    InterventionResult,
-    LoadCheckpointResult,
+    CheckpointResult, ForkWorldResult, InterventionOp, InterventionResult, LoadCheckpointResult,
+    RestoreWorldResult,
 };
 use super::super::WorldSimController;
 
@@ -29,7 +30,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get_mut(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
 
         let mut applied = 0u32;
         let mut rejected = 0u32;
@@ -88,28 +89,17 @@ impl WorldSimController {
 
     #[wasm_bindgen(js_name = fork_world)]
     pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
-        if !tick.is_finite() || tick < 0.0 {
-            return Err(JsValue::from_str(
-                "tick must be a non-negative finite value",
-            ));
-        }
-        let tick_u64 = tick.round() as u64;
+        let tick_u64 = validate_non_negative_tick(tick)?;
         let (snapshot, source_rate, source_params) = {
             let source = self
                 .worlds
                 .get(&world_id)
-                .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
-            if tick_u64 % HISTORY_SNAPSHOT_INTERVAL != 0 {
-                return Err(JsValue::from_str(&format!(
-                    "tick {tick_u64} is not checkpointed; available ticks are saved every {HISTORY_SNAPSHOT_INTERVAL} ticks"
-                )));
-            }
+                .ok_or_else(|| world_not_found_error(&world_id))?;
+            validate_checkpoint_tick(tick_u64)?;
             let snapshot = if let Some(found) = source.history.get(&tick_u64) {
                 found.clone()
             } else {
-                return Err(JsValue::from_str(&format!(
-                    "tick {tick_u64} is not available in history"
-                )));
+                return Err(history_tick_not_available_error(tick_u64));
             };
             (
                 snapshot,
@@ -140,13 +130,48 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize fork result: {err}")))
     }
 
+    #[wasm_bindgen(js_name = restore_world_to_tick)]
+    pub fn restore_world_to_tick_js(
+        &mut self,
+        world_id: String,
+        tick: f64,
+    ) -> Result<JsValue, JsValue> {
+        let tick_u64 = validate_non_negative_tick(tick)?;
+        validate_integer_tick(tick, tick_u64)?;
+        validate_checkpoint_tick(tick_u64)?;
+
+        let managed = self
+            .worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let restored_world = managed
+            .history
+            .get(&tick_u64)
+            .cloned()
+            .ok_or_else(|| history_tick_not_available_error(tick_u64))?;
+
+        managed.world = restored_world;
+        managed.sync_state = WorldSyncState::from_world(&managed.world);
+        managed
+            .history
+            .insert(managed.world.exec.tick, managed.world.clone());
+
+        let result = RestoreWorldResult {
+            world_id,
+            tick: managed.world.exec.tick as f64,
+        };
+        serde_wasm_bindgen::to_value(&result).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize restore world result: {err}"))
+        })
+    }
+
     #[wasm_bindgen(js_name = save_checkpoint)]
     pub fn save_checkpoint_js(&mut self, world_id: String) -> Result<JsValue, JsValue> {
         let (world_clone, tick) = {
             let managed = self
                 .worlds
                 .get(&world_id)
-                .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+                .ok_or_else(|| world_not_found_error(&world_id))?;
             (managed.world.clone(), managed.world.exec.tick)
         };
         let snapshot_id = self.next_snapshot_id();

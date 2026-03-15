@@ -44,6 +44,7 @@ import {
     syncWorldFromController,
 } from "./world-sync.js";
 import { advanceWorldLoop, resetWorldProgress } from "./world-loop.js";
+import { createPlaybackController } from "./playback-controller.js";
 
 export async function createApp() {
     const {
@@ -64,6 +65,8 @@ export async function createApp() {
         climateMetricInputs,
         climateLegend,
         climateControlHint,
+        playbackControls,
+        eventLogList,
         statFields,
     } = collectAppElements();
 
@@ -140,6 +143,7 @@ export async function createApp() {
     };
     let currentTerrainData = world.core;
     const worldState = world.runtime;
+    const playbackState = worldState.playback;
     const debugSnapshotTickSet = new Set(DEBUG_SNAPSHOT_TICKS);
     const debugSnapshotSavedTicks = new Set();
 
@@ -227,6 +231,9 @@ export async function createApp() {
         climateMetricGroup.hidden = !isClimateMode;
         climateLegend.panel.hidden = !isClimateMode;
         climateControlHint.hidden = !isClimateMode;
+        climateMetricGroup.setAttribute("aria-hidden", String(!isClimateMode));
+        climateLegend.panel.setAttribute("aria-hidden", String(!isClimateMode));
+        climateControlHint.setAttribute("aria-hidden", String(!isClimateMode));
         for (const input of climateMetricInputs) {
             input.checked = input.value === currentClimateMetric;
         }
@@ -241,6 +248,35 @@ export async function createApp() {
         climateLegend.min.textContent = stats ? meta.formatter(stats.min) : "-";
         climateLegend.mid.textContent = stats ? meta.formatter(stats.mid) : "-";
         climateLegend.max.textContent = stats ? meta.formatter(stats.max) : "-";
+    }
+
+    let playbackController = null;
+
+    function syncWorldFromActiveController() {
+        if (!activeWorldId) {
+            return null;
+        }
+        const result = syncWorldFromController({
+            worldSimController,
+            worldId: activeWorldId,
+            world,
+            basePositions,
+            currentSeed,
+            currentSurfaceMode,
+            terrainRenderer,
+            createEraMetrics,
+            buildEraMetricsFromRuntime,
+            setEraScale,
+            setCurrentTerrainData: (core) => {
+                currentTerrainData = core;
+            },
+            statFields,
+            level: LEVEL,
+        });
+        syncClimateUi();
+        plateHover.hidePopup();
+        playbackController.syncAfterWorldSync();
+        return result;
     }
 
     function setSurfaceMode(nextMode) {
@@ -267,6 +303,7 @@ export async function createApp() {
     }
 
     function setEraScale(nextEraScale, metrics = null) {
+        const previousEra = currentEraScale;
         currentEraScale = getEraScalePreset(nextEraScale).key ?? DEFAULT_ERA_SCALE;
         currentEraMetrics = metrics ?? createEraMetrics(currentEraScale);
         worldState.runtimeTickMs = currentEraMetrics.runtimeTickMs;
@@ -279,6 +316,14 @@ export async function createApp() {
         );
         const preset = getEraScalePreset(currentEraScale);
         setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
+        if (activeWorldId && previousEra !== currentEraScale) {
+            const previousLabel = getEraScalePreset(previousEra).label;
+            playbackController.appendPlaybackEvent(
+                "era-changed",
+                "時代遷移",
+                `${previousLabel} -> ${preset.label}`,
+            );
+        }
     }
 
     function shouldRefreshStatsAtTick(tick) {
@@ -299,7 +344,7 @@ export async function createApp() {
 
     function stepWorldTick() {
         if (!activeWorldId || !currentTerrainData) {
-            return;
+            return false;
         }
 
         const nextTick = world.tick + 1;
@@ -345,6 +390,8 @@ export async function createApp() {
                 `Running (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,
             );
         }
+        playbackController.syncAfterWorldStep();
+        return true;
     }
 
     function setViewMode(nextMode) {
@@ -403,25 +450,9 @@ export async function createApp() {
                 createInitialBudgets,
                 createEraMetrics,
             );
-            syncWorldFromController({
-                worldSimController,
-                worldId: activeWorldId,
-                world,
-                basePositions,
-                currentSeed,
-                currentSurfaceMode,
-                terrainRenderer,
-                createEraMetrics,
-                buildEraMetricsFromRuntime,
-                setEraScale,
-                setCurrentTerrainData: (core) => {
-                    currentTerrainData = core;
-                },
-                statFields,
-                level: LEVEL,
-            });
-            syncClimateUi();
-            plateHover.hidePopup();
+            playbackController.setPlaybackRunning(true);
+            syncWorldFromActiveController();
+            playbackController.appendPlaybackEvent("world-generated", "地形生成", `seed=${currentSeed}`);
 
             const eraPreset = getEraScalePreset(currentEraScale);
             setStatus(`Ready (${currentSeed}) | ${eraPreset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
@@ -432,6 +463,20 @@ export async function createApp() {
         }
     }
 
+    playbackController = createPlaybackController({
+        playbackControls,
+        eventLogList,
+        playbackState,
+        worldState,
+        worldSimController,
+        getActiveWorldId: () => activeWorldId,
+        getCurrentTerrainData: () => currentTerrainData,
+        getWorldTick: () => world.tick,
+        syncWorldFromActiveController,
+        stepWorldTick,
+        setStatus,
+    });
+
     setupUiControls({
         canvas,
         viewportPanel,
@@ -440,6 +485,8 @@ export async function createApp() {
         eraScaleSelect,
         viewModeInputs,
         climateMetricInputs,
+        playbackControls,
+        eventLogList,
         seedForm,
         seedInput,
         onResize,
@@ -462,6 +509,12 @@ export async function createApp() {
         onClimateMetricChange: setClimateMetric,
         onToggleSurface: setSurfaceMode,
         onToggleDebug: setDebugModeEnabled,
+        onTogglePlay: playbackController.handleTogglePlay,
+        onStepForward: playbackController.handleStepForward,
+        onRewind: playbackController.handleRewind,
+        onHistorySeek: playbackController.handleHistorySeek,
+        onHistoryStepDirection: playbackController.handleHistoryStepDirection,
+        onEventLogJump: playbackController.handleHistoryJump,
         getDebugEnabled: () => debugEnabled,
         getCurrentSurfaceMode: () => currentSurfaceMode,
         getCurrentViewMode: () => currentViewMode,
@@ -487,6 +540,10 @@ export async function createApp() {
     );
     setEraScale(DEFAULT_ERA_SCALE, currentEraMetrics);
     syncClimateUi();
+    playbackController.refreshHistoryTicks();
+    playbackController.syncPlaybackUi();
+    playbackController.notePlaybackOverlayActivity();
+    playbackController.bindOverlayActivityEvents(viewportPanel);
     onResize();
     plateHover.hidePopup();
 
@@ -495,7 +552,7 @@ export async function createApp() {
             advanceWorldLoop(
                 nowMs,
                 worldState,
-                () => worldState.isRunning && Boolean(currentTerrainData) && Boolean(activeWorldId),
+                () => playbackState.isPlaying && Boolean(currentTerrainData) && Boolean(activeWorldId),
                 stepWorldTick,
             );
             cameraController.getActiveControls().update();

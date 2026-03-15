@@ -115,6 +115,30 @@ pub(super) struct LoadCheckpointResult {
 }
 
 #[derive(Serialize)]
+pub(super) struct HistoryTicksResponse {
+    pub world_id: String,
+    pub interval: u32,
+    pub ticks: Vec<f64>,
+}
+
+#[derive(Serialize)]
+pub(super) struct RestoreWorldResult {
+    pub world_id: String,
+    pub tick: f64,
+}
+
+#[derive(Serialize)]
+pub(super) struct CheckpointListEntry {
+    pub snapshot_id: String,
+    pub tick: f64,
+}
+
+#[derive(Serialize)]
+pub(super) struct CheckpointListResponse {
+    pub checkpoints: Vec<CheckpointListEntry>,
+}
+
+#[derive(Serialize)]
 pub(super) struct DeltaRange {
     pub start: u32,
     pub end: u32,

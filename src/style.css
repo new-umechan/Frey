@@ -27,6 +27,10 @@ body {
     height: 100%;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: "IBM Plex Sans JP", "Manrope", sans-serif;
     color: var(--ink);
@@ -39,8 +43,8 @@ body {
     grid-template-rows: auto minmax(0, 1fr);
     width: 100%;
     height: 100%;
-    padding: 0.9rem;
-    gap: 0.8rem;
+    padding: 0;
+    gap: 0;
 }
 
 .top-bar {
@@ -50,10 +54,11 @@ body {
     display: grid;
     grid-template-columns: auto minmax(14rem, 20rem);
     align-items: center;
-    gap: 0.85rem;
-    padding: 0.7rem 0.9rem;
-    border: 1px solid var(--line);
-    background: var(--panel);
+    gap: 0.75rem;
+    padding: 0.55rem 0.8rem;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in oklab, var(--panel), white 6%);
     position: relative;
     z-index: 1;
 }
@@ -126,7 +131,7 @@ body {
     position: relative;
     min-width: 0;
     min-height: 0;
-    border: 1px solid var(--line);
+    border: 0;
     background: #EDF4FA;
     overflow: hidden;
 }
@@ -149,6 +154,27 @@ body {
     white-space: pre-line;
 }
 
+.playback-overlay {
+    position: absolute;
+    left: 50%;
+    bottom: 0.9rem;
+    transform: translate(-50%, 0);
+    width: 90%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    z-index: 8;
+    opacity: 1;
+    transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.playback-overlay.is-idle-hidden {
+    transform: translate(-50%, 1.4rem);
+    opacity: 0;
+    pointer-events: none;
+}
+
 .sidebar {
     grid-column: 2;
     grid-row: 1 / 3;
@@ -156,8 +182,9 @@ body {
     min-height: 0;
     display: grid;
     grid-template-columns: var(--sidebar-rail) minmax(0, 1fr);
-    border: 1px solid var(--line);
-    background: var(--panel);
+    border: 0;
+    border-left: 1px solid var(--line);
+    background: color-mix(in oklab, var(--panel), white 5%);
     transition: grid-template-columns 220ms ease;
     position: relative;
     z-index: 2;
@@ -174,7 +201,7 @@ body {
 .sidebar-toggle {
     border: 0;
     border-right: 1px solid var(--line);
-    background: var(--panel-strong);
+    background: transparent;
     color: var(--ink);
     cursor: pointer;
     padding: 0.75rem 0.45rem;
@@ -205,20 +232,20 @@ body {
     min-width: 0;
     min-height: 0;
     overflow: auto;
-    padding: 0.75rem;
+    padding: 0.3rem 0.45rem;
     display: grid;
     align-content: start;
     gap: 0.65rem;
 }
 
 .panel {
-    padding: 0.65rem 0.7rem;
-    border: 1px solid color-mix(in oklab, var(--line), transparent 10%);
-    background: color-mix(in oklab, var(--panel), white 8%);
+    padding: 0.42rem 0.25rem;
+    border: 0;
+    background: transparent;
 }
 
 .panel h2 {
-    margin: 0 0 0.35rem;
+    margin: 0 0 0.28rem;
     font-family: "Manrope", sans-serif;
     font-size: 0.86rem;
     letter-spacing: 0.04em;
@@ -226,9 +253,238 @@ body {
 }
 
 .panel p {
-    margin: 0.22rem 0;
+    margin: 0.16rem 0;
     color: var(--ink-soft);
     font-size: 0.84rem;
+}
+
+.control-button {
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background: color-mix(in oklab, var(--panel), white 18%);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.45rem 0.52rem;
+    cursor: pointer;
+}
+
+.control-button:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--accent-soft), white 32%);
+}
+
+.control-button:disabled {
+    color: color-mix(in oklab, var(--ink-soft), transparent 30%);
+    cursor: not-allowed;
+}
+
+.control-button:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.playback-head-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.playback-play-button {
+    min-width: 2.2rem;
+    min-height: 2.0rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    display: inline-grid;
+    place-items: center;
+}
+
+.playback-tick {
+    margin: 0;
+    justify-self: end;
+    font-size: 0.78rem;
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.playback-seek-shell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
+}
+
+.playback-seek-track {
+    display: grid;
+    gap: 0.24rem;
+    margin: 0;
+}
+
+.seek-slider {
+    --seek-progress: 0%;
+    appearance: none;
+    width: 100%;
+    height: 0.95rem;
+    margin: 0;
+    border-radius: 999px;
+    border: 0;
+    background:
+        linear-gradient(
+            to right,
+            color-mix(in oklab, var(--accent), white 15%) 0%,
+            color-mix(in oklab, var(--accent), white 15%) var(--seek-progress),
+            color-mix(in oklab, var(--line), white 36%) var(--seek-progress),
+            color-mix(in oklab, var(--line), white 36%) 100%
+        );
+    cursor: pointer;
+}
+
+.seek-slider:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.seek-slider:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.seek-slider::-webkit-slider-runnable-track {
+    height: 0.32rem;
+    border-radius: 999px;
+    background: transparent;
+}
+
+.seek-slider::-webkit-slider-thumb {
+    appearance: none;
+    margin-top: -0.33rem;
+    width: 0.98rem;
+    height: 0.98rem;
+    border-radius: 50%;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 26%);
+    background: color-mix(in oklab, var(--panel), white 42%);
+    box-shadow: 0 1px 3px color-mix(in oklab, var(--ink), transparent 80%);
+}
+
+.seek-slider::-moz-range-track {
+    height: 0.32rem;
+    border-radius: 999px;
+    background: transparent;
+}
+
+.seek-slider::-moz-range-progress {
+    height: 0.32rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--accent), white 15%);
+}
+
+.seek-slider::-moz-range-thumb {
+    width: 0.98rem;
+    height: 0.98rem;
+    border-radius: 50%;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 26%);
+    background: color-mix(in oklab, var(--panel), white 42%);
+    box-shadow: 0 1px 3px color-mix(in oklab, var(--ink), transparent 80%);
+}
+
+.seek-range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+}
+
+.seek-nudge-button {
+    border: 1px solid color-mix(in oklab, var(--line), transparent 10%);
+    background: color-mix(in oklab, var(--panel), white 24%);
+    color: var(--ink);
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(0.22rem);
+    transition: opacity 160ms ease, transform 190ms ease, background-color 120ms ease;
+    pointer-events: none;
+}
+
+.seek-nudge-button:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--accent-soft), white 34%);
+}
+
+.seek-nudge-button:disabled {
+    color: color-mix(in oklab, var(--ink-soft), transparent 30%);
+    cursor: not-allowed;
+}
+
+.seek-nudge-button:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.playback-overlay:has(.playback-seek-shell:hover) .seek-nudge-button,
+.playback-overlay:has(.playback-seek-shell:focus-within) .seek-nudge-button {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    .seek-nudge-button {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+}
+
+.checkpoint-actions {
+    display: grid;
+    gap: 0.38rem;
+}
+
+.event-log-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.3rem;
+    max-height: 12.5rem;
+    overflow: auto;
+}
+
+.event-log-item {
+    margin: 0;
+}
+
+.event-log-entry {
+    width: 100%;
+    text-align: left;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background: color-mix(in oklab, var(--panel), white 12%);
+    color: var(--ink);
+    padding: 0.35rem 0.45rem;
+    font: inherit;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    cursor: pointer;
+}
+
+.event-log-entry.is-static {
+    cursor: default;
+}
+
+.event-log-entry:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.event-log-meta {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 0.70rem;
 }
 
 .field-stack {
@@ -524,6 +780,11 @@ body {
     .viewport-panel {
         grid-column: 1;
         grid-row: 2;
+    }
+
+    .playback-overlay {
+        width: 90%;
+        bottom: 0.45rem;
     }
 
     .sidebar {

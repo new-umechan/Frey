@@ -6,6 +6,8 @@ export function setupUiControls({
     eraScaleSelect,
     viewModeInputs,
     climateMetricInputs,
+    playbackControls,
+    eventLogList,
     seedForm,
     seedInput,
     onResize,
@@ -18,6 +20,12 @@ export function setupUiControls({
     onClimateMetricChange,
     onToggleSurface,
     onToggleDebug,
+    onTogglePlay,
+    onStepForward,
+    onRewind,
+    onHistorySeek,
+    onHistoryStepDirection,
+    onEventLogJump,
     getDebugEnabled,
     getCurrentSurfaceMode,
     getCurrentViewMode,
@@ -64,6 +72,37 @@ export function setupUiControls({
         });
     }
 
+    playbackControls.playToggleButton.addEventListener("click", () => {
+        onTogglePlay();
+    });
+    playbackControls.historySeekSlider.addEventListener("input", () => {
+        onHistorySeek(playbackControls.historySeekSlider.value);
+    });
+    playbackControls.historySeekSlider.addEventListener("change", () => {
+        onHistorySeek(playbackControls.historySeekSlider.value);
+    });
+    playbackControls.seekBackwardButton.addEventListener("click", () => {
+        onHistoryStepDirection(-1);
+    });
+    playbackControls.seekForwardButton.addEventListener("click", () => {
+        onHistoryStepDirection(1);
+    });
+    eventLogList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+        const entryButton = target.closest("[data-log-tick]");
+        if (!(entryButton instanceof HTMLButtonElement)) {
+            return;
+        }
+        const tickText = entryButton.dataset.logTick;
+        if (!tickText) {
+            return;
+        }
+        onEventLogJump(tickText);
+    });
+
     document.addEventListener("keydown", (event) => {
         if (
             event.defaultPrevented ||
@@ -78,7 +117,7 @@ export function setupUiControls({
         if (
             target instanceof HTMLElement &&
             (target.isContentEditable ||
-                target instanceof HTMLInputElement ||
+                (target instanceof HTMLInputElement && target.type !== "range") ||
                 target instanceof HTMLTextAreaElement ||
                 target instanceof HTMLSelectElement)
         ) {
@@ -137,6 +176,36 @@ export function setupUiControls({
         if (event.key.toLowerCase() === "v") {
             event.preventDefault();
             onToggleSurface(getCurrentSurfaceMode() === "globe" ? "map" : "globe");
+            return;
+        }
+
+        if (event.code === "Space") {
+            event.preventDefault();
+            onTogglePlay();
+            return;
+        }
+
+        if (event.key === ".") {
+            event.preventDefault();
+            onStepForward();
+            return;
+        }
+
+        if (event.key === ",") {
+            event.preventDefault();
+            onRewind();
+            return;
+        }
+
+        if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            onHistoryStepDirection(-1);
+            return;
+        }
+
+        if (event.key === "ArrowRight") {
+            event.preventDefault();
+            onHistoryStepDirection(1);
         }
     });
 

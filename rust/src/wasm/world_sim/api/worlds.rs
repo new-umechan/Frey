@@ -6,6 +6,7 @@ use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::domains;
 use crate::sim::{step_world, world};
 
+use super::common::world_not_found_error;
 use super::super::helpers::{build_erosion_state, sync_erosion_state};
 use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
@@ -113,7 +114,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get_mut(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
 
         let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
         let steps = scaled_ticks.max(1);
@@ -136,7 +137,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get_mut(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
         managed.simulation_rate = rate.clamp(0.1, 32.0);
         Ok(())
     }

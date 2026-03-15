@@ -21,6 +21,17 @@ export function resetWorldProgress(world, worldState, debugSnapshotSavedTicks, c
     for (const key of Object.keys(worldState.executedSteps)) {
         worldState.executedSteps[key] = 0;
     }
+    if (worldState.playback) {
+        worldState.playback.isPlaying = true;
+        worldState.playback.historyInterval = 32;
+        worldState.playback.selectedTick = null;
+        worldState.playback.availableTicks = [];
+        worldState.playback.checkpoints = [];
+        worldState.playback.activeCheckpointId = "";
+        worldState.playback.eventLog = [];
+        worldState.playback.nextLogId = 1;
+    }
+    worldState.isRunning = true;
     return createEraMetrics(DEFAULT_ERA_SCALE);
 }
 

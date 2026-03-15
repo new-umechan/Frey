@@ -35,6 +35,17 @@ export function collectAppElements() {
         hover: requireElement("climate-legend-hover", HTMLElement),
     };
     const climateControlHint = requireElement("control-climate-hint", HTMLElement);
+    const playbackControls = {
+        overlay: requireElement("playback-overlay", HTMLElement),
+        playToggleButton: requireElement("play-toggle-button", HTMLButtonElement),
+        currentTick: requireElement("playback-current-tick", HTMLElement),
+        historySeekSlider: requireElement("history-seek-slider", HTMLInputElement),
+        seekMinLabel: requireElement("history-seek-min", HTMLElement),
+        seekMaxLabel: requireElement("history-seek-max", HTMLElement),
+        seekBackwardButton: requireElement("seek-backward-button", HTMLButtonElement),
+        seekForwardButton: requireElement("seek-forward-button", HTMLButtonElement),
+    };
+    const eventLogList = requireElement("event-log-list", HTMLUListElement);
 
     if (!(appShell instanceof HTMLElement)) {
         throw new Error("required app shell is missing");
@@ -72,6 +83,8 @@ export function collectAppElements() {
         climateMetricInputs,
         climateLegend,
         climateControlHint,
+        playbackControls,
+        eventLogList,
         statFields,
     };
 }

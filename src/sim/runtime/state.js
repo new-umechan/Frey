@@ -1,5 +1,18 @@
 import { LAYER_KIND } from "../../core/constants.js";
 
+function createInitialPlaybackState() {
+    return {
+        isPlaying: true,
+        historyInterval: 32,
+        selectedTick: null,
+        availableTicks: [],
+        checkpoints: [],
+        activeCheckpointId: "",
+        eventLog: [],
+        nextLogId: 1,
+    };
+}
+
 export function createEmptyCore() {
     return null;
 }
@@ -52,5 +65,6 @@ export function createInitialRuntimeState(defaultRuntimeTickMs) {
             ecology: 0,
             civilization: 0,
         },
+        playback: createInitialPlaybackState(),
     };
 }

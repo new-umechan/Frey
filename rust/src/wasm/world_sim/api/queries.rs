@@ -1,9 +1,11 @@
 use wasm_bindgen::prelude::*;
 
+use super::common::world_not_found_error;
 use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_u16, sampled_len};
+use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
-    BudgetSummary, FieldResponse, MetricsResponse, PlateStat, PlateStatsResponse,
-    WorldDeltaResponse,
+    BudgetSummary, CheckpointListEntry, CheckpointListResponse, FieldResponse,
+    HistoryTicksResponse, MetricsResponse, PlateStat, PlateStatsResponse, WorldDeltaResponse,
 };
 use super::super::WorldSimController;
 
@@ -19,7 +21,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
         let stride = lod.max(1);
         let world_ref = &managed.world;
 
@@ -74,7 +76,10 @@ impl WorldSimController {
                 stride,
                 cell_count: world_ref.state.climate.ocean_temperature.len() as u32,
                 sampled_count: sampled_len(world_ref.state.climate.ocean_temperature.len(), stride),
-                f32_data: Some(sample_f32(&world_ref.state.climate.ocean_temperature, stride)),
+                f32_data: Some(sample_f32(
+                    &world_ref.state.climate.ocean_temperature,
+                    stride,
+                )),
                 u32_data: None,
                 i32_data: None,
             },
@@ -134,7 +139,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
         let w = &managed.world;
         let metrics = w.metrics();
 
@@ -174,7 +179,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get_mut(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
         let w = &managed.world;
         let response = WorldDeltaResponse {
             world_id,
@@ -199,7 +204,7 @@ impl WorldSimController {
         let managed = self
             .worlds
             .get(&world_id)
-            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            .ok_or_else(|| world_not_found_error(&world_id))?;
         let w = &managed.world;
 
         let plate_count = w
@@ -253,5 +258,50 @@ impl WorldSimController {
 
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize plate stats: {err}")))
+    }
+
+    #[wasm_bindgen(js_name = list_history_ticks)]
+    pub fn list_history_ticks_js(&self, world_id: String) -> Result<JsValue, JsValue> {
+        let managed = self
+            .worlds
+            .get(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let ticks = managed
+            .history
+            .keys()
+            .copied()
+            .map(|tick| tick as f64)
+            .collect::<Vec<_>>();
+        let response = HistoryTicksResponse {
+            world_id,
+            interval: HISTORY_SNAPSHOT_INTERVAL as u32,
+            ticks,
+        };
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!(
+                "failed to serialize history ticks response: {err}"
+            ))
+        })
+    }
+
+    #[wasm_bindgen(js_name = list_checkpoints)]
+    pub fn list_checkpoints_js(&self) -> Result<JsValue, JsValue> {
+        let mut checkpoints = self
+            .snapshots
+            .iter()
+            .map(|(snapshot_id, snapshot)| CheckpointListEntry {
+                snapshot_id: snapshot_id.clone(),
+                tick: snapshot.tick as f64,
+            })
+            .collect::<Vec<_>>();
+        checkpoints.sort_by(|a, b| {
+            a.tick
+                .total_cmp(&b.tick)
+                .then_with(|| a.snapshot_id.cmp(&b.snapshot_id))
+        });
+        let response = CheckpointListResponse { checkpoints };
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize checkpoint list: {err}"))
+        })
     }
 }
