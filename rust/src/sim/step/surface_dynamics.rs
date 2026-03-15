@@ -1,14 +1,10 @@
 use std::cmp::Ordering;
 
-use crate::TerrainParams;
 use crate::sim::world::{
-    BoundaryDynamicsState,
-    BoundaryType,
-    CrustType,
-    StressTensor,
-    TerrainStepMetrics,
+    BoundaryDynamicsState, BoundaryType, CrustType, StressTensor, TerrainStepMetrics,
     VertexCrustState,
 };
+use crate::TerrainParams;
 
 use super::super::{DEFAULT_DIFFUSION_WEIGHT, MAX_HEIGHT_DELTA_PER_STEP};
 
@@ -59,7 +55,11 @@ pub(super) fn apply_stress_and_surface_update(
             nbr_sum += heights[n];
             nbr_count += 1;
             let n_tensor = next_vertex_states[n].stress_tensor;
-            let atten = if plate_id[n] == plate_id[i] { 0.12 } else { 0.18 };
+            let atten = if plate_id[n] == plate_id[i] {
+                0.12
+            } else {
+                0.18
+            };
             nbr_stress.xx += n_tensor.xx * atten;
             nbr_stress.yy += n_tensor.yy * atten;
             nbr_stress.xy += n_tensor.xy * atten;

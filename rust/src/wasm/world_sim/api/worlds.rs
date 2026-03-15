@@ -6,12 +6,12 @@ use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::domains;
 use crate::sim::{step_world, world};
 
-use super::common::world_not_found_error;
 use super::super::helpers::{build_erosion_state, sync_erosion_state};
 use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
 use super::super::WorldSimController;
+use super::common::world_not_found_error;
 
 #[wasm_bindgen]
 impl WorldSimController {

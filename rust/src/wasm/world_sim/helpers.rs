@@ -32,7 +32,23 @@ pub(super) fn build_erosion_state(
         in_queue: vec![1; cell_count],
         rain_cursor: 0,
         tick: world.exec.tick,
+        last_rebuild_tick: world.exec.tick.saturating_sub(1),
+        flux_scale_ema: 1.0,
+        last_river_driver: 1.0,
+        prev_river_next: world.state.geology.river_next.clone(),
+        flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
+        groundwater_storage: vec![0.0; cell_count],
         recent_changed: Vec::new(),
+        sink_id: vec![-1; cell_count],
+        sink_route_next: vec![-1; cell_count],
+        sink_spill_cell: Vec::new(),
+        sink_spill_to: Vec::new(),
+        sink_capacity_total: Vec::new(),
+        sink_capacity_remaining: Vec::new(),
+        sink_storage_sediment: Vec::new(),
+        sink_spill_level: Vec::new(),
+        sink_overflow_active: Vec::new(),
+        sink_dirty: vec![1; cell_count],
         params,
     }
 }
@@ -44,24 +60,59 @@ pub(super) fn sync_erosion_state(world: &mut world::World, params: &TerrainParam
         let _ = world.attach_river_erosion_state(state);
         return;
     };
-    if state.height.len() != expected
-        || state.river_flux.len() != expected
-        || state.river_next.len() != expected
-        || state.rain.len() != expected
-    {
+    if !erosion_state_shape_matches(state, expected) {
         let state = build_erosion_state(world, params.clone());
         let _ = world.attach_river_erosion_state(state);
         return;
     }
     state.height.clone_from(&world.state.geology.height);
     state.river_flux.clone_from(&world.state.geology.river_flux);
+    state
+        .prev_river_next
+        .clone_from(&world.state.geology.river_next);
     state.river_next.clone_from(&world.state.geology.river_next);
-    for (rain, runoff) in state.rain.iter_mut().zip(world.state.climate.runoff.iter().copied()) {
+    for (rain, runoff) in state
+        .rain
+        .iter_mut()
+        .zip(world.state.climate.runoff.iter().copied())
+    {
         *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
     }
     state.tick = world.exec.tick;
+    state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();
+    ensure_sink_buffers(state, expected);
+}
+
+fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -> bool {
+    state.height.len() == expected
+        && state.river_flux.len() == expected
+        && state.river_next.len() == expected
+        && state.rain.len() == expected
+        && state.prev_river_next.len() == expected
+        && state.flow_heading.len() == expected
+        && state.groundwater_storage.len() == expected
+}
+
+fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
+    if state.sink_id.len() != expected {
+        state.sink_id = vec![-1; expected];
+    }
+    if state.sink_route_next.len() != expected {
+        state.sink_route_next = vec![-1; expected];
+    }
+    if state.sink_dirty.len() != expected {
+        state.sink_dirty = vec![1; expected];
+    } else {
+        state.sink_dirty.fill(1);
+    }
+    if state.flow_heading.len() != expected {
+        state.flow_heading = vec![[0.0, 0.0, 0.0]; expected];
+    }
+    if state.groundwater_storage.len() != expected {
+        state.groundwater_storage = vec![0.0; expected];
+    }
 }
 
 pub(super) fn sampled_len(total_len: usize, stride: u32) -> u32 {

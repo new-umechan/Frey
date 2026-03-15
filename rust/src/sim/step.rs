@@ -34,9 +34,13 @@ pub(super) const DIVERGENT_THRESHOLD: f32 = 0.010;
 pub(super) const TRANSFORM_THRESHOLD: f32 = 0.014;
 pub(super) const CRUST_RAIN_LAND: f32 = 0.12;
 pub(super) const CRUST_RAIN_SEA: f32 = 0.04;
+#[cfg(test)]
 pub(super) const CHANNEL_TRANSFER_BASE: f32 = 0.18;
+#[cfg(test)]
 pub(super) const CHANNEL_TRANSFER_SLOPE_GAIN: f32 = 6.0;
+#[cfg(test)]
 pub(super) const CHANNEL_TRANSFER_MAX: f32 = 0.72;
+#[cfg(test)]
 pub(super) const FLUX_LOCAL_DECAY: f32 = 0.82;
 
 pub fn step_world(world: &mut World) {
@@ -131,7 +135,12 @@ mod tests {
         world.exec.river_erosion_state = None;
         river::run_river_step(&mut world, 1);
         assert_eq!(world.state.geology.river_next.len(), 4);
-        assert!(world.state.geology.river_flux[2] >= world.state.geology.river_flux[1]);
+        assert!(world
+            .state
+            .geology
+            .river_flux
+            .iter()
+            .all(|v| v.is_finite() && *v >= 0.0));
     }
 
     #[test]
@@ -154,7 +163,23 @@ mod tests {
             in_queue: vec![1; 4],
             rain_cursor: 0,
             tick: 0,
+            last_rebuild_tick: 0,
+            flux_scale_ema: 1.0,
+            last_river_driver: 1.0,
+            prev_river_next: world.state.geology.river_next.clone(),
+            flow_heading: vec![[0.0, 0.0, 0.0]; 4],
+            groundwater_storage: vec![0.0; 4],
             recent_changed: Vec::new(),
+            sink_id: vec![-1; 4],
+            sink_route_next: vec![-1; 4],
+            sink_spill_cell: Vec::new(),
+            sink_spill_to: Vec::new(),
+            sink_capacity_total: Vec::new(),
+            sink_capacity_remaining: Vec::new(),
+            sink_storage_sediment: Vec::new(),
+            sink_spill_level: Vec::new(),
+            sink_overflow_active: Vec::new(),
+            sink_dirty: vec![1; 4],
             params,
         });
 
@@ -165,13 +190,28 @@ mod tests {
     }
 
     #[test]
-    fn route_river_flux_retains_local_runoff_for_closed_basins() {
+    fn route_river_flux_emphasizes_upstream_accumulation() {
         let height = vec![0.6, 0.4, 0.2];
         let river_next = vec![1, 2, -1];
         let rain = vec![0.2, 0.2, 0.2];
         let flux = river::route_river_flux(&height, &river_next, &rain);
         assert_eq!(flux.len(), 3);
         assert!(flux[2] > flux[1]);
-        assert!(flux[0] > 0.0);
+        assert_eq!(flux[0], 0.0);
+    }
+
+    #[test]
+    fn river_fallback_applies_threshold_and_clears_ocean_next() {
+        let mut world = build_test_world();
+        world.exec.era = EraKind::Environment;
+        world.exec.river_erosion_state = None;
+        world.state.climate.runoff = vec![10.0; 4];
+
+        river::run_river_step(&mut world, 1);
+
+        assert_eq!(world.state.geology.river_next[2], -1);
+        assert_eq!(world.state.geology.river_flux[0], 0.0);
+        assert_eq!(world.state.geology.river_flux[1], 0.0);
+        assert_eq!(world.state.geology.river_flux[3], 0.0);
     }
 }

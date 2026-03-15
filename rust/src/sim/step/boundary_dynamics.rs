@@ -1,15 +1,11 @@
-use crate::TerrainParams;
 use crate::sim::world::{
-    BoundaryDynamicsState,
-    BoundaryType,
-    CrustType,
-    PlateKinematicsState,
-    VertexCrustState,
+    BoundaryDynamicsState, BoundaryType, CrustType, PlateKinematicsState, VertexCrustState,
 };
+use crate::TerrainParams;
 
-use super::lerp;
 use super::super::math::{cross3, dot, length3, seeded_axis};
 use super::super::{CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFORM_THRESHOLD};
+use super::lerp;
 
 pub(super) fn reclassify_boundaries(
     positions: &[[f32; 3]],

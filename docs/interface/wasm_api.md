@@ -34,7 +34,7 @@ JSから利用する現行WASM公開APIを定義する。
 ### 2.2 観測
 
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
-  - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature`
+  - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature`
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
 

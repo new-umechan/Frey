@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use wasm_bindgen::prelude::*;
 
-use super::common::world_not_found_error;
 use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_u16, sampled_len};
 use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
@@ -11,6 +10,7 @@ use super::super::types::{
     WorldDeltaResponse,
 };
 use super::super::WorldSimController;
+use super::common::world_not_found_error;
 
 #[wasm_bindgen]
 impl WorldSimController {
@@ -107,6 +107,54 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: Some(sample_i32(&world_ref.state.geology.river_next, stride)),
             },
+            "sink_id" => {
+                let values = sink_id_values_by_cell(world_ref);
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: values.len() as u32,
+                    sampled_count: sampled_len(values.len(), stride),
+                    f32_data: None,
+                    u32_data: None,
+                    i32_data: Some(sample_i32(values.as_slice(), stride)),
+                }
+            }
+            "sink_spill_to" => {
+                let spill_by_cell = sink_spill_to_values_by_cell(world_ref);
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: spill_by_cell.len() as u32,
+                    sampled_count: sampled_len(spill_by_cell.len(), stride),
+                    f32_data: None,
+                    u32_data: None,
+                    i32_data: Some(sample_i32(spill_by_cell.as_slice(), stride)),
+                }
+            }
+            "sink_capacity_remaining" => {
+                let values = sink_capacity_remaining_values_by_cell(world_ref);
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: values.len() as u32,
+                    sampled_count: sampled_len(values.len(), stride),
+                    f32_data: Some(sample_f32(values.as_slice(), stride)),
+                    u32_data: None,
+                    i32_data: None,
+                }
+            }
+            "sink_fill_ratio" => {
+                let values = sink_fill_ratio_values_by_cell(world_ref);
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: values.len() as u32,
+                    sampled_count: sampled_len(values.len(), stride),
+                    f32_data: Some(sample_f32(values.as_slice(), stride)),
+                    u32_data: None,
+                    i32_data: None,
+                }
+            }
             "mantle_heat" => {
                 let default_mantle_heat = vec![0.5; world_ref.state.geology.height.len()];
                 let mantle_heat = world_ref
@@ -169,6 +217,11 @@ impl WorldSimController {
             min_height: metrics.min_height,
             max_river_flux: metrics.max_river_flux,
             top10_river_flux_sum: metrics.top10_river_flux_sum,
+            river_active_cells: metrics.river_active_cells,
+            river_fragmentation_ratio: metrics.river_fragmentation_ratio,
+            river_ocean_reach_ratio: metrics.river_ocean_reach_ratio,
+            river_mainstem_persistence: metrics.river_mainstem_persistence,
+            river_flux_concentration: metrics.river_flux_concentration,
             continent_count: metrics.continent_count,
             largest_continent_cells: metrics.largest_continent_cells,
         };
@@ -326,4 +379,96 @@ impl WorldSimController {
             JsValue::from_str(&format!("failed to serialize checkpoint list: {err}"))
         })
     }
+}
+
+fn matched_sink_state(
+    world: &crate::sim::world::World,
+) -> Option<&crate::sim::erosion::ErosionAutomatonState> {
+    world
+        .exec
+        .river_erosion_state
+        .as_ref()
+        .filter(|state| state.sink_id.len() == world.state.geology.height.len())
+}
+
+fn sink_id_values_by_cell(world: &crate::sim::world::World) -> Vec<i32> {
+    if let Some(state) = matched_sink_state(world) {
+        return state.sink_id.clone();
+    }
+    vec![-1; world.state.geology.height.len()]
+}
+
+fn map_sink_i32_by_cell(
+    world: &crate::sim::world::World,
+    default_value: i32,
+    mapper: impl Fn(&crate::sim::erosion::ErosionAutomatonState, usize, usize) -> i32,
+) -> Vec<i32> {
+    let cell_count = world.state.geology.height.len();
+    let Some(state) = matched_sink_state(world) else {
+        return vec![default_value; cell_count];
+    };
+    let mut out = vec![default_value; cell_count];
+    for (i, value) in out.iter_mut().enumerate() {
+        let sid = state.sink_id.get(i).copied().unwrap_or(-1);
+        if sid < 0 {
+            continue;
+        }
+        let sink_index = sid as usize;
+        *value = mapper(state, i, sink_index);
+    }
+    out
+}
+
+fn map_sink_f32_by_cell(
+    world: &crate::sim::world::World,
+    default_value: f32,
+    mapper: impl Fn(&crate::sim::erosion::ErosionAutomatonState, usize, usize) -> f32,
+) -> Vec<f32> {
+    let cell_count = world.state.geology.height.len();
+    let Some(state) = matched_sink_state(world) else {
+        return vec![default_value; cell_count];
+    };
+    let mut out = vec![default_value; cell_count];
+    for (i, value) in out.iter_mut().enumerate() {
+        let sid = state.sink_id.get(i).copied().unwrap_or(-1);
+        if sid < 0 {
+            continue;
+        }
+        let sink_index = sid as usize;
+        *value = mapper(state, i, sink_index);
+    }
+    out
+}
+
+fn sink_spill_to_values_by_cell(world: &crate::sim::world::World) -> Vec<i32> {
+    map_sink_i32_by_cell(world, -1, |state, _, sid| {
+        state.sink_spill_to.get(sid).copied().unwrap_or(-1)
+    })
+}
+
+fn sink_capacity_remaining_values_by_cell(world: &crate::sim::world::World) -> Vec<f32> {
+    map_sink_f32_by_cell(world, 0.0, |state, _, sid| {
+        state
+            .sink_capacity_remaining
+            .get(sid)
+            .copied()
+            .unwrap_or(0.0)
+    })
+}
+
+fn sink_fill_ratio_values_by_cell(world: &crate::sim::world::World) -> Vec<f32> {
+    map_sink_f32_by_cell(world, 0.0, |state, _, sid| {
+        let total = state.sink_capacity_total.get(sid).copied().unwrap_or(0.0);
+        let remain = state
+            .sink_capacity_remaining
+            .get(sid)
+            .copied()
+            .unwrap_or(total)
+            .clamp(0.0, total.max(0.0));
+        if total > 1e-6 {
+            (1.0 - remain / total).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    })
 }

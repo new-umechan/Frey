@@ -19,14 +19,18 @@ pub(super) fn run_ecology_step(world: &mut World, budget: u32) {
     for i in 0..world.state.geology.height.len() {
         let temp = climate_temp[i];
         let precipitation = climate_precipitation[i];
-        let land = if world.state.geology.height[i] > 0.0 { 1.0 } else { 0.08 };
+        let land = if world.state.geology.height[i] > 0.0 {
+            1.0
+        } else {
+            0.08
+        };
         let river_bonus = (world.state.geology.river_flux[i] / max_flux).clamp(0.0, 1.0) * 0.20;
         let pollution = world.exec.feedback_queue.active.pollution[i].clamp(0.0, 1.0);
         let temp_suit = (1.0 - ((temp - 18.0).abs() / 30.0)).clamp(0.0, 1.0);
         let rain_suit = (1.0 - ((precipitation - 1_000.0).abs() / 1_200.0)).clamp(0.0, 1.0);
-        let target_vegetation =
-            ((rain_suit * 0.60 + river_bonus * 0.35 + temp_suit * 0.20) * (1.0 - pollution * 0.50))
-                .clamp(0.0, 1.0);
+        let target_vegetation = ((rain_suit * 0.60 + river_bonus * 0.35 + temp_suit * 0.20)
+            * (1.0 - pollution * 0.50))
+            .clamp(0.0, 1.0);
         let target_habitability = (((temp_suit * 0.55 + rain_suit * 0.45) * land + river_bonus)
             * (1.0 - pollution * 0.35))
             .clamp(0.0, 1.0);

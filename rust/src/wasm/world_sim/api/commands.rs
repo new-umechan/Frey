@@ -4,10 +4,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::domains::types::TerrainParams;
 
-use super::common::{
-    history_tick_not_available_error, validate_checkpoint_tick, validate_integer_tick,
-    validate_non_negative_tick, world_not_found_error,
-};
 use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
 use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
 use super::super::types::{
@@ -15,6 +11,10 @@ use super::super::types::{
     RestoreWorldResult,
 };
 use super::super::WorldSimController;
+use super::common::{
+    history_tick_not_available_error, validate_checkpoint_tick, validate_integer_tick,
+    validate_non_negative_tick, world_not_found_error,
+};
 
 #[wasm_bindgen]
 impl WorldSimController {

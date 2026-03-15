@@ -313,6 +313,11 @@ pub struct WorldMetrics {
     pub mean_river_flux: f32,
     pub max_river_flux: f32,
     pub top10_river_flux_sum: f32,
+    pub river_active_cells: u32,
+    pub river_fragmentation_ratio: f32,
+    pub river_ocean_reach_ratio: f32,
+    pub river_mainstem_persistence: f32,
+    pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
 }
@@ -440,6 +445,20 @@ impl World {
 
         let (continent_count, largest_continent_cells) = continent_stats(self);
         let top10_river_flux_sum = top_fluxes.iter().take(top_fluxes_len).sum::<f32>();
+        let (
+            river_active_cells,
+            river_fragmentation_ratio,
+            river_ocean_reach_ratio,
+            river_mainstem_persistence,
+            river_flux_concentration,
+        ) = river_network_metrics(
+            &self.state.geology.height,
+            &self.state.geology.river_flux,
+            &self.state.geology.river_next,
+            top10_river_flux_sum,
+            sum_flux,
+            max_flux,
+        );
 
         WorldMetrics {
             cell_count: cell_count as u32,
@@ -447,11 +466,24 @@ impl World {
             land_ratio: land_cells as f32 / cell_count_f32,
             mean_height,
             height_std_dev,
-            min_height: if min_height.is_finite() { min_height } else { 0.0 },
-            max_height: if max_height.is_finite() { max_height } else { 0.0 },
+            min_height: if min_height.is_finite() {
+                min_height
+            } else {
+                0.0
+            },
+            max_height: if max_height.is_finite() {
+                max_height
+            } else {
+                0.0
+            },
             mean_river_flux: sum_flux / cell_count_f32,
             max_river_flux: max_flux,
             top10_river_flux_sum,
+            river_active_cells,
+            river_fragmentation_ratio,
+            river_ocean_reach_ratio,
+            river_mainstem_persistence,
+            river_flux_concentration,
             continent_count: continent_count as u32,
             largest_continent_cells: largest_continent_cells as u32,
         }
@@ -582,14 +614,21 @@ fn build_distance_from_ocean_km(mesh: &WorldMesh, height: &[f32]) -> Vec<f32> {
             continue;
         }
         let start = mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-        let end = mesh.nbr_offsets.get(index + 1).copied().unwrap_or(start as u32) as usize;
+        let end = mesh
+            .nbr_offsets
+            .get(index + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
         for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
             let n = n_u32 as usize;
             if n >= cell_count {
                 continue;
             }
             let edge_cost = edge_distance_km(
-                mesh.positions.get(index).copied().unwrap_or([0.0, 0.0, 1.0]),
+                mesh.positions
+                    .get(index)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 1.0]),
                 mesh.positions.get(n).copied().unwrap_or([0.0, 0.0, 1.0]),
             );
             let next_cost = cost + edge_cost;
@@ -620,11 +659,19 @@ fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastS
     if index >= cell_count {
         return CoastSide::None;
     }
-    let pos = mesh.positions.get(index).copied().unwrap_or([0.0, 0.0, 1.0]);
+    let pos = mesh
+        .positions
+        .get(index)
+        .copied()
+        .unwrap_or([0.0, 0.0, 1.0]);
     let is_land = height[index] > 0.0;
     let seek_land = !is_land;
     let start = mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-    let end = mesh.nbr_offsets.get(index + 1).copied().unwrap_or(start as u32) as usize;
+    let end = mesh
+        .nbr_offsets
+        .get(index + 1)
+        .copied()
+        .unwrap_or(start as u32) as usize;
     let mut dir_sum = [0.0_f32; 3];
 
     for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
@@ -766,6 +813,178 @@ fn continent_stats(world: &World) -> (usize, usize) {
     (continent_count, largest_continent_cells)
 }
 
+fn river_network_metrics(
+    height: &[f32],
+    flux: &[f32],
+    river_next: &[i32],
+    top10_river_flux_sum: f32,
+    sum_flux: f32,
+    max_flux: f32,
+) -> (u32, f32, f32, f32, f32) {
+    let cell_count = height.len();
+    if cell_count == 0 || river_next.len() != cell_count {
+        return (0, 0.0, 0.0, 0.0, 0.0);
+    }
+
+    let active_threshold = (max_flux * 0.08).max(0.02);
+    let mut active = vec![false; cell_count];
+    let mut active_cells = 0usize;
+    for i in 0..cell_count {
+        if height[i] > 0.0 && flux.get(i).copied().unwrap_or(0.0) >= active_threshold {
+            active[i] = true;
+            active_cells += 1;
+        }
+    }
+    if active_cells == 0 {
+        return (0, 0.0, 0.0, 0.0, 0.0);
+    }
+
+    let mut upstream_active = vec![0u32; cell_count];
+    for i in 0..cell_count {
+        if !active[i] {
+            continue;
+        }
+        let next = river_next[i];
+        if next < 0 {
+            continue;
+        }
+        let n = next as usize;
+        if n < cell_count && active[n] {
+            upstream_active[n] = upstream_active[n].saturating_add(1);
+        }
+    }
+
+    let mut head_cells = Vec::new();
+    for i in 0..cell_count {
+        if active[i] && upstream_active[i] == 0 {
+            head_cells.push(i);
+        }
+    }
+    let fragmentation_ratio = head_cells.len() as f32 / active_cells as f32;
+
+    let mut memo = vec![0u8; cell_count];
+    let mut visit_mark = vec![0u32; cell_count];
+    let mut run_id = 1u32;
+    let mut reaches_ocean_count = 0usize;
+    let mut path = Vec::<usize>::new();
+
+    for i in 0..cell_count {
+        if !active[i] {
+            continue;
+        }
+        if trace_active_to_ocean(
+            i,
+            height,
+            river_next,
+            &active,
+            &mut memo,
+            &mut visit_mark,
+            &mut run_id,
+            &mut path,
+        ) {
+            reaches_ocean_count += 1;
+        }
+    }
+
+    let mut longest_mainstem = 0usize;
+    for &head in &head_cells {
+        let mut steps = 0usize;
+        let mut current = head;
+        let mut guard = 0usize;
+        while guard < cell_count {
+            guard += 1;
+            steps += 1;
+            let next = river_next.get(current).copied().unwrap_or(-1);
+            if next < 0 {
+                break;
+            }
+            let n = next as usize;
+            if n >= cell_count || !active[n] {
+                break;
+            }
+            if n == current {
+                break;
+            }
+            current = n;
+        }
+        longest_mainstem = longest_mainstem.max(steps);
+    }
+
+    let ocean_reach_ratio = reaches_ocean_count as f32 / active_cells as f32;
+    let mainstem_persistence = longest_mainstem as f32 / active_cells as f32;
+    let flux_concentration = top10_river_flux_sum / sum_flux.max(1e-6);
+
+    (
+        active_cells as u32,
+        fragmentation_ratio,
+        ocean_reach_ratio,
+        mainstem_persistence,
+        flux_concentration.clamp(0.0, 1.0),
+    )
+}
+
+fn trace_active_to_ocean(
+    start: usize,
+    height: &[f32],
+    river_next: &[i32],
+    active: &[bool],
+    memo: &mut [u8],
+    visit_mark: &mut [u32],
+    run_id: &mut u32,
+    path: &mut Vec<usize>,
+) -> bool {
+    if memo.get(start).copied().unwrap_or(0) == 2 {
+        return true;
+    }
+    if memo.get(start).copied().unwrap_or(0) == 3 {
+        return false;
+    }
+
+    path.clear();
+    let current_run = *run_id;
+    *run_id = (*run_id).saturating_add(1).max(1);
+    let mut cur = start;
+    let mut result = false;
+
+    for _ in 0..height.len() {
+        if memo[cur] == 2 {
+            result = true;
+            break;
+        }
+        if memo[cur] == 3 || !active[cur] {
+            result = false;
+            break;
+        }
+        if visit_mark[cur] == current_run {
+            result = false;
+            break;
+        }
+        visit_mark[cur] = current_run;
+        path.push(cur);
+
+        let next = river_next.get(cur).copied().unwrap_or(-1);
+        if next < 0 {
+            result = false;
+            break;
+        }
+        let n = next as usize;
+        if n >= height.len() {
+            result = false;
+            break;
+        }
+        if height[n] <= 0.0 {
+            result = true;
+            break;
+        }
+        cur = n;
+    }
+
+    let mark = if result { 2 } else { 3 };
+    for &v in path.iter() {
+        memo[v] = mark;
+    }
+    result
+}
 
 fn default_reclassify_interval() -> u32 {
     4
@@ -775,6 +994,7 @@ fn default_reclassify_interval() -> u32 {
 mod tests {
     use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
     use crate::common::mesh::{build_neighbors, generate_icosphere};
+    use crate::sim::erosion::ErosionAutomatonState;
     use crate::sim::step_world;
     use crate::TerrainParams;
 
@@ -882,8 +1102,16 @@ mod tests {
         let terrain_b = crate::domains::build_terrain(seed, params);
         let (positions, indices) = generate_icosphere(2);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-        let plate_id_a = terrain_a.plate_id.iter().map(|&v| v as u16).collect::<Vec<_>>();
-        let plate_id_b = terrain_b.plate_id.iter().map(|&v| v as u16).collect::<Vec<_>>();
+        let plate_id_a = terrain_a
+            .plate_id
+            .iter()
+            .map(|&v| v as u16)
+            .collect::<Vec<_>>();
+        let plate_id_b = terrain_b
+            .plate_id
+            .iter()
+            .map(|&v| v as u16)
+            .collect::<Vec<_>>();
 
         let mut world_a = World::new(
             WorldMesh {
@@ -938,5 +1166,92 @@ mod tests {
             metrics_a.largest_continent_cells,
             metrics_b.largest_continent_cells
         );
+    }
+
+    #[test]
+    fn river_network_persists_without_early_collapse() {
+        let mut params = TerrainParams::default();
+        params.level = 2;
+        let seed = "river-network-stability-seed";
+
+        let terrain = crate::domains::build_terrain(seed, params.clone());
+        let (positions, indices) = generate_icosphere(2);
+        let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+        let plate_id = terrain
+            .plate_id
+            .iter()
+            .map(|&v| v as u16)
+            .collect::<Vec<_>>();
+
+        let mut world = World::new(
+            WorldMesh {
+                positions: positions.clone(),
+                nbr_offsets: nbr_offsets.clone(),
+                nbrs: nbrs.clone(),
+            },
+            GeologyState {
+                height: terrain.height.clone(),
+                plate_id,
+                river_flux: terrain.river_flux.clone(),
+                river_next: terrain.river_next.clone(),
+                erosion_rate: vec![0.0; positions.len()],
+                deposition_rate: vec![0.0; positions.len()],
+                boundary_condition: vec![0.0; positions.len()],
+            },
+        );
+
+        let erosion = ErosionAutomatonState {
+            positions,
+            nbr_offsets,
+            nbrs,
+            height: terrain.height,
+            water: vec![0.0; terrain.river_flux.len()],
+            sediment: vec![0.0; terrain.river_flux.len()],
+            armor: vec![0.0; terrain.river_flux.len()],
+            rain: vec![0.12; terrain.river_flux.len()],
+            river_flux: terrain.river_flux,
+            river_next: terrain.river_next,
+            active_queue: (0..world.cell_count() as u32).collect(),
+            active_head: 0,
+            in_queue: vec![1; world.cell_count()],
+            rain_cursor: 0,
+            tick: 0,
+            last_rebuild_tick: 0,
+            flux_scale_ema: 1.0,
+            last_river_driver: 1.0,
+            prev_river_next: world.state.geology.river_next.clone(),
+            flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
+            groundwater_storage: vec![0.0; world.cell_count()],
+            recent_changed: Vec::new(),
+            sink_id: vec![-1; world.cell_count()],
+            sink_route_next: vec![-1; world.cell_count()],
+            sink_spill_cell: Vec::new(),
+            sink_spill_to: Vec::new(),
+            sink_capacity_total: Vec::new(),
+            sink_capacity_remaining: Vec::new(),
+            sink_storage_sediment: Vec::new(),
+            sink_spill_level: Vec::new(),
+            sink_overflow_active: Vec::new(),
+            sink_dirty: vec![1; world.cell_count()],
+            params,
+        };
+        let _ = world.attach_river_erosion_state(erosion);
+
+        for _ in 0..2 {
+            step_world(&mut world);
+        }
+        let metrics_t2 = world.metrics();
+
+        for _ in 2..28 {
+            step_world(&mut world);
+        }
+        let metrics_t28 = world.metrics();
+
+        assert!(metrics_t2.river_active_cells > 0);
+        assert!(metrics_t28.river_active_cells > 0);
+        assert!(metrics_t2.river_ocean_reach_ratio > 0.10);
+        assert!(metrics_t28.river_ocean_reach_ratio > 0.05);
+        assert!(metrics_t2.river_fragmentation_ratio < 0.95);
+        assert!(metrics_t28.river_fragmentation_ratio < 0.98);
     }
 }

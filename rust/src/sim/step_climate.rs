@@ -36,7 +36,8 @@ pub(super) fn run_climate_step(world: &mut World, budget: u32) {
         let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
         let latitude_abs = latitude_deg.abs();
         let elevation_m = world.state.geology.height[i].max(0.0) * HEIGHT_TO_METERS;
-        let temperature = base_land_temperature(latitude_deg) - LAPSE_RATE_C_PER_KM * elevation_m / 1_000.0;
+        let temperature =
+            base_land_temperature(latitude_deg) - LAPSE_RATE_C_PER_KM * elevation_m / 1_000.0;
         let mut precipitation = latitude_band_precipitation(latitude_abs);
         let wind_sign = prevailing_wind_sign(latitude_deg);
         let (windward_factor, leeward_factor) = orographic_factors(world, i, wind_sign);
@@ -82,8 +83,11 @@ pub(super) fn run_climate_step(world: &mut World, budget: u32) {
         let runoff = (precipitation - evapotranspiration).max(0.0);
         let aridity = pet / precipitation.max(EPS);
 
-        world.state.climate.temperature[i] =
-            lerp(world.state.climate.temperature[i], target_temperature[i], alpha);
+        world.state.climate.temperature[i] = lerp(
+            world.state.climate.temperature[i],
+            target_temperature[i],
+            alpha,
+        );
         world.state.climate.precipitation[i] =
             lerp(world.state.climate.precipitation[i], precipitation, alpha);
         world.state.climate.evapotranspiration[i] = lerp(
@@ -218,19 +222,26 @@ fn apply_cold_coast_precipitation(
         }
         let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
         let mean_ocean_temperature = base_ocean_temperature(latitude_deg);
-        let cold_anomaly =
-            (mean_ocean_temperature - ocean_temperature.get(i).copied().unwrap_or(mean_ocean_temperature))
-                .max(0.0);
+        let cold_anomaly = (mean_ocean_temperature
+            - ocean_temperature
+                .get(i)
+                .copied()
+                .unwrap_or(mean_ocean_temperature))
+        .max(0.0);
         if cold_anomaly <= 0.0 {
             continue;
         }
-        let cold_factor = 1.0
-            - COLD_COAST_GAIN * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
+        let cold_factor =
+            1.0 - COLD_COAST_GAIN * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
         let wind_sign = prevailing_wind_sign(latitude_deg);
         let mut current = i;
         for step in 0..4 {
             let attenuation = 1.0 - (step as f32) * 0.2;
-            let step_factor = lerp(1.0, cold_factor.clamp(0.2, 1.0), attenuation.clamp(0.0, 1.0));
+            let step_factor = lerp(
+                1.0,
+                cold_factor.clamp(0.2, 1.0),
+                attenuation.clamp(0.0, 1.0),
+            );
             precip_factor[current] *= step_factor;
             let Some(next) = best_downwind_land_neighbor(world, current, wind_sign) else {
                 break;
@@ -308,8 +319,7 @@ fn annual_pet_mm(annual_temperature_c: f32, latitude_deg: f32) -> f32 {
     if heat_index <= EPS {
         return 0.0;
     }
-    let alpha = 6.75e-7 * heat_index.powi(3)
-        - 7.71e-5 * heat_index.powi(2)
+    let alpha = 6.75e-7 * heat_index.powi(3) - 7.71e-5 * heat_index.powi(2)
         + 1.792e-2 * heat_index
         + 0.49239;
     monthly

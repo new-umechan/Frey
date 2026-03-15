@@ -18,6 +18,38 @@ pub struct ErosionAutomatonState {
     pub in_queue: Vec<u8>,
     pub rain_cursor: usize,
     pub tick: u64,
+    #[serde(default)]
+    pub last_rebuild_tick: u64,
+    #[serde(default)]
+    pub flux_scale_ema: f32,
+    #[serde(default)]
+    pub last_river_driver: f32,
+    #[serde(default)]
+    pub prev_river_next: Vec<i32>,
+    #[serde(default)]
+    pub flow_heading: Vec<[f32; 3]>,
+    #[serde(default)]
+    pub groundwater_storage: Vec<f32>,
     pub recent_changed: Vec<u32>,
+    #[serde(default)]
+    pub sink_id: Vec<i32>,
+    #[serde(default)]
+    pub sink_route_next: Vec<i32>,
+    #[serde(default)]
+    pub sink_spill_cell: Vec<i32>,
+    #[serde(default)]
+    pub sink_spill_to: Vec<i32>,
+    #[serde(default)]
+    pub sink_capacity_total: Vec<f32>,
+    #[serde(default)]
+    pub sink_capacity_remaining: Vec<f32>,
+    #[serde(default)]
+    pub sink_storage_sediment: Vec<f32>,
+    #[serde(default)]
+    pub sink_spill_level: Vec<f32>,
+    #[serde(default)]
+    pub sink_overflow_active: Vec<u8>,
+    #[serde(default)]
+    pub sink_dirty: Vec<u8>,
     pub params: TerrainParams,
 }

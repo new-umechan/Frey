@@ -6,6 +6,15 @@ pub(crate) fn step_async_erosion_automaton(
     if v_count == 0 {
         return;
     }
+    if state.prev_river_next.len() != v_count {
+        state.prev_river_next = state.river_next.clone();
+    }
+    if state.flow_heading.len() != v_count {
+        state.flow_heading = vec![[0.0, 0.0, 0.0]; v_count];
+    }
+    if state.groundwater_storage.len() != v_count {
+        state.groundwater_storage = vec![0.0; v_count];
+    }
     if state.positions.len() != v_count
         || state.nbr_offsets.len() != v_count + 1
         || state.water.len() != v_count
@@ -21,7 +30,9 @@ pub(crate) fn step_async_erosion_automaton(
 
     let budget = budget_cells.max(1) as usize;
     state.tick = state.tick.saturating_add(1);
+    let previous_changed = state.recent_changed.clone();
     state.recent_changed.clear();
+    rebuild_sink_state(state, &previous_changed);
 
     let mut changed_mark = vec![0u8; v_count];
     let rain_inject_count = ((budget / 2).clamp(16, 256)).min(v_count);
@@ -78,16 +89,17 @@ fn process_async_erosion_cell(
     let h_i_before = state.height[i];
     let water_before = state.water[i];
     let sediment_before = state.sediment[i];
-    let river_next_before = state.river_next[i];
-    let river_flux_before = state.river_flux[i];
 
     state.armor[i] *= 0.985;
 
-    let (next_idx, local_slope, next_h) = find_local_flow_target(
+    let (mut next_idx, local_slope, next_h) = find_local_flow_target(
         &state.positions,
         &state.nbr_offsets,
         &state.nbrs,
         &state.height,
+        &state.river_next,
+        &state.flow_heading,
+        &state.params,
         i,
     );
     let downstream_slope = if let Some(n) = next_idx {
@@ -131,8 +143,6 @@ fn process_async_erosion_cell(
     let mut sediment = state.sediment[i];
 
     if water <= 1e-5 && sediment <= 1e-5 && h_i <= 0.0 {
-        state.river_next[i] = next_idx.map(|n| n as i32).unwrap_or(-1);
-        state.river_flux[i] *= 0.95;
         result.downstream = next_idx;
         return result;
     }
@@ -213,6 +223,12 @@ fn process_async_erosion_cell(
         sediment = (sediment - loss).max(0.0);
     }
 
+    let sink_before_next = next_idx;
+    apply_sink_capacity_rule(state, i, &mut sediment, &mut next_idx);
+    if next_idx != sink_before_next {
+        result.changed = true;
+    }
+
     let mut outflow_water = 0.0f32;
     let mut outflow_sediment = 0.0f32;
     if let Some(n) = next_idx {
@@ -226,9 +242,6 @@ fn process_async_erosion_cell(
         state.water[n] += outflow_water;
         state.sediment[n] += outflow_sediment;
         result.downstream = Some(n);
-        state.river_next[i] = n as i32;
-    } else {
-        state.river_next[i] = -1;
     }
 
     water = (water - outflow_water).max(0.0);
@@ -245,17 +258,10 @@ fn process_async_erosion_cell(
 
     state.water[i] = water;
     state.sediment[i] = sediment;
-    state.river_flux[i] = clamp(
-        state.river_flux[i] * 0.85 + outflow_water * 0.35 + water * 0.15,
-        0.0,
-        1.0,
-    );
 
     if (state.height[i] - h_i_before).abs() > 1e-6
         || (state.water[i] - water_before).abs() > 1e-6
         || (state.sediment[i] - sediment_before).abs() > 1e-6
-        || state.river_next[i] != river_next_before
-        || (state.river_flux[i] - river_flux_before).abs() > 1e-6
     {
         result.changed = true;
     }

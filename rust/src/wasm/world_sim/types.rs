@@ -71,6 +71,11 @@ pub(super) struct MetricsResponse {
     pub min_height: f32,
     pub max_river_flux: f32,
     pub top10_river_flux_sum: f32,
+    pub river_active_cells: u32,
+    pub river_fragmentation_ratio: f32,
+    pub river_ocean_reach_ratio: f32,
+    pub river_mainstem_persistence: f32,
+    pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
 }

@@ -300,7 +300,8 @@ impl WorldSyncState {
         }
 
         self.temperature.observe(&world.state.climate.temperature);
-        self.precipitation.observe(&world.state.climate.precipitation);
+        self.precipitation
+            .observe(&world.state.climate.precipitation);
     }
 
     pub fn take_world_field_deltas<F>(&mut self, mut include_field: F) -> Vec<FieldDeltaResponse>
@@ -363,7 +364,8 @@ impl ManagedWorld {
         if self.world.exec.tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
             return;
         }
-        self.history.insert(self.world.exec.tick, self.world.clone());
+        self.history
+            .insert(self.world.exec.tick, self.world.clone());
         while self.history.len() > DEFAULT_HISTORY_LIMIT {
             if let Some(oldest) = self.history.keys().next().copied() {
                 self.history.remove(&oldest);

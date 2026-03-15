@@ -3,6 +3,7 @@ import * as THREE from "three";
 const RIVER_MASK_WIDTH = 2048;
 const RIVER_MASK_HEIGHT = 1024;
 const RIVER_MIN_FLUX = 0.10;
+const RIVER_DYNAMIC_QUANTILE = 0.72;
 const RIVER_WIDTH_MIN_PX = 1.0;
 const RIVER_WIDTH_MAX_PX = 4.5;
 const RIVER_WIDTH_GAMMA = 0.55;
@@ -63,6 +64,16 @@ function createEmptyRiverMaskTexture() {
     return texture;
 }
 
+function quantile(values, q) {
+    if (!Array.isArray(values) || values.length === 0) {
+        return 0;
+    }
+    const sorted = values.slice().sort((a, b) => a - b);
+    const clampedQ = THREE.MathUtils.clamp(q, 0, 1);
+    const index = Math.floor((sorted.length - 1) * clampedQ);
+    return sorted[index];
+}
+
 export function buildTerrainUvFromPositions(basePositions) {
     const vertexCount = basePositions.length / 3;
     const uv = new Float32Array(vertexCount * 2);
@@ -96,16 +107,33 @@ export function buildRiverMaskTexture(basePositions, riverNext, riverFlux) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
+    const segmentFluxSamples = [];
     for (let i = 0; i < riverNext.length; i += 1) {
         const next = riverNext[i];
         if (next < 0 || next >= riverNext.length) {
             continue;
         }
-        if (!Number.isFinite(riverFlux[i]) || riverFlux[i] < RIVER_MIN_FLUX) {
+        const flux = riverFlux[i];
+        if (!Number.isFinite(flux) || flux <= 0) {
+            continue;
+        }
+        segmentFluxSamples.push(flux);
+    }
+    const dynamicMinFlux = Math.max(
+        RIVER_MIN_FLUX,
+        quantile(segmentFluxSamples, RIVER_DYNAMIC_QUANTILE),
+    );
+
+    for (let i = 0; i < riverNext.length; i += 1) {
+        const next = riverNext[i];
+        if (next < 0 || next >= riverNext.length) {
+            continue;
+        }
+        if (!Number.isFinite(riverFlux[i]) || riverFlux[i] < dynamicMinFlux) {
             continue;
         }
         const fluxNorm = THREE.MathUtils.clamp(
-            (riverFlux[i] - RIVER_MIN_FLUX) / (1 - RIVER_MIN_FLUX),
+            (riverFlux[i] - dynamicMinFlux) / (1 - dynamicMinFlux),
             0,
             1,
         );

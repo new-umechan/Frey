@@ -6,19 +6,12 @@ mod boundary_dynamics;
 mod surface_dynamics;
 
 use crate::sim::world::{
-    BoundaryDynamicsState,
-    BoundaryType,
-    CrustType,
-    PlateKinematicsState,
-    StressTensor,
-    TerrainDynamicsState,
-    TerrainStepMetrics,
-    VertexCrustState,
-    World,
+    BoundaryDynamicsState, BoundaryType, CrustType, PlateKinematicsState, StressTensor,
+    TerrainDynamicsState, TerrainStepMetrics, VertexCrustState, World,
 };
 
-use super::math::{hash01, seeded_axis};
 use super::lerp;
+use super::math::{hash01, seeded_axis};
 use boundary_dynamics::{reclassify_boundaries, update_plate_kinematics};
 use surface_dynamics::{apply_stress_and_surface_update, preserve_target_sea_ratio};
 

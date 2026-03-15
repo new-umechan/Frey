@@ -28,6 +28,9 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         boundary_anisotropy: 0.40f32,
         river_rain_base: 0.5f32,
         river_accumulation_threshold: 0.035f32,
+        sink_local_rebuild_radius: 3,
+        sink_overflow_hysteresis: 0.0001f32,
+        sink_min_capacity: 0.000001f32,
         erosion_iterations: 12,
         hydraulic_erosion_rate: 0.02f32,
         hydraulic_deposit_rate: 0.35f32,
@@ -36,6 +39,11 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         erosion_max_delta_per_iter: 0.015f32,
         coastal_deposit_rate: 0.45f32,
         shallow_sea_floor: -0.08f32,
+        river_inertia_gain: 0.22f32,
+        river_curvature_penalty: 0.18f32,
+        baseflow_infiltration_rate: 0.22f32,
+        baseflow_release_rate: 0.08f32,
+        baseflow_storage_cap: 0.35f32,
         continent_competence_noise_gain: 0.18f32,
         continent_competence_large_scale: 3.4f32,
         continent_competence_mid_scale: 7.8f32,
@@ -70,4 +78,3 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         isostatic_relax_gain: 0.012f32,
     }
 }
-
