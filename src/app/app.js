@@ -67,6 +67,8 @@ export async function createApp() {
         climateMetricInputs,
         climateLegend,
         climateControlHint,
+        controlHelpModal,
+        controlHelpCloseButton,
         playbackControls,
         eventLogList,
         statFields,
@@ -262,7 +264,6 @@ export async function createApp() {
             worldSimController,
             worldId: activeWorldId,
             world,
-            basePositions,
             currentSeed,
             currentSurfaceMode,
             terrainRenderer,
@@ -339,7 +340,6 @@ export async function createApp() {
             world,
             currentSeed,
             statFields,
-            basePositions,
             level: LEVEL,
         });
     }
@@ -484,6 +484,10 @@ export async function createApp() {
             const eraPreset = getEraScalePreset(currentEraScale);
             setStatus(`Ready (${currentSeed}) | ${eraPreset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
             seedInput.value = currentSeed;
+            const activeElement = document.activeElement;
+            if (activeElement instanceof HTMLElement && seedForm.contains(activeElement)) {
+                activeElement.blur();
+            }
         } finally {
             seedInput.removeAttribute("disabled");
             seedForm.querySelector("button")?.removeAttribute("disabled");
@@ -512,6 +516,8 @@ export async function createApp() {
         eraScaleSelect,
         viewModeInputs,
         climateMetricInputs,
+        controlHelpModal,
+        controlHelpCloseButton,
         playbackControls,
         eventLogList,
         seedForm,

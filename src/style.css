@@ -258,6 +258,71 @@ body {
     font-size: 0.84rem;
 }
 
+.control-help-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+}
+
+.control-help-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: color-mix(in oklab, var(--ink), transparent 72%);
+    cursor: pointer;
+}
+
+.control-help-card {
+    position: relative;
+    width: min(26rem, calc(100vw - 1.4rem));
+    max-height: calc(100vh - 1.4rem);
+    overflow: auto;
+    padding: 0.9rem 1rem;
+    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 22%);
+    background: color-mix(in oklab, var(--panel), white 24%);
+    box-shadow: 0 20px 40px color-mix(in oklab, var(--ink), transparent 80%);
+}
+
+.control-help-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.35rem;
+}
+
+.control-help-head h2 {
+    margin: 0;
+    font-family: "Manrope", sans-serif;
+    font-size: 0.92rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.control-help-close {
+    border: 1px solid color-mix(in oklab, var(--line), transparent 10%);
+    background: color-mix(in oklab, var(--panel), white 28%);
+    color: var(--ink);
+    width: 1.8rem;
+    height: 1.8rem;
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.control-help-close:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.control-help-card p {
+    margin: 0.16rem 0;
+    color: var(--ink-soft);
+    font-size: 0.84rem;
+}
+
 .control-button {
     border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
     background: color-mix(in oklab, var(--panel), white 18%);
@@ -572,10 +637,6 @@ body {
 .era-scale-weights dd {
     margin: 0;
     font-weight: 600;
-}
-
-.panel-note p {
-    font-size: 0.8rem;
 }
 
 .view-mode-group {

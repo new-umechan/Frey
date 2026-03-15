@@ -103,7 +103,6 @@
                         <section class="panel">
                             <h2>Stats</h2>
                             <dl class="stats-list">
-                                <div><dt>Vertices</dt><dd id="stat-vertices">-</dd></div>
                                 <div><dt>Level</dt><dd id="stat-level">-</dd></div>
                                 <div><dt>Seed</dt><dd id="stat-seed">-</dd></div>
                                 <div><dt>Plates</dt><dd id="stat-plates">-</dd></div>
@@ -208,22 +207,46 @@
                                 </dl>
                             </div>
                         </section>
-                        <section class="panel panel-note">
-                            <h2>CONTROL</h2>
-                            <p>ドラッグ: 回転</p>
-                            <p>ホイール / ピンチ: ズーム</p>
-                            <p>V: 地球儀 / 地図切替</p>
-                            <p>D: デバッグ表示切替</p>
-                            <p>1/2/3/4: View切替</p>
-                            <p>Space: 再生 / 停止</p>
-                            <p>.: 1tick進行</p>
-                            <p>,: 32tick巻き戻し</p>
-                            <p id="control-climate-hint" hidden>Q/W: Climate指標切替</p>
+                        <section class="panel">
+                            <h2>Help</h2>
+                            <p>?: CONTROLを表示</p>
                         </section>
                     </div>
                 </aside>
             </section>
         </main>
+        <div
+            id="control-help-modal"
+            class="control-help-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="control-help-title"
+            hidden
+        >
+            <button
+                class="control-help-backdrop"
+                type="button"
+                aria-label="Close controls"
+                data-control-help-close
+            ></button>
+            <section class="control-help-card">
+                <header class="control-help-head">
+                    <h2 id="control-help-title">CONTROL</h2>
+                    <button id="control-help-close" class="control-help-close" type="button" aria-label="閉じる">
+                        ×
+                    </button>
+                </header>
+                <p>ドラッグ: 回転</p>
+                <p>ホイール / ピンチ: ズーム</p>
+                <p>V: 地球儀 / 地図切替</p>
+                <p>D: デバッグ表示切替</p>
+                <p>1/2/3/4: View切替</p>
+                <p>Space: 再生 / 停止</p>
+                <p>.: 1tick進行</p>
+                <p>,: 32tick巻き戻し</p>
+                <p id="control-climate-hint" hidden>Q/W: Climate指標切替</p>
+            </section>
+        </div>
         <script type="module" src="/src/main.js"></script>
     </body>
 </html>

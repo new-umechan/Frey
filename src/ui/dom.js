@@ -35,6 +35,8 @@ export function collectAppElements() {
         hover: requireElement("climate-legend-hover", HTMLElement),
     };
     const climateControlHint = requireElement("control-climate-hint", HTMLElement);
+    const controlHelpModal = requireElement("control-help-modal", HTMLDivElement);
+    const controlHelpCloseButton = requireElement("control-help-close", HTMLButtonElement);
     const playbackControls = {
         overlay: requireElement("playback-overlay", HTMLElement),
         playToggleButton: requireElement("play-toggle-button", HTMLButtonElement),
@@ -52,7 +54,6 @@ export function collectAppElements() {
     }
 
     const statFields = {
-        vertices: requireElement("stat-vertices", HTMLElement),
         level: requireElement("stat-level", HTMLElement),
         seed: requireElement("stat-seed", HTMLElement),
         plates: requireElement("stat-plates", HTMLElement),
@@ -83,6 +84,8 @@ export function collectAppElements() {
         climateMetricInputs,
         climateLegend,
         climateControlHint,
+        controlHelpModal,
+        controlHelpCloseButton,
         playbackControls,
         eventLogList,
         statFields,

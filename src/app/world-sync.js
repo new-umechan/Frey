@@ -177,8 +177,7 @@ function applyWorldMetrics({
     setEraScale(world.era, nextEraMetrics);
 }
 
-function updateStatFields({ statFields, basePositions, level, currentSeed, plateStats, metrics }) {
-    statFields.vertices.textContent = `${basePositions.length / 3}`;
+function updateStatFields({ statFields, level, currentSeed, plateStats, metrics }) {
     statFields.level.textContent = `${level}`;
     statFields.seed.textContent = currentSeed;
     statFields.plates.textContent = `${Number(plateStats?.plate_count) || 0}`;
@@ -204,7 +203,6 @@ export function refreshWorldStatsFromController({
     world,
     currentSeed,
     statFields,
-    basePositions,
     level,
 }) {
     if (!world.core) {
@@ -214,7 +212,6 @@ export function refreshWorldStatsFromController({
     refreshCoreStatsFromMetrics(world.core, stats.metrics, stats.plateStats);
     updateStatFields({
         statFields,
-        basePositions,
         level,
         currentSeed,
         plateStats: stats.plateStats,
@@ -363,7 +360,6 @@ export function syncWorldFromController({
     worldSimController,
     worldId,
     world,
-    basePositions,
     currentSeed,
     currentSurfaceMode,
     terrainRenderer,
@@ -394,7 +390,6 @@ export function syncWorldFromController({
     });
     updateStatFields({
         statFields,
-        basePositions,
         level,
         currentSeed,
         plateStats: stats.plateStats,

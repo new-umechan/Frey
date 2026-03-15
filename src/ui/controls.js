@@ -6,6 +6,8 @@ export function setupUiControls({
     eraScaleSelect,
     viewModeInputs,
     climateMetricInputs,
+    controlHelpModal,
+    controlHelpCloseButton,
     playbackControls,
     eventLogList,
     seedForm,
@@ -103,6 +105,37 @@ export function setupUiControls({
         onEventLogJump(tickText);
     });
 
+    function isHelpToggleKey(event) {
+        return event.key === "?" || (event.code === "Slash" && event.shiftKey);
+    }
+
+    function openControlHelp() {
+        controlHelpModal.hidden = false;
+    }
+
+    function closeControlHelp() {
+        controlHelpModal.hidden = true;
+    }
+
+    function toggleControlHelp() {
+        if (controlHelpModal.hidden) {
+            openControlHelp();
+            return;
+        }
+        closeControlHelp();
+    }
+
+    controlHelpCloseButton.addEventListener("click", closeControlHelp);
+    controlHelpModal.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+        if (target.dataset.controlHelpClose !== undefined) {
+            closeControlHelp();
+        }
+    });
+
     document.addEventListener("keydown", (event) => {
         if (
             event.defaultPrevented ||
@@ -121,6 +154,20 @@ export function setupUiControls({
                 target instanceof HTMLTextAreaElement ||
                 target instanceof HTMLSelectElement)
         ) {
+            return;
+        }
+
+        if (isHelpToggleKey(event)) {
+            event.preventDefault();
+            toggleControlHelp();
+            return;
+        }
+
+        if (!controlHelpModal.hidden) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeControlHelp();
+            }
             return;
         }
 
