@@ -9,8 +9,7 @@ export const DEFAULT_ERA_SCALE = "crust";
 export const PLATE_HOVER_POPUP_DELAY_MS = 450;
 
 export const WORLD_SUBSYSTEM_KEYS = Object.freeze([
-    "terrain",
-    "river",
+    "geology",
     "climate",
     "ecology",
     "civilization",
@@ -27,45 +26,57 @@ export const ERA_SCALE_PRESETS = Object.freeze({
         label: "地殻形成期",
         tickLabel: "500万年",
         runtimeTickMs: 70,
-        weights: { terrain: 4.0, river: 0.25, climate: 0.0, ecology: 0.0, civilization: 0.0 },
+        weights: { geology: 4.0, climate: 0.0, ecology: 0.0, civilization: 0.0 },
     },
     environment: {
         label: "環境形成期",
         tickLabel: "1万年",
         runtimeTickMs: 150,
-        weights: { terrain: 0.3, river: 1.0, climate: 0.9, ecology: 0.15, civilization: 0.0 },
+        weights: { geology: 3.0, climate: 3.0, ecology: 1.0, civilization: 0.0 },
     },
     life: {
         label: "生命誕生期",
         tickLabel: "1000年",
         runtimeTickMs: 110,
-        weights: { terrain: 0.15, river: 0.5, climate: 0.6, ecology: 1.0, civilization: 0.05 },
+        weights: { geology: 2.0, climate: 3.0, ecology: 4.0, civilization: 1.0 },
     },
     civilization: {
         label: "文明成立期",
         tickLabel: "100年",
         runtimeTickMs: 90,
-        weights: { terrain: 0.08, river: 0.3, climate: 0.45, ecology: 0.5, civilization: 1.0 },
+        weights: { geology: 1.0, climate: 2.0, ecology: 2.0, civilization: 4.0 },
     },
     history: {
         label: "歴史展開期",
         tickLabel: "1年",
         runtimeTickMs: 70,
-        weights: { terrain: 0.02, river: 0.08, climate: 0.12, ecology: 0.1, civilization: 1.0 },
+        weights: { geology: 1.0, climate: 1.0, ecology: 1.0, civilization: 4.0 },
     },
 });
 
+export function formatRealYearsPerTick(years) {
+    if (!Number.isFinite(years) || years <= 0) {
+        return "-";
+    }
+    if (years >= 100000000) {
+        return `${(years / 100000000).toFixed(years >= 1000000000 ? 0 : 1)}億年`;
+    }
+    if (years >= 10000) {
+        return `${(years / 10000).toFixed(years >= 100000 ? 0 : 1)}万年`;
+    }
+    return `${years.toFixed(years >= 10 ? 0 : 1)}年`;
+}
+
 export const SUBSYSTEM_ACTIVITY_SIGNAL_GAIN = Object.freeze({
-    terrain: RUNTIME_PARAMS.activity_signal_gain_terrain,
-    river: RUNTIME_PARAMS.activity_signal_gain_river,
+    geology: RUNTIME_PARAMS.activity_signal_gain_terrain + RUNTIME_PARAMS.activity_signal_gain_river,
     climate: RUNTIME_PARAMS.activity_signal_gain_climate,
     ecology: RUNTIME_PARAMS.activity_signal_gain_ecology,
     civilization: RUNTIME_PARAMS.activity_signal_gain_civilization,
 });
 
 export const SUBSYSTEM_ACTIVITY_STEP_BASELINE = Object.freeze({
-    terrain: RUNTIME_PARAMS.activity_step_baseline_terrain,
-    river: RUNTIME_PARAMS.activity_step_baseline_river,
+    geology:
+        RUNTIME_PARAMS.activity_step_baseline_terrain + RUNTIME_PARAMS.activity_step_baseline_river,
     climate: RUNTIME_PARAMS.activity_step_baseline_climate,
     ecology: RUNTIME_PARAMS.activity_step_baseline_ecology,
     civilization: RUNTIME_PARAMS.activity_step_baseline_civilization,

@@ -34,8 +34,7 @@ export function collectAppElements() {
         land: requireElement("stat-land", HTMLElement),
     };
     const eraScaleWeightFields = {
-        terrain: requireElement("era-weight-terrain", HTMLElement),
-        river: requireElement("era-weight-river", HTMLElement),
+        geology: requireElement("era-weight-geology", HTMLElement),
         climate: requireElement("era-weight-climate", HTMLElement),
         ecology: requireElement("era-weight-ecology", HTMLElement),
         civilization: requireElement("era-weight-civilization", HTMLElement),

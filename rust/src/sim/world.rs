@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::ErosionAutomatonState;
 use serde::{Deserialize, Serialize};
 
@@ -22,21 +20,68 @@ impl EraKind {
             EraKind::History => "history",
         }
     }
+
+    pub fn budgets(self) -> SubsystemBudgets {
+        match self {
+            EraKind::Crust => SubsystemBudgets {
+                geology: 4,
+                climate: 0,
+                ecology: 0,
+                civilization: 0,
+            },
+            EraKind::Environment => SubsystemBudgets {
+                geology: 3,
+                climate: 3,
+                ecology: 1,
+                civilization: 0,
+            },
+            EraKind::Life => SubsystemBudgets {
+                geology: 2,
+                climate: 3,
+                ecology: 4,
+                civilization: 1,
+            },
+            EraKind::Civilization => SubsystemBudgets {
+                geology: 1,
+                climate: 2,
+                ecology: 2,
+                civilization: 4,
+            },
+            EraKind::History => SubsystemBudgets {
+                geology: 1,
+                climate: 1,
+                ecology: 1,
+                civilization: 4,
+            },
+        }
+    }
+
+    pub fn real_years_per_tick(self) -> f32 {
+        match self {
+            EraKind::Crust => 5_000_000.0,
+            EraKind::Environment => 10_000.0,
+            EraKind::Life => 1_000.0,
+            EraKind::Civilization => 100.0,
+            EraKind::History => 1.0,
+        }
+    }
+
+    pub fn runtime_tick_ms(self) -> u32 {
+        match self {
+            EraKind::Crust => 70,
+            EraKind::Environment => 150,
+            EraKind::Life => 110,
+            EraKind::Civilization => 90,
+            EraKind::History => 70,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
-    pub tick: u64,
-    pub era: EraKind,
     pub mesh: WorldMesh,
-    pub core: CoreCells,
-    #[serde(default = "default_target_sea_ratio")]
-    pub target_sea_ratio: f32,
-    pub layers: HashMap<LayerKind, CellLayer>,
-    pub budgets: SubsystemBudgets,
-    pub river_erosion_state: Option<ErosionAutomatonState>,
-    #[serde(default)]
-    pub terrain_dynamics: Option<TerrainDynamicsState>,
+    pub state: WorldState,
+    pub exec: ExecState,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -47,11 +92,94 @@ pub struct WorldMesh {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CoreCells {
+pub struct WorldState {
+    pub geology: GeologyState,
+    pub climate: ClimateState,
+    pub ecology: EcologyState,
+    pub civilization: CivilizationState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeologyState {
     pub height: Vec<f32>,
     pub plate_id: Vec<u16>,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
+    pub erosion_rate: Vec<f32>,
+    pub deposition_rate: Vec<f32>,
+    pub boundary_condition: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClimateState {
+    pub temp: Vec<f32>,
+    pub rain: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EcologyState {
+    pub vegetation: Vec<f32>,
+    pub habitability: Vec<f32>,
+    pub productivity: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CivilizationState {
+    pub population: Vec<f32>,
+    pub state_id: Vec<u32>,
+    pub agriculture: Vec<f32>,
+    pub water_withdrawal: Vec<f32>,
+    pub dam_level: Vec<f32>,
+    pub pollution: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExecState {
+    pub tick: u64,
+    pub era: EraKind,
+    pub real_years_per_tick: f32,
+    pub runtime_tick_ms: u32,
+    #[serde(default = "default_target_sea_ratio")]
+    pub target_sea_ratio: f32,
+    pub budgets: SubsystemBudgets,
+    pub feedback_queue: FeedbackQueue,
+    pub transition: TransitionState,
+    #[serde(default)]
+    pub terrain_dynamics: Option<TerrainDynamicsState>,
+    #[serde(default)]
+    pub river_erosion_state: Option<ErosionAutomatonState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SubsystemBudgets {
+    pub geology: u32,
+    pub climate: u32,
+    pub ecology: u32,
+    pub civilization: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackQueue {
+    pub active: FeedbackFields,
+    pub pending: FeedbackFields,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackFields {
+    pub water_withdrawal: Vec<f32>,
+    pub dam_pressure: Vec<f32>,
+    pub pollution: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransitionState {
+    pub era_enter_tick: u64,
+    pub stable_ticks_in_era: u32,
+    pub last_land_ratio: f32,
+    pub ema_geology_activity: f32,
+    pub ema_climate_activity: f32,
+    pub ema_ecology_activity: f32,
+    pub ema_civilization_activity: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,253 +272,136 @@ pub struct TerrainStepMetrics {
     pub subsidence_rate: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum LayerKind {
-    Climate,
-    Ecology,
-    Civilization,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CellLayer {
-    Climate(ClimateLayer),
-    Ecology(EcologyLayer),
-    Civilization(CivilizationLayer),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ClimateLayer {
-    pub temp: Vec<f32>,
-    pub rain: Vec<f32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EcologyLayer {
-    pub habitability: Vec<f32>,
-    pub productivity: Vec<f32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CivilizationLayer {
-    pub population: Vec<f32>,
-    pub state_id: Vec<u32>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct SubsystemBudgets {
-    pub terrain: u32,
-    pub river: u32,
-    pub climate: u32,
-    pub ecology: u32,
-    pub civilization: u32,
-}
-
 impl World {
-    pub fn new(mesh: WorldMesh, core: CoreCells) -> Self {
-        let target_sea_ratio = if core.height.is_empty() {
-            0.62
-        } else {
-            let sea_count = core.height.iter().filter(|&&h| h <= 0.0).count();
-            sea_count as f32 / core.height.len() as f32
-        };
+    pub fn new(mesh: WorldMesh, geology: GeologyState) -> Self {
+        let cell_count = geology.height.len();
+        let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
+        let era = EraKind::Crust;
         Self {
-            tick: 0,
-            era: EraKind::Crust,
             mesh,
-            core,
-            target_sea_ratio,
-            layers: HashMap::new(),
-            budgets: SubsystemBudgets::default(),
-            river_erosion_state: None,
-            terrain_dynamics: None,
+            state: WorldState {
+                geology,
+                climate: ClimateState {
+                    temp: vec![0.5; cell_count],
+                    rain: vec![0.5; cell_count],
+                },
+                ecology: EcologyState {
+                    vegetation: vec![0.0; cell_count],
+                    habitability: vec![0.0; cell_count],
+                    productivity: vec![0.0; cell_count],
+                },
+                civilization: CivilizationState {
+                    population: vec![0.0; cell_count],
+                    state_id: vec![0; cell_count],
+                    agriculture: vec![0.0; cell_count],
+                    water_withdrawal: vec![0.0; cell_count],
+                    dam_level: vec![0.0; cell_count],
+                    pollution: vec![0.0; cell_count],
+                },
+            },
+            exec: ExecState {
+                tick: 0,
+                era,
+                real_years_per_tick: era.real_years_per_tick(),
+                runtime_tick_ms: era.runtime_tick_ms(),
+                target_sea_ratio,
+                budgets: era.budgets(),
+                feedback_queue: FeedbackQueue::new(cell_count),
+                transition: TransitionState {
+                    era_enter_tick: 0,
+                    stable_ticks_in_era: 0,
+                    last_land_ratio: land_ratio,
+                    ema_geology_activity: 1.0,
+                    ema_climate_activity: 1.0,
+                    ema_ecology_activity: 1.0,
+                    ema_civilization_activity: 1.0,
+                },
+                terrain_dynamics: None,
+                river_erosion_state: None,
+            },
         }
+    }
+
+    pub fn cell_count(&self) -> usize {
+        self.state.geology.height.len()
     }
 
     pub fn attach_river_erosion_state(
         &mut self,
         state: ErosionAutomatonState,
     ) -> Result<(), String> {
-        let expected = self.core.height.len();
+        let expected = self.state.geology.height.len();
         if state.height.len() != expected
             || state.river_flux.len() != expected
             || state.river_next.len() != expected
         {
             return Err("river erosion state length does not match core cell count".to_string());
         }
-        self.core.height = state.height.clone();
-        self.core.river_flux = state.river_flux.clone();
-        self.core.river_next = state.river_next.clone();
-        self.river_erosion_state = Some(state);
+        self.state.geology.height = state.height.clone();
+        self.state.geology.river_flux = state.river_flux.clone();
+        self.state.geology.river_next = state.river_next.clone();
+        self.exec.river_erosion_state = Some(state);
         Ok(())
     }
 }
 
-pub fn era_for_tick(tick: u64) -> EraKind {
-    match tick {
-        0..=47 => EraKind::Crust,
-        48..=143 => EraKind::Environment,
-        144..=319 => EraKind::Life,
-        320..=639 => EraKind::Civilization,
-        _ => EraKind::History,
+fn land_and_sea_ratios(height: &[f32]) -> (f32, f32) {
+    if height.is_empty() {
+        return (1.0 - default_target_sea_ratio(), default_target_sea_ratio());
     }
+
+    let sea_count = height.iter().filter(|&&h| h <= 0.0).count() as f32;
+    let cell_count = height.len() as f32;
+    let sea_ratio = sea_count / cell_count;
+    (1.0 - sea_ratio, sea_ratio)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct WorldTime {
-    pub tick: u64,
-    pub era: EraKind,
-    pub era_enter_tick: u64,
-    pub ema_terrain_activity: f32,
-    pub ema_river_activity: f32,
-    pub ema_climate_activity: f32,
-    pub ema_ecology_activity: f32,
-    pub ema_civilization_activity: f32,
-    pub stable_ticks_in_era: u32,
-}
-
-impl Default for WorldTime {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WorldTime {
-    pub fn new() -> Self {
+impl FeedbackQueue {
+    pub fn new(cell_count: usize) -> Self {
         Self {
-            tick: 0,
-            era: era_for_tick(0),
-            era_enter_tick: 0,
-            ema_terrain_activity: 1.0,
-            ema_river_activity: 1.0,
-            ema_climate_activity: 1.0,
-            ema_ecology_activity: 1.0,
-            ema_civilization_activity: 1.0,
-            stable_ticks_in_era: 0,
+            active: FeedbackFields::zeros(cell_count),
+            pending: FeedbackFields::zeros(cell_count),
+        }
+    }
+}
+
+impl FeedbackFields {
+    pub fn zeros(cell_count: usize) -> Self {
+        Self {
+            water_withdrawal: vec![0.0; cell_count],
+            dam_pressure: vec![0.0; cell_count],
+            pollution: vec![0.0; cell_count],
         }
     }
 
-    pub fn reset(&mut self) {
-        *self = Self::new();
+    pub fn clear(&mut self) {
+        self.water_withdrawal.fill(0.0);
+        self.dam_pressure.fill(0.0);
+        self.pollution.fill(0.0);
     }
+}
 
-    pub fn step(&mut self, ticks: u32) {
-        let delta = ticks as u64;
-        self.tick = self.tick.saturating_add(delta);
-    }
-
-    pub fn sync_era(&mut self) {
-        self.set_era(era_for_tick(self.tick));
-    }
-
-    pub fn observe_activity(
-        &mut self,
-        terrain: f32,
-        river: f32,
-        climate: f32,
-        ecology: f32,
-        civilization: f32,
-    ) {
-        self.ema_terrain_activity = update_ema(self.ema_terrain_activity, terrain);
-        self.ema_river_activity = update_ema(self.ema_river_activity, river);
-        self.ema_climate_activity = update_ema(self.ema_climate_activity, climate);
-        self.ema_ecology_activity = update_ema(self.ema_ecology_activity, ecology);
-        self.ema_civilization_activity = update_ema(self.ema_civilization_activity, civilization);
-
-        if self.is_current_era_converged() {
-            self.stable_ticks_in_era = self.stable_ticks_in_era.saturating_add(1);
-        } else {
-            self.stable_ticks_in_era = 0;
-        }
-
-        if let Some(next_era) = self.next_era_if_ready() {
-            self.set_era(next_era);
-        }
-    }
-
-    fn set_era(&mut self, next_era: EraKind) {
-        if self.era == next_era {
-            return;
-        }
-        self.era = next_era;
-        self.era_enter_tick = self.tick;
+impl TransitionState {
+    pub fn reset_for_era(&mut self, tick: u64, era: EraKind, land_ratio: f32) {
+        self.era_enter_tick = tick;
         self.stable_ticks_in_era = 0;
-    }
-
-    fn ticks_in_era(&self) -> u64 {
-        self.tick.saturating_sub(self.era_enter_tick)
-    }
-
-    fn next_era_if_ready(&self) -> Option<EraKind> {
-        if self.ticks_in_era() < min_ticks_before_transition(self.era) {
-            return None;
-        }
-        if self.stable_ticks_in_era < stable_ticks_required(self.era) {
-            return None;
-        }
-        match self.era {
-            EraKind::Crust => Some(EraKind::Environment),
-            EraKind::Environment => Some(EraKind::Life),
-            EraKind::Life => Some(EraKind::Civilization),
-            EraKind::Civilization => Some(EraKind::History),
-            EraKind::History => None,
-        }
-    }
-
-    fn is_current_era_converged(&self) -> bool {
-        let threshold = convergence_threshold(self.era);
-        match self.era {
-            EraKind::Crust => self.ema_terrain_activity <= threshold,
-            EraKind::Environment => {
-                self.ema_river_activity.max(self.ema_climate_activity) <= threshold
-            }
-            EraKind::Life => self.ema_ecology_activity.max(self.ema_climate_activity) <= threshold,
-            EraKind::Civilization => self.ema_civilization_activity <= threshold,
-            EraKind::History => false,
-        }
+        self.last_land_ratio = land_ratio;
+        self.ema_geology_activity = if era == EraKind::Crust { 1.0 } else { 0.0 };
+        self.ema_climate_activity = if era == EraKind::Environment {
+            1.0
+        } else {
+            0.0
+        };
+        self.ema_ecology_activity = if era == EraKind::Life { 1.0 } else { 0.0 };
+        self.ema_civilization_activity = if era == EraKind::Civilization {
+            1.0
+        } else {
+            0.0
+        };
     }
 }
 
-fn update_ema(prev: f32, sample: f32) -> f32 {
-    let alpha = 0.15_f32;
-    let x = if sample.is_finite() {
-        sample.clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    prev.mul_add(1.0 - alpha, alpha * x)
-}
-
-fn min_ticks_before_transition(era: EraKind) -> u64 {
-    match era {
-        EraKind::Crust => 8,
-        EraKind::Environment => 24,
-        EraKind::Life => 24,
-        EraKind::Civilization => 32,
-        EraKind::History => u64::MAX,
-    }
-}
-
-fn stable_ticks_required(era: EraKind) -> u32 {
-    match era {
-        EraKind::Crust => 6,
-        EraKind::Environment => 10,
-        EraKind::Life => 12,
-        EraKind::Civilization => 16,
-        EraKind::History => u32::MAX,
-    }
-}
-
-fn convergence_threshold(era: EraKind) -> f32 {
-    match era {
-        EraKind::Crust => 0.02,
-        EraKind::Environment => 0.03,
-        EraKind::Life => 0.02,
-        EraKind::Civilization => 0.015,
-        EraKind::History => 0.0,
-    }
-}
-
-fn default_target_sea_ratio() -> f32 {
+pub fn default_target_sea_ratio() -> f32 {
     0.62
 }
 
@@ -412,50 +423,67 @@ fn default_reclassify_interval() -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{era_for_tick, EraKind, WorldTime};
+    use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
 
-    #[test]
-    fn era_transitions_follow_thresholds() {
-        assert_eq!(era_for_tick(0), EraKind::Crust);
-        assert_eq!(era_for_tick(47), EraKind::Crust);
-        assert_eq!(era_for_tick(48), EraKind::Environment);
-        assert_eq!(era_for_tick(143), EraKind::Environment);
-        assert_eq!(era_for_tick(144), EraKind::Life);
-        assert_eq!(era_for_tick(319), EraKind::Life);
-        assert_eq!(era_for_tick(320), EraKind::Civilization);
-        assert_eq!(era_for_tick(639), EraKind::Civilization);
-        assert_eq!(era_for_tick(640), EraKind::History);
+    fn build_world() -> World {
+        World::new(
+            WorldMesh {
+                positions: vec![[0.0, 0.0, 1.0]; 4],
+                nbr_offsets: vec![0, 1, 2, 3, 4],
+                nbrs: vec![1, 2, 3, 0],
+            },
+            GeologyState {
+                height: vec![0.2, -0.1, 0.1, -0.2],
+                plate_id: vec![0, 0, 1, 1],
+                river_flux: vec![0.0; 4],
+                river_next: vec![-1; 4],
+                erosion_rate: vec![0.0; 4],
+                deposition_rate: vec![0.0; 4],
+                boundary_condition: vec![0.0; 4],
+            },
+        )
     }
 
     #[test]
-    fn world_time_updates_tick_and_era() {
-        let mut time = WorldTime::new();
-        assert_eq!(time.tick, 0);
-        assert_eq!(time.era, EraKind::Crust);
-
-        time.step(48);
-        assert_eq!(time.tick, 48);
-        assert_eq!(time.era, EraKind::Crust);
-
-        time.reset();
-        assert_eq!(time.tick, 0);
-        assert_eq!(time.era, EraKind::Crust);
+    fn world_initializes_exec_state() {
+        let world = build_world();
+        assert_eq!(world.exec.era, EraKind::Crust);
+        assert_eq!(
+            world.exec.real_years_per_tick,
+            EraKind::Crust.real_years_per_tick()
+        );
+        assert_eq!(world.exec.budgets, EraKind::Crust.budgets());
+        assert_eq!(world.exec.transition.last_land_ratio, 0.5);
+        assert_eq!(world.exec.feedback_queue.pending.pollution.len(), 4);
     }
 
     #[test]
-    fn convergence_can_advance_era() {
-        let mut time = WorldTime::new();
-        for _ in 0..64 {
-            time.observe_activity(0.0, 1.0, 1.0, 1.0, 1.0);
-            time.step(1);
-        }
-        assert_eq!(time.era, EraKind::Environment);
+    fn world_initializes_land_ratio_independently_from_sea_ratio() {
+        let world = World::new(
+            WorldMesh {
+                positions: vec![[0.0, 0.0, 1.0]; 4],
+                nbr_offsets: vec![0, 1, 2, 3, 4],
+                nbrs: vec![1, 2, 3, 0],
+            },
+            GeologyState {
+                height: vec![0.3, 0.1, 0.2, -0.4],
+                plate_id: vec![0, 0, 1, 1],
+                river_flux: vec![0.0; 4],
+                river_next: vec![-1; 4],
+                erosion_rate: vec![0.0; 4],
+                deposition_rate: vec![0.0; 4],
+                boundary_condition: vec![0.0; 4],
+            },
+        );
+
+        assert_eq!(world.exec.target_sea_ratio, 0.25);
+        assert_eq!(world.exec.transition.last_land_ratio, 0.75);
     }
 
     #[test]
-    fn step_with_zero_does_not_advance_tick() {
-        let mut time = WorldTime::new();
-        time.step(0);
-        assert_eq!(time.tick, 0);
+    fn feedback_queue_sizes_match_world() {
+        let queue = FeedbackQueue::new(8);
+        assert_eq!(queue.active.water_withdrawal.len(), 8);
+        assert_eq!(queue.pending.dam_pressure.len(), 8);
     }
 }

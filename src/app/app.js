@@ -19,6 +19,7 @@ import {
     DEFAULT_TERRAIN_SEED,
     DEFAULT_VIEW_MODE,
     ERA_SCALE_PRESETS,
+    formatRealYearsPerTick,
     LEVEL,
 } from "../core/constants.js";
 import {
@@ -112,6 +113,36 @@ function buildCoreFromController({
     };
 }
 
+function createEraMetrics(key = DEFAULT_ERA_SCALE) {
+    const preset = Object.hasOwn(ERA_SCALE_PRESETS, key)
+        ? ERA_SCALE_PRESETS[key]
+        : ERA_SCALE_PRESETS[DEFAULT_ERA_SCALE];
+    return {
+        tickLabel: preset.tickLabel,
+        runtimeTickMs: Number.isFinite(preset.runtimeTickMs) ? preset.runtimeTickMs : 120,
+        budgets: {
+            geology: Number(preset.weights.geology ?? 0),
+            climate: Number(preset.weights.climate ?? 0),
+            ecology: Number(preset.weights.ecology ?? 0),
+            civilization: Number(preset.weights.civilization ?? 0),
+        },
+    };
+}
+
+function buildEraMetricsFromRuntime(era, metrics) {
+    const fallback = createEraMetrics(era);
+    return {
+        tickLabel: formatRealYearsPerTick(Number(metrics?.real_years_per_tick) || 0),
+        runtimeTickMs: Number(metrics?.runtime_tick_ms) || fallback.runtimeTickMs,
+        budgets: {
+            geology: Number(metrics?.budgets?.geology) || 0,
+            climate: Number(metrics?.budgets?.climate) || 0,
+            ecology: Number(metrics?.budgets?.ecology) || 0,
+            civilization: Number(metrics?.budgets?.civilization) || 0,
+        },
+    };
+}
+
 export async function createApp() {
     const {
         appShell,
@@ -183,6 +214,7 @@ export async function createApp() {
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentEraScale = DEFAULT_ERA_SCALE;
+    let currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
     const worldSimController = new WorldSimController();
     let activeWorldId = null;
     const world = {
@@ -197,7 +229,7 @@ export async function createApp() {
         core: createEmptyCore(),
         layers: createEmptyLayers(),
         budgets: createInitialBudgets(),
-        runtime: createInitialRuntimeState(getEraScalePresetRuntimeTickMs(DEFAULT_ERA_SCALE)),
+        runtime: createInitialRuntimeState(currentEraMetrics.runtimeTickMs),
     };
     let currentTerrainData = world.core;
     const worldState = world.runtime;
@@ -263,13 +295,6 @@ export async function createApp() {
         hoverController.syncDebugMode();
     }
 
-    function getEraScalePresetRuntimeTickMs(key) {
-        const preset = Object.hasOwn(ERA_SCALE_PRESETS, key)
-            ? ERA_SCALE_PRESETS[key]
-            : ERA_SCALE_PRESETS[DEFAULT_ERA_SCALE];
-        return Number.isFinite(preset.runtimeTickMs) ? preset.runtimeTickMs : 120;
-    }
-
     function getEraScalePreset(key) {
         if (Object.hasOwn(ERA_SCALE_PRESETS, key)) {
             return ERA_SCALE_PRESETS[key];
@@ -278,24 +303,23 @@ export async function createApp() {
     }
 
     function renderEraScaleControls() {
-        const preset = getEraScalePreset(currentEraScale);
         eraScaleSelect.value = currentEraScale;
-        eraScaleTickLabel.textContent = `1 Tick: ${preset.tickLabel}`;
-        eraScaleWeightFields.terrain.textContent = preset.weights.terrain.toFixed(2);
-        eraScaleWeightFields.river.textContent = preset.weights.river.toFixed(2);
-        eraScaleWeightFields.climate.textContent = preset.weights.climate.toFixed(2);
-        eraScaleWeightFields.ecology.textContent = preset.weights.ecology.toFixed(2);
-        eraScaleWeightFields.civilization.textContent = preset.weights.civilization.toFixed(2);
+        eraScaleTickLabel.textContent = `1 Tick: ${currentEraMetrics.tickLabel}`;
+        eraScaleWeightFields.geology.textContent = currentEraMetrics.budgets.geology.toFixed(2);
+        eraScaleWeightFields.climate.textContent = currentEraMetrics.budgets.climate.toFixed(2);
+        eraScaleWeightFields.ecology.textContent = currentEraMetrics.budgets.ecology.toFixed(2);
+        eraScaleWeightFields.civilization.textContent = currentEraMetrics.budgets.civilization.toFixed(2);
     }
 
-    function setEraScale(nextEraScale) {
+    function setEraScale(nextEraScale, metrics = null) {
         currentEraScale = Object.hasOwn(ERA_SCALE_PRESETS, nextEraScale)
             ? nextEraScale
             : DEFAULT_ERA_SCALE;
-        worldState.runtimeTickMs = getEraScalePresetRuntimeTickMs(currentEraScale);
+        currentEraMetrics = metrics ?? createEraMetrics(currentEraScale);
+        worldState.runtimeTickMs = currentEraMetrics.runtimeTickMs;
         renderEraScaleControls();
         const preset = getEraScalePreset(currentEraScale);
-        setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${preset.tickLabel}`);
+        setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
     }
 
     function resetWorldProgress() {
@@ -303,14 +327,14 @@ export async function createApp() {
         world.era = DEFAULT_ERA_SCALE;
         world.layers = createEmptyLayers();
         world.budgets = createInitialBudgets();
+        currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
         debugSnapshotSavedTicks.clear();
         worldState.accumulatorMs = 0;
         worldState.lastFrameTimeMs = null;
         worldState.pendingRiverSteps = 0;
         worldState.terrainErosionDirty = false;
         worldState.terrainCoreDirty = false;
-        worldState.latestActivity.terrain = 0;
-        worldState.latestActivity.river = 0;
+        worldState.latestActivity.geology = 0;
         worldState.latestActivity.climate = 0;
         worldState.latestActivity.ecology = 0;
         worldState.latestActivity.civilization = 0;
@@ -344,12 +368,12 @@ export async function createApp() {
 
         world.tick = Math.max(0, Math.floor(metrics.tick ?? 0));
         world.era = typeof metrics.era === "string" ? metrics.era : DEFAULT_ERA_SCALE;
+        const nextEraMetrics = buildEraMetricsFromRuntime(world.era, metrics);
+        world.budgets = { ...nextEraMetrics.budgets };
         world.core = core;
         currentTerrainData = core;
 
-        if (world.era !== currentEraScale) {
-            setEraScale(world.era);
-        }
+        setEraScale(world.era, nextEraMetrics);
 
         terrainVisualController.updateTerrainAttributes(currentTerrainData);
         terrainVisualController.updateRiverMaskTexture(currentTerrainData);
@@ -392,7 +416,7 @@ export async function createApp() {
         if (world.tick > 0 && world.tick % 8 === 0) {
             const preset = getEraScalePreset(currentEraScale);
             setStatus(
-                `Running (${currentSeed}) | ${preset.label} / 1Tick=${preset.tickLabel} | tick=${world.tick}`,
+                `Running (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,
             );
         }
     }
@@ -468,7 +492,7 @@ export async function createApp() {
             hoverController.hidePopup();
 
             const eraPreset = getEraScalePreset(currentEraScale);
-            setStatus(`Ready (${currentSeed}) | ${eraPreset.label} / 1Tick=${eraPreset.tickLabel}`);
+            setStatus(`Ready (${currentSeed}) | ${eraPreset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
             seedInput.value = currentSeed;
         } finally {
             seedInput.removeAttribute("disabled");
@@ -520,7 +544,7 @@ export async function createApp() {
     eraScaleSelect.setAttribute("aria-disabled", "true");
     eraScaleSelect.title = "時代プリセットは進行状況に応じて自動切り替えされます。";
     renderEraScaleControls();
-    setEraScale(DEFAULT_ERA_SCALE);
+    setEraScale(DEFAULT_ERA_SCALE, currentEraMetrics);
     onResize();
     hoverController.hidePopup();
 

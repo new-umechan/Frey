@@ -3,136 +3,92 @@ use std::cmp::Ordering;
 use crate::domains;
 use crate::TerrainParams;
 
+#[path = "step_civilization.rs"]
+mod civilization;
+#[path = "step_climate.rs"]
+mod climate;
+#[path = "step_ecology.rs"]
+mod ecology;
+#[path = "step_feedback.rs"]
+mod feedback;
+#[path = "step_transition.rs"]
+mod transition;
+
 use super::world::{
-    era_for_tick, BoundaryDynamicsState, BoundaryType, CellLayer, CivilizationLayer, ClimateLayer,
-    CrustType, EcologyLayer, EraKind, LayerKind, PlateKinematicsState, StressTensor,
-    SubsystemBudgets, TerrainDynamicsState, TerrainStepMetrics, VertexCrustState, World,
+    BoundaryDynamicsState, BoundaryType, CrustType, EraKind, PlateKinematicsState, StressTensor,
+    TerrainDynamicsState, TerrainStepMetrics, VertexCrustState, World,
 };
+use civilization::run_civilization_step;
+use climate::run_climate_step;
+use ecology::run_ecology_step;
+use feedback::apply_feedback_queue;
+use transition::update_era_transition;
 
 const MAX_HEIGHT_DELTA_PER_STEP: f32 = 0.020;
 const DEFAULT_DIFFUSION_WEIGHT: f32 = 0.06;
 const CONVERGENT_THRESHOLD: f32 = 0.010;
 const DIVERGENT_THRESHOLD: f32 = 0.010;
 const TRANSFORM_THRESHOLD: f32 = 0.014;
+const CRUST_RAIN_LAND: f32 = 0.12;
+const CRUST_RAIN_SEA: f32 = 0.04;
+const RUNOFF_BASE: f32 = 0.03;
+const RUNOFF_RAIN_GAIN: f32 = 0.22;
+const RUNOFF_ALTITUDE_GAIN: f32 = 0.12;
+const RUNOFF_OCEAN_FACTOR: f32 = 0.18;
+const CHANNEL_TRANSFER_BASE: f32 = 0.18;
+const CHANNEL_TRANSFER_SLOPE_GAIN: f32 = 6.0;
+const CHANNEL_TRANSFER_MAX: f32 = 0.72;
+const FLUX_LOCAL_DECAY: f32 = 0.82;
 
 pub fn step_world(world: &mut World) {
-    world.budgets = compute_budgets(world.era);
-    ensure_required_layers(world);
-    run_terrain_step(world);
-    run_river_step(world, world.budgets.river);
-    run_climate_step(world, world.budgets.climate);
-    run_ecology_step(world, world.budgets.ecology);
-    run_civilization_step(world, world.budgets.civilization);
+    world.exec.budgets = world.exec.era.budgets();
+    world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
+    world.exec.runtime_tick_ms = world.exec.era.runtime_tick_ms();
+    apply_feedback_queue(world);
+    run_geology_step(world, world.exec.budgets.geology);
+    run_climate_step(world, world.exec.budgets.climate);
+    run_ecology_step(world, world.exec.budgets.ecology);
+    run_civilization_step(world, world.exec.budgets.civilization);
     update_era_transition(world);
-    world.tick = world.tick.saturating_add(1);
+    world.exec.tick = world.exec.tick.saturating_add(1);
 }
 
-fn compute_budgets(era: EraKind) -> SubsystemBudgets {
-    match era {
-        EraKind::Crust => SubsystemBudgets {
-            terrain: 1,
-            river: 1,
-            climate: 0,
-            ecology: 0,
-            civilization: 0,
-        },
-        EraKind::Environment => SubsystemBudgets {
-            terrain: 1,
-            river: 4,
-            climate: 3,
-            ecology: 1,
-            civilization: 0,
-        },
-        EraKind::Life => SubsystemBudgets {
-            terrain: 1,
-            river: 2,
-            climate: 3,
-            ecology: 4,
-            civilization: 1,
-        },
-        EraKind::Civilization => SubsystemBudgets {
-            terrain: 1,
-            river: 1,
-            climate: 2,
-            ecology: 2,
-            civilization: 4,
-        },
-        EraKind::History => SubsystemBudgets {
-            terrain: 1,
-            river: 1,
-            climate: 1,
-            ecology: 1,
-            civilization: 4,
-        },
+fn run_geology_step(world: &mut World, budget: u32) {
+    if budget == 0 {
+        return;
     }
+    run_terrain_step(world);
+    run_river_step(world, geology_river_budget(world.exec.era, budget));
 }
 
-fn ensure_required_layers(world: &mut World) {
-    let cell_count = world.core.height.len();
-    if world.era == EraKind::Environment
-        || world.era == EraKind::Life
-        || world.era == EraKind::Civilization
-        || world.era == EraKind::History
-    {
-        let layer = world.layers.entry(LayerKind::Climate).or_insert_with(|| {
-            CellLayer::Climate(ClimateLayer {
-                temp: vec![0.5; cell_count],
-                rain: vec![0.5; cell_count],
-            })
-        });
-        if let CellLayer::Climate(climate) = layer {
-            resize_with_fill(&mut climate.temp, cell_count, 0.5);
-            resize_with_fill(&mut climate.rain, cell_count, 0.5);
-        }
-    }
-    if world.era == EraKind::Life
-        || world.era == EraKind::Civilization
-        || world.era == EraKind::History
-    {
-        let layer = world.layers.entry(LayerKind::Ecology).or_insert_with(|| {
-            CellLayer::Ecology(EcologyLayer {
-                habitability: vec![0.0; cell_count],
-                productivity: vec![0.0; cell_count],
-            })
-        });
-        if let CellLayer::Ecology(ecology) = layer {
-            resize_with_fill(&mut ecology.habitability, cell_count, 0.0);
-            resize_with_fill(&mut ecology.productivity, cell_count, 0.0);
-        }
-    }
-    if world.era == EraKind::Civilization || world.era == EraKind::History {
-        let layer = world
-            .layers
-            .entry(LayerKind::Civilization)
-            .or_insert_with(|| {
-                CellLayer::Civilization(CivilizationLayer {
-                    population: vec![0.0; cell_count],
-                    state_id: vec![0; cell_count],
-                })
-            });
-        if let CellLayer::Civilization(civilization) = layer {
-            resize_with_fill(&mut civilization.population, cell_count, 0.0);
-            resize_with_fill(&mut civilization.state_id, cell_count, 0_u32);
-        }
-    }
+fn geology_river_budget(era: EraKind, geology_budget: u32) -> u32 {
+    let scale = match era {
+        EraKind::Crust => 1,
+        EraKind::Environment => 4,
+        EraKind::Life => 3,
+        EraKind::Civilization => 2,
+        EraKind::History => 1,
+    };
+    geology_budget.saturating_mul(scale).max(1)
 }
 
 fn run_terrain_step(world: &mut World) {
-    if world.mesh.nbr_offsets.len() != world.core.height.len() + 1 {
+    if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
         return;
     }
-    if world.core.plate_id.len() != world.core.height.len() {
+    if world.state.geology.plate_id.len() != world.state.geology.height.len() {
         return;
     }
 
     ensure_terrain_dynamics(world);
-    let Some(dynamics) = world.terrain_dynamics.as_mut() else {
+    let Some(dynamics) = world.exec.terrain_dynamics.as_mut() else {
         return;
     };
 
-    let cell_count = world.core.height.len();
+    let cell_count = world.state.geology.height.len();
     let default_params = TerrainParams::default();
     let params = world
+        .exec
         .river_erosion_state
         .as_ref()
         .map(|state| &state.params)
@@ -151,8 +107,8 @@ fn run_terrain_step(world: &mut World) {
         dynamics.boundary_state.activity = vec![0.0; cell_count];
     }
 
-    let heights = world.core.height.clone();
-    let plate_id = world.core.plate_id.clone();
+    let heights = world.state.geology.height.clone();
+    let plate_id = world.state.geology.plate_id.clone();
     let positions = world.mesh.positions.clone();
     let nbr_offsets = world.mesh.nbr_offsets.clone();
     let nbrs = world.mesh.nbrs.clone();
@@ -214,31 +170,33 @@ fn run_terrain_step(world: &mut World) {
         params,
     );
 
-    preserve_target_sea_ratio(&mut next_height, world.target_sea_ratio, 0.35);
+    preserve_target_sea_ratio(&mut next_height, world.exec.target_sea_ratio, 0.35);
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
     dynamics.update_index = dynamics.update_index.saturating_add(1);
-    world.core.height = next_height;
+    world.state.geology.height = next_height;
+    world.state.geology.boundary_condition = dynamics.boundary_state.activity.clone();
 
-    if let Some(state) = world.river_erosion_state.as_mut() {
-        if state.height.len() == world.core.height.len() {
-            state.height.clone_from(&world.core.height);
+    if let Some(state) = world.exec.river_erosion_state.as_mut() {
+        if state.height.len() == world.state.geology.height.len() {
+            state.height.clone_from(&world.state.geology.height);
         }
     }
 }
 
 fn ensure_terrain_dynamics(world: &mut World) {
-    let cell_count = world.core.height.len();
+    let cell_count = world.state.geology.height.len();
     let plate_count = world
-        .core
+        .state
+        .geology
         .plate_id
         .iter()
         .copied()
         .max()
         .map(|v| v as usize + 1)
         .unwrap_or(0);
-    let needs_rebuild = match world.terrain_dynamics.as_ref() {
+    let needs_rebuild = match world.exec.terrain_dynamics.as_ref() {
         Some(state) => {
             state.vertex_states.len() != cell_count
                 || state.mantle_heat.len() != cell_count
@@ -250,7 +208,7 @@ fn ensure_terrain_dynamics(world: &mut World) {
         return;
     }
 
-    let plate_states = build_plate_states(&world.core.plate_id);
+    let plate_states = build_plate_states(&world.state.geology.plate_id);
     let mut vertex_states = vec![
         VertexCrustState {
             crust_type: CrustType::Continental,
@@ -267,7 +225,7 @@ fn ensure_terrain_dynamics(world: &mut World) {
     let mut mantle_heat = vec![0.5; cell_count];
 
     for i in 0..cell_count {
-        let h = world.core.height[i];
+        let h = world.state.geology.height[i];
         let is_oceanic = h <= 0.0;
         vertex_states[i].crust_type = if is_oceanic {
             CrustType::Oceanic
@@ -294,7 +252,7 @@ fn ensure_terrain_dynamics(world: &mut World) {
         vertex_states[i].temperature = mantle_heat[i];
     }
 
-    world.terrain_dynamics = Some(TerrainDynamicsState {
+    world.exec.terrain_dynamics = Some(TerrainDynamicsState {
         update_index: 0,
         plate_states,
         vertex_states,
@@ -768,18 +726,17 @@ fn run_river_step(world: &mut World, budget: u32) {
         return;
     }
 
-    if let Some(state) = world.river_erosion_state.as_mut() {
-        if state.height.len() == world.core.height.len()
-            && state.river_flux.len() == world.core.river_flux.len()
-            && state.river_next.len() == world.core.river_next.len()
+    if let Some(state) = world.exec.river_erosion_state.as_mut() {
+        if state.height.len() == world.state.geology.height.len()
+            && state.river_flux.len() == world.state.geology.river_flux.len()
+            && state.river_next.len() == world.state.geology.river_next.len()
         {
-            let cell_count = world.core.height.len() as u32;
+            let cell_count = world.state.geology.height.len() as u32;
             let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
             domains::step_erosion_automaton(state, budget_cells);
-            world.core.height.clone_from(&state.height);
-            world.core.river_flux.clone_from(&state.river_flux);
-            world.core.river_next.clone_from(&state.river_next);
-            return;
+            world.state.geology.height.clone_from(&state.height);
+            world.state.geology.erosion_rate.fill(0.0);
+            world.state.geology.deposition_rate.fill(0.0);
         }
     }
 
@@ -787,7 +744,7 @@ fn run_river_step(world: &mut World, budget: u32) {
 }
 
 fn run_river_fallback(world: &mut World) {
-    let cell_count = world.core.height.len();
+    let cell_count = world.state.geology.height.len();
     if cell_count == 0 || world.mesh.nbr_offsets.len() != cell_count + 1 {
         return;
     }
@@ -802,7 +759,7 @@ fn run_river_fallback(world: &mut World) {
             if n >= cell_count {
                 continue;
             }
-            let drop = world.core.height[i] - world.core.height[n];
+            let drop = world.state.geology.height[i] - world.state.geology.height[n];
             if drop <= 1e-5 {
                 continue;
             }
@@ -820,8 +777,8 @@ fn run_river_fallback(world: &mut World) {
     let mut flux = rain;
     let mut order = (0..cell_count).collect::<Vec<_>>();
     order.sort_by(|&a, &b| {
-        world.core.height[b]
-            .partial_cmp(&world.core.height[a])
+        world.state.geology.height[b]
+            .partial_cmp(&world.state.geology.height[a])
             .unwrap_or(Ordering::Equal)
     });
     for i in order {
@@ -835,191 +792,80 @@ fn run_river_fallback(world: &mut World) {
         }
     }
 
-    world.core.river_next = river_next;
-    world.core.river_flux = flux;
-}
-
-fn build_rain_for_fallback(world: &World) -> Vec<f32> {
-    if let Some(CellLayer::Climate(climate)) = world.layers.get(&LayerKind::Climate) {
-        if climate.rain.len() == world.core.height.len() {
-            return climate.rain.clone();
+    world.state.geology.river_next = river_next;
+    world.state.geology.river_flux = flux.clone();
+    if let Some(state) = world.exec.river_erosion_state.as_mut() {
+        if state.river_flux.len() == flux.len() {
+            state.river_flux.clone_from(&flux);
+            state.river_next.clone_from(&world.state.geology.river_next);
+            state.height.clone_from(&world.state.geology.height);
         }
     }
+}
+
+pub(super) fn build_rain_for_fallback(world: &World) -> Vec<f32> {
+    if world.exec.era != EraKind::Crust {
+        return world.state.climate.rain.clone();
+    }
     world
-        .core
+        .state
+        .geology
         .height
         .iter()
-        .map(|&h| if h > 0.0 { 0.65 } else { 0.35 })
+        .map(|&h| {
+            if h > 0.0 {
+                CRUST_RAIN_LAND
+            } else {
+                CRUST_RAIN_SEA
+            }
+        })
         .collect()
 }
 
-fn run_climate_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let Some(CellLayer::Climate(climate)) = world.layers.get_mut(&LayerKind::Climate) else {
-        return;
-    };
-    let alpha = blend_alpha(budget, 0.10);
-    let max_flux = world
-        .core
-        .river_flux
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max)
-        .max(1e-5);
-
-    for i in 0..world.core.height.len() {
-        let pos = world
-            .mesh
-            .positions
-            .get(i)
-            .copied()
-            .unwrap_or([0.0, 0.0, 1.0]);
-        let latitude = pos[1].abs().clamp(0.0, 1.0);
-        let altitude = world.core.height[i].max(0.0);
-        let base_temp = 0.15 + (1.0 - latitude) * 0.85;
-        let target_temp = (base_temp - altitude * 0.35).clamp(0.0, 1.0);
-
-        let river_norm = (world.core.river_flux[i] / max_flux).clamp(0.0, 1.0);
-        let orographic = (altitude * 0.50).clamp(0.0, 0.35);
-        let target_rain =
-            (0.20 + river_norm * 0.45 + (1.0 - latitude) * 0.25 + orographic).clamp(0.0, 1.0);
-
-        climate.temp[i] = lerp(climate.temp[i], target_temp, alpha);
-        climate.rain[i] = lerp(climate.rain[i], target_rain, alpha);
-    }
-}
-
-fn run_ecology_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let (climate_temp, climate_rain) = match world.layers.get(&LayerKind::Climate) {
-        Some(CellLayer::Climate(climate))
-            if climate.temp.len() == world.core.height.len()
-                && climate.rain.len() == world.core.height.len() =>
-        {
-            (climate.temp.clone(), climate.rain.clone())
-        }
-        _ => return,
-    };
-    let Some(CellLayer::Ecology(ecology)) = world.layers.get_mut(&LayerKind::Ecology) else {
-        return;
-    };
-    if ecology.habitability.len() != world.core.height.len()
-        || ecology.productivity.len() != world.core.height.len()
-    {
-        return;
-    }
-    let alpha = blend_alpha(budget, 0.16);
-    let max_flux = world
-        .core
-        .river_flux
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max)
-        .max(1e-5);
-
-    for i in 0..world.core.height.len() {
-        let temp = climate_temp[i];
-        let rain = climate_rain[i];
-        let land = if world.core.height[i] > 0.0 {
-            1.0
-        } else {
-            0.15
-        };
-        let river_bonus = (world.core.river_flux[i] / max_flux).clamp(0.0, 1.0) * 0.20;
-        let temp_suit = 1.0 - ((temp - 0.55).abs() / 0.55).clamp(0.0, 1.0);
-        let rain_suit = 1.0 - ((rain - 0.60).abs() / 0.60).clamp(0.0, 1.0);
-        let target_habitability =
-            ((temp_suit * 0.55 + rain_suit * 0.45) * land + river_bonus).clamp(0.0, 1.0);
-        let target_productivity =
-            (target_habitability * (0.45 + rain * 0.40 + river_bonus)).clamp(0.0, 1.0);
-
-        ecology.habitability[i] = lerp(ecology.habitability[i], target_habitability, alpha);
-        ecology.productivity[i] = lerp(ecology.productivity[i], target_productivity, alpha);
-    }
-}
-
-fn run_civilization_step(world: &mut World, budget: u32) {
-    if budget == 0 {
-        return;
-    }
-    let (eco_habitability, eco_productivity) = match world.layers.get(&LayerKind::Ecology) {
-        Some(CellLayer::Ecology(ecology))
-            if ecology.habitability.len() == world.core.height.len()
-                && ecology.productivity.len() == world.core.height.len() =>
-        {
-            (ecology.habitability.clone(), ecology.productivity.clone())
-        }
-        _ => return,
-    };
-    let Some(CellLayer::Civilization(civilization)) =
-        world.layers.get_mut(&LayerKind::Civilization)
-    else {
-        return;
-    };
-    if civilization.population.len() != world.core.height.len()
-        || civilization.state_id.len() != world.core.height.len()
-    {
-        return;
-    }
-    let alpha = blend_alpha(budget, 0.12);
-    let max_flux = world
-        .core
-        .river_flux
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max)
-        .max(1e-5);
-
-    for i in 0..world.core.height.len() {
-        if world.core.height[i] <= 0.0 {
-            civilization.population[i] *= 0.98;
-            civilization.state_id[i] = 0;
-            continue;
-        }
-
-        let river_support = (world.core.river_flux[i] / max_flux).clamp(0.0, 1.0);
-        let carrying =
-            1.0 + eco_productivity[i] * 130.0 + eco_habitability[i] * 70.0 + river_support * 40.0;
-        let current = civilization.population[i].max(0.0);
-        let seeded = if current < 1.0 && eco_habitability[i] > 0.55 {
-            1.0
-        } else {
-            current
-        };
-        let growth =
-            0.18 * eco_habitability[i].max(0.05) * seeded * (1.0 - seeded / carrying).max(-0.5);
-        let next_population = (seeded + growth * alpha * 4.0).max(0.0);
-        civilization.population[i] = next_population;
-        civilization.state_id[i] = if next_population >= 10.0 {
-            (i + 1) as u32
-        } else {
-            0
-        };
-    }
-}
-
-fn update_era_transition(world: &mut World) {
-    let next_tick = world.tick.saturating_add(1);
-    world.era = era_for_tick(next_tick);
-}
-
-fn resize_with_fill<T: Clone>(values: &mut Vec<T>, size: usize, fill: T) {
-    if values.len() != size {
-        values.resize(size, fill);
-    }
-}
-
-fn blend_alpha(budget: u32, base: f32) -> f32 {
+pub(super) fn blend_alpha(budget: u32, base: f32) -> f32 {
     let b = budget.max(1) as f32;
     (1.0 - (1.0 - base).powf(b)).clamp(0.0, 1.0)
 }
 
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
+pub(super) fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
+}
+
+pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], rain: &[f32]) -> Vec<f32> {
+    let cell_count = height.len();
+    let mut flux = vec![0.0; cell_count];
+    let mut local_runoff = vec![0.0; cell_count];
+    for i in 0..cell_count {
+        let altitude = height[i].max(0.0);
+        let land_factor = if height[i] > 0.0 {
+            1.0
+        } else {
+            RUNOFF_OCEAN_FACTOR
+        };
+        let runoff_ratio =
+            (RUNOFF_BASE + rain[i] * RUNOFF_RAIN_GAIN + altitude * RUNOFF_ALTITUDE_GAIN)
+                .clamp(0.0, 0.35);
+        local_runoff[i] = rain[i] * runoff_ratio * land_factor;
+        flux[i] = local_runoff[i];
+    }
+    let mut order = (0..cell_count).collect::<Vec<_>>();
+    order.sort_by(|&a, &b| height[b].partial_cmp(&height[a]).unwrap_or(Ordering::Equal));
+    for i in order {
+        let next = river_next.get(i).copied().unwrap_or(-1);
+        if next < 0 {
+            continue;
+        }
+        let n = next as usize;
+        if n < cell_count {
+            let drop = (height[i] - height[n]).max(0.0);
+            let transfer = (CHANNEL_TRANSFER_BASE + drop * CHANNEL_TRANSFER_SLOPE_GAIN)
+                .clamp(CHANNEL_TRANSFER_BASE, CHANNEL_TRANSFER_MAX);
+            let carried =
+                (flux[i] - local_runoff[i] * (1.0 - FLUX_LOCAL_DECAY)).max(0.0) * transfer;
+            flux[n] += carried;
+        }
+    }
+    flux
 }
 
 fn preserve_target_sea_ratio(height: &mut [f32], target_sea_ratio: f32, strength: f32) {
@@ -1105,7 +951,7 @@ mod tests {
     use crate::TerrainParams;
 
     use super::*;
-    use crate::sim::world::{CoreCells, World, WorldMesh};
+    use crate::sim::world::{GeologyState, World, WorldMesh};
 
     fn build_test_world() -> World {
         let mesh = WorldMesh {
@@ -1118,21 +964,24 @@ mod tests {
             nbr_offsets: vec![0, 3, 6, 9, 12],
             nbrs: vec![1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2],
         };
-        let core = CoreCells {
+        let geology = GeologyState {
             height: vec![0.45, 0.15, -0.25, 0.05],
             plate_id: vec![0, 0, 1, 1],
             river_flux: vec![0.1, 0.2, 0.3, 0.1],
             river_next: vec![1, 2, -1, 2],
+            erosion_rate: vec![0.0; 4],
+            deposition_rate: vec![0.0; 4],
+            boundary_condition: vec![0.0; 4],
         };
-        World::new(mesh, core)
+        World::new(mesh, geology)
     }
 
     #[test]
     fn step_world_advances_tick_and_sets_budget_to_one() {
         let mut world = build_test_world();
         step_world(&mut world);
-        assert_eq!(world.tick, 1);
-        assert_eq!(world.budgets.terrain, 1);
+        assert_eq!(world.exec.tick, 1);
+        assert_eq!(world.exec.budgets.geology, 4);
     }
 
     #[test]
@@ -1140,12 +989,19 @@ mod tests {
         let mut world = build_test_world();
         run_terrain_step(&mut world);
 
-        let dynamics = world.terrain_dynamics.as_ref().expect("terrain dynamics");
-        assert_eq!(dynamics.vertex_states.len(), world.core.height.len());
-        assert_eq!(dynamics.mantle_heat.len(), world.core.height.len());
+        let dynamics = world
+            .exec
+            .terrain_dynamics
+            .as_ref()
+            .expect("terrain dynamics");
+        assert_eq!(
+            dynamics.vertex_states.len(),
+            world.state.geology.height.len()
+        );
+        assert_eq!(dynamics.mantle_heat.len(), world.state.geology.height.len());
         assert_eq!(
             dynamics.boundary_state.dominant_type.len(),
-            world.core.height.len()
+            world.state.geology.height.len()
         );
         assert!(dynamics.cached_metrics.terrain_activity >= 0.0);
     }
@@ -1194,14 +1050,72 @@ mod tests {
     #[test]
     fn river_fallback_updates_flux_and_next() {
         let mut world = build_test_world();
-        world.river_erosion_state = None;
+        world.exec.river_erosion_state = None;
         step_world(&mut world);
 
         assert!(world
-            .core
+            .state
+            .geology
             .river_flux
             .iter()
             .all(|v| v.is_finite() && *v >= 0.0));
-        assert!(world.core.river_next.iter().any(|&n| n >= 0));
+        assert!(world.state.geology.river_next.iter().any(|&n| n >= 0));
+    }
+
+    #[test]
+    fn civilization_feedback_is_delayed_until_next_tick() {
+        let mut world = build_test_world();
+        world.exec.era = EraKind::Civilization;
+        world.exec.tick = 40;
+        world.exec.transition.era_enter_tick = 0;
+        world.state.ecology.habitability.fill(0.9);
+        world.state.ecology.productivity.fill(0.8);
+
+        step_world(&mut world);
+        let pending = world
+            .exec
+            .feedback_queue
+            .pending
+            .pollution
+            .iter()
+            .copied()
+            .sum::<f32>();
+        let active = world
+            .exec
+            .feedback_queue
+            .active
+            .pollution
+            .iter()
+            .copied()
+            .sum::<f32>();
+        assert!(pending > 0.0);
+        assert_eq!(active, 0.0);
+
+        step_world(&mut world);
+        let active_after = world
+            .exec
+            .feedback_queue
+            .active
+            .pollution
+            .iter()
+            .copied()
+            .sum::<f32>();
+        assert!(active_after > 0.0);
+    }
+
+    #[test]
+    fn crust_transitions_to_environment_when_land_ratio_is_stable() {
+        let mut world = build_test_world();
+        world.state.geology.height = vec![0.4, 0.2, 0.1, -0.3];
+        world.exec.transition.last_land_ratio = 0.75;
+        world.exec.transition.ema_geology_activity = 0.0;
+
+        for _ in 0..6 {
+            world.exec.tick = 8 + u64::from(world.exec.transition.stable_ticks_in_era);
+            update_era_transition(&mut world);
+        }
+
+        assert_eq!(world.exec.era, EraKind::Environment);
+        assert_eq!(world.exec.budgets, EraKind::Environment.budgets());
     }
 }

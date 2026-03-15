@@ -61,11 +61,22 @@ struct FieldResponse {
 }
 
 #[derive(Serialize)]
+struct BudgetSummary {
+    geology: u32,
+    climate: u32,
+    ecology: u32,
+    civilization: u32,
+}
+
+#[derive(Serialize)]
 struct MetricsResponse {
     world_id: String,
     tick: f64,
     era: String,
     simulation_rate: f32,
+    real_years_per_tick: f32,
+    runtime_tick_ms: u32,
+    budgets: BudgetSummary,
     cell_count: u32,
     land_ratio: f32,
     mean_height: f32,
@@ -187,11 +198,14 @@ impl WorldSimController {
             .map(|&v| u16::try_from(v).map_err(|_| JsValue::from_str("plate id exceeds u16 range")))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let core = world::CoreCells {
+        let geology = world::GeologyState {
             height: terrain.height,
             plate_id,
             river_flux: terrain.river_flux,
             river_next: terrain.river_next,
+            erosion_rate: vec![0.0; positions.len()],
+            deposition_rate: vec![0.0; positions.len()],
+            boundary_condition: vec![0.0; positions.len()],
         };
 
         let mesh = world::WorldMesh {
@@ -200,11 +214,11 @@ impl WorldSimController {
             nbrs,
         };
 
-        let mut sim_world = world::World::new(mesh, core);
+        let mut sim_world = world::World::new(mesh, geology);
         if let Some(target) = config.target_sea_ratio {
-            sim_world.target_sea_ratio = target.clamp(0.02, 0.98);
+            sim_world.exec.target_sea_ratio = target.clamp(0.02, 0.98);
         }
-        sim_world.era = world::EraKind::Crust;
+        sim_world.exec.era = world::EraKind::Crust;
 
         let erosion_state = build_erosion_state(&sim_world, terrain_params.clone());
         let _ = sim_world.attach_river_erosion_state(erosion_state);
@@ -217,14 +231,14 @@ impl WorldSimController {
         };
         managed
             .history
-            .insert(managed.world.tick, managed.world.clone());
+            .insert(managed.world.exec.tick, managed.world.clone());
 
         let world_id = self.next_world_id();
         let output = InitWorldOutput {
             world_id: world_id.clone(),
-            tick: managed.world.tick as f64,
-            era: managed.world.era.as_key().to_string(),
-            cell_count: managed.world.core.height.len() as u32,
+            tick: managed.world.exec.tick as f64,
+            era: managed.world.exec.era.as_key().to_string(),
+            cell_count: managed.world.state.geology.height.len() as u32,
         };
         self.worlds.insert(world_id, managed);
 
@@ -250,7 +264,7 @@ impl WorldSimController {
             sync_erosion_state(&mut managed.world, &managed.terrain_params);
             managed
                 .history
-                .insert(managed.world.tick, managed.world.clone());
+                .insert(managed.world.exec.tick, managed.world.clone());
             trim_history(&mut managed.history, DEFAULT_HISTORY_LIMIT);
         }
 
@@ -288,46 +302,50 @@ impl WorldSimController {
             "height" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.core.height.len() as u32,
-                sampled_count: sampled_len(world_ref.core.height.len(), stride),
-                f32_data: Some(sample_f32(&world_ref.core.height, stride)),
+                cell_count: world_ref.state.geology.height.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.height.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.geology.height, stride)),
                 u32_data: None,
                 i32_data: None,
             },
             "river_flux" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.core.river_flux.len() as u32,
-                sampled_count: sampled_len(world_ref.core.river_flux.len(), stride),
-                f32_data: Some(sample_f32(&world_ref.core.river_flux, stride)),
+                cell_count: world_ref.state.geology.river_flux.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.river_flux.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.geology.river_flux, stride)),
                 u32_data: None,
                 i32_data: None,
             },
             "plate_id" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.core.plate_id.len() as u32,
-                sampled_count: sampled_len(world_ref.core.plate_id.len(), stride),
+                cell_count: world_ref.state.geology.plate_id.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.plate_id.len(), stride),
                 f32_data: None,
-                u32_data: Some(sample_u32_from_u16(&world_ref.core.plate_id, stride)),
+                u32_data: Some(sample_u32_from_u16(
+                    &world_ref.state.geology.plate_id,
+                    stride,
+                )),
                 i32_data: None,
             },
             "river_next" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.core.river_next.len() as u32,
-                sampled_count: sampled_len(world_ref.core.river_next.len(), stride),
+                cell_count: world_ref.state.geology.river_next.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.river_next.len(), stride),
                 f32_data: None,
                 u32_data: None,
-                i32_data: Some(sample_i32(&world_ref.core.river_next, stride)),
+                i32_data: Some(sample_i32(&world_ref.state.geology.river_next, stride)),
             },
             "mantle_heat" => {
-                let default_mantle_heat = vec![0.5; world_ref.core.height.len()];
+                let default_mantle_heat = vec![0.5; world_ref.state.geology.height.len()];
                 let mantle_heat = world_ref
+                    .exec
                     .terrain_dynamics
                     .as_ref()
                     .map(|dynamics| dynamics.mantle_heat.as_slice())
-                    .filter(|data| data.len() == world_ref.core.height.len())
+                    .filter(|data| data.len() == world_ref.state.geology.height.len())
                     .unwrap_or(default_mantle_heat.as_slice());
                 FieldResponse {
                     field_kind,
@@ -358,7 +376,7 @@ impl WorldSimController {
             .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
         let w = &managed.world;
 
-        let cell_count = w.core.height.len().max(1) as f32;
+        let cell_count = w.state.geology.height.len().max(1) as f32;
         let mut land_cells = 0usize;
         let mut sum_height = 0.0f32;
         let mut sum_flux = 0.0f32;
@@ -366,9 +384,9 @@ impl WorldSimController {
         let mut min_height = f32::INFINITY;
         let mut max_flux = 0.0f32;
 
-        for i in 0..w.core.height.len() {
-            let h = w.core.height[i];
-            let flux = w.core.river_flux.get(i).copied().unwrap_or(0.0);
+        for i in 0..w.state.geology.height.len() {
+            let h = w.state.geology.height[i];
+            let flux = w.state.geology.river_flux.get(i).copied().unwrap_or(0.0);
             if h > 0.0 {
                 land_cells += 1;
             }
@@ -381,10 +399,18 @@ impl WorldSimController {
 
         let response = MetricsResponse {
             world_id,
-            tick: w.tick as f64,
-            era: w.era.as_key().to_string(),
+            tick: w.exec.tick as f64,
+            era: w.exec.era.as_key().to_string(),
             simulation_rate: managed.simulation_rate,
-            cell_count: w.core.height.len() as u32,
+            real_years_per_tick: w.exec.real_years_per_tick,
+            runtime_tick_ms: w.exec.runtime_tick_ms,
+            budgets: BudgetSummary {
+                geology: w.exec.budgets.geology,
+                climate: w.exec.budgets.climate,
+                ecology: w.exec.budgets.ecology,
+                civilization: w.exec.budgets.civilization,
+            },
+            cell_count: w.state.geology.height.len() as u32,
             land_ratio: land_cells as f32 / cell_count,
             mean_height: sum_height / cell_count,
             mean_river_flux: sum_flux / cell_count,
@@ -414,7 +440,8 @@ impl WorldSimController {
         let w = &managed.world;
 
         let plate_count = w
-            .core
+            .state
+            .geology
             .plate_id
             .iter()
             .copied()
@@ -427,14 +454,14 @@ impl WorldSimController {
         let mut height_sums = vec![0.0f32; plate_count];
         let mut flux_sums = vec![0.0f32; plate_count];
 
-        for i in 0..w.core.plate_id.len() {
-            let pid = w.core.plate_id[i] as usize;
+        for i in 0..w.state.geology.plate_id.len() {
+            let pid = w.state.geology.plate_id[i] as usize;
             if pid >= plate_count {
                 continue;
             }
             counts[pid] = counts[pid].saturating_add(1);
-            let h = w.core.height.get(i).copied().unwrap_or(0.0);
-            let flux = w.core.river_flux.get(i).copied().unwrap_or(0.0);
+            let h = w.state.geology.height.get(i).copied().unwrap_or(0.0);
+            let flux = w.state.geology.river_flux.get(i).copied().unwrap_or(0.0);
             if h > 0.0 {
                 land_counts[pid] = land_counts[pid].saturating_add(1);
             }
@@ -456,7 +483,7 @@ impl WorldSimController {
 
         let response = PlateStatsResponse {
             world_id,
-            tick: w.tick as f64,
+            tick: w.exec.tick as f64,
             plate_count: plate_count as u32,
             stats,
         };
@@ -485,18 +512,30 @@ impl WorldSimController {
         for op in ops {
             let idx = op.cell_id as usize;
             let ok = match op.field.as_str() {
-                "height" => apply_f32(&mut managed.world.core.height, idx, op.value as f32),
+                "height" => apply_f32(
+                    &mut managed.world.state.geology.height,
+                    idx,
+                    op.value as f32,
+                ),
                 "river_flux" => apply_f32(
-                    &mut managed.world.core.river_flux,
+                    &mut managed.world.state.geology.river_flux,
                     idx,
                     (op.value as f32).max(0.0),
                 ),
-                "river_next" => apply_i32(&mut managed.world.core.river_next, idx, op.value as i32),
+                "river_next" => apply_i32(
+                    &mut managed.world.state.geology.river_next,
+                    idx,
+                    op.value as i32,
+                ),
                 "plate_id" => {
                     if op.value < 0.0 || op.value > u16::MAX as f64 {
                         false
                     } else {
-                        apply_u16(&mut managed.world.core.plate_id, idx, op.value as u16)
+                        apply_u16(
+                            &mut managed.world.state.geology.plate_id,
+                            idx,
+                            op.value as u16,
+                        )
                     }
                 }
                 _ => false,
@@ -511,7 +550,7 @@ impl WorldSimController {
         sync_erosion_state(&mut managed.world, &managed.terrain_params);
         managed
             .history
-            .insert(managed.world.tick, managed.world.clone());
+            .insert(managed.world.exec.tick, managed.world.clone());
         trim_history(&mut managed.history, DEFAULT_HISTORY_LIMIT);
 
         let result = InterventionResult {
@@ -552,7 +591,7 @@ impl WorldSimController {
         };
         let new_world_id = self.next_world_id();
         let mut history = BTreeMap::new();
-        history.insert(snapshot.tick, snapshot.clone());
+        history.insert(snapshot.exec.tick, snapshot.clone());
         let forked = ManagedWorld {
             world: snapshot,
             simulation_rate: source_rate,
@@ -578,7 +617,7 @@ impl WorldSimController {
                 .worlds
                 .get(&world_id)
                 .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
-            (managed.world.clone(), managed.world.tick)
+            (managed.world.clone(), managed.world.exec.tick)
         };
         let snapshot_id = self.next_snapshot_id();
         let entry = SnapshotEntry {
@@ -642,23 +681,23 @@ impl WorldSimController {
 }
 
 fn build_erosion_state(world: &world::World, params: TerrainParams) -> ErosionAutomatonState {
-    let cell_count = world.core.height.len();
+    let cell_count = world.state.geology.height.len();
     ErosionAutomatonState {
         positions: world.mesh.positions.clone(),
         nbr_offsets: world.mesh.nbr_offsets.clone(),
         nbrs: world.mesh.nbrs.clone(),
-        height: world.core.height.clone(),
+        height: world.state.geology.height.clone(),
         water: vec![0.0; cell_count],
         sediment: vec![0.0; cell_count],
         armor: vec![0.0; cell_count],
         rain: vec![0.5; cell_count],
-        river_flux: world.core.river_flux.clone(),
-        river_next: world.core.river_next.clone(),
+        river_flux: world.state.geology.river_flux.clone(),
+        river_next: world.state.geology.river_next.clone(),
         active_queue: (0..cell_count as u32).collect(),
         active_head: 0,
         in_queue: vec![1; cell_count],
         rain_cursor: 0,
-        tick: world.tick,
+        tick: world.exec.tick,
         recent_changed: Vec::new(),
         params,
     }
@@ -747,8 +786,17 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct BudgetSummary {
+        geology: u32,
+        climate: u32,
+        ecology: u32,
+        civilization: u32,
+    }
+
+    #[derive(Deserialize)]
     struct MetricsResponse {
         tick: f64,
+        budgets: BudgetSummary,
     }
 
     #[test]
@@ -767,5 +815,26 @@ mod tests {
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert!(metrics_data.tick >= 1.0);
+    }
+
+    #[test]
+    fn init_metrics_expose_crust_budgets_before_first_tick() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-b".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+
+        let metrics = controller
+            .get_metrics_js(init_data.world_id)
+            .expect("get metrics");
+        let metrics_data: MetricsResponse =
+            serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
+
+        assert_eq!(metrics_data.tick, 0.0);
+        assert_eq!(metrics_data.budgets.geology, 4);
+        assert_eq!(metrics_data.budgets.climate, 0);
+        assert_eq!(metrics_data.budgets.ecology, 0);
+        assert_eq!(metrics_data.budgets.civilization, 0);
     }
 }
