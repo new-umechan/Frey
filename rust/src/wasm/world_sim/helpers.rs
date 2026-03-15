@@ -1,8 +1,6 @@
-use std::collections::BTreeMap;
-
 use crate::domains::types::TerrainParams;
-use crate::sim::world;
 use crate::sim::erosion::ErosionAutomatonState;
+use crate::sim::world;
 
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
 
@@ -40,18 +38,30 @@ pub(super) fn build_erosion_state(
 }
 
 pub(super) fn sync_erosion_state(world: &mut world::World, params: &TerrainParams) {
-    let state = build_erosion_state(world, params.clone());
-    let _ = world.attach_river_erosion_state(state);
-}
-
-pub(super) fn trim_history(history: &mut BTreeMap<u64, world::World>, max_entries: usize) {
-    while history.len() > max_entries {
-        if let Some(oldest) = history.keys().next().copied() {
-            history.remove(&oldest);
-        } else {
-            break;
-        }
+    let expected = world.state.geology.height.len();
+    let Some(state) = world.exec.river_erosion_state.as_mut() else {
+        let state = build_erosion_state(world, params.clone());
+        let _ = world.attach_river_erosion_state(state);
+        return;
+    };
+    if state.height.len() != expected
+        || state.river_flux.len() != expected
+        || state.river_next.len() != expected
+        || state.rain.len() != expected
+    {
+        let state = build_erosion_state(world, params.clone());
+        let _ = world.attach_river_erosion_state(state);
+        return;
     }
+    state.height.clone_from(&world.state.geology.height);
+    state.river_flux.clone_from(&world.state.geology.river_flux);
+    state.river_next.clone_from(&world.state.geology.river_next);
+    for (rain, runoff) in state.rain.iter_mut().zip(world.state.climate.runoff.iter().copied()) {
+        *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
+    }
+    state.tick = world.exec.tick;
+    state.params = params.clone();
+    state.recent_changed.clear();
 }
 
 pub(super) fn sampled_len(total_len: usize, stride: u32) -> u32 {

@@ -6,8 +6,8 @@ use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::domains;
 use crate::sim::{step_world, world};
 
-use super::super::helpers::{build_erosion_state, sync_erosion_state, trim_history};
-use super::super::state::{ManagedWorld, DEFAULT_HISTORY_LIMIT};
+use super::super::helpers::{build_erosion_state, sync_erosion_state};
+use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
 use super::super::WorldSimController;
@@ -79,11 +79,13 @@ impl WorldSimController {
 
         let erosion_state = build_erosion_state(&sim_world, terrain_params.clone());
         let _ = sim_world.attach_river_erosion_state(erosion_state);
+        let sync_state = WorldSyncState::from_world(&sim_world);
 
         let mut managed = ManagedWorld {
             world: sim_world,
             simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
             terrain_params,
+            sync_state,
             history: BTreeMap::new(),
         };
         managed
@@ -119,10 +121,8 @@ impl WorldSimController {
         for _ in 0..steps {
             step_world(&mut managed.world);
             sync_erosion_state(&mut managed.world, &managed.terrain_params);
-            managed
-                .history
-                .insert(managed.world.exec.tick, managed.world.clone());
-            trim_history(&mut managed.history, DEFAULT_HISTORY_LIMIT);
+            managed.observe_after_world_change();
+            managed.save_history_snapshot_if_needed();
         }
 
         Ok(())

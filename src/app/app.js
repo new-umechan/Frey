@@ -38,7 +38,11 @@ import {
     createInitialRuntimeState,
 } from "../sim/runtime/state.js";
 import { saveDebugSnapshotIfNeeded } from "../sim/debug/snapshot.js";
-import { syncWorldFromController } from "./world-sync.js";
+import {
+    refreshWorldStatsFromController,
+    syncWorldDeltaFromController,
+    syncWorldFromController,
+} from "./world-sync.js";
 import { advanceWorldLoop, resetWorldProgress } from "./world-loop.js";
 
 export async function createApp() {
@@ -245,7 +249,11 @@ export async function createApp() {
             return;
         }
         currentSurfaceMode = normalizedMode;
-        terrainRenderer.updateGeometryPositions(currentTerrainData, currentSurfaceMode);
+        terrainRenderer.updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
+            force: true,
+            heightChanged: true,
+            tick: world.tick,
+        });
         cameraController.setSurfaceMode(normalizedMode);
         plateHover.hidePopup();
     }
@@ -273,6 +281,22 @@ export async function createApp() {
         setStatus(`Ready (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
     }
 
+    function shouldRefreshStatsAtTick(tick) {
+        return (tick % 8) === 0;
+    }
+
+    function refreshActiveWorldStats() {
+        return refreshWorldStatsFromController({
+            worldSimController,
+            worldId: activeWorldId,
+            world,
+            currentSeed,
+            statFields,
+            basePositions,
+            level: LEVEL,
+        });
+    }
+
     function stepWorldTick() {
         if (!activeWorldId || !currentTerrainData) {
             return;
@@ -284,24 +308,22 @@ export async function createApp() {
             : null;
 
         worldSimController.step_world(activeWorldId, 1);
-        syncWorldFromController({
+        const shouldRefreshStats = shouldRefreshStatsAtTick(nextTick);
+        const { changes, statsRefreshed } = syncWorldDeltaFromController({
             worldSimController,
             worldId: activeWorldId,
             world,
-            basePositions,
-            currentSeed,
             currentSurfaceMode,
             terrainRenderer,
             createEraMetrics,
             buildEraMetricsFromRuntime,
             setEraScale,
-            setCurrentTerrainData: (core) => {
-                currentTerrainData = core;
-            },
-            statFields,
-            level: LEVEL,
+            refreshStats: shouldRefreshStats,
+            refreshWorldStats: refreshActiveWorldStats,
         });
-        syncClimateUi();
+        if (changes?.climate || statsRefreshed) {
+            syncClimateUi();
+        }
 
         void saveDebugSnapshotIfNeeded({
             isDev: import.meta.env.DEV,
@@ -317,7 +339,7 @@ export async function createApp() {
             setStatus,
         });
 
-        if (world.tick > 0 && world.tick % 8 === 0) {
+        if (world.tick > 0 && shouldRefreshStats) {
             const preset = getEraScalePreset(currentEraScale);
             setStatus(
                 `Running (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,

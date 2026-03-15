@@ -108,3 +108,29 @@ pub(super) struct LoadCheckpointResult {
     pub world_id: String,
     pub tick: f64,
 }
+
+#[derive(Serialize)]
+pub(super) struct DeltaRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Serialize)]
+pub(super) struct FieldDeltaResponse {
+    pub field_kind: String,
+    pub mode: String,
+    pub ranges: Vec<DeltaRange>,
+    pub f32_data: Option<Vec<f32>>,
+    pub i32_data: Option<Vec<i32>>,
+}
+
+#[derive(Serialize)]
+pub(super) struct WorldDeltaResponse {
+    pub world_id: String,
+    pub tick: f64,
+    pub era: String,
+    pub real_years_per_tick: f32,
+    pub runtime_tick_ms: u32,
+    pub budgets: BudgetSummary,
+    pub deltas: Vec<FieldDeltaResponse>,
+}

@@ -1,12 +1,10 @@
 use wasm_bindgen::prelude::*;
 
-use super::super::helpers::{
-    sample_f32,
-    sample_i32,
-    sample_u32_from_u16,
-    sampled_len,
+use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_u16, sampled_len};
+use super::super::types::{
+    BudgetSummary, FieldResponse, MetricsResponse, PlateStat, PlateStatsResponse,
+    WorldDeltaResponse,
 };
-use super::super::types::{BudgetSummary, FieldResponse, MetricsResponse, PlateStat, PlateStatsResponse};
 use super::super::WorldSimController;
 
 #[wasm_bindgen]
@@ -184,6 +182,31 @@ impl WorldSimController {
 
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize metrics: {err}")))
+    }
+
+    #[wasm_bindgen(js_name = get_world_delta)]
+    pub fn get_world_delta_js(&mut self, world_id: String) -> Result<JsValue, JsValue> {
+        let managed = self
+            .worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+        let w = &managed.world;
+        let response = WorldDeltaResponse {
+            world_id,
+            tick: w.exec.tick as f64,
+            era: w.exec.era.as_key().to_string(),
+            real_years_per_tick: w.exec.real_years_per_tick,
+            runtime_tick_ms: w.exec.runtime_tick_ms,
+            budgets: BudgetSummary {
+                geology: w.exec.budgets.geology,
+                climate: w.exec.budgets.climate,
+                ecology: w.exec.budgets.ecology,
+                civilization: w.exec.budgets.civilization,
+            },
+            deltas: managed.sync_state.take_world_field_deltas(),
+        };
+        serde_wasm_bindgen::to_value(&response)
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize world delta: {err}")))
     }
 
     #[wasm_bindgen(js_name = get_plate_stats)]

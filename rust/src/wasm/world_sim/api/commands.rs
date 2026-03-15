@@ -4,8 +4,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::domains::types::TerrainParams;
 
-use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state, trim_history};
-use super::super::state::{ManagedWorld, SnapshotEntry, DEFAULT_HISTORY_LIMIT};
+use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
+use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState, HISTORY_SNAPSHOT_INTERVAL};
 use super::super::types::{
     CheckpointResult,
     ForkWorldResult,
@@ -73,10 +73,8 @@ impl WorldSimController {
         }
 
         sync_erosion_state(&mut managed.world, &managed.terrain_params);
-        managed
-            .history
-            .insert(managed.world.exec.tick, managed.world.clone());
-        trim_history(&mut managed.history, DEFAULT_HISTORY_LIMIT);
+        managed.observe_after_world_change();
+        managed.save_history_snapshot_if_needed();
 
         let result = InterventionResult {
             world_id,
@@ -101,6 +99,11 @@ impl WorldSimController {
                 .worlds
                 .get(&world_id)
                 .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
+            if tick_u64 % HISTORY_SNAPSHOT_INTERVAL != 0 {
+                return Err(JsValue::from_str(&format!(
+                    "tick {tick_u64} is not checkpointed; available ticks are saved every {HISTORY_SNAPSHOT_INTERVAL} ticks"
+                )));
+            }
             let snapshot = if let Some(found) = source.history.get(&tick_u64) {
                 found.clone()
             } else {
@@ -117,10 +120,12 @@ impl WorldSimController {
         let new_world_id = self.next_world_id();
         let mut history = BTreeMap::new();
         history.insert(snapshot.exec.tick, snapshot.clone());
+        let sync_state = WorldSyncState::from_world(&snapshot);
         let forked = ManagedWorld {
             world: snapshot,
             simulation_rate: source_rate,
             terrain_params: source_params,
+            sync_state,
             history,
         };
         self.worlds.insert(new_world_id.clone(), forked);
@@ -174,6 +179,7 @@ impl WorldSimController {
         self.worlds.insert(
             world_id.clone(),
             ManagedWorld {
+                sync_state: WorldSyncState::from_world(&snapshot.world),
                 world: snapshot.world,
                 simulation_rate: 1.0,
                 terrain_params: TerrainParams::default(),
