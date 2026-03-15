@@ -56,12 +56,17 @@ pub(super) struct MetricsResponse {
     pub runtime_tick_ms: u32,
     pub budgets: BudgetSummary,
     pub cell_count: u32,
+    pub land_cells: u32,
     pub land_ratio: f32,
     pub mean_height: f32,
+    pub height_std_dev: f32,
     pub mean_river_flux: f32,
     pub max_height: f32,
     pub min_height: f32,
     pub max_river_flux: f32,
+    pub top10_river_flux_sum: f32,
+    pub continent_count: u32,
+    pub largest_continent_cells: u32,
 }
 
 #[derive(Serialize)]

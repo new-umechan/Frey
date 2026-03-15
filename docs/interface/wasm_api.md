@@ -38,6 +38,27 @@ JSから利用する現行WASM公開APIを定義する。
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
 
+`MetricsResponse`:
+- `world_id: string`
+- `tick: number`
+- `era: string`
+- `simulation_rate: number`
+- `real_years_per_tick: number`
+- `runtime_tick_ms: number`
+- `budgets: { geology: number, climate: number, ecology: number, civilization: number }`
+- `cell_count: number`
+- `land_cells: number`
+- `land_ratio: number`
+- `mean_height: number`
+- `height_std_dev: number`
+- `mean_river_flux: number`
+- `max_height: number`
+- `min_height: number`
+- `max_river_flux: number`
+- `top10_river_flux_sum: number`
+- `continent_count: number`
+- `largest_continent_cells: number`
+
 ### 2.3 介入と分岐
 
 - `apply_intervention(world_id: string, op_batch: InterventionOp[]) -> { applied, rejected }`

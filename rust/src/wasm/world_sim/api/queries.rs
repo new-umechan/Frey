@@ -136,27 +136,7 @@ impl WorldSimController {
             .get(&world_id)
             .ok_or_else(|| JsValue::from_str(&format!("world not found: {world_id}")))?;
         let w = &managed.world;
-
-        let cell_count = w.state.geology.height.len().max(1) as f32;
-        let mut land_cells = 0usize;
-        let mut sum_height = 0.0f32;
-        let mut sum_flux = 0.0f32;
-        let mut max_height = f32::NEG_INFINITY;
-        let mut min_height = f32::INFINITY;
-        let mut max_flux = 0.0f32;
-
-        for i in 0..w.state.geology.height.len() {
-            let h = w.state.geology.height[i];
-            let flux = w.state.geology.river_flux.get(i).copied().unwrap_or(0.0);
-            if h > 0.0 {
-                land_cells += 1;
-            }
-            sum_height += h;
-            sum_flux += flux;
-            max_height = max_height.max(h);
-            min_height = min_height.min(h);
-            max_flux = max_flux.max(flux);
-        }
+        let metrics = w.metrics();
 
         let response = MetricsResponse {
             world_id,
@@ -171,13 +151,18 @@ impl WorldSimController {
                 ecology: w.exec.budgets.ecology,
                 civilization: w.exec.budgets.civilization,
             },
-            cell_count: w.state.geology.height.len() as u32,
-            land_ratio: land_cells as f32 / cell_count,
-            mean_height: sum_height / cell_count,
-            mean_river_flux: sum_flux / cell_count,
-            max_height: if max_height.is_finite() { max_height } else { 0.0 },
-            min_height: if min_height.is_finite() { min_height } else { 0.0 },
-            max_river_flux: max_flux,
+            cell_count: metrics.cell_count,
+            land_cells: metrics.land_cells,
+            land_ratio: metrics.land_ratio,
+            mean_height: metrics.mean_height,
+            height_std_dev: metrics.height_std_dev,
+            mean_river_flux: metrics.mean_river_flux,
+            max_height: metrics.max_height,
+            min_height: metrics.min_height,
+            max_river_flux: metrics.max_river_flux,
+            top10_river_flux_sum: metrics.top10_river_flux_sum,
+            continent_count: metrics.continent_count,
+            largest_continent_cells: metrics.largest_continent_cells,
         };
 
         serde_wasm_bindgen::to_value(&response)

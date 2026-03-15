@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
@@ -301,6 +301,22 @@ pub struct TerrainStepMetrics {
     pub subsidence_rate: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct WorldMetrics {
+    pub cell_count: u32,
+    pub land_cells: u32,
+    pub land_ratio: f32,
+    pub mean_height: f32,
+    pub height_std_dev: f32,
+    pub min_height: f32,
+    pub max_height: f32,
+    pub mean_river_flux: f32,
+    pub max_river_flux: f32,
+    pub top10_river_flux_sum: f32,
+    pub continent_count: u32,
+    pub largest_continent_cells: u32,
+}
+
 impl World {
     pub fn new(mesh: WorldMesh, geology: GeologyState) -> Self {
         let cell_count = geology.height.len();
@@ -382,6 +398,63 @@ impl World {
         self.state.geology.river_next = state.river_next.clone();
         self.exec.river_erosion_state = Some(state);
         Ok(())
+    }
+
+    pub fn metrics(&self) -> WorldMetrics {
+        let height = &self.state.geology.height;
+        let river_flux = &self.state.geology.river_flux;
+        let cell_count = height.len();
+        if cell_count == 0 {
+            return WorldMetrics::default();
+        }
+
+        let mut land_cells = 0usize;
+        let mut min_height = f32::INFINITY;
+        let mut max_height = f32::NEG_INFINITY;
+        let mut sum_height = 0.0f32;
+        let mut sum_height_sq = 0.0f32;
+        let mut sum_flux = 0.0f32;
+        let mut max_flux = 0.0f32;
+        let mut top_fluxes = [0.0f32; 10];
+        let mut top_fluxes_len = 0usize;
+
+        for i in 0..cell_count {
+            let h = height[i];
+            let flux = river_flux.get(i).copied().unwrap_or(0.0).max(0.0);
+            if h > 0.0 {
+                land_cells += 1;
+            }
+            min_height = min_height.min(h);
+            max_height = max_height.max(h);
+            sum_height += h;
+            sum_height_sq += h * h;
+            sum_flux += flux;
+            max_flux = max_flux.max(flux);
+            push_top_flux(&mut top_fluxes, &mut top_fluxes_len, flux);
+        }
+
+        let cell_count_f32 = cell_count as f32;
+        let mean_height = sum_height / cell_count_f32;
+        let variance = (sum_height_sq / cell_count_f32) - (mean_height * mean_height);
+        let height_std_dev = variance.max(0.0).sqrt();
+
+        let (continent_count, largest_continent_cells) = continent_stats(self);
+        let top10_river_flux_sum = top_fluxes.iter().take(top_fluxes_len).sum::<f32>();
+
+        WorldMetrics {
+            cell_count: cell_count as u32,
+            land_cells: land_cells as u32,
+            land_ratio: land_cells as f32 / cell_count_f32,
+            mean_height,
+            height_std_dev,
+            min_height: if min_height.is_finite() { min_height } else { 0.0 },
+            max_height: if max_height.is_finite() { max_height } else { 0.0 },
+            mean_river_flux: sum_flux / cell_count_f32,
+            max_river_flux: max_flux,
+            top10_river_flux_sum,
+            continent_count: continent_count as u32,
+            largest_continent_cells: largest_continent_cells as u32,
+        }
     }
 }
 
@@ -621,6 +694,78 @@ impl PartialOrd for DistanceNode {
     }
 }
 
+fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {
+    if !value.is_finite() || value <= 0.0 {
+        return;
+    }
+    if *len < top_fluxes.len() {
+        top_fluxes[*len] = value;
+        *len += 1;
+        return;
+    }
+    let mut min_index = 0usize;
+    for i in 1..top_fluxes.len() {
+        if top_fluxes[i] < top_fluxes[min_index] {
+            min_index = i;
+        }
+    }
+    if value > top_fluxes[min_index] {
+        top_fluxes[min_index] = value;
+    }
+}
+
+fn continent_stats(world: &World) -> (usize, usize) {
+    let height = &world.state.geology.height;
+    let cell_count = height.len();
+    if cell_count == 0 {
+        return (0, 0);
+    }
+    let min_continent_cells = ((cell_count as f32) * 0.01).ceil().max(1.0) as usize;
+    let mut visited = vec![false; cell_count];
+    let mut queue = VecDeque::new();
+    let mut continent_count = 0usize;
+    let mut largest_continent_cells = 0usize;
+
+    for start_index in 0..cell_count {
+        if visited[start_index] || height[start_index] <= 0.0 {
+            continue;
+        }
+        visited[start_index] = true;
+        queue.clear();
+        queue.push_back(start_index);
+        let mut component_size = 0usize;
+
+        while let Some(index) = queue.pop_front() {
+            component_size += 1;
+            let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+            let end = world
+                .mesh
+                .nbr_offsets
+                .get(index + 1)
+                .copied()
+                .unwrap_or(start as u32) as usize;
+            for &neighbor in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
+                let neighbor_index = neighbor as usize;
+                if neighbor_index >= cell_count
+                    || visited[neighbor_index]
+                    || height[neighbor_index] <= 0.0
+                {
+                    continue;
+                }
+                visited[neighbor_index] = true;
+                queue.push_back(neighbor_index);
+            }
+        }
+
+        if component_size >= min_continent_cells {
+            continent_count += 1;
+            largest_continent_cells = largest_continent_cells.max(component_size);
+        }
+    }
+
+    (continent_count, largest_continent_cells)
+}
+
 
 fn default_reclassify_interval() -> u32 {
     4
@@ -629,6 +774,9 @@ fn default_reclassify_interval() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
+    use crate::common::mesh::{build_neighbors, generate_icosphere};
+    use crate::sim::step_world;
+    use crate::TerrainParams;
 
     fn build_world() -> World {
         World::new(
@@ -690,5 +838,105 @@ mod tests {
         let queue = FeedbackQueue::new(8);
         assert_eq!(queue.active.water_withdrawal.len(), 8);
         assert_eq!(queue.pending.dam_pressure.len(), 8);
+    }
+
+    #[test]
+    fn metrics_collects_height_and_flux_stats() {
+        let world = World::new(
+            WorldMesh {
+                positions: vec![[0.0, 0.0, 1.0]; 4],
+                nbr_offsets: vec![0, 3, 5, 7, 8],
+                nbrs: vec![1, 2, 3, 0, 2, 0, 1, 0],
+            },
+            GeologyState {
+                height: vec![1.0, -1.0, 2.0, -2.0],
+                plate_id: vec![0, 0, 1, 1],
+                river_flux: vec![0.5, 1.2, 3.0, 0.1],
+                river_next: vec![1, 2, -1, 0],
+                erosion_rate: vec![0.0; 4],
+                deposition_rate: vec![0.0; 4],
+                boundary_condition: vec![0.0; 4],
+            },
+        );
+
+        let metrics = world.metrics();
+        assert_eq!(metrics.cell_count, 4);
+        assert_eq!(metrics.land_cells, 2);
+        assert!((metrics.land_ratio - 0.5).abs() < 1e-6);
+        assert!((metrics.mean_height - 0.0).abs() < 1e-6);
+        assert!((metrics.height_std_dev - 1.5811388).abs() < 1e-5);
+        assert!((metrics.mean_river_flux - 1.2).abs() < 1e-6);
+        assert!((metrics.max_river_flux - 3.0).abs() < 1e-6);
+        assert!((metrics.top10_river_flux_sum - 4.8).abs() < 1e-6);
+        assert_eq!(metrics.continent_count, 1);
+        assert_eq!(metrics.largest_continent_cells, 2);
+    }
+
+    #[test]
+    fn metrics_are_deterministic_for_fixed_seed() {
+        let mut params = TerrainParams::default();
+        params.level = 2;
+        let seed = "metrics-regression-seed";
+
+        let terrain_a = crate::domains::build_terrain(seed, params.clone());
+        let terrain_b = crate::domains::build_terrain(seed, params);
+        let (positions, indices) = generate_icosphere(2);
+        let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+        let plate_id_a = terrain_a.plate_id.iter().map(|&v| v as u16).collect::<Vec<_>>();
+        let plate_id_b = terrain_b.plate_id.iter().map(|&v| v as u16).collect::<Vec<_>>();
+
+        let mut world_a = World::new(
+            WorldMesh {
+                positions: positions.clone(),
+                nbr_offsets: nbr_offsets.clone(),
+                nbrs: nbrs.clone(),
+            },
+            GeologyState {
+                height: terrain_a.height,
+                plate_id: plate_id_a,
+                river_flux: terrain_a.river_flux,
+                river_next: terrain_a.river_next,
+                erosion_rate: vec![0.0; positions.len()],
+                deposition_rate: vec![0.0; positions.len()],
+                boundary_condition: vec![0.0; positions.len()],
+            },
+        );
+        let mut world_b = World::new(
+            WorldMesh {
+                positions,
+                nbr_offsets,
+                nbrs,
+            },
+            GeologyState {
+                height: terrain_b.height,
+                plate_id: plate_id_b,
+                river_flux: terrain_b.river_flux,
+                river_next: terrain_b.river_next,
+                erosion_rate: vec![0.0; world_a.cell_count()],
+                deposition_rate: vec![0.0; world_a.cell_count()],
+                boundary_condition: vec![0.0; world_a.cell_count()],
+            },
+        );
+
+        for _ in 0..8 {
+            step_world(&mut world_a);
+            step_world(&mut world_b);
+        }
+
+        let metrics_a = world_a.metrics();
+        let metrics_b = world_b.metrics();
+
+        assert_eq!(metrics_a.cell_count, metrics_b.cell_count);
+        assert_eq!(metrics_a.land_cells, metrics_b.land_cells);
+        assert!((metrics_a.land_ratio - metrics_b.land_ratio).abs() < 1e-6);
+        assert!((metrics_a.mean_height - metrics_b.mean_height).abs() < 1e-6);
+        assert!((metrics_a.height_std_dev - metrics_b.height_std_dev).abs() < 1e-6);
+        assert!((metrics_a.max_river_flux - metrics_b.max_river_flux).abs() < 1e-6);
+        assert!((metrics_a.top10_river_flux_sum - metrics_b.top10_river_flux_sum).abs() < 1e-6);
+        assert_eq!(metrics_a.continent_count, metrics_b.continent_count);
+        assert_eq!(
+            metrics_a.largest_continent_cells,
+            metrics_b.largest_continent_cells
+        );
     }
 }
