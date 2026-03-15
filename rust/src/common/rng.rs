@@ -1,4 +1,4 @@
-use crate::TerrainParams;
+use crate::domains::types::TerrainParams;
 
 pub(crate) struct DeterministicRng {
     state: u64,

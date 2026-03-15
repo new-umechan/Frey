@@ -1,3 +1,4 @@
+pub mod erosion;
 pub mod step;
 pub mod world;
 

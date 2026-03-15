@@ -3,11 +3,11 @@ mod domains;
 pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
-mod types;
 mod wasm;
 pub use sim::world;
 
-pub use crate::types::{ErosionAutomatonState, MeshOutput, TerrainOutput, TerrainParams};
+pub use crate::domains::types::{MeshOutput, TerrainOutput, TerrainParams};
+pub use crate::sim::erosion::ErosionAutomatonState;
 pub use crate::wasm::world_sim::WorldSimController;
 use wasm_bindgen::prelude::*;
 

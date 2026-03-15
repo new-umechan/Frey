@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export function createTerrainVisualController({
+export function createTerrainRenderer({
     geometry,
     terrainMaterial,
     basePositions,

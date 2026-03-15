@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../core/constants.js";
 
-export function createPlateHoverController({
+export function createPlateHover({
     canvas,
     sphere,
     geometry,

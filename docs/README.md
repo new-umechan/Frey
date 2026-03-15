@@ -1,81 +1,110 @@
-# 仕様の全体像
+# 仕様と実装の対応
 
-Freyの仕様メモと設計ドキュメントをまとめる場所。
+Freyの設計文書と、現在の実装境界を対応づけるための索引。
+文書とコードの責務がずれたときは、このファイルを先に更新する。
 
 ## 読み始める順番
 
 1. `docs/architecture/overview.md`
-2. `docs/architecture/phase_control.md`
+2. `docs/architecture/module_boundaries.md`
 3. `docs/architecture/data_model.md`
-4. `docs/architecture/module_boundaries.md`
-5. `docs/core/` 配下の各仕様
-6. `docs/interface/` 配下の各仕様
+4. `docs/architecture/phase_control.md`
+5. `docs/interface/wasm_api.md`
+6. `docs/interface/ui_spec.md`
+7. `docs/manage/test.md`
 
-### 世界地形シミュレーション再設計（4点セット）
+## 実装マップ
 
-1. `docs/core/redesign/README.md`
-2. `docs/core/redesign/01_common_foundation.md`
-3. `docs/core/redesign/02_plate_rigid_rotation.md`
-4. `docs/core/redesign/03_vertical_velocity_u.md`
-5. `docs/core/redesign/04_topography_evolution_equation.md`
-6. `docs/core/redesign/05_erosion_stream_power_diffusion.md`
-7. `docs/core/redesign/06_climate_precip_k_modulation.md`
-8. `docs/core/redesign/07_coupling_execution.md`
-9. `docs/core/redesign/08_calibration_validation.md`
+### フロントエンド
 
-## ディレクトリ構成
+- `src/main.js`
+  - 起動エントリーポイント
+- `src/app/`
+  - アプリの組み立て、UI状態、WASM同期
+  - `app.js`: 依存の組み立てとアプリ起動
+  - `world-sync.js`: WASM応答をアプリ状態へ同期
+  - `world-loop.js`: tick進行と進行状態リセット
+  - `era-presets.js`: 時代プリセット表示と変換
+  - `plate-hover.js`: プレートhover表示
+  - `terrain-renderer.js`: 地形属性の描画反映
+- `src/gfx/`
+  - Three.js描画、カメラ、地形ビジュアル
+- `src/ui/`
+  - DOM取得とイベント配線
+- `src/interface/`
+  - UIとWASMの境界
+- `src/sim/`
+  - フロントエンド側のランタイム状態とデバッグ補助
 
-### `config/`
+### Rust / WASM
 
-実行時のパラメータファイルを置く。
+- `rust/src/lib.rs`
+  - 公開エントリーポイント
+- `rust/src/wasm/world_sim/`
+  - `WorldSimController` のWASM境界
+  - `mod.rs`: コントローラ本体
+  - `api/worlds.rs`: world生成と進行
+  - `api/queries.rs`: 観測API
+  - `api/commands.rs`: 介入、fork、checkpoint
+  - `types.rs`: JSとの送受信型
+  - `state.rs`: 管理中ワールドと履歴
+  - `helpers.rs`: サンプリング、履歴管理、侵食状態同期
+- `rust/src/sim/`
+  - `World` とtick進行
+  - `erosion.rs`: 侵食オートマトン状態
+  - `step.rs`: Execのオーケストレーション
+  - `step/terrain.rs`: 地質進行の束ね
+  - `step/boundary_dynamics.rs`: 境界分類とプレート運動
+  - `step/surface_dynamics.rs`: 応力から地表更新
+  - `step/river.rs`: 河川と侵食オートマトン接続
+  - `step/geology.rs`: Geology全体の束ね
+- `rust/src/domains/types.rs`
+  - 地形生成の公開型
+  - `TerrainParams`、`TerrainOutput`、`MeshOutput`
+- `rust/src/domains/terrain/`
+  - 地形生成ドメイン
+  - `terrain.rs` は `noise`、`plates`、`boundaries`、`surface`、`pipeline` を束ねる
+  - `plates/`、`boundaries/`、`surface/` 配下は大物ファイルを責務単位で細分化した内部実装
 
-- `terrain.yaml`: 地形生成と河川侵食の生成系パラメータ
-- `runtime.yaml`: 時代制御・活動量観測などランタイム挙動の調整パラメータ
+## 文書とコードの対応
 
-### `docs/architecture/`
+### `docs/architecture/overview.md`
 
-歴史シミュレータの全体構成、共有 `World State`、時間制御を置く。
+- 対応コード:
+  - `rust/src/sim/world.rs`
+  - `rust/src/sim/step.rs`
+  - `src/app/app.js`
 
-- `overview.md`: 設計思想、`Exec / Geology / Climate / Ecology / Civilization`、共有 `World State`、更新DAG
-- `phase_control.md`: tick、時代、予算、時代遷移
-- `data_model.md`: `World State` と `Exec State` の役割分担
-- `module_boundaries.md`: 各モジュールが何を読み、何を書くか。河川の責務分担を含む
+### `docs/architecture/module_boundaries.md`
 
-### `docs/core/`
+- 対応コード:
+  - `rust/src/sim/step.rs`
+  - `rust/src/sim/step/`
+  - `rust/src/sim/world.rs`
 
-地形・河川・気候など、世界の基盤計算系の仕様を置く。
+### `docs/architecture/data_model.md`
 
-- `plate.md`: プレート/地形生成
-- `hydrology.md`: 河川・侵食・堆積
-- `climate.md`: 気候（気温・降水）
-- `ecology.md`: 生態（可住性・一次生産など）
+- 対応コード:
+  - `rust/src/sim/world.rs`
+  - `src/sim/runtime/state.js`
 
-### `docs/interface/`
+### `docs/interface/wasm_api.md`
 
-UIとWASM APIなど、外部との接続仕様を置く。
+- 対応コード:
+  - `rust/src/wasm/world_sim/`
+  - `src/interface/wasm.js`
+  - `src/app/world-sync.js`
 
-- `ui_spec.md`: UI仕様
-- `wasm_api.md`: WASM公開API仕様
+### `docs/interface/ui_spec.md`
 
-### `docs/manage/`
+- 対応コード:
+  - `src/app/`
+  - `src/ui/`
+  - `src/gfx/`
 
-運用メモ、TODO、テスト観点などの管理用ドキュメントを置く。
+## 更新ルール
 
-- `test.md`: テスト方針・確認メモ
-- `todo.md`: タスク管理メモ
-
-## 書き分けルール
-
-- `architecture`: なぜその構成にするか（責務分割、依存関係、時代制御）
-- `core`: 何を計算するか（入力、状態量、更新則）
-- `interface`: 外からどう使うか（UI/API）
-- `manage`: 作業メモ、運用メモ
-
-補足:
-
-- `architecture` では実装上の補助構造より、共有状態と更新順の原則を優先して記述する
-- 画面エントリーポイントや描画接着の詳細は `architecture` の主対象ではない
-
-## 注意
-
-- 仕様は段階的に更新する。未確定事項は削除せず、未決として残す。
+- 500行超のファイルは優先分割対象として扱う
+- 500行未満でも複数責務があるファイルは分割する
+- 実装の責務名を変えたら、同じ変更でこの索引も更新する
+- 存在しない文書や未実装前提の索引は残さない

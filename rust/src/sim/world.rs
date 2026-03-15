@@ -1,5 +1,6 @@
-use crate::ErosionAutomatonState;
 use serde::{Deserialize, Serialize};
+
+use super::erosion::ErosionAutomatonState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EraKind {

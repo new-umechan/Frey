@@ -1,7 +1,9 @@
 use crate::common::mesh::{flatten_positions, generate_icosphere};
-use crate::MeshOutput;
-use crate::{ErosionAutomatonState, TerrainOutput, TerrainParams};
+use crate::sim::erosion::ErosionAutomatonState;
 
+use self::types::{MeshOutput, TerrainOutput, TerrainParams};
+
+pub mod types;
 mod terrain;
 
 pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
