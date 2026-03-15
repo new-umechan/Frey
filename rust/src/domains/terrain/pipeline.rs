@@ -259,34 +259,6 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
     }
 }
 
-pub(super) fn step_crust_update_budget(state: &mut CrustTerrainUpdateState, budget_ticks: u32) {
-    let ticks = budget_ticks.max(1);
-    for _ in 0..ticks {
-        if crust_update_is_done(state) {
-            return;
-        }
-        step_crust_update(state);
-    }
-}
-
-pub(super) fn crust_update_is_done(state: &CrustTerrainUpdateState) -> bool {
-    state.phase == CrustUpdatePhase::Done
-}
-
-pub(super) fn crust_update_phase_name(state: &CrustTerrainUpdateState) -> &'static str {
-    match state.phase {
-        CrustUpdatePhase::InitMeshAndNoise => "init_mesh_and_noise",
-        CrustUpdatePhase::BuildPlateField => "build_plate_field",
-        CrustUpdatePhase::BuildBaseHeight => "build_base_height",
-        CrustUpdatePhase::ApplyBoundaryRelief => "apply_boundary_relief",
-        CrustUpdatePhase::ApplyCrustErosion => "apply_crust_erosion",
-        CrustUpdatePhase::PostprocessSurface => "postprocess_surface",
-        CrustUpdatePhase::ApplyHotspots => "apply_hotspots",
-        CrustUpdatePhase::BuildHydrology => "build_hydrology",
-        CrustUpdatePhase::Done => "done",
-    }
-}
-
 pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) -> TerrainOutput {
     let boundary_fields = state
         .boundary_fields

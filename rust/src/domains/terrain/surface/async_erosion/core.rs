@@ -1,46 +1,3 @@
-pub(crate) fn init_async_erosion_automaton(
-    seed: &str,
-    mut params: TerrainParams,
-) -> crate::ErosionAutomatonState {
-    sanitize_params(&mut params);
-
-    let terrain = generate(seed, params.clone());
-    let (positions, indices) = generate_icosphere(params.level);
-    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let rain = build_precipitation_map(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &terrain.height,
-        params.river_rain_base,
-    );
-
-    let v_count = terrain.height.len();
-    let active_queue = (0..v_count as u32).collect::<Vec<_>>();
-    let mut in_queue = vec![0u8; v_count];
-    in_queue.fill(1);
-
-    crate::ErosionAutomatonState {
-        positions,
-        nbr_offsets,
-        nbrs,
-        height: terrain.height,
-        water: vec![0.0; v_count],
-        sediment: vec![0.0; v_count],
-        armor: vec![0.0; v_count],
-        rain,
-        river_flux: terrain.river_flux,
-        river_next: terrain.river_next,
-        active_queue,
-        active_head: 0,
-        in_queue,
-        rain_cursor: 0,
-        tick: 0,
-        recent_changed: Vec::new(),
-        params,
-    }
-}
-
 pub(crate) fn step_async_erosion_automaton(
     state: &mut crate::ErosionAutomatonState,
     budget_cells: u32,
@@ -305,4 +262,3 @@ fn process_async_erosion_cell(
 
     result
 }
-

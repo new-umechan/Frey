@@ -21,6 +21,20 @@ export function collectAppElements() {
     const viewModeInputs = Array.from(
         document.querySelectorAll('input[name="view-mode"]'),
     ).filter((input) => input instanceof HTMLInputElement);
+    const climateMetricGroup = requireElement("climate-metric-group", HTMLDivElement);
+    const climateMetricInputs = Array.from(
+        document.querySelectorAll('input[name="climate-metric"]'),
+    ).filter((input) => input instanceof HTMLInputElement);
+    const climateLegendPanel = requireElement("climate-legend-panel", HTMLElement);
+    const climateLegend = {
+        panel: climateLegendPanel,
+        title: requireElement("climate-legend-title", HTMLElement),
+        min: requireElement("climate-legend-min", HTMLElement),
+        mid: requireElement("climate-legend-mid", HTMLElement),
+        max: requireElement("climate-legend-max", HTMLElement),
+        hover: requireElement("climate-legend-hover", HTMLElement),
+    };
+    const climateControlHint = requireElement("control-climate-hint", HTMLElement);
 
     if (!(appShell instanceof HTMLElement)) {
         throw new Error("required app shell is missing");
@@ -54,6 +68,10 @@ export function collectAppElements() {
         eraScaleTickLabel,
         eraScaleWeightFields,
         viewModeInputs,
+        climateMetricGroup,
+        climateMetricInputs,
+        climateLegend,
+        climateControlHint,
         statFields,
     };
 }

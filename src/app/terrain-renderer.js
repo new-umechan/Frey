@@ -37,6 +37,14 @@ export function createTerrainRenderer({
             new THREE.BufferAttribute(currentTerrainData.mantleHeat, 1),
         );
         geometry.setAttribute(
+            "terrainTemperature",
+            new THREE.BufferAttribute(currentTerrainData.temperature, 1),
+        );
+        geometry.setAttribute(
+            "terrainPrecipitation",
+            new THREE.BufferAttribute(currentTerrainData.precipitation, 1),
+        );
+        geometry.setAttribute(
             "terrainPlateId",
             new THREE.BufferAttribute(Float32Array.from(currentTerrainData.plateId), 1),
         );
@@ -75,9 +83,10 @@ export function createTerrainRenderer({
         terrainMaterial.setRiverMaskTexture(nextTexture);
     }
 
-    function applyTerrainMaterialState(currentViewMode, debugEnabled) {
+    function applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric) {
         terrainMaterial.setViewMode(currentViewMode);
         terrainMaterial.setDebugEnabled(debugEnabled);
+        terrainMaterial.setClimateMetric(currentClimateMetric);
     }
 
     return {

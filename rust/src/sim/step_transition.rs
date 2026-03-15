@@ -58,7 +58,15 @@ pub(super) fn update_era_transition(world: &mut World) {
                 .max(state.cached_metrics.boundary_activity)
         })
         .unwrap_or(0.0);
-    let climate_activity = world.state.climate.rain.iter().copied().sum::<f32>() / cell_count;
+    let climate_activity = world
+        .state
+        .climate
+        .precipitation
+        .iter()
+        .copied()
+        .map(|value| (value / 1_500.0).clamp(0.0, 1.0))
+        .sum::<f32>()
+        / cell_count;
     let ecology_activity = world
         .state
         .ecology

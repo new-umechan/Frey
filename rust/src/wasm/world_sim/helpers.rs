@@ -4,6 +4,8 @@ use crate::domains::types::TerrainParams;
 use crate::sim::world;
 use crate::sim::erosion::ErosionAutomatonState;
 
+const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
+
 pub(super) fn build_erosion_state(
     world: &world::World,
     params: TerrainParams,
@@ -17,7 +19,14 @@ pub(super) fn build_erosion_state(
         water: vec![0.0; cell_count],
         sediment: vec![0.0; cell_count],
         armor: vec![0.0; cell_count],
-        rain: vec![0.5; cell_count],
+        rain: world
+            .state
+            .climate
+            .runoff
+            .iter()
+            .copied()
+            .map(|value| (value.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0))
+            .collect(),
         river_flux: world.state.geology.river_flux.clone(),
         river_next: world.state.geology.river_next.clone(),
         active_queue: (0..cell_count as u32).collect(),

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../core/constants.js";
+import { getClimateMetricMeta } from "./climate-metric.js";
 
 export function createPlateHover({
     canvas,
@@ -8,6 +9,7 @@ export function createPlateHover({
     viewportPanel,
     plateHoverPopup,
     getState,
+    onClimateHover,
 }) {
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
@@ -33,12 +35,43 @@ export function createPlateHover({
         visiblePlateHoverId = null;
         plateHoverPopup.hidden = true;
         plateHoverPopup.textContent = "";
+        onClimateHover?.(null);
     }
 
     function showPlateHoverPopup(clientX, clientY, plateIdValue, hoverDiagnostics) {
-        const { currentTerrainData, currentViewMode, debugEnabled } = getState();
-        if (!currentTerrainData || currentViewMode !== "plates") {
+        const {
+            currentTerrainData,
+            currentViewMode,
+            currentClimateMetric,
+            debugEnabled,
+        } = getState();
+        if (!currentTerrainData || (currentViewMode !== "plates" && currentViewMode !== "climate")) {
             hidePopup();
+            return;
+        }
+
+        if (currentViewMode === "climate") {
+            const climateHover = readClimateHoverValue(
+                currentTerrainData,
+                currentClimateMetric,
+                plateIdValue,
+            );
+            if (!climateHover) {
+                hidePopup();
+                return;
+            }
+            plateHoverPopup.textContent = [
+                climateHover.meta.label,
+                `cell: ${climateHover.vertexIndex}`,
+                `value: ${climateHover.formattedValue}`,
+            ].join("\n");
+            plateHoverPopup.hidden = false;
+            positionPopup(clientX, clientY);
+            visiblePlateHoverId = climateHover.vertexIndex;
+            onClimateHover?.({
+                label: climateHover.meta.label,
+                value: climateHover.formattedValue,
+            });
             return;
         }
 
@@ -67,7 +100,11 @@ export function createPlateHover({
             ...debugLines,
         ].join("\n");
         plateHoverPopup.hidden = false;
+        positionPopup(clientX, clientY);
+        visiblePlateHoverId = plateIndex;
+    }
 
+    function positionPopup(clientX, clientY) {
         const viewportRect = viewportPanel.getBoundingClientRect();
         const margin = 10;
         const offset = 14;
@@ -83,7 +120,6 @@ export function createPlateHover({
         const top = Math.min(Math.max(clientY - viewportRect.top + offset, margin), maxTop);
         plateHoverPopup.style.left = `${left}px`;
         plateHoverPopup.style.top = `${top}px`;
-        visiblePlateHoverId = plateIndex;
     }
 
     function schedulePlateHoverPopup(clientX, clientY, plateIdValue, hoverDiagnostics) {
@@ -296,10 +332,10 @@ export function createPlateHover({
         const {
             currentTerrainData,
             currentViewMode,
-            currentSurfaceMode,
             camera,
+            currentClimateMetric,
         } = getState();
-        if (!currentTerrainData || currentViewMode !== "plates" || currentSurfaceMode !== "globe") {
+        if (!currentTerrainData || (currentViewMode !== "plates" && currentViewMode !== "climate")) {
             hidePopup();
             return;
         }
@@ -322,6 +358,26 @@ export function createPlateHover({
         }
 
         const hoveredVertexIndex = face.a;
+        if (currentViewMode === "climate") {
+            if (!readClimateHoverValue(currentTerrainData, currentClimateMetric, hoveredVertexIndex)) {
+                hidePopup();
+                return;
+            }
+            pendingPlateHover = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                plateId: hoveredVertexIndex,
+                hoverDiagnostics: null,
+            };
+            schedulePlateHoverPopup(
+                event.clientX,
+                event.clientY,
+                hoveredVertexIndex,
+                null,
+            );
+            return;
+        }
+
         const hoveredPlateId = currentTerrainData.plateId[hoveredVertexIndex];
         const hoveredPlateIndex = Number(hoveredPlateId);
         if (!Number.isInteger(hoveredPlateIndex)) {
@@ -361,6 +417,22 @@ export function createPlateHover({
             hoveredPlateIndex,
             hoverDiagnostics,
         );
+    }
+
+    function readClimateHoverValue(currentTerrainData, currentClimateMetric, vertexIndexValue) {
+        const meta = getClimateMetricMeta(currentClimateMetric);
+        const vertexIndex = Number(vertexIndexValue);
+        const values = currentTerrainData[meta.key];
+        const value = values?.[vertexIndex];
+        if (!Number.isInteger(vertexIndex) || !Number.isFinite(value)) {
+            return null;
+        }
+        return {
+            meta,
+            vertexIndex,
+            value,
+            formattedValue: meta.formatter(value),
+        };
     }
 
     function syncDebugMode() {

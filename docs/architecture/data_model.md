@@ -63,6 +63,12 @@ World = {
 
 ```python
 WorldState = {
+    geo: {
+        latitude_deg,
+        distance_from_ocean_km,
+        coast_side,
+        is_coastal,
+    },
     geology: {
         height,
         plate_id,
@@ -71,9 +77,12 @@ WorldState = {
         river_path,
     },
     climate: {
-        rain,
+        precipitation,
         runoff,
         temperature,
+        evapotranspiration,
+        aridity,
+        ocean_temperature,
     },
     ecology: {
         vegetation,
@@ -139,3 +148,4 @@ Rust側では `World` に次のような実装都合の保持が残っている�
 
 - 現在の実装型として `core` `layers` などが存在していても、architectureではそれを主語にしない
 - architectureで重要なのは、どの値が共有の `World State` で、どの値が進行管理の `Exec State` かである
+- 固定地理量のようにtickごとには変化しない値でも、各モジュールが共有して読むなら `World State` に置く

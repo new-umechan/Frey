@@ -328,6 +328,13 @@ body {
     gap: 0.35rem;
 }
 
+.climate-metric-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+}
+
 .view-mode-option {
     position: relative;
     display: block;
@@ -362,6 +369,74 @@ body {
 .view-mode-option input:focus-visible + span {
     outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
     outline-offset: 2px;
+}
+
+.climate-legend-panel {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.climate-legend-title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.climate-legend-bar {
+    height: 0.8rem;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background:
+        linear-gradient(
+            90deg,
+            #0e2a58 0%,
+            #3a87cc 26%,
+            #f2e4a8 52%,
+            #dd7039 76%,
+            #8b1c1f 100%
+        );
+}
+
+.climate-legend-panel[data-metric="precipitation"] .climate-legend-bar {
+    background:
+        linear-gradient(
+            90deg,
+            #b39b6e 0%,
+            #dbc997 25%,
+            #81b491 50%,
+            #388da9 75%,
+            #0e3f63 100%
+        );
+}
+
+.climate-legend-scale {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin: 0;
+}
+
+.climate-legend-scale > div {
+    display: grid;
+    gap: 0.16rem;
+}
+
+.climate-legend-scale dt {
+    color: var(--ink-soft);
+    font-size: 0.72rem;
+}
+
+.climate-legend-scale dd {
+    margin: 0;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.climate-legend-hover {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
 }
 
 .toggle-row {

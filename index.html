@@ -83,7 +83,47 @@
                                     <input type="radio" name="view-mode" value="mantle" />
                                     <span>3: マントル熱量</span>
                                 </label>
+                                <label class="view-mode-option">
+                                    <input type="radio" name="view-mode" value="climate" />
+                                    <span>4: Climate</span>
+                                </label>
                             </div>
+                            <div
+                                class="climate-metric-group"
+                                id="climate-metric-group"
+                                role="radiogroup"
+                                aria-label="Climate metric"
+                                hidden
+                            >
+                                <label class="view-mode-option">
+                                    <input
+                                        type="radio"
+                                        name="climate-metric"
+                                        value="temperature"
+                                        checked
+                                    />
+                                    <span>Q: 気温</span>
+                                </label>
+                                <label class="view-mode-option">
+                                    <input
+                                        type="radio"
+                                        name="climate-metric"
+                                        value="precipitation"
+                                    />
+                                    <span>W: 降水量</span>
+                                </label>
+                            </div>
+                        </section>
+                        <section class="panel climate-legend-panel" id="climate-legend-panel" hidden>
+                            <h2>Climate Legend</h2>
+                            <p class="climate-legend-title" id="climate-legend-title">気温</p>
+                            <div class="climate-legend-bar" aria-hidden="true"></div>
+                            <dl class="climate-legend-scale">
+                                <div><dt>Low</dt><dd id="climate-legend-min">-</dd></div>
+                                <div><dt>Mid</dt><dd id="climate-legend-mid">-</dd></div>
+                                <div><dt>High</dt><dd id="climate-legend-max">-</dd></div>
+                            </dl>
+                            <p class="climate-legend-hover" id="climate-legend-hover">Hover: -</p>
                         </section>
                         <section class="panel">
                             <h2>Mode</h2>
@@ -126,7 +166,8 @@
                             <p>ホイール / ピンチ: ズーム</p>
                             <p>V: 地球儀 / 地図切替</p>
                             <p>D: デバッグ表示切替</p>
-                            <p>1/2/3: View切替</p>
+                            <p>1/2/3/4: View切替</p>
+                            <p id="control-climate-hint" hidden>Q/W: Climate指標切替</p>
                         </section>
                     </div>
                 </aside>

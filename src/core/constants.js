@@ -4,6 +4,7 @@ import { RUNTIME_PARAMS } from "../interface/params/runtime.js";
 export const LEVEL = TERRAIN_LEVEL;
 export const DEFAULT_TERRAIN_SEED = "alpha";
 export const DEFAULT_VIEW_MODE = "normal";
+export const DEFAULT_CLIMATE_METRIC = "temperature";
 export const DEFAULT_SURFACE_MODE = "globe";
 export const DEFAULT_ERA_SCALE = "crust";
 export const PLATE_HOVER_POPUP_DELAY_MS = 450;

@@ -3,10 +3,16 @@ use super::river::run_river_step;
 use super::terrain::run_terrain_step;
 use crate::sim::world::World;
 
-pub(super) fn run_geology_step(world: &mut World, budget: u32) {
+pub(super) fn run_geology_terrain_step(world: &mut World, budget: u32) {
     if budget == 0 {
         return;
     }
     run_terrain_step(world);
+}
+
+pub(super) fn run_geology_river_step(world: &mut World, budget: u32) {
+    if budget == 0 {
+        return;
+    }
     run_river_step(world, geology_river_budget(world.exec.era, budget));
 }

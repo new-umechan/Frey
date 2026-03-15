@@ -5,6 +5,7 @@ export function setupUiControls({
     debugToggleInput,
     eraScaleSelect,
     viewModeInputs,
+    climateMetricInputs,
     seedForm,
     seedInput,
     onResize,
@@ -14,10 +15,12 @@ export function setupUiControls({
     onDebugToggle,
     onEraScaleChange,
     onViewModeChange,
+    onClimateMetricChange,
     onToggleSurface,
     onToggleDebug,
     getDebugEnabled,
     getCurrentSurfaceMode,
+    getCurrentViewMode,
     onSubmitSeed,
     onSubmitSeedError,
 }) {
@@ -49,6 +52,15 @@ export function setupUiControls({
                 return;
             }
             onViewModeChange(input.value);
+        });
+    }
+
+    for (const input of climateMetricInputs) {
+        input.addEventListener("change", () => {
+            if (!input.checked) {
+                return;
+            }
+            onClimateMetricChange(input.value);
         });
     }
 
@@ -88,6 +100,24 @@ export function setupUiControls({
         if (event.key === "3") {
             event.preventDefault();
             onViewModeChange("mantle");
+            return;
+        }
+
+        if (event.key === "4") {
+            event.preventDefault();
+            onViewModeChange("climate");
+            return;
+        }
+
+        if (getCurrentViewMode() === "climate" && event.key.toLowerCase() === "q") {
+            event.preventDefault();
+            onClimateMetricChange("temperature");
+            return;
+        }
+
+        if (getCurrentViewMode() === "climate" && event.key.toLowerCase() === "w") {
+            event.preventDefault();
+            onClimateMetricChange("precipitation");
             return;
         }
 

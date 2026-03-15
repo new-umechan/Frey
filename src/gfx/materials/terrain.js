@@ -12,7 +12,14 @@ function viewModeToNumber(mode) {
     if (mode === "mantle") {
         return 2;
     }
+    if (mode === "climate") {
+        return 3;
+    }
     return 0;
+}
+
+function climateMetricToNumber(metric) {
+    return metric === "precipitation" ? 1 : 0;
 }
 
 export function createTerrainMaterial() {
@@ -25,6 +32,7 @@ export function createTerrainMaterial() {
 
     const uniforms = {
         uViewMode: { value: 0.0 },
+        uClimateMetric: { value: 0.0 },
         uDebugEnabled: { value: 0.0 },
         uRiverMask: { value: emptyRiverMask },
         uSeaColor: { value: srgbHexToLinearRgb("#12406a") },
@@ -53,6 +61,8 @@ export function createTerrainMaterial() {
 attribute float terrainHeight;
 attribute float terrainRiverFlux;
 attribute float terrainMantleHeat;
+attribute float terrainTemperature;
+attribute float terrainPrecipitation;
 attribute float terrainPlateId;
 attribute float terrainLakeDepth;
 attribute float terrainDebugTrench;
@@ -63,6 +73,8 @@ attribute vec2 terrainUv;
 varying float vTerrainHeight;
 varying float vTerrainRiverFlux;
 varying float vTerrainMantleHeat;
+varying float vTerrainTemperature;
+varying float vTerrainPrecipitation;
 varying float vTerrainPlateId;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
@@ -77,6 +89,8 @@ varying vec2 vTerrainUv;`,
 vTerrainHeight = terrainHeight;
 vTerrainRiverFlux = terrainRiverFlux;
 vTerrainMantleHeat = terrainMantleHeat;
+vTerrainTemperature = terrainTemperature;
+vTerrainPrecipitation = terrainPrecipitation;
 vTerrainPlateId = terrainPlateId;
 vTerrainLakeDepth = terrainLakeDepth;
 vTerrainDebugTrench = terrainDebugTrench;
@@ -91,6 +105,7 @@ vTerrainUv = terrainUv;`,
                 "#include <common>",
                 `#include <common>
 uniform float uViewMode;
+uniform float uClimateMetric;
 uniform float uDebugEnabled;
 uniform sampler2D uRiverMask;
 uniform vec3 uSeaColor;
@@ -104,6 +119,8 @@ uniform vec3 uDebugOceanOceanArcColor;
 varying float vTerrainHeight;
 varying float vTerrainRiverFlux;
 varying float vTerrainMantleHeat;
+varying float vTerrainTemperature;
+varying float vTerrainPrecipitation;
 varying float vTerrainPlateId;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
@@ -171,6 +188,44 @@ vec3 freyMantleModeColor(float heat01) {
     return mix(c3, c4, (t - 0.75) / 0.25);
 }
 
+vec3 freyClimateTemperatureColor(float tempC) {
+    float t = clamp((tempC + 25.0) / 60.0, 0.0, 1.0);
+    vec3 c0 = vec3(0.056, 0.165, 0.345);
+    vec3 c1 = vec3(0.223, 0.530, 0.800);
+    vec3 c2 = vec3(0.949, 0.901, 0.659);
+    vec3 c3 = vec3(0.882, 0.428, 0.220);
+    vec3 c4 = vec3(0.545, 0.098, 0.117);
+    if (t < 0.25) {
+        return mix(c0, c1, t / 0.25);
+    }
+    if (t < 0.5) {
+        return mix(c1, c2, (t - 0.25) / 0.25);
+    }
+    if (t < 0.75) {
+        return mix(c2, c3, (t - 0.5) / 0.25);
+    }
+    return mix(c3, c4, (t - 0.75) / 0.25);
+}
+
+vec3 freyClimatePrecipitationColor(float precipMm) {
+    float t = clamp(precipMm / 3000.0, 0.0, 1.0);
+    vec3 c0 = vec3(0.701, 0.606, 0.432);
+    vec3 c1 = vec3(0.859, 0.790, 0.593);
+    vec3 c2 = vec3(0.507, 0.706, 0.570);
+    vec3 c3 = vec3(0.219, 0.553, 0.665);
+    vec3 c4 = vec3(0.054, 0.247, 0.388);
+    if (t < 0.25) {
+        return mix(c0, c1, t / 0.25);
+    }
+    if (t < 0.5) {
+        return mix(c1, c2, (t - 0.25) / 0.25);
+    }
+    if (t < 0.75) {
+        return mix(c2, c3, (t - 0.5) / 0.25);
+    }
+    return mix(c3, c4, (t - 0.75) / 0.25);
+}
+
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverFlux, float riverMask) {
     if (h <= 0.0) {
         return uSeaColor;
@@ -225,7 +280,13 @@ vec3 freyApplyDebugOverlay(vec3 color) {
 float riverMaskTex = texture2D(uRiverMask, vec2(fract(vTerrainUv.x), clamp(vTerrainUv.y, 0.0, 1.0))).r;
 vec3 terrainColor;
 if (uViewMode > 1.5) {
-    terrainColor = freyMantleModeColor(vTerrainMantleHeat);
+    if (uViewMode > 2.5) {
+        terrainColor = uClimateMetric > 0.5
+            ? freyClimatePrecipitationColor(vTerrainPrecipitation)
+            : freyClimateTemperatureColor(vTerrainTemperature);
+    } else {
+        terrainColor = freyMantleModeColor(vTerrainMantleHeat);
+    }
 } else if (uViewMode > 0.5) {
     terrainColor = freyPlateModeColor(vTerrainPlateId, vTerrainHeight);
     if (vTerrainHeight <= 0.0) {
@@ -247,12 +308,15 @@ diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v3";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v4";
 
     const controller = {
         material,
         setViewMode(mode) {
             uniforms.uViewMode.value = viewModeToNumber(mode);
+        },
+        setClimateMetric(metric) {
+            uniforms.uClimateMetric.value = climateMetricToNumber(metric);
         },
         setDebugEnabled(enabled) {
             uniforms.uDebugEnabled.value = enabled ? 1.0 : 0.0;

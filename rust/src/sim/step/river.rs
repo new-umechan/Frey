@@ -10,22 +10,23 @@ use super::{
     CRUST_RAIN_LAND,
     CRUST_RAIN_SEA,
     FLUX_LOCAL_DECAY,
-    RUNOFF_ALTITUDE_GAIN,
-    RUNOFF_BASE,
-    RUNOFF_OCEAN_FACTOR,
-    RUNOFF_RAIN_GAIN,
 };
+
+const RIVER_RUNOFF_SCALE_MM: f32 = 1_200.0;
 
 pub(super) fn run_river_step(world: &mut World, budget: u32) {
     if budget == 0 {
         return;
     }
 
+    let runoff = build_runoff_for_routing(world);
+
     if let Some(state) = world.exec.river_erosion_state.as_mut() {
         if state.height.len() == world.state.geology.height.len()
             && state.river_flux.len() == world.state.geology.river_flux.len()
             && state.river_next.len() == world.state.geology.river_next.len()
         {
+            sync_erosion_rain(state, &runoff);
             let cell_count = world.state.geology.height.len() as u32;
             let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
             domains::step_erosion_automaton(state, budget_cells);
@@ -35,10 +36,10 @@ pub(super) fn run_river_step(world: &mut World, budget: u32) {
         }
     }
 
-    run_river_fallback(world);
+    run_river_fallback(world, &runoff);
 }
 
-fn run_river_fallback(world: &mut World) {
+fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     let cell_count = world.state.geology.height.len();
     if cell_count == 0 || world.mesh.nbr_offsets.len() != cell_count + 1 {
         return;
@@ -68,29 +69,13 @@ fn run_river_fallback(world: &mut World) {
         }
     }
 
-    let rain = build_rain_for_fallback(world);
-    let mut flux = rain;
-    let mut order = (0..cell_count).collect::<Vec<_>>();
-    order.sort_by(|&a, &b| {
-        world.state.geology.height[b]
-            .partial_cmp(&world.state.geology.height[a])
-            .unwrap_or(Ordering::Equal)
-    });
-    for i in order {
-        let next = river_next[i];
-        if next < 0 {
-            continue;
-        }
-        let n = next as usize;
-        if n < cell_count {
-            flux[n] += flux[i];
-        }
-    }
+    let flux = route_river_flux(&world.state.geology.height, &river_next, &runoff);
 
     world.state.geology.river_next = river_next;
     world.state.geology.river_flux = flux.clone();
     if let Some(state) = world.exec.river_erosion_state.as_mut() {
         if state.river_flux.len() == flux.len() {
+            sync_erosion_rain(state, runoff);
             state.river_flux.clone_from(&flux);
             state.river_next.clone_from(&world.state.geology.river_next);
             state.height.clone_from(&world.state.geology.height);
@@ -98,9 +83,16 @@ fn run_river_fallback(world: &mut World) {
     }
 }
 
-pub(super) fn build_rain_for_fallback(world: &World) -> Vec<f32> {
+pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
     if world.exec.era != EraKind::Crust {
-        return world.state.climate.rain.clone();
+        return world
+            .state
+            .climate
+            .runoff
+            .iter()
+            .copied()
+            .map(normalize_runoff_mm)
+            .collect();
     }
     world
         .state
@@ -117,21 +109,12 @@ pub(super) fn build_rain_for_fallback(world: &World) -> Vec<f32> {
         .collect()
 }
 
-pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], rain: &[f32]) -> Vec<f32> {
+pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
     let cell_count = height.len();
     let mut flux = vec![0.0; cell_count];
     let mut local_runoff = vec![0.0; cell_count];
     for i in 0..cell_count {
-        let altitude = height[i].max(0.0);
-        let land_factor = if height[i] > 0.0 {
-            1.0
-        } else {
-            RUNOFF_OCEAN_FACTOR
-        };
-        let runoff_ratio =
-            (RUNOFF_BASE + rain[i] * RUNOFF_RAIN_GAIN + altitude * RUNOFF_ALTITUDE_GAIN)
-                .clamp(0.0, 0.35);
-        local_runoff[i] = rain[i] * runoff_ratio * land_factor;
+        local_runoff[i] = runoff.get(i).copied().unwrap_or(0.0).max(0.0);
         flux[i] = local_runoff[i];
     }
     let mut order = (0..cell_count).collect::<Vec<_>>();
@@ -152,4 +135,17 @@ pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], rain: &[f32])
         }
     }
     flux
+}
+
+fn normalize_runoff_mm(runoff_mm: f32) -> f32 {
+    (runoff_mm.max(0.0) / RIVER_RUNOFF_SCALE_MM).clamp(0.0, 1.0)
+}
+
+fn sync_erosion_rain(state: &mut crate::ErosionAutomatonState, runoff: &[f32]) {
+    if state.rain.len() != runoff.len() {
+        return;
+    }
+    for (dst, src) in state.rain.iter_mut().zip(runoff.iter().copied()) {
+        *dst = src.max(0.0);
+    }
 }

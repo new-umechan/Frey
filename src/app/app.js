@@ -6,6 +6,10 @@ import initWasm, {
 import { collectAppElements } from "../ui/dom.js";
 import { setupUiControls } from "../ui/controls.js";
 import { createPlateHover } from "./plate-hover.js";
+import {
+    getClimateMetricMeta,
+    normalizeClimateMetric,
+} from "./climate-metric.js";
 import { createTerrainRenderer } from "./terrain-renderer.js";
 import { createGlobeScene, resizeViewport } from "../gfx/scene.js";
 import { createCameraController } from "../gfx/views/camera-controller.js";
@@ -20,6 +24,7 @@ import {
 } from "./era-presets.js";
 import {
     DEBUG_SNAPSHOT_TICKS,
+    DEFAULT_CLIMATE_METRIC,
     DEFAULT_ERA_SCALE,
     DEFAULT_SURFACE_MODE,
     DEFAULT_TERRAIN_SEED,
@@ -51,6 +56,10 @@ export async function createApp() {
         eraScaleTickLabel,
         eraScaleWeightFields,
         viewModeInputs,
+        climateMetricGroup,
+        climateMetricInputs,
+        climateLegend,
+        climateControlHint,
         statFields,
     } = collectAppElements();
 
@@ -105,6 +114,7 @@ export async function createApp() {
     let generationToken = 0;
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentViewMode = DEFAULT_VIEW_MODE;
+    let currentClimateMetric = DEFAULT_CLIMATE_METRIC;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentEraScale = DEFAULT_ERA_SCALE;
     let currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
@@ -135,6 +145,11 @@ export async function createApp() {
     geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainRiverFlux", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainMantleHeat", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainTemperature", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute(
+        "terrainPrecipitation",
+        new THREE.BufferAttribute(new Float32Array(vertexCount), 1),
+    );
     geometry.setAttribute("terrainPlateId", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainDebugTrench", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
@@ -145,6 +160,7 @@ export async function createApp() {
         new THREE.BufferAttribute(new Float32Array(vertexCount), 1),
     );
     terrainMaterial.setViewMode(currentViewMode);
+    terrainMaterial.setClimateMetric(currentClimateMetric);
     terrainMaterial.setDebugEnabled(debugEnabled);
 
     const terrainRenderer = createTerrainRenderer({
@@ -163,11 +179,65 @@ export async function createApp() {
         getState: () => ({
             currentTerrainData,
             currentViewMode,
+            currentClimateMetric,
             currentSurfaceMode,
             camera: cameraController.getCamera(),
             debugEnabled,
         }),
+        onClimateHover: updateClimateHoverReadout,
     });
+
+    function computeClimateLegendStats(metricKey) {
+        const values = currentTerrainData?.[metricKey];
+        if (!values || values.length === 0) {
+            return null;
+        }
+        let min = Number.POSITIVE_INFINITY;
+        let max = Number.NEGATIVE_INFINITY;
+        for (let i = 0; i < values.length; i += 1) {
+            const value = values[i];
+            if (!Number.isFinite(value)) {
+                continue;
+            }
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+        }
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+            return null;
+        }
+        return {
+            min,
+            mid: (min + max) * 0.5,
+            max,
+        };
+    }
+
+    function updateClimateHoverReadout(payload) {
+        climateLegend.hover.textContent = payload
+            ? `Hover: ${payload.label} ${payload.value}`
+            : "Hover: -";
+    }
+
+    function syncClimateUi() {
+        const isClimateMode = currentViewMode === "climate";
+        climateMetricGroup.hidden = !isClimateMode;
+        climateLegend.panel.hidden = !isClimateMode;
+        climateControlHint.hidden = !isClimateMode;
+        for (const input of climateMetricInputs) {
+            input.checked = input.value === currentClimateMetric;
+        }
+        if (!isClimateMode) {
+            updateClimateHoverReadout(null);
+            return;
+        }
+        const meta = getClimateMetricMeta(currentClimateMetric);
+        const stats = computeClimateLegendStats(meta.key);
+        climateLegend.panel.dataset.metric = currentClimateMetric;
+        climateLegend.title.textContent = `${meta.label} (${meta.unit})`;
+        climateLegend.min.textContent = stats ? meta.formatter(stats.min) : "-";
+        climateLegend.mid.textContent = stats ? meta.formatter(stats.mid) : "-";
+        climateLegend.max.textContent = stats ? meta.formatter(stats.max) : "-";
+    }
 
     function setSurfaceMode(nextMode) {
         const normalizedMode = nextMode === "map" ? "map" : "globe";
@@ -184,7 +254,7 @@ export async function createApp() {
         debugEnabled = Boolean(nextEnabled);
         debugToggleInput.checked = debugEnabled;
         wireframe.visible = debugEnabled && cameraController.getSurfaceMode() === "globe";
-        terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled);
+        terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric);
         plateHover.syncDebugMode();
     }
 
@@ -231,6 +301,7 @@ export async function createApp() {
             statFields,
             level: LEVEL,
         });
+        syncClimateUi();
 
         void saveDebugSnapshotIfNeeded({
             isDev: import.meta.env.DEV,
@@ -255,15 +326,29 @@ export async function createApp() {
     }
 
     function setViewMode(nextMode) {
-        const normalizedMode = nextMode === "plates" || nextMode === "mantle" ? nextMode : "normal";
+        const normalizedMode = (
+            nextMode === "plates"
+            || nextMode === "mantle"
+            || nextMode === "climate"
+        )
+            ? nextMode
+            : "normal";
         currentViewMode = normalizedMode;
         for (const input of viewModeInputs) {
             input.checked = input.value === normalizedMode;
         }
-        terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled);
+        terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric);
+        syncClimateUi();
         if (normalizedMode !== "plates") {
             plateHover.hidePopup();
         }
+    }
+
+    function setClimateMetric(nextMetric) {
+        currentClimateMetric = normalizeClimateMetric(nextMetric);
+        terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric);
+        syncClimateUi();
+        plateHover.hidePopup();
     }
 
     function onResize() {
@@ -313,6 +398,7 @@ export async function createApp() {
                 statFields,
                 level: LEVEL,
             });
+            syncClimateUi();
             plateHover.hidePopup();
 
             const eraPreset = getEraScalePreset(currentEraScale);
@@ -331,6 +417,7 @@ export async function createApp() {
         debugToggleInput,
         eraScaleSelect,
         viewModeInputs,
+        climateMetricInputs,
         seedForm,
         seedInput,
         onResize,
@@ -350,10 +437,12 @@ export async function createApp() {
             setEraScale(value);
         },
         onViewModeChange: setViewMode,
+        onClimateMetricChange: setClimateMetric,
         onToggleSurface: setSurfaceMode,
         onToggleDebug: setDebugModeEnabled,
         getDebugEnabled: () => debugEnabled,
         getCurrentSurfaceMode: () => currentSurfaceMode,
+        getCurrentViewMode: () => currentViewMode,
         onSubmitSeed: updateTerrain,
         onSubmitSeedError: (error) => {
             setStatus(`Generation failed: ${String(error)}`);
@@ -375,6 +464,7 @@ export async function createApp() {
         currentEraMetrics,
     );
     setEraScale(DEFAULT_ERA_SCALE, currentEraMetrics);
+    syncClimateUi();
     onResize();
     plateHover.hidePopup();
 

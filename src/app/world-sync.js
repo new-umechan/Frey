@@ -1,6 +1,14 @@
 export function getFieldData(controller, worldId, fieldKind) {
     const response = controller.get_field(worldId, fieldKind, 1);
-    if (fieldKind === "height" || fieldKind === "river_flux" || fieldKind === "mantle_heat") {
+    if (
+        fieldKind === "height"
+        || fieldKind === "river_flux"
+        || fieldKind === "mantle_heat"
+        || fieldKind === "temperature"
+        || fieldKind === "precipitation"
+        || fieldKind === "runoff"
+        || fieldKind === "ocean_temperature"
+    ) {
         return new Float32Array(response?.f32_data ?? []);
     }
     if (fieldKind === "plate_id") {
@@ -49,6 +57,8 @@ export function buildCoreFromController({
     riverFlux,
     riverNext,
     mantleHeat,
+    temperature,
+    precipitation,
     plateInfo,
     targetLandRatio,
 }) {
@@ -68,6 +78,8 @@ export function buildCoreFromController({
         riverFlux,
         riverNext,
         mantleHeat,
+        temperature,
+        precipitation,
         lakeDepth: new Float32Array(cellCount),
         plateInfo,
         vertexWeight,
@@ -103,6 +115,8 @@ export function syncWorldFromController({
     const plateId = getFieldData(worldSimController, worldId, "plate_id");
     const riverNext = getFieldData(worldSimController, worldId, "river_next");
     const mantleHeat = getFieldData(worldSimController, worldId, "mantle_heat");
+    const temperature = getFieldData(worldSimController, worldId, "temperature");
+    const precipitation = getFieldData(worldSimController, worldId, "precipitation");
 
     const plateInfo = buildPlateInfoFromStats(plateStats);
     const core = buildCoreFromController({
@@ -111,6 +125,8 @@ export function syncWorldFromController({
         riverFlux,
         riverNext,
         mantleHeat,
+        temperature,
+        precipitation,
         plateInfo,
         targetLandRatio: metrics.land_ratio,
     });
