@@ -13,6 +13,12 @@ pub(super) struct InitWorldConfig {
 }
 
 #[derive(Deserialize)]
+pub(super) struct WorldDeltaQuery {
+    #[serde(default)]
+    pub include_fields: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
 pub(super) struct InterventionOp {
     pub cell_id: u32,
     pub field: String,

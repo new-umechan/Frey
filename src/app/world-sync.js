@@ -25,6 +25,26 @@ const WORLD_CHANGESET = Object.freeze({
     climate: false,
 });
 
+const DELTA_FIELD_KIND_BY_VIEW = Object.freeze({
+    normal: ["height", "river_flux", "river_next"],
+    plates: ["height", "river_flux", "river_next"],
+    mantle: ["height", "river_flux", "river_next", "mantle_heat"],
+});
+
+const CLIMATE_FIELD_KIND_BY_METRIC = Object.freeze({
+    temperature: "temperature",
+    precipitation: "precipitation",
+});
+
+const CORE_KEY_BY_FIELD_KIND = Object.freeze({
+    height: "heightData",
+    river_flux: "riverFlux",
+    river_next: "riverNext",
+    mantle_heat: "mantleHeat",
+    temperature: "temperature",
+    precipitation: "precipitation",
+});
+
 function getFieldData(controller, worldId, fieldKind) {
     const response = controller.get_field(worldId, fieldKind, 1);
     if (FLOAT32_FIELDS.has(fieldKind)) {
@@ -43,6 +63,14 @@ function fetchCoreFields(worldSimController, worldId) {
             getFieldData(worldSimController, worldId, fieldKind),
         ]),
     );
+}
+
+export function getDeltaFieldKindsForView({ viewMode, climateMetric }) {
+    if (viewMode === "climate") {
+        const climateField = CLIMATE_FIELD_KIND_BY_METRIC[climateMetric] ?? "temperature";
+        return ["height", "river_flux", "river_next", climateField];
+    }
+    return DELTA_FIELD_KIND_BY_VIEW[viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }
 
 function createEmptyCoreBuffers(cellCount) {
@@ -199,8 +227,11 @@ function applyNumericDelta(target, fieldDelta) {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
     const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? [];
     if (fieldDelta?.mode === "full") {
-        target.set(values);
-        return true;
+        const copyLength = Math.min(target.length, values.length);
+        for (let i = 0; i < copyLength; i += 1) {
+            target[i] = values[i];
+        }
+        return copyLength > 0;
     }
 
     let offset = 0;
@@ -210,8 +241,12 @@ function applyNumericDelta(target, fieldDelta) {
         if (end <= start) {
             continue;
         }
-        target.set(values.slice(offset, offset + (end - start)), start);
-        offset += end - start;
+        const rangeLength = end - start;
+        const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
+        for (let i = 0; i < copyLength; i += 1) {
+            target[start + i] = values[offset + i];
+        }
+        offset += rangeLength;
     }
     return ranges.length > 0;
 }
@@ -241,6 +276,44 @@ function applyWorldDeltaToCore(core, worldDelta) {
         default:
             break;
         }
+    }
+    return changes;
+}
+
+function applyFieldSnapshotToCore(core, fieldKind, values, changes) {
+    const coreKey = CORE_KEY_BY_FIELD_KIND[fieldKind];
+    if (!coreKey || !(coreKey in core)) {
+        return;
+    }
+    core[coreKey] = values;
+    if (fieldKind === "height") {
+        changes.height = true;
+        return;
+    }
+    if (fieldKind === "river_flux" || fieldKind === "river_next") {
+        changes.river = true;
+        return;
+    }
+    if (fieldKind === "mantle_heat") {
+        changes.mantleHeat = true;
+        return;
+    }
+    if (fieldKind === "temperature" || fieldKind === "precipitation") {
+        changes.climate = true;
+    }
+}
+
+export function syncVisibleCoreFieldsFromController({
+    worldSimController,
+    worldId,
+    core,
+    fieldKinds,
+}) {
+    const changes = { ...WORLD_CHANGESET };
+    const uniqueFieldKinds = Array.from(new Set(fieldKinds ?? []));
+    for (const fieldKind of uniqueFieldKinds) {
+        const values = getFieldData(worldSimController, worldId, fieldKind);
+        applyFieldSnapshotToCore(core, fieldKind, values, changes);
     }
     return changes;
 }
@@ -345,6 +418,7 @@ export function syncWorldDeltaFromController({
     setEraScale,
     refreshStats,
     refreshWorldStats,
+    deltaFieldKinds,
 }) {
     if (!world.core) {
         return {
@@ -355,7 +429,12 @@ export function syncWorldDeltaFromController({
         };
     }
 
-    const worldDelta = worldSimController.get_world_delta(worldId);
+    const worldDelta = worldSimController.get_world_delta(
+        worldId,
+        Array.isArray(deltaFieldKinds) && deltaFieldKinds.length > 0
+            ? { include_fields: deltaFieldKinds }
+            : undefined,
+    );
     const changes = applyWorldDeltaToCore(world.core, worldDelta);
     const result = syncWorldState({
         world,

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use wasm_bindgen::prelude::*;
 
 use super::common::world_not_found_error;
@@ -5,7 +7,8 @@ use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_u16, sampled
 use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
     BudgetSummary, CheckpointListEntry, CheckpointListResponse, FieldResponse,
-    HistoryTicksResponse, MetricsResponse, PlateStat, PlateStatsResponse, WorldDeltaResponse,
+    HistoryTicksResponse, MetricsResponse, PlateStat, PlateStatsResponse, WorldDeltaQuery,
+    WorldDeltaResponse,
 };
 use super::super::WorldSimController;
 
@@ -175,7 +178,21 @@ impl WorldSimController {
     }
 
     #[wasm_bindgen(js_name = get_world_delta)]
-    pub fn get_world_delta_js(&mut self, world_id: String) -> Result<JsValue, JsValue> {
+    pub fn get_world_delta_js(
+        &mut self,
+        world_id: String,
+        options_js: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let include_fields = if options_js.is_undefined() || options_js.is_null() {
+            None
+        } else {
+            let query = serde_wasm_bindgen::from_value::<WorldDeltaQuery>(options_js)
+                .map_err(|err| JsValue::from_str(&format!("invalid world delta query: {err}")))?;
+            query
+                .include_fields
+                .map(|fields| fields.into_iter().collect::<HashSet<String>>())
+        };
+
         let managed = self
             .worlds
             .get_mut(&world_id)
@@ -193,7 +210,12 @@ impl WorldSimController {
                 ecology: w.exec.budgets.ecology,
                 civilization: w.exec.budgets.civilization,
             },
-            deltas: managed.sync_state.take_world_field_deltas(),
+            deltas: managed.sync_state.take_world_field_deltas(|field_kind| {
+                include_fields
+                    .as_ref()
+                    .map(|fields| fields.contains(field_kind))
+                    .unwrap_or(true)
+            }),
         };
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize world delta: {err}")))

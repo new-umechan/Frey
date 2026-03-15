@@ -135,6 +135,11 @@ impl F32FieldTracker {
         })
     }
 
+    pub fn discard_pending(&mut self) {
+        self.force_full = false;
+        self.dirty_ranges.clear();
+    }
+
     fn merge_dirty_range(&mut self, start: usize, end: usize) {
         if start >= end {
             return;
@@ -234,6 +239,11 @@ impl I32FieldTracker {
         })
     }
 
+    pub fn discard_pending(&mut self) {
+        self.force_full = false;
+        self.dirty_ranges.clear();
+    }
+
     fn merge_dirty_range(&mut self, start: usize, end: usize) {
         if start >= end {
             return;
@@ -293,25 +303,52 @@ impl WorldSyncState {
         self.precipitation.observe(&world.state.climate.precipitation);
     }
 
-    pub fn take_world_field_deltas(&mut self) -> Vec<FieldDeltaResponse> {
+    pub fn take_world_field_deltas<F>(&mut self, mut include_field: F) -> Vec<FieldDeltaResponse>
+    where
+        F: FnMut(&str) -> bool,
+    {
         let mut deltas = Vec::new();
-        if let Some(delta) = self.height.take_delta("height") {
-            deltas.push(delta);
+        if include_field("height") {
+            if let Some(delta) = self.height.take_delta("height") {
+                deltas.push(delta);
+            }
+        } else {
+            self.height.discard_pending();
         }
-        if let Some(delta) = self.river_flux.take_delta("river_flux") {
-            deltas.push(delta);
+        if include_field("river_flux") {
+            if let Some(delta) = self.river_flux.take_delta("river_flux") {
+                deltas.push(delta);
+            }
+        } else {
+            self.river_flux.discard_pending();
         }
-        if let Some(delta) = self.river_next.take_delta("river_next") {
-            deltas.push(delta);
+        if include_field("river_next") {
+            if let Some(delta) = self.river_next.take_delta("river_next") {
+                deltas.push(delta);
+            }
+        } else {
+            self.river_next.discard_pending();
         }
-        if let Some(delta) = self.mantle_heat.take_delta("mantle_heat") {
-            deltas.push(delta);
+        if include_field("mantle_heat") {
+            if let Some(delta) = self.mantle_heat.take_delta("mantle_heat") {
+                deltas.push(delta);
+            }
+        } else {
+            self.mantle_heat.discard_pending();
         }
-        if let Some(delta) = self.temperature.take_delta("temperature") {
-            deltas.push(delta);
+        if include_field("temperature") {
+            if let Some(delta) = self.temperature.take_delta("temperature") {
+                deltas.push(delta);
+            }
+        } else {
+            self.temperature.discard_pending();
         }
-        if let Some(delta) = self.precipitation.take_delta("precipitation") {
-            deltas.push(delta);
+        if include_field("precipitation") {
+            if let Some(delta) = self.precipitation.take_delta("precipitation") {
+                deltas.push(delta);
+            }
+        } else {
+            self.precipitation.discard_pending();
         }
         deltas
     }
@@ -339,7 +376,7 @@ impl ManagedWorld {
 
 #[cfg(test)]
 mod tests {
-    use super::{F32FieldTracker, I32FieldTracker};
+    use super::{F32FieldTracker, I32FieldTracker, WorldSyncState};
 
     #[test]
     fn f32_tracker_collects_delta_ranges_once() {
@@ -362,5 +399,28 @@ mod tests {
         assert_eq!(delta.mode, "full");
         assert_eq!(delta.ranges.len(), 1);
         assert_eq!(delta.i32_data.expect("i32 data"), vec![9, 8, 7, 4]);
+    }
+
+    #[test]
+    fn world_sync_state_discards_pending_for_excluded_fields() {
+        let mut state = WorldSyncState {
+            height: F32FieldTracker::new(&[1.0, 1.0]),
+            river_flux: F32FieldTracker::new(&[0.0, 0.0]),
+            river_next: I32FieldTracker::new(&[-1, -1]),
+            mantle_heat: F32FieldTracker::new(&[0.5, 0.5]),
+            temperature: F32FieldTracker::new(&[10.0, 10.0]),
+            precipitation: F32FieldTracker::new(&[100.0, 100.0]),
+        };
+
+        state.height.observe(&[2.0, 1.0]);
+        state.temperature.observe(&[11.0, 10.0]);
+
+        let deltas = state.take_world_field_deltas(|field_kind| field_kind == "height");
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].field_kind, "height");
+
+        let no_pending_temperature =
+            state.take_world_field_deltas(|field_kind| field_kind == "temperature");
+        assert!(no_pending_temperature.is_empty());
     }
 }

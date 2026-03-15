@@ -39,7 +39,9 @@ import {
 } from "../sim/runtime/state.js";
 import { saveDebugSnapshotIfNeeded } from "../sim/debug/snapshot.js";
 import {
+    getDeltaFieldKindsForView,
     refreshWorldStatsFromController,
+    syncVisibleCoreFieldsFromController,
     syncWorldDeltaFromController,
     syncWorldFromController,
 } from "./world-sync.js";
@@ -342,6 +344,26 @@ export async function createApp() {
         });
     }
 
+    function getCurrentDeltaFieldKinds() {
+        return getDeltaFieldKindsForView({
+            viewMode: currentViewMode,
+            climateMetric: currentClimateMetric,
+        });
+    }
+
+    function syncVisibleFieldsForCurrentView() {
+        if (!activeWorldId || !currentTerrainData) {
+            return;
+        }
+        const changes = syncVisibleCoreFieldsFromController({
+            worldSimController,
+            worldId: activeWorldId,
+            core: currentTerrainData,
+            fieldKinds: getCurrentDeltaFieldKinds(),
+        });
+        terrainRenderer.applyCoreChanges(currentTerrainData, changes, currentSurfaceMode, world.tick);
+    }
+
     function stepWorldTick() {
         if (!activeWorldId || !currentTerrainData) {
             return false;
@@ -365,6 +387,7 @@ export async function createApp() {
             setEraScale,
             refreshStats: shouldRefreshStats,
             refreshWorldStats: refreshActiveWorldStats,
+            deltaFieldKinds: getCurrentDeltaFieldKinds(),
         });
         if (changes?.climate || statsRefreshed) {
             syncClimateUi();
@@ -406,6 +429,7 @@ export async function createApp() {
         for (const input of viewModeInputs) {
             input.checked = input.value === normalizedMode;
         }
+        syncVisibleFieldsForCurrentView();
         terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric);
         syncClimateUi();
         if (normalizedMode !== "plates") {
@@ -415,6 +439,9 @@ export async function createApp() {
 
     function setClimateMetric(nextMetric) {
         currentClimateMetric = normalizeClimateMetric(nextMetric);
+        if (currentViewMode === "climate") {
+            syncVisibleFieldsForCurrentView();
+        }
         terrainRenderer.applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric);
         syncClimateUi();
         plateHover.hidePopup();
