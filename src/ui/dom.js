@@ -55,6 +55,7 @@ export function collectAppElements(options = {}) {
             runButton: requireElement("perf-run-button", HTMLButtonElement),
             copyButton: requireElement("perf-copy-button", HTMLButtonElement),
             status: requireElement("perf-status", HTMLElement),
+            progress: requireElement("perf-progress", HTMLProgressElement),
         }
         : null;
     const perfStatFields = perfEnabled

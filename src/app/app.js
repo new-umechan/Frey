@@ -59,6 +59,20 @@ function isPerfFeatureEnabled() {
     return params.get("perf") === "1" || params.get("bench") === "1";
 }
 
+const STEP_BREAKDOWN_SAMPLE_INTERVAL = 4;
+const STEP_BREAKDOWN_METRIC_NAMES = [
+    "step_feedback",
+    "step_geology_terrain",
+    "step_climate",
+    "step_geology_river",
+    "step_ecology",
+    "step_civilization",
+    "step_transition",
+    "step_sync_erosion",
+    "step_observe_world_change",
+    "step_history_snapshot",
+];
+
 export async function createApp() {
     const isPerfEnabled = isPerfFeatureEnabled();
     const {
@@ -116,6 +130,35 @@ export async function createApp() {
         perfControls.status.textContent = message;
     }
 
+    function setPerfProgress(value, max = 1) {
+        if (!isPerfEnabled || !perfControls) {
+            return;
+        }
+        const normalizedMax = Math.max(1, Math.floor(max));
+        const normalizedValue = Math.max(0, Math.min(normalizedMax, Math.floor(value)));
+        perfControls.progress.max = normalizedMax;
+        perfControls.progress.value = normalizedValue;
+    }
+
+    function pushStepBreakdownSamples(
+        perfRecorder,
+        profiledResult,
+        options = {},
+    ) {
+        if (!perfRecorder || !profiledResult) {
+            return;
+        }
+        const stepCountKey = options.stepCountKey ?? "steps";
+        const steps = Math.max(1, Math.floor(profiledResult[stepCountKey] ?? 1));
+        for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
+            const rawValue = profiledResult[`${metricName}_ms`];
+            if (!Number.isFinite(rawValue)) {
+                continue;
+            }
+            perfRecorder.pushSample(metricName, rawValue / steps);
+        }
+    }
+
     function formatMs(value) {
         if (!Number.isFinite(value)) {
             return "-";
@@ -169,6 +212,7 @@ export async function createApp() {
     setSidebarOpen(true);
     if (isPerfEnabled && perfControls) {
         setPerfStatus("Idle");
+        setPerfProgress(0, 1);
         renderPerfStats(null);
         perfControls.copyButton.disabled = true;
     }
@@ -456,33 +500,9 @@ export async function createApp() {
         if (!activeWorldId || !currentTerrainData) {
             return false;
         }
-        const pushStepBreakdownSamples = (profiledResult) => {
-            if (!perfRecorder || !profiledResult) {
-                return;
-            }
-            const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
-            const breakdownMetricNames = [
-                "step_feedback",
-                "step_geology_terrain",
-                "step_climate",
-                "step_geology_river",
-                "step_ecology",
-                "step_civilization",
-                "step_transition",
-                "step_sync_erosion",
-                "step_observe_world_change",
-                "step_history_snapshot",
-            ];
-            for (const metricName of breakdownMetricNames) {
-                const rawValue = profiledResult[`${metricName}_ms`];
-                if (!Number.isFinite(rawValue)) {
-                    continue;
-                }
-                perfRecorder.pushSample(metricName, rawValue / steps);
-            }
-        };
         const runTick = () => {
             const benchmarkMode = options?.benchmarkMode === true;
+            const sampleStepBreakdown = options?.sampleStepBreakdown === true;
             const nextTick = world.tick + 1;
             const prevHeightForSnapshot = debugSnapshotTickSet.has(nextTick) && currentTerrainData?.heightData
                 ? currentTerrainData.heightData.slice()
@@ -490,8 +510,12 @@ export async function createApp() {
 
             if (perfRecorder) {
                 perfRecorder.measure("step_world", () => {
-                    const profiled = worldSimController.step_world_profiled(activeWorldId, 1);
-                    pushStepBreakdownSamples(profiled);
+                    if (sampleStepBreakdown) {
+                        const profiled = worldSimController.step_world_profiled(activeWorldId, 1);
+                        pushStepBreakdownSamples(perfRecorder, profiled);
+                        return;
+                    }
+                    worldSimController.step_world(activeWorldId, 1);
                 });
             } else {
                 worldSimController.step_world(activeWorldId, 1);
@@ -572,18 +596,37 @@ export async function createApp() {
 
             const startedAt = performance.now();
             const recorder = createTickPerfRecorder();
-            setPerfStatus(`Running ${profile.tickCount} ticks...`);
+            setPerfStatus(`Running 0/${profile.tickCount} ticks... (0%)`);
+            setPerfProgress(0, profile.tickCount + 1);
             const tickStart = world.tick;
             for (let i = 0; i < profile.tickCount; i += 1) {
-                stepWorldTick(recorder, { benchmarkMode: true });
-                if ((i + 1) % 8 === 0 || i + 1 === profile.tickCount) {
-                    setPerfStatus(`Running ${i + 1}/${profile.tickCount} ticks...`);
-                    await new Promise((resolve) => {
-                        requestAnimationFrame(() => resolve());
-                    });
-                }
+                stepWorldTick(recorder, { benchmarkMode: true, sampleStepBreakdown: false });
+                setPerfProgress(i + 1, profile.tickCount + 1);
+                const pct = Math.floor(((i + 1) / profile.tickCount) * 100);
+                setPerfStatus(`Running ${i + 1}/${profile.tickCount} ticks... (${pct}%)`);
+                await new Promise((resolve) => {
+                    requestAnimationFrame(() => resolve());
+                });
             }
-            const wallTimeMs = performance.now() - startedAt;
+            const wallTimeMainMs = performance.now() - startedAt;
+
+            setPerfStatus("Collecting step breakdown...");
+            const breakdownStartedAt = performance.now();
+            const breakdownWorld = worldSimController.init_world(profile.seed, LEVEL, {
+                terrain_params: TERRAIN_PARAMS,
+            });
+            const breakdownResult = worldSimController.step_world_profiled_batch(
+                breakdownWorld.world_id,
+                profile.tickCount,
+                STEP_BREAKDOWN_SAMPLE_INTERVAL,
+            );
+            pushStepBreakdownSamples(recorder, breakdownResult, { stepCountKey: "sampled_steps" });
+            setPerfProgress(profile.tickCount + 1, profile.tickCount + 1);
+            await new Promise((resolve) => {
+                requestAnimationFrame(() => resolve());
+            });
+            const breakdownCollectionMs = performance.now() - breakdownStartedAt;
+
             const result = {
                 meta: {
                     generated_at: new Date().toISOString(),
@@ -596,7 +639,8 @@ export async function createApp() {
                     tickEnd: world.tick,
                 },
                 totals: {
-                    wall_time_ms: Math.round(wallTimeMs * 1000) / 1000,
+                    wall_time_ms: Math.round(wallTimeMainMs * 1000) / 1000,
+                    breakdown_collection_ms: Math.round(breakdownCollectionMs * 1000) / 1000,
                     processed_ticks: profile.tickCount,
                 },
                 metrics: recorder.buildSummary(),
@@ -605,6 +649,7 @@ export async function createApp() {
             renderPerfStats(result);
             const summaryLine = formatBenchmarkSummaryLine(result);
             setPerfStatus(`Done: ${summaryLine}`);
+            setPerfProgress(profile.tickCount + 1, profile.tickCount + 1);
             console.group(`[perf-bench] ${profile.tickCount} tick benchmark`);
             console.log("result", result);
             console.table(createBenchmarkConsoleTable(result));

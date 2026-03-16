@@ -11,6 +11,7 @@ use super::super::helpers::{build_erosion_state, sync_erosion_state};
 use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
+use super::super::types::StepWorldProfiledBatchResponse;
 use super::super::types::StepWorldProfiledResponse;
 use super::super::WorldSimController;
 use super::common::world_not_found_error;
@@ -205,6 +206,95 @@ impl WorldSimController {
         };
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize step_world_profiled: {err}")))
+    }
+
+    #[wasm_bindgen(js_name = step_world_profiled_batch)]
+    pub fn step_world_profiled_batch_js(
+        &mut self,
+        world_id: String,
+        tick_count: u32,
+        sample_interval: u32,
+    ) -> Result<JsValue, JsValue> {
+        if tick_count == 0 {
+            let response = StepWorldProfiledBatchResponse {
+                world_id,
+                steps: 0,
+                sampled_steps: 0,
+                sample_interval: sample_interval.max(1),
+                step_feedback_ms: 0.0,
+                step_geology_terrain_ms: 0.0,
+                step_climate_ms: 0.0,
+                step_geology_river_ms: 0.0,
+                step_ecology_ms: 0.0,
+                step_civilization_ms: 0.0,
+                step_transition_ms: 0.0,
+                step_sync_erosion_ms: 0.0,
+                step_observe_world_change_ms: 0.0,
+                step_history_snapshot_ms: 0.0,
+            };
+            return serde_wasm_bindgen::to_value(&response).map_err(|err| {
+                JsValue::from_str(&format!("failed to serialize step_world_profiled_batch: {err}"))
+            });
+        }
+
+        let managed = self
+            .worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+
+        let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
+        let steps = scaled_ticks.max(1);
+        let interval = sample_interval.max(1);
+        let mut sim_breakdown = StepWorldBreakdown::default();
+        let mut step_sync_erosion_ms = 0.0;
+        let mut step_observe_world_change_ms = 0.0;
+        let mut step_history_snapshot_ms = 0.0;
+        let mut sampled_steps = 0u32;
+
+        for step_index in 0..steps {
+            let should_sample = step_index % interval == 0;
+            if should_sample {
+                sampled_steps = sampled_steps.saturating_add(1);
+                let step_breakdown = step_world_profiled(&mut managed.world);
+                sim_breakdown.accumulate(&step_breakdown);
+
+                let phase_start = Instant::now();
+                sync_erosion_state(&mut managed.world, &managed.terrain_params);
+                step_sync_erosion_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+
+                let phase_start = Instant::now();
+                managed.observe_after_world_change();
+                step_observe_world_change_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+
+                let phase_start = Instant::now();
+                managed.save_history_snapshot_if_needed();
+                step_history_snapshot_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+                continue;
+            }
+
+            step_world(&mut managed.world);
+            run_post_step(managed);
+        }
+
+        let response = StepWorldProfiledBatchResponse {
+            world_id,
+            steps,
+            sampled_steps,
+            sample_interval: interval,
+            step_feedback_ms: sim_breakdown.step_feedback_ms,
+            step_geology_terrain_ms: sim_breakdown.step_geology_terrain_ms,
+            step_climate_ms: sim_breakdown.step_climate_ms,
+            step_geology_river_ms: sim_breakdown.step_geology_river_ms,
+            step_ecology_ms: sim_breakdown.step_ecology_ms,
+            step_civilization_ms: sim_breakdown.step_civilization_ms,
+            step_transition_ms: sim_breakdown.step_transition_ms,
+            step_sync_erosion_ms,
+            step_observe_world_change_ms,
+            step_history_snapshot_ms,
+        };
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize step_world_profiled_batch: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = set_simulation_rate)]

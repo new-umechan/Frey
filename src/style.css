@@ -618,6 +618,13 @@ body {
     word-break: break-word;
 }
 
+.perf-progress {
+    width: 100%;
+    height: 0.52rem;
+    margin-top: 0.45rem;
+    accent-color: color-mix(in oklab, var(--accent), white 5%);
+}
+
 .perf-stats {
     margin-top: 0.5rem;
 }
