@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::time::Instant;
 
 use wasm_bindgen::prelude::*;
 
@@ -14,6 +13,26 @@ use super::super::types::InitWorldOutput;
 use super::super::types::StepWorldProfiledResponse;
 use super::super::WorldSimController;
 use super::common::world_not_found_error;
+
+#[cfg(target_arch = "wasm32")]
+fn profile_now_ms() -> f64 {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_now_ms() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn profile_elapsed_ms(start: f64) -> f64 {
+    js_sys::Date::now() - start
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
+}
 
 fn run_post_step(managed: &mut ManagedWorld) {
     sync_erosion_state(&mut managed.world, &managed.terrain_params);
@@ -176,17 +195,17 @@ impl WorldSimController {
             let step_breakdown = step_world_profiled(&mut managed.world);
             sim_breakdown.accumulate(&step_breakdown);
 
-            let phase_start = Instant::now();
+            let phase_start = profile_now_ms();
             sync_erosion_state(&mut managed.world, &managed.terrain_params);
-            step_sync_erosion_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+            step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
-            let phase_start = Instant::now();
+            let phase_start = profile_now_ms();
             managed.observe_after_world_change();
-            step_observe_world_change_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+            step_observe_world_change_ms += profile_elapsed_ms(phase_start);
 
-            let phase_start = Instant::now();
+            let phase_start = profile_now_ms();
             managed.save_history_snapshot_if_needed();
-            step_history_snapshot_ms += phase_start.elapsed().as_secs_f64() * 1000.0;
+            step_history_snapshot_ms += profile_elapsed_ms(phase_start);
         }
 
         let response = StepWorldProfiledResponse {

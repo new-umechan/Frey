@@ -42,6 +42,20 @@ const CLIMATE_FIELD_KIND_BY_METRIC = Object.freeze({
 let wasmReadyPromise = null;
 let emittedWarning = false;
 
+function roundMs(value) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    return Math.round(value * 1000) / 1000;
+}
+
+function roundRatio(value) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    return Math.round(value * 1000000) / 1000000;
+}
+
 function postProgress(runId, payload = {}) {
     const done = Math.max(0, Math.floor(payload.done ?? 0));
     const total = Math.max(1, Math.floor(payload.total ?? 1));
@@ -267,6 +281,14 @@ async function runBenchmark(message) {
     const recorder = createTickPerfRecorder();
     const tickStart = Math.floor(controller.get_metrics(worldId)?.tick ?? 0);
     const wallStartedAt = performance.now();
+    const diagnostics = {
+        profile_attempt_count: 0,
+        profile_success_count: 0,
+        profile_fallback_count: 0,
+        replay_ticks_total: 0,
+        replay_time_ms_total: 0,
+        step_world_time_ms_total: 0,
+    };
 
     for (let i = 0; i < totalTicks; i += 1) {
         const tickTotalStart = performance.now();
@@ -282,17 +304,23 @@ async function runBenchmark(message) {
 
         const stepStart = performance.now();
         if (shouldSampleBreakdown) {
+            diagnostics.profile_attempt_count += 1;
             try {
                 const profiled = controller.step_world_profiled(worldId, 1);
                 pushStepBreakdownSamples(recorder, profiled);
+                diagnostics.profile_success_count += 1;
             } catch (error) {
+                diagnostics.profile_fallback_count += 1;
+                diagnostics.replay_ticks_total += i;
                 notifyWarning(message.runId, `step profiling trap recovered (${formatError(error)})`);
                 try {
+                    const replayStart = performance.now();
                     controllerState = rebuildControllerState(profile, level, terrainParams, i, deltaFieldKinds);
                     controller = controllerState.controller;
                     worldId = controllerState.worldId;
                     core = controllerState.core;
                     controller.step_world(worldId, 1);
+                    diagnostics.replay_time_ms_total += performance.now() - replayStart;
                 } catch (recoverError) {
                     throw new Error(
                         `step profiling recovery failed at tick ${tickIndex}: ${formatError(recoverError)} (profile error: ${formatError(error)})`,
@@ -306,7 +334,9 @@ async function runBenchmark(message) {
                 throw new Error(`step_world failed at tick ${tickIndex}: ${formatError(error)}`);
             }
         }
-        recorder.pushSample("step_world", performance.now() - stepStart);
+        const stepElapsedMs = performance.now() - stepStart;
+        diagnostics.step_world_time_ms_total += stepElapsedMs;
+        recorder.pushSample("step_world", stepElapsedMs);
 
         const deltaStart = performance.now();
         let changes = {
@@ -358,6 +388,12 @@ async function runBenchmark(message) {
 
     const tickEnd = Math.floor(controller.get_metrics(worldId)?.tick ?? tickStart);
     const wallTimeMs = performance.now() - wallStartedAt;
+    const replayShareOfWall = wallTimeMs > 0
+        ? diagnostics.replay_time_ms_total / wallTimeMs
+        : 0;
+    const replayShareOfStepWorld = diagnostics.step_world_time_ms_total > 0
+        ? diagnostics.replay_time_ms_total / diagnostics.step_world_time_ms_total
+        : 0;
     const result = {
         meta: {
             generated_at: new Date().toISOString(),
@@ -370,10 +406,20 @@ async function runBenchmark(message) {
             tickEnd,
         },
         totals: {
-            wall_time_ms: Math.round(wallTimeMs * 1000) / 1000,
+            wall_time_ms: roundMs(wallTimeMs),
             processed_ticks: totalTicks,
         },
         metrics: recorder.buildSummary(),
+        diagnostics: {
+            profile_attempt_count: diagnostics.profile_attempt_count,
+            profile_success_count: diagnostics.profile_success_count,
+            profile_fallback_count: diagnostics.profile_fallback_count,
+            replay_ticks_total: diagnostics.replay_ticks_total,
+            replay_time_ms_total: roundMs(diagnostics.replay_time_ms_total),
+            step_world_time_ms_total: roundMs(diagnostics.step_world_time_ms_total),
+            replay_time_share_of_wall: roundRatio(replayShareOfWall),
+            replay_time_share_of_step_world: roundRatio(replayShareOfStepWorld),
+        },
     };
     self.postMessage({
         type: "done",
