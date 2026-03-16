@@ -11,6 +11,10 @@ pub(crate) struct ErosionAutomatonBreakdown {
     pub sink_rebuild_ms: f64,
     pub cell_process_ms: f64,
     pub queue_update_ms: f64,
+    pub sink_rebuild_full_count: u32,
+    pub sink_rebuild_partial_count: u32,
+    pub sink_rebuild_skipped_count: u32,
+    pub sink_rebuild_fallback_full_count: u32,
 }
 
 pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {

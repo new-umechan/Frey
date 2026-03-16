@@ -286,7 +286,60 @@ fn distribute_deposition_direct_by_context(
     }
 }
 
-fn rebuild_sink_state(state: &mut crate::ErosionAutomatonState, _changed: &[u32]) {
+const PARTIAL_INVALID_SPILL_RATIO: f32 = 0.20;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SinkRebuildStats {
+    full_count: u32,
+    partial_count: u32,
+    skipped_count: u32,
+    fallback_full_count: u32,
+}
+
+fn rebuild_sink_state(
+    state: &mut crate::ErosionAutomatonState,
+    changed: &[u32],
+    force_full: bool,
+) -> SinkRebuildStats {
+    if force_full {
+        rebuild_sink_state_full(state);
+        state.last_sink_full_rebuild_tick = state.tick;
+        return SinkRebuildStats {
+            full_count: 1,
+            ..SinkRebuildStats::default()
+        };
+    }
+    if changed.is_empty() {
+        return SinkRebuildStats {
+            skipped_count: 1,
+            ..SinkRebuildStats::default()
+        };
+    }
+    let (affected_count, invalid_count) = rebuild_sink_state_partial(state, changed);
+    if affected_count == 0 {
+        return SinkRebuildStats {
+            skipped_count: 1,
+            ..SinkRebuildStats::default()
+        };
+    }
+    let invalid_ratio = invalid_count as f32 / affected_count as f32;
+    if invalid_ratio > PARTIAL_INVALID_SPILL_RATIO {
+        rebuild_sink_state_full(state);
+        state.last_sink_full_rebuild_tick = state.tick;
+        return SinkRebuildStats {
+            full_count: 1,
+            partial_count: 1,
+            fallback_full_count: 1,
+            ..SinkRebuildStats::default()
+        };
+    }
+    SinkRebuildStats {
+        partial_count: 1,
+        ..SinkRebuildStats::default()
+    }
+}
+
+fn rebuild_sink_state_full(state: &mut crate::ErosionAutomatonState) {
     let v_count = state.height.len();
     if v_count == 0 {
         return;
@@ -310,33 +363,133 @@ fn rebuild_sink_state(state: &mut crate::ErosionAutomatonState, _changed: &[u32]
     resize_sink_state_arrays(state, sink_count);
 
     for (sid, members) in sink_members.iter().enumerate() {
-        if members.is_empty() {
-            continue;
-        }
-        let (best_level, best_from, best_to) = find_sink_spill_edge(
-            &state.height,
-            &state.nbr_offsets,
-            &state.nbrs,
-            &state.sink_id,
-            sid,
-            members,
-        );
-
-        state.sink_spill_cell[sid] = best_from;
-        state.sink_spill_to[sid] = best_to;
-        state.sink_spill_level[sid] = best_level;
-        if best_from < 0 {
-            state.sink_overflow_active[sid] = 1;
-            continue;
-        }
-
-        let cap = sink_capacity(&state.height, members, best_level, state.params.sink_min_capacity);
-        state.sink_capacity_total[sid] = cap;
-
-        restore_sink_snapshot(state, sid, cap, best_from, best_to, &old_state);
-
-        rebuild_sink_route_for_sid(state, sid, members);
+        update_sink_for_sid(state, sid, members, &old_state);
     }
+}
+
+fn rebuild_sink_state_partial(state: &mut crate::ErosionAutomatonState, changed: &[u32]) -> (usize, usize) {
+    let v_count = state.height.len();
+    if v_count == 0 {
+        return (0, 0);
+    }
+    let sink_count = state.sink_spill_cell.len();
+    if sink_count == 0 {
+        return (0, 0);
+    }
+    let mut affected_mark = vec![0u8; v_count];
+    for &v_u32 in changed {
+        let v = v_u32 as usize;
+        if v >= v_count {
+            continue;
+        }
+        affected_mark[v] = 1;
+        let start = state.nbr_offsets[v] as usize;
+        let end = state.nbr_offsets[v + 1] as usize;
+        for &n_u32 in &state.nbrs[start..end] {
+            let n = n_u32 as usize;
+            if n < v_count {
+                affected_mark[n] = 1;
+            }
+        }
+    }
+
+    let mut affected_sink_ids = Vec::<usize>::new();
+    let mut sink_seen = vec![0u8; sink_count];
+    for (cell, mark) in affected_mark.iter().enumerate() {
+        if *mark == 0 {
+            continue;
+        }
+        let sid_raw = state.sink_id[cell];
+        if sid_raw < 0 {
+            continue;
+        }
+        let sid = sid_raw as usize;
+        if sid >= sink_count || sink_seen[sid] != 0 {
+            continue;
+        }
+        sink_seen[sid] = 1;
+        affected_sink_ids.push(sid);
+    }
+    if affected_sink_ids.is_empty() {
+        return (0, 0);
+    }
+    affected_sink_ids.sort_unstable();
+
+    let old_state = snapshot_sink_state(state);
+    let mut member_map = std::collections::HashMap::<usize, Vec<usize>>::new();
+    for (cell, sid_raw) in state.sink_id.iter().copied().enumerate() {
+        if sid_raw < 0 {
+            continue;
+        }
+        let sid = sid_raw as usize;
+        if sid >= sink_count || sink_seen[sid] == 0 {
+            continue;
+        }
+        member_map.entry(sid).or_default().push(cell);
+    }
+
+    let mut invalid_count = 0usize;
+    for sid in &affected_sink_ids {
+        let members = member_map.get(sid).map(|v| v.as_slice()).unwrap_or(&[]);
+        update_sink_for_sid(state, *sid, members, &old_state);
+        if state.sink_spill_cell.get(*sid).copied().unwrap_or(-1) < 0 {
+            invalid_count += 1;
+        }
+    }
+    (affected_sink_ids.len(), invalid_count)
+}
+
+fn update_sink_for_sid(
+    state: &mut crate::ErosionAutomatonState,
+    sid: usize,
+    members: &[usize],
+    old_state: &std::collections::HashMap<(i32, i32), (f32, f32, u8)>,
+) {
+    if sid >= state.sink_spill_cell.len() {
+        return;
+    }
+    if members.is_empty() {
+        state.sink_spill_cell[sid] = -1;
+        state.sink_spill_to[sid] = -1;
+        state.sink_spill_level[sid] = 0.0;
+        state.sink_capacity_total[sid] = 0.0;
+        state.sink_capacity_remaining[sid] = 0.0;
+        state.sink_storage_sediment[sid] = 0.0;
+        state.sink_overflow_active[sid] = 1;
+        return;
+    }
+    let (best_level, best_from, best_to) = find_sink_spill_edge(
+        &state.height,
+        &state.nbr_offsets,
+        &state.nbrs,
+        &state.sink_id,
+        sid,
+        members,
+    );
+
+    state.sink_spill_cell[sid] = best_from;
+    state.sink_spill_to[sid] = best_to;
+    state.sink_spill_level[sid] = best_level;
+    if best_from < 0 {
+        state.sink_capacity_total[sid] = 0.0;
+        state.sink_capacity_remaining[sid] = 0.0;
+        state.sink_storage_sediment[sid] = 0.0;
+        state.sink_overflow_active[sid] = 1;
+        for &v in members {
+            state.sink_route_next[v] = -1;
+        }
+        return;
+    }
+
+    let cap = sink_capacity(
+        &state.height,
+        members,
+        best_level,
+        state.params.sink_min_capacity,
+    );
+    state.sink_capacity_total[sid] = cap;
+    restore_sink_snapshot(state, sid, cap, best_from, best_to, old_state);
+    rebuild_sink_route_for_sid(state, sid, members);
 }
 
 fn reset_sink_buffers(state: &mut crate::ErosionAutomatonState, v_count: usize) {

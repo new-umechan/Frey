@@ -24,6 +24,10 @@ pub(super) struct RiverStepDetailBreakdown {
     pub river_fallback_ms: f64,
     pub network_rebuild_count: u32,
     pub fallback_count: u32,
+    pub sink_rebuild_full_count: u32,
+    pub sink_rebuild_partial_count: u32,
+    pub sink_rebuild_skipped_count: u32,
+    pub sink_rebuild_fallback_full_count: u32,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -148,6 +152,18 @@ fn run_river_step_with_erosion_state(
     detail.river_automaton_sink_ms += automaton_breakdown.sink_rebuild_ms;
     detail.river_automaton_cell_ms += automaton_breakdown.cell_process_ms;
     detail.river_automaton_queue_ms += automaton_breakdown.queue_update_ms;
+    detail.sink_rebuild_full_count = detail
+        .sink_rebuild_full_count
+        .saturating_add(automaton_breakdown.sink_rebuild_full_count);
+    detail.sink_rebuild_partial_count = detail
+        .sink_rebuild_partial_count
+        .saturating_add(automaton_breakdown.sink_rebuild_partial_count);
+    detail.sink_rebuild_skipped_count = detail
+        .sink_rebuild_skipped_count
+        .saturating_add(automaton_breakdown.sink_rebuild_skipped_count);
+    detail.sink_rebuild_fallback_full_count = detail
+        .sink_rebuild_fallback_full_count
+        .saturating_add(automaton_breakdown.sink_rebuild_fallback_full_count);
 
     state.last_river_driver = river_driver;
     if should_rebuild_network(tick, state, river_driver) {

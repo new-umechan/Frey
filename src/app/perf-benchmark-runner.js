@@ -362,6 +362,10 @@ export function createPerfBenchmarkRunner(deps = {}) {
             river_network_rebuild_count_total: 0,
             river_fallback_count_total: 0,
             geometry_update_skipped_count: 0,
+            sink_rebuild_full_count_total: 0,
+            sink_rebuild_partial_count_total: 0,
+            sink_rebuild_skipped_count_total: 0,
+            sink_rebuild_fallback_full_count_total: 0,
         };
 
         for (let i = 0; i < totalTicks; i += 1) {
@@ -395,6 +399,22 @@ export function createPerfBenchmarkRunner(deps = {}) {
                     diagnostics.river_fallback_count_total += Math.max(
                         0,
                         Math.floor(Number(profiled?.river_fallback_count) || 0),
+                    );
+                    diagnostics.sink_rebuild_full_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.sink_rebuild_full_count) || 0),
+                    );
+                    diagnostics.sink_rebuild_partial_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.sink_rebuild_partial_count) || 0),
+                    );
+                    diagnostics.sink_rebuild_skipped_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.sink_rebuild_skipped_count) || 0),
+                    );
+                    diagnostics.sink_rebuild_fallback_full_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.sink_rebuild_fallback_full_count) || 0),
                     );
                     diagnostics.profile_success_count += 1;
                 } catch (error) {
@@ -551,6 +571,10 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 river_rebuild_rate: roundRatio(riverRebuildRate),
                 river_fallback_count_total: diagnostics.river_fallback_count_total,
                 geometry_update_skipped_count: diagnostics.geometry_update_skipped_count,
+                sink_rebuild_full_count_total: diagnostics.sink_rebuild_full_count_total,
+                sink_rebuild_partial_count_total: diagnostics.sink_rebuild_partial_count_total,
+                sink_rebuild_skipped_count_total: diagnostics.sink_rebuild_skipped_count_total,
+                sink_rebuild_fallback_full_count_total: diagnostics.sink_rebuild_fallback_full_count_total,
             },
         };
     }

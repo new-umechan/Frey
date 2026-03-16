@@ -1217,6 +1217,7 @@ mod tests {
             rain_cursor: 0,
             tick: 0,
             last_rebuild_tick: 0,
+            last_sink_full_rebuild_tick: 0,
             flux_scale_ema: 1.0,
             last_river_driver: 1.0,
             prev_river_next: world.state.geology.river_next.clone(),

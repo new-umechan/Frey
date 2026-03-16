@@ -33,6 +33,7 @@ pub(super) fn build_erosion_state(
         rain_cursor: 0,
         tick: world.exec.tick,
         last_rebuild_tick: world.exec.tick.saturating_sub(1),
+        last_sink_full_rebuild_tick: world.exec.tick.saturating_sub(8),
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
         prev_river_next: world.state.geology.river_next.clone(),

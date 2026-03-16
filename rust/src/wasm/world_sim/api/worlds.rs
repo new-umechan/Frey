@@ -264,6 +264,10 @@ impl WorldSimController {
                 step_geology_river_fallback_ms: 0.0,
                 river_network_rebuild_count: 0,
                 river_fallback_count: 0,
+                sink_rebuild_full_count: 0,
+                sink_rebuild_partial_count: 0,
+                sink_rebuild_skipped_count: 0,
+                sink_rebuild_fallback_full_count: 0,
             };
             return serde_wasm_bindgen::to_value(&response).map_err(|err| {
                 JsValue::from_str(&format!(
@@ -329,6 +333,12 @@ impl WorldSimController {
             step_geology_river_fallback_ms: sim_breakdown.river.step_geology_river_fallback_ms,
             river_network_rebuild_count: sim_breakdown.river.river_network_rebuild_count,
             river_fallback_count: sim_breakdown.river.river_fallback_count,
+            sink_rebuild_full_count: sim_breakdown.river.sink_rebuild_full_count,
+            sink_rebuild_partial_count: sim_breakdown.river.sink_rebuild_partial_count,
+            sink_rebuild_skipped_count: sim_breakdown.river.sink_rebuild_skipped_count,
+            sink_rebuild_fallback_full_count: sim_breakdown
+                .river
+                .sink_rebuild_fallback_full_count,
         };
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(

@@ -215,4 +215,8 @@ pub(super) struct StepWorldProfiledDetailResponse {
     pub step_geology_river_fallback_ms: f64,
     pub river_network_rebuild_count: u32,
     pub river_fallback_count: u32,
+    pub sink_rebuild_full_count: u32,
+    pub sink_rebuild_partial_count: u32,
+    pub sink_rebuild_skipped_count: u32,
+    pub sink_rebuild_fallback_full_count: u32,
 }

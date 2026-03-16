@@ -21,6 +21,8 @@ pub struct ErosionAutomatonState {
     #[serde(default)]
     pub last_rebuild_tick: u64,
     #[serde(default)]
+    pub last_sink_full_rebuild_tick: u64,
+    #[serde(default)]
     pub flux_scale_ema: f32,
     #[serde(default)]
     pub last_river_driver: f32,

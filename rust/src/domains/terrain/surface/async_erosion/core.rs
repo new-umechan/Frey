@@ -23,6 +23,21 @@ fn profile_elapsed_ms(start: ProfileClock) -> f64 {
     start.elapsed().as_secs_f64() * 1000.0
 }
 
+const FULL_REBUILD_INTERVAL_TICKS: u64 = 8;
+const FULL_REBUILD_CHANGED_RATIO: f32 = 0.02;
+
+fn sink_buffers_ready(state: &crate::ErosionAutomatonState, v_count: usize) -> bool {
+    state.sink_id.len() == v_count
+        && state.sink_route_next.len() == v_count
+        && state.sink_dirty.len() == v_count
+        && state.sink_spill_cell.len() == state.sink_spill_to.len()
+        && state.sink_spill_cell.len() == state.sink_spill_level.len()
+        && state.sink_spill_cell.len() == state.sink_capacity_total.len()
+        && state.sink_spill_cell.len() == state.sink_capacity_remaining.len()
+        && state.sink_spill_cell.len() == state.sink_storage_sediment.len()
+        && state.sink_spill_cell.len() == state.sink_overflow_active.len()
+}
+
 pub(crate) fn step_async_erosion_automaton(
     state: &mut crate::ErosionAutomatonState,
     budget_cells: u32,
@@ -59,8 +74,24 @@ pub(crate) fn step_async_erosion_automaton(
 
     let mut previous_changed = std::mem::take(&mut state.recent_changed);
     let phase_start = profile_now();
-    rebuild_sink_state(state, &previous_changed);
+    let changed_ratio = if v_count > 0 {
+        previous_changed.len() as f32 / v_count as f32
+    } else {
+        0.0
+    };
+    let force_full_rebuild = state.tick <= 1
+        || !sink_buffers_ready(state, v_count)
+        || changed_ratio >= FULL_REBUILD_CHANGED_RATIO
+        || state
+            .tick
+            .saturating_sub(state.last_sink_full_rebuild_tick)
+            >= FULL_REBUILD_INTERVAL_TICKS;
+    let sink_rebuild_stats = rebuild_sink_state(state, &previous_changed, force_full_rebuild);
     breakdown.sink_rebuild_ms += profile_elapsed_ms(phase_start);
+    breakdown.sink_rebuild_full_count = sink_rebuild_stats.full_count;
+    breakdown.sink_rebuild_partial_count = sink_rebuild_stats.partial_count;
+    breakdown.sink_rebuild_skipped_count = sink_rebuild_stats.skipped_count;
+    breakdown.sink_rebuild_fallback_full_count = sink_rebuild_stats.fallback_full_count;
     previous_changed.clear();
     state.recent_changed = previous_changed;
 

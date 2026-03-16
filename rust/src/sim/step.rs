@@ -66,6 +66,10 @@ pub struct StepWorldRiverBreakdown {
     pub step_geology_river_fallback_ms: f64,
     pub river_network_rebuild_count: u32,
     pub river_fallback_count: u32,
+    pub sink_rebuild_full_count: u32,
+    pub sink_rebuild_partial_count: u32,
+    pub sink_rebuild_skipped_count: u32,
+    pub sink_rebuild_fallback_full_count: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -131,6 +135,18 @@ impl StepWorldRiverBreakdown {
         self.river_fallback_count = self
             .river_fallback_count
             .saturating_add(other.river_fallback_count);
+        self.sink_rebuild_full_count = self
+            .sink_rebuild_full_count
+            .saturating_add(other.sink_rebuild_full_count);
+        self.sink_rebuild_partial_count = self
+            .sink_rebuild_partial_count
+            .saturating_add(other.sink_rebuild_partial_count);
+        self.sink_rebuild_skipped_count = self
+            .sink_rebuild_skipped_count
+            .saturating_add(other.sink_rebuild_skipped_count);
+        self.sink_rebuild_fallback_full_count = self
+            .sink_rebuild_fallback_full_count
+            .saturating_add(other.sink_rebuild_fallback_full_count);
     }
 }
 
@@ -192,6 +208,11 @@ pub fn step_world_profiled_detailed(world: &mut World) -> StepWorldBreakdownDeta
     river_breakdown.step_geology_river_fallback_ms = river_profile.river_fallback_ms;
     river_breakdown.river_network_rebuild_count = river_profile.network_rebuild_count;
     river_breakdown.river_fallback_count = river_profile.fallback_count;
+    river_breakdown.sink_rebuild_full_count = river_profile.sink_rebuild_full_count;
+    river_breakdown.sink_rebuild_partial_count = river_profile.sink_rebuild_partial_count;
+    river_breakdown.sink_rebuild_skipped_count = river_profile.sink_rebuild_skipped_count;
+    river_breakdown.sink_rebuild_fallback_full_count =
+        river_profile.sink_rebuild_fallback_full_count;
 
     let phase_start = profile_now();
     run_ecology_step(world, world.exec.budgets.ecology);
@@ -319,6 +340,7 @@ mod tests {
             rain_cursor: 0,
             tick: 0,
             last_rebuild_tick: 0,
+            last_sink_full_rebuild_tick: 0,
             flux_scale_ema: 1.0,
             last_river_driver: 1.0,
             prev_river_next: world.state.geology.river_next.clone(),
