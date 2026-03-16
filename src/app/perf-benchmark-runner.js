@@ -1,274 +1,15 @@
 import { createTickPerfRecorder } from "./perf-benchmark.js";
-
-const STEP_BREAKDOWN_METRIC_NAMES = [
-    "step_feedback",
-    "step_geology_terrain",
-    "step_climate",
-    "step_geology_river",
-    "step_ecology",
-    "step_civilization",
-    "step_transition",
-    "step_sync_erosion",
-    "step_observe_world_change",
-    "step_history_snapshot",
-];
-
-const RIVER_BREAKDOWN_METRIC_NAMES = [
-    "step_geology_river_prepare",
-    "step_geology_river_automaton",
-    "step_geology_river_automaton_sink",
-    "step_geology_river_automaton_cell",
-    "step_geology_river_automaton_queue",
-    "step_geology_river_network",
-    "step_geology_river_sync",
-    "step_geology_river_fallback",
-];
-
-const FLOAT32_FIELDS = new Set([
-    "height",
-    "river_flux",
-    "mantle_heat",
-    "temperature",
-    "precipitation",
-    "runoff",
-    "ocean_temperature",
-]);
-
-const DELTA_FIELD_KIND_BY_VIEW = Object.freeze({
-    normal: ["height", "river_flux", "river_next"],
-    plates: ["height", "river_flux", "river_next"],
-    mantle: ["height", "river_flux", "river_next", "mantle_heat"],
-});
-
-const CLIMATE_FIELD_KIND_BY_METRIC = Object.freeze({
-    temperature: "temperature",
-    precipitation: "precipitation",
-});
-
-function defaultNowMs() {
-    if (globalThis.performance && typeof globalThis.performance.now === "function") {
-        return globalThis.performance.now();
-    }
-    return Date.now();
-}
-
-function roundMs(value) {
-    if (!Number.isFinite(value)) {
-        return 0;
-    }
-    return Math.round(value * 1000) / 1000;
-}
-
-function roundRatio(value) {
-    if (!Number.isFinite(value)) {
-        return 0;
-    }
-    return Math.round(value * 1000000) / 1000000;
-}
-
-function formatError(error) {
-    if (error instanceof Error) {
-        return `${error.name}: ${error.message}`;
-    }
-    return String(error);
-}
-
-function getDeltaFieldKindsForProfile(profile) {
-    if (profile?.viewMode === "climate") {
-        const climateField = CLIMATE_FIELD_KIND_BY_METRIC[profile?.climateMetric] ?? "temperature";
-        return ["height", "river_flux", "river_next", climateField];
-    }
-    return DELTA_FIELD_KIND_BY_VIEW[profile?.viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
-}
-
-function getFieldData(controller, worldId, fieldKind) {
-    const response = controller.get_field(worldId, fieldKind, 1);
-    if (FLOAT32_FIELDS.has(fieldKind)) {
-        return new Float32Array(response?.f32_data ?? []);
-    }
-    if (fieldKind === "plate_id") {
-        return new Uint32Array(response?.u32_data ?? []);
-    }
-    return new Int32Array(response?.i32_data ?? []);
-}
-
-function buildCoreBuffers(controller, worldId) {
-    return {
-        heightData: getFieldData(controller, worldId, "height"),
-        riverFlux: getFieldData(controller, worldId, "river_flux"),
-        riverNext: getFieldData(controller, worldId, "river_next"),
-        mantleHeat: getFieldData(controller, worldId, "mantle_heat"),
-        temperature: getFieldData(controller, worldId, "temperature"),
-        precipitation: getFieldData(controller, worldId, "precipitation"),
-    };
-}
-
-function applyNumericDelta(target, fieldDelta) {
-    const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
-    const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? [];
-    const canFastCopy = typeof target?.set === "function" && ArrayBuffer.isView(values);
-    if (fieldDelta?.mode === "full") {
-        const copyLength = Math.min(target.length, values.length);
-        if (canFastCopy) {
-            target.set(values.subarray(0, copyLength), 0);
-            return copyLength > 0;
-        }
-        for (let i = 0; i < copyLength; i += 1) {
-            target[i] = values[i];
-        }
-        return copyLength > 0;
-    }
-
-    let offset = 0;
-    for (const range of ranges) {
-        const start = Math.max(0, Math.floor(range?.start ?? 0));
-        const end = Math.min(target.length, Math.floor(range?.end ?? 0));
-        if (end <= start) {
-            continue;
-        }
-        const rangeLength = end - start;
-        const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
-        if (canFastCopy && copyLength > 0) {
-            target.set(values.subarray(offset, offset + copyLength), start);
-            offset += rangeLength;
-            continue;
-        }
-        for (let i = 0; i < copyLength; i += 1) {
-            target[start + i] = values[offset + i];
-        }
-        offset += rangeLength;
-    }
-    return ranges.length > 0;
-}
-
-function applyWorldDeltaToCore(core, worldDelta) {
-    const changes = {
-        height: false,
-        heightChangedCount: 0,
-        river: false,
-        mantleHeat: false,
-        climate: false,
-    };
-    const deltaCellCount = (delta, targetLength) => {
-        if (delta?.mode === "full") {
-            return targetLength;
-        }
-        let count = 0;
-        for (const range of delta?.ranges ?? []) {
-            const start = Math.max(0, Math.floor(range?.start ?? 0));
-            const end = Math.min(targetLength, Math.floor(range?.end ?? 0));
-            if (end > start) {
-                count += end - start;
-            }
-        }
-        return count;
-    };
-    for (const delta of worldDelta?.deltas ?? []) {
-        switch (delta?.field_kind) {
-        case "height":
-            changes.height = applyNumericDelta(core.heightData, delta);
-            if (changes.height) {
-                changes.heightChangedCount += deltaCellCount(delta, core.heightData.length);
-            }
-            break;
-        case "river_flux":
-            changes.river = applyNumericDelta(core.riverFlux, delta) || changes.river;
-            break;
-        case "river_next":
-            changes.river = applyNumericDelta(core.riverNext, delta) || changes.river;
-            break;
-        case "mantle_heat":
-            changes.mantleHeat = applyNumericDelta(core.mantleHeat, delta);
-            break;
-        case "temperature":
-            changes.climate = applyNumericDelta(core.temperature, delta) || changes.climate;
-            break;
-        case "precipitation":
-            changes.climate = applyNumericDelta(core.precipitation, delta) || changes.climate;
-            break;
-        default:
-            break;
-        }
-    }
-    return changes;
-}
-
-function estimateRiverMaskUpdate(riverNext, riverFlux) {
-    let activeSegments = 0;
-    for (let i = 0; i < riverNext.length; i += 1) {
-        const next = riverNext[i];
-        if (next < 0 || next >= riverNext.length) {
-            continue;
-        }
-        if (Number.isFinite(riverFlux[i]) && riverFlux[i] > 0) {
-            activeSegments += 1;
-        }
-    }
-    return activeSegments;
-}
-
-function pushStepBreakdownSamples(recorder, profiledResult) {
-    if (!profiledResult) {
-        return;
-    }
-    const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
-    for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = profiledResult[`${metricName}_ms`];
-        if (!Number.isFinite(rawValue)) {
-            continue;
-        }
-        recorder.pushSample(metricName, rawValue / steps);
-    }
-}
-
-function pushRiverBreakdownSamples(recorder, profiledResult) {
-    if (!profiledResult) {
-        return;
-    }
-    const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
-    for (const metricName of RIVER_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = profiledResult[`${metricName}_ms`];
-        if (!Number.isFinite(rawValue)) {
-            continue;
-        }
-        recorder.pushSample(metricName, rawValue / steps);
-    }
-}
-
-function createControllerState(WorldSimController, profile, level, terrainParams) {
-    const controller = new WorldSimController();
-    const initResult = controller.init_world(profile.seed ?? "alpha", level, {
-        terrain_params: terrainParams,
-    });
-    const worldId = initResult?.world_id;
-    if (!worldId) {
-        throw new Error("benchmark failed: missing world id");
-    }
-    return {
-        controller,
-        worldId,
-        core: buildCoreBuffers(controller, worldId),
-    };
-}
-
-function rebuildControllerState(
-    WorldSimController,
-    profile,
-    level,
-    terrainParams,
-    completedTicks,
-    deltaFieldKinds,
-) {
-    const state = createControllerState(WorldSimController, profile, level, terrainParams);
-    if (completedTicks > 0) {
-        state.controller.step_world(state.worldId, completedTicks);
-    }
-    state.controller.get_world_delta(state.worldId, {
-        include_fields: deltaFieldKinds,
-    });
-    state.core = buildCoreBuffers(state.controller, state.worldId);
-    return state;
-}
+import { createControllerState, rebuildControllerState } from "./perf-benchmark/controller-state.js";
+import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./perf-benchmark/diagnostics.js";
+import {
+    defaultNowMs,
+    formatError,
+    getDeltaFieldKindsForProfile,
+    pushRiverBreakdownSamples,
+    pushStepBreakdownSamples,
+    roundMs,
+} from "./perf-benchmark/helpers.js";
+import { applyWorldDeltaToCore, estimateRiverMaskUpdate } from "./perf-benchmark/world-core.js";
 
 export function createPerfBenchmarkRunner(deps = {}) {
     const {
@@ -349,24 +90,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
         const recorder = createTickPerfRecorder();
         const tickStart = Math.floor(controller.get_metrics(worldId)?.tick ?? 0);
         const wallStartedAt = nowMs();
-        const diagnostics = {
-            profile_attempt_count: 0,
-            profile_success_count: 0,
-            profile_fallback_count: 0,
-            replay_ticks_total: 0,
-            replay_time_ms_total: 0,
-            step_world_time_ms_total: 0,
-            step_world_profiled_time_ms_total: 0,
-            step_geology_river_time_ms_total: 0,
-            tick_total_time_ms_total: 0,
-            river_network_rebuild_count_total: 0,
-            river_fallback_count_total: 0,
-            geometry_update_skipped_count: 0,
-            sink_rebuild_full_count_total: 0,
-            sink_rebuild_partial_count_total: 0,
-            sink_rebuild_skipped_count_total: 0,
-            sink_rebuild_fallback_full_count_total: 0,
-        };
+        const diagnostics = createDiagnostics();
 
         for (let i = 0; i < totalTicks; i += 1) {
             const tickTotalStart = nowMs();
@@ -391,32 +115,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
                         : controller.step_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
-                    diagnostics.step_geology_river_time_ms_total += Number(profiled?.step_geology_river_ms) || 0;
-                    diagnostics.river_network_rebuild_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.river_network_rebuild_count) || 0),
-                    );
-                    diagnostics.river_fallback_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.river_fallback_count) || 0),
-                    );
-                    diagnostics.sink_rebuild_full_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.sink_rebuild_full_count) || 0),
-                    );
-                    diagnostics.sink_rebuild_partial_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.sink_rebuild_partial_count) || 0),
-                    );
-                    diagnostics.sink_rebuild_skipped_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.sink_rebuild_skipped_count) || 0),
-                    );
-                    diagnostics.sink_rebuild_fallback_full_count_total += Math.max(
-                        0,
-                        Math.floor(Number(profiled?.sink_rebuild_fallback_full_count) || 0),
-                    );
-                    diagnostics.profile_success_count += 1;
+                    recordProfiledStepSuccess(diagnostics, profiled);
                 } catch (error) {
                     diagnostics.profile_fallback_count += 1;
                     diagnostics.replay_ticks_total += i;
@@ -519,22 +218,6 @@ export function createPerfBenchmarkRunner(deps = {}) {
 
         const tickEnd = Math.floor(controller.get_metrics(worldId)?.tick ?? tickStart);
         const wallTimeMs = nowMs() - wallStartedAt;
-        const replayShareOfWall = wallTimeMs > 0
-            ? diagnostics.replay_time_ms_total / wallTimeMs
-            : 0;
-        const replayShareOfStepWorld = diagnostics.step_world_time_ms_total > 0
-            ? diagnostics.replay_time_ms_total / diagnostics.step_world_time_ms_total
-            : 0;
-        const stepWorldShareOfTick = diagnostics.tick_total_time_ms_total > 0
-            ? diagnostics.step_world_time_ms_total / diagnostics.tick_total_time_ms_total
-            : 0;
-        const riverShareOfStepWorld = diagnostics.step_world_profiled_time_ms_total > 0
-            ? diagnostics.step_geology_river_time_ms_total / diagnostics.step_world_profiled_time_ms_total
-            : 0;
-        const riverRebuildRate = totalTicks > 0
-            ? diagnostics.river_network_rebuild_count_total / totalTicks
-            : 0;
-
         const metrics = recorder.buildSummary();
 
         return {
@@ -553,29 +236,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 processed_ticks: totalTicks,
             },
             metrics,
-            diagnostics: {
-                profile_attempt_count: diagnostics.profile_attempt_count,
-                profile_success_count: diagnostics.profile_success_count,
-                profile_fallback_count: diagnostics.profile_fallback_count,
-                replay_ticks_total: diagnostics.replay_ticks_total,
-                replay_time_ms_total: roundMs(diagnostics.replay_time_ms_total),
-                step_world_time_ms_total: roundMs(diagnostics.step_world_time_ms_total),
-                step_world_profiled_time_ms_total: roundMs(diagnostics.step_world_profiled_time_ms_total),
-                step_geology_river_time_ms_total: roundMs(diagnostics.step_geology_river_time_ms_total),
-                tick_total_time_ms_total: roundMs(diagnostics.tick_total_time_ms_total),
-                replay_time_share_of_wall: roundRatio(replayShareOfWall),
-                replay_time_share_of_step_world: roundRatio(replayShareOfStepWorld),
-                step_world_share_of_tick: roundRatio(stepWorldShareOfTick),
-                river_share_of_step_world: roundRatio(riverShareOfStepWorld),
-                river_network_rebuild_count_total: diagnostics.river_network_rebuild_count_total,
-                river_rebuild_rate: roundRatio(riverRebuildRate),
-                river_fallback_count_total: diagnostics.river_fallback_count_total,
-                geometry_update_skipped_count: diagnostics.geometry_update_skipped_count,
-                sink_rebuild_full_count_total: diagnostics.sink_rebuild_full_count_total,
-                sink_rebuild_partial_count_total: diagnostics.sink_rebuild_partial_count_total,
-                sink_rebuild_skipped_count_total: diagnostics.sink_rebuild_skipped_count_total,
-                sink_rebuild_fallback_full_count_total: diagnostics.sink_rebuild_fallback_full_count_total,
-            },
+            diagnostics: buildDiagnosticsSummary(diagnostics, totalTicks, wallTimeMs),
         };
     }
 

@@ -1,0 +1,184 @@
+.view-mode-group {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+}
+
+.climate-metric-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+}
+
+.view-mode-option {
+    position: relative;
+    display: block;
+    cursor: pointer;
+}
+
+.view-mode-option input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.view-mode-option span {
+    display: block;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 0.45rem 1.0rem;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background: color-mix(in oklab, var(--panel), white 14%);
+}
+
+.view-mode-option input:checked + span {
+    color: var(--ink);
+    border-color: color-mix(in oklab, var(--accent), white 10%);
+    background: color-mix(in oklab, var(--accent-soft), white 35%);
+}
+
+.view-mode-option input:focus-visible + span {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+.climate-legend-panel {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.climate-legend-title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.climate-legend-bar {
+    height: 0.8rem;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 12%);
+    background:
+        linear-gradient(
+            90deg,
+            #0e2a58 0%,
+            #3a87cc 26%,
+            #f2e4a8 52%,
+            #dd7039 76%,
+            #8b1c1f 100%
+        );
+}
+
+.climate-legend-panel[data-metric="precipitation"] .climate-legend-bar {
+    background:
+        linear-gradient(
+            90deg,
+            #b39b6e 0%,
+            #dbc997 25%,
+            #81b491 50%,
+            #388da9 75%,
+            #0e3f63 100%
+        );
+}
+
+.climate-legend-scale {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin: 0;
+}
+
+.climate-legend-scale > div {
+    display: grid;
+    gap: 0.16rem;
+}
+
+.climate-legend-scale dt {
+    color: var(--ink-soft);
+    font-size: 0.72rem;
+}
+
+.climate-legend-scale dd {
+    margin: 0;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.climate-legend-hover {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+}
+
+.toggle-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    cursor: pointer;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-grid;
+    align-items: center;
+}
+
+.toggle-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.toggle-slider {
+    width: 2.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--line), transparent 5%);
+    background: color-mix(in oklab, var(--panel), white 10%);
+    position: relative;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.toggle-slider::after {
+    content: "";
+    position: absolute;
+    top: 0.12rem;
+    left: 0.14rem;
+    width: 0.95rem;
+    height: 0.95rem;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.15);
+    transition: transform 150ms ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: color-mix(in oklab, var(--accent-soft), white 20%);
+    border-color: color-mix(in oklab, var(--accent), white 15%);
+}
+
+.toggle-switch input:checked + .toggle-slider::after {
+    transform: translateX(0.96rem);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid color-mix(in oklab, var(--accent), white 12%);
+    outline-offset: 2px;
+}
+
+#mesh-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
