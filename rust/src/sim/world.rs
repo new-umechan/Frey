@@ -1223,6 +1223,8 @@ mod tests {
             flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
             groundwater_storage: vec![0.0; world.cell_count()],
             scratch_effective_runoff: vec![0.0; world.cell_count()],
+            scratch_changed_mark: vec![0; world.cell_count()],
+            scratch_flux_samples: Vec::with_capacity(world.cell_count() / 2),
             recent_changed: Vec::new(),
             sink_id: vec![-1; world.cell_count()],
             sink_route_next: vec![-1; world.cell_count()],

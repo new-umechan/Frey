@@ -32,6 +32,10 @@ pub struct ErosionAutomatonState {
     pub groundwater_storage: Vec<f32>,
     #[serde(default)]
     pub scratch_effective_runoff: Vec<f32>,
+    #[serde(default)]
+    pub scratch_changed_mark: Vec<u8>,
+    #[serde(default)]
+    pub scratch_flux_samples: Vec<f32>,
     pub recent_changed: Vec<u32>,
     #[serde(default)]
     pub sink_id: Vec<i32>,

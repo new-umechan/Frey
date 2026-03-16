@@ -35,6 +35,9 @@ function parseArgs(argv) {
         thresholdStepWorld: null,
         thresholdStepGeologyRiver: null,
         progress: false,
+        noGeometry: false,
+        profileEveryTick: false,
+        geometryUpdateMinChangedRatio: 0,
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -92,6 +95,19 @@ function parseArgs(argv) {
         case "--progress":
             args.progress = true;
             break;
+        case "--no-geometry":
+            args.noGeometry = true;
+            break;
+        case "--profile-every-tick":
+            args.profileEveryTick = true;
+            break;
+        case "--geometry-update-min-changed-ratio":
+            args.geometryUpdateMinChangedRatio = Math.max(
+                0,
+                Math.min(1, parseNumber(next, "--geometry-update-min-changed-ratio")),
+            );
+            i += 1;
+            break;
         case "--help":
             printHelp();
             process.exit(0);
@@ -119,6 +135,9 @@ function printHelp() {
     console.error("  --threshold-step-world <ratio>");
     console.error("  --threshold-step-geology-river <ratio>");
     console.error("  --progress");
+    console.error("  --no-geometry");
+    console.error("  --profile-every-tick");
+    console.error("  --geometry-update-min-changed-ratio <0..1>");
 }
 
 function getPathValue(obj, path) {
@@ -229,6 +248,9 @@ async function main() {
         level: args.level,
         terrainParams: TERRAIN_PARAMS,
         sampleInterval: args.sampleInterval,
+        profileEveryTick: args.profileEveryTick,
+        skipGeometry: args.noGeometry,
+        geometryUpdateMinChangedRatio: args.geometryUpdateMinChangedRatio,
         meta: {
             user_agent: `node ${process.version}`,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

@@ -58,6 +58,9 @@ pub struct StepWorldBreakdown {
 pub struct StepWorldRiverBreakdown {
     pub step_geology_river_prepare_ms: f64,
     pub step_geology_river_automaton_ms: f64,
+    pub step_geology_river_automaton_sink_ms: f64,
+    pub step_geology_river_automaton_cell_ms: f64,
+    pub step_geology_river_automaton_queue_ms: f64,
     pub step_geology_river_network_ms: f64,
     pub step_geology_river_sync_ms: f64,
     pub step_geology_river_fallback_ms: f64,
@@ -116,6 +119,9 @@ impl StepWorldRiverBreakdown {
     pub fn accumulate(&mut self, other: &Self) {
         self.step_geology_river_prepare_ms += other.step_geology_river_prepare_ms;
         self.step_geology_river_automaton_ms += other.step_geology_river_automaton_ms;
+        self.step_geology_river_automaton_sink_ms += other.step_geology_river_automaton_sink_ms;
+        self.step_geology_river_automaton_cell_ms += other.step_geology_river_automaton_cell_ms;
+        self.step_geology_river_automaton_queue_ms += other.step_geology_river_automaton_queue_ms;
         self.step_geology_river_network_ms += other.step_geology_river_network_ms;
         self.step_geology_river_sync_ms += other.step_geology_river_sync_ms;
         self.step_geology_river_fallback_ms += other.step_geology_river_fallback_ms;
@@ -178,6 +184,9 @@ pub fn step_world_profiled_detailed(world: &mut World) -> StepWorldBreakdownDeta
     breakdown.step_geology_river_ms = StepWorldBreakdown::capture_elapsed(phase_start);
     river_breakdown.step_geology_river_prepare_ms = river_profile.river_prepare_ms;
     river_breakdown.step_geology_river_automaton_ms = river_profile.river_automaton_ms;
+    river_breakdown.step_geology_river_automaton_sink_ms = river_profile.river_automaton_sink_ms;
+    river_breakdown.step_geology_river_automaton_cell_ms = river_profile.river_automaton_cell_ms;
+    river_breakdown.step_geology_river_automaton_queue_ms = river_profile.river_automaton_queue_ms;
     river_breakdown.step_geology_river_network_ms = river_profile.river_network_ms;
     river_breakdown.step_geology_river_sync_ms = river_profile.river_sync_ms;
     river_breakdown.step_geology_river_fallback_ms = river_profile.river_fallback_ms;
@@ -316,6 +325,8 @@ mod tests {
             flow_heading: vec![[0.0, 0.0, 0.0]; 4],
             groundwater_storage: vec![0.0; 4],
             scratch_effective_runoff: vec![0.0; 4],
+            scratch_changed_mark: vec![0; 4],
+            scratch_flux_samples: Vec::with_capacity(2),
             recent_changed: Vec::new(),
             sink_id: vec![-1; 4],
             sink_route_next: vec![-1; 4],

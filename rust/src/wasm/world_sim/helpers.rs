@@ -39,6 +39,8 @@ pub(super) fn build_erosion_state(
         flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
         groundwater_storage: vec![0.0; cell_count],
         scratch_effective_runoff: vec![0.0; cell_count],
+        scratch_changed_mark: vec![0; cell_count],
+        scratch_flux_samples: Vec::with_capacity(cell_count / 2),
         recent_changed: Vec::new(),
         sink_id: vec![-1; cell_count],
         sink_route_next: vec![-1; cell_count],
@@ -118,6 +120,7 @@ fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -
         && state.flow_heading.len() == expected
         && state.groundwater_storage.len() == expected
         && state.scratch_effective_runoff.len() == expected
+        && state.scratch_changed_mark.len() == expected
 }
 
 fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
@@ -140,6 +143,13 @@ fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
     }
     if state.scratch_effective_runoff.len() != expected {
         state.scratch_effective_runoff = vec![0.0; expected];
+    }
+    if state.scratch_changed_mark.len() != expected {
+        state.scratch_changed_mark = vec![0; expected];
+    }
+    if state.scratch_flux_samples.capacity() < expected / 2 {
+        state.scratch_flux_samples
+            .reserve((expected / 2).saturating_sub(state.scratch_flux_samples.capacity()));
     }
 }
 

@@ -16,6 +16,9 @@ const ACTIVE_OFF_THRESHOLD_SCALE: f32 = 0.65;
 pub(super) struct RiverStepDetailBreakdown {
     pub river_prepare_ms: f64,
     pub river_automaton_ms: f64,
+    pub river_automaton_sink_ms: f64,
+    pub river_automaton_cell_ms: f64,
+    pub river_automaton_queue_ms: f64,
     pub river_network_ms: f64,
     pub river_sync_ms: f64,
     pub river_fallback_ms: f64,
@@ -140,8 +143,11 @@ fn run_river_step_with_erosion_state(
     let cell_count = expected_height as u32;
     let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
     let phase_start = profile_now();
-    domains::step_erosion_automaton(state, budget_cells);
+    let automaton_breakdown = domains::step_erosion_automaton(state, budget_cells);
     detail.river_automaton_ms += profile_elapsed_ms(phase_start);
+    detail.river_automaton_sink_ms += automaton_breakdown.sink_rebuild_ms;
+    detail.river_automaton_cell_ms += automaton_breakdown.cell_process_ms;
+    detail.river_automaton_queue_ms += automaton_breakdown.queue_update_ms;
 
     state.last_river_driver = river_driver;
     if should_rebuild_network(tick, state, river_driver) {
@@ -159,6 +165,7 @@ fn run_river_step_with_erosion_state(
             &mut rebuilt_flux,
             &state.river_flux,
             &mut state.flux_scale_ema,
+            &mut state.scratch_flux_samples,
         );
         apply_river_network_constraints(
             &state.height,
@@ -234,7 +241,13 @@ fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     );
 
     let mut flux_scale_ema = 1.0;
-    smooth_and_normalize_flux(&mut flux, &previous_flux, &mut flux_scale_ema);
+    let mut scratch_flux_samples = Vec::with_capacity(flux.len() / 2);
+    smooth_and_normalize_flux(
+        &mut flux,
+        &previous_flux,
+        &mut flux_scale_ema,
+        &mut scratch_flux_samples,
+    );
     apply_river_network_constraints(
         &world.state.geology.height,
         &mut flux,
@@ -585,8 +598,13 @@ fn align_flow_heading(positions: &[[f32; 3]], heading: &mut [[f32; 3]], river_ne
     }
 }
 
-fn smooth_and_normalize_flux(flux: &mut [f32], previous_flux: &[f32], flux_scale_ema: &mut f32) {
-    let target_scale = robust_flux_scale(flux).max(1e-6);
+fn smooth_and_normalize_flux(
+    flux: &mut [f32],
+    previous_flux: &[f32],
+    flux_scale_ema: &mut f32,
+    scratch_flux_samples: &mut Vec<f32>,
+) {
+    let target_scale = robust_flux_scale(flux, scratch_flux_samples).max(1e-6);
     if !flux_scale_ema.is_finite() || *flux_scale_ema <= 0.0 {
         *flux_scale_ema = target_scale;
     } else {
@@ -603,24 +621,29 @@ fn smooth_and_normalize_flux(flux: &mut [f32], previous_flux: &[f32], flux_scale
     }
 }
 
-fn robust_flux_scale(flux: &[f32]) -> f32 {
+fn robust_flux_scale(flux: &[f32], scratch_flux_samples: &mut Vec<f32>) -> f32 {
     let mut max_flux = 0.0f32;
-    let mut positives = Vec::new();
-    positives.reserve(flux.len() / 2);
+    scratch_flux_samples.clear();
+    if scratch_flux_samples.capacity() < flux.len() / 2 {
+        scratch_flux_samples.reserve(
+            (flux.len() / 2).saturating_sub(scratch_flux_samples.capacity()),
+        );
+    }
     for &value in flux {
         if value.is_finite() && value > 0.0 {
             max_flux = max_flux.max(value);
-            positives.push(value);
+            scratch_flux_samples.push(value);
         }
     }
-    if positives.is_empty() {
+    if scratch_flux_samples.is_empty() {
         return 1.0;
     }
 
-    let idx = ((positives.len() as f32) * 0.995).floor() as usize;
-    let nth = idx.min(positives.len() - 1);
-    positives.select_nth_unstable_by(nth, |a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-    let q = positives[nth];
+    let idx = ((scratch_flux_samples.len() as f32) * 0.995).floor() as usize;
+    let nth = idx.min(scratch_flux_samples.len() - 1);
+    scratch_flux_samples
+        .select_nth_unstable_by(nth, |a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let q = scratch_flux_samples[nth];
     q.max(max_flux * 0.5).max(1e-6)
 }
 

@@ -16,6 +16,9 @@ const STEP_BREAKDOWN_METRIC_NAMES = [
 const RIVER_BREAKDOWN_METRIC_NAMES = [
     "step_geology_river_prepare",
     "step_geology_river_automaton",
+    "step_geology_river_automaton_sink",
+    "step_geology_river_automaton_cell",
+    "step_geology_river_automaton_queue",
     "step_geology_river_network",
     "step_geology_river_sync",
     "step_geology_river_fallback",
@@ -141,14 +144,32 @@ function applyNumericDelta(target, fieldDelta) {
 function applyWorldDeltaToCore(core, worldDelta) {
     const changes = {
         height: false,
+        heightChangedCount: 0,
         river: false,
         mantleHeat: false,
         climate: false,
+    };
+    const deltaCellCount = (delta, targetLength) => {
+        if (delta?.mode === "full") {
+            return targetLength;
+        }
+        let count = 0;
+        for (const range of delta?.ranges ?? []) {
+            const start = Math.max(0, Math.floor(range?.start ?? 0));
+            const end = Math.min(targetLength, Math.floor(range?.end ?? 0));
+            if (end > start) {
+                count += end - start;
+            }
+        }
+        return count;
     };
     for (const delta of worldDelta?.deltas ?? []) {
         switch (delta?.field_kind) {
         case "height":
             changes.height = applyNumericDelta(core.heightData, delta);
+            if (changes.height) {
+                changes.heightChangedCount += deltaCellCount(delta, core.heightData.length);
+            }
             break;
         case "river_flux":
             changes.river = applyNumericDelta(core.riverFlux, delta) || changes.river;
@@ -274,6 +295,9 @@ export function createPerfBenchmarkRunner(deps = {}) {
             level = 3,
             terrainParams = {},
             sampleInterval = 4,
+            profileEveryTick = false,
+            skipGeometry = false,
+            geometryUpdateMinChangedRatio = 0.0,
             meta = {},
             onProgress,
             onWarning,
@@ -332,14 +356,20 @@ export function createPerfBenchmarkRunner(deps = {}) {
             replay_ticks_total: 0,
             replay_time_ms_total: 0,
             step_world_time_ms_total: 0,
+            step_world_profiled_time_ms_total: 0,
+            step_geology_river_time_ms_total: 0,
+            tick_total_time_ms_total: 0,
             river_network_rebuild_count_total: 0,
             river_fallback_count_total: 0,
+            geometry_update_skipped_count: 0,
         };
 
         for (let i = 0; i < totalTicks; i += 1) {
             const tickTotalStart = nowMs();
             const tickIndex = i + 1;
-            const shouldSampleBreakdown = tickIndex % normalizedSampleInterval === 0 || tickIndex === totalTicks;
+            const shouldSampleBreakdown = profileEveryTick
+                || tickIndex % normalizedSampleInterval === 0
+                || tickIndex === totalTicks;
             postProgress({
                 done: i,
                 total: totalTicks,
@@ -357,6 +387,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
                         : controller.step_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
+                    diagnostics.step_geology_river_time_ms_total += Number(profiled?.step_geology_river_ms) || 0;
                     diagnostics.river_network_rebuild_count_total += Math.max(
                         0,
                         Math.floor(Number(profiled?.river_network_rebuild_count) || 0),
@@ -400,11 +431,15 @@ export function createPerfBenchmarkRunner(deps = {}) {
             }
             const stepElapsedMs = nowMs() - stepStart;
             diagnostics.step_world_time_ms_total += stepElapsedMs;
+            if (shouldSampleBreakdown) {
+                diagnostics.step_world_profiled_time_ms_total += stepElapsedMs;
+            }
             recorder.pushSample("step_world", stepElapsedMs);
 
             const deltaStart = nowMs();
             let changes = {
                 height: false,
+                heightChangedCount: 0,
                 river: false,
                 mantleHeat: false,
                 climate: false,
@@ -419,7 +454,15 @@ export function createPerfBenchmarkRunner(deps = {}) {
             }
             recorder.pushSample("delta_sync", nowMs() - deltaStart);
 
-            if (changes.height && basePositions) {
+            const changedRatio = core.heightData.length > 0
+                ? changes.heightChangedCount / core.heightData.length
+                : 0;
+            const shouldRunGeometry = !skipGeometry
+                && changes.height
+                && basePositions
+                && changedRatio >= geometryUpdateMinChangedRatio;
+
+            if (shouldRunGeometry) {
                 const geometryStart = nowMs();
                 try {
                     build_render_positions({
@@ -431,6 +474,8 @@ export function createPerfBenchmarkRunner(deps = {}) {
                     notifyWarning(`geometry update skipped (${formatError(error)})`);
                 }
                 recorder.pushSample("geometry_update", nowMs() - geometryStart);
+            } else if (changes.height) {
+                diagnostics.geometry_update_skipped_count += 1;
             }
 
             if (changes.river) {
@@ -439,7 +484,9 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 recorder.pushSample("river_mask_update", nowMs() - riverStart);
             }
 
-            recorder.pushSample("tick_total", nowMs() - tickTotalStart);
+            const tickTotalElapsed = nowMs() - tickTotalStart;
+            diagnostics.tick_total_time_ms_total += tickTotalElapsed;
+            recorder.pushSample("tick_total", tickTotalElapsed);
             const percent = Math.floor((tickIndex / totalTicks) * 100);
             const sampleLabel = shouldSampleBreakdown ? " | breakdown sample" : "";
             postProgress({
@@ -458,6 +505,17 @@ export function createPerfBenchmarkRunner(deps = {}) {
         const replayShareOfStepWorld = diagnostics.step_world_time_ms_total > 0
             ? diagnostics.replay_time_ms_total / diagnostics.step_world_time_ms_total
             : 0;
+        const stepWorldShareOfTick = diagnostics.tick_total_time_ms_total > 0
+            ? diagnostics.step_world_time_ms_total / diagnostics.tick_total_time_ms_total
+            : 0;
+        const riverShareOfStepWorld = diagnostics.step_world_profiled_time_ms_total > 0
+            ? diagnostics.step_geology_river_time_ms_total / diagnostics.step_world_profiled_time_ms_total
+            : 0;
+        const riverRebuildRate = totalTicks > 0
+            ? diagnostics.river_network_rebuild_count_total / totalTicks
+            : 0;
+
+        const metrics = recorder.buildSummary();
 
         return {
             meta: {
@@ -474,7 +532,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 wall_time_ms: roundMs(wallTimeMs),
                 processed_ticks: totalTicks,
             },
-            metrics: recorder.buildSummary(),
+            metrics,
             diagnostics: {
                 profile_attempt_count: diagnostics.profile_attempt_count,
                 profile_success_count: diagnostics.profile_success_count,
@@ -482,10 +540,17 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 replay_ticks_total: diagnostics.replay_ticks_total,
                 replay_time_ms_total: roundMs(diagnostics.replay_time_ms_total),
                 step_world_time_ms_total: roundMs(diagnostics.step_world_time_ms_total),
+                step_world_profiled_time_ms_total: roundMs(diagnostics.step_world_profiled_time_ms_total),
+                step_geology_river_time_ms_total: roundMs(diagnostics.step_geology_river_time_ms_total),
+                tick_total_time_ms_total: roundMs(diagnostics.tick_total_time_ms_total),
                 replay_time_share_of_wall: roundRatio(replayShareOfWall),
                 replay_time_share_of_step_world: roundRatio(replayShareOfStepWorld),
+                step_world_share_of_tick: roundRatio(stepWorldShareOfTick),
+                river_share_of_step_world: roundRatio(riverShareOfStepWorld),
                 river_network_rebuild_count_total: diagnostics.river_network_rebuild_count_total,
+                river_rebuild_rate: roundRatio(riverRebuildRate),
                 river_fallback_count_total: diagnostics.river_fallback_count_total,
+                geometry_update_skipped_count: diagnostics.geometry_update_skipped_count,
             },
         };
     }

@@ -256,6 +256,9 @@ impl WorldSimController {
                 step_history_snapshot_ms: 0.0,
                 step_geology_river_prepare_ms: 0.0,
                 step_geology_river_automaton_ms: 0.0,
+                step_geology_river_automaton_sink_ms: 0.0,
+                step_geology_river_automaton_cell_ms: 0.0,
+                step_geology_river_automaton_queue_ms: 0.0,
                 step_geology_river_network_ms: 0.0,
                 step_geology_river_sync_ms: 0.0,
                 step_geology_river_fallback_ms: 0.0,
@@ -312,6 +315,15 @@ impl WorldSimController {
             step_history_snapshot_ms,
             step_geology_river_prepare_ms: sim_breakdown.river.step_geology_river_prepare_ms,
             step_geology_river_automaton_ms: sim_breakdown.river.step_geology_river_automaton_ms,
+            step_geology_river_automaton_sink_ms: sim_breakdown
+                .river
+                .step_geology_river_automaton_sink_ms,
+            step_geology_river_automaton_cell_ms: sim_breakdown
+                .river
+                .step_geology_river_automaton_cell_ms,
+            step_geology_river_automaton_queue_ms: sim_breakdown
+                .river
+                .step_geology_river_automaton_queue_ms,
             step_geology_river_network_ms: sim_breakdown.river.step_geology_river_network_ms,
             step_geology_river_sync_ms: sim_breakdown.river.step_geology_river_sync_ms,
             step_geology_river_fallback_ms: sim_breakdown.river.step_geology_river_fallback_ms,

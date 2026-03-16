@@ -1,10 +1,36 @@
+#[cfg(target_arch = "wasm32")]
+type ProfileClock = f64;
+#[cfg(not(target_arch = "wasm32"))]
+type ProfileClock = std::time::Instant;
+
+#[cfg(target_arch = "wasm32")]
+fn profile_now() -> ProfileClock {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_now() -> ProfileClock {
+    std::time::Instant::now()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn profile_elapsed_ms(start: ProfileClock) -> f64 {
+    js_sys::Date::now() - start
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_elapsed_ms(start: ProfileClock) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
+}
+
 pub(crate) fn step_async_erosion_automaton(
     state: &mut crate::ErosionAutomatonState,
     budget_cells: u32,
-) {
+) -> crate::domains::ErosionAutomatonBreakdown {
+    let mut breakdown = crate::domains::ErosionAutomatonBreakdown::default();
     let v_count = state.height.len();
     if v_count == 0 {
-        return;
+        return breakdown;
     }
     if state.prev_river_next.len() != v_count {
         state.prev_river_next = state.river_next.clone();
@@ -25,20 +51,30 @@ pub(crate) fn step_async_erosion_automaton(
         || state.river_next.len() != v_count
         || state.in_queue.len() != v_count
     {
-        return;
+        return breakdown;
     }
 
     let budget = budget_cells.max(1) as usize;
     state.tick = state.tick.saturating_add(1);
-    let previous_changed = state.recent_changed.clone();
-    state.recent_changed.clear();
-    rebuild_sink_state(state, &previous_changed);
 
-    let mut changed_mark = vec![0u8; v_count];
+    let mut previous_changed = std::mem::take(&mut state.recent_changed);
+    let phase_start = profile_now();
+    rebuild_sink_state(state, &previous_changed);
+    breakdown.sink_rebuild_ms += profile_elapsed_ms(phase_start);
+    previous_changed.clear();
+    state.recent_changed = previous_changed;
+
+    let mut changed_mark = std::mem::take(&mut state.scratch_changed_mark);
+    if changed_mark.len() != v_count {
+        changed_mark = vec![0; v_count];
+    } else {
+        changed_mark.fill(0);
+    }
     let rain_inject_count = ((budget / 2).clamp(16, 256)).min(v_count);
     inject_async_rain(state, rain_inject_count, &mut changed_mark);
 
     let mut processed = 0usize;
+    let cell_phase_start = profile_now();
     while processed < budget {
         let Some(v) = pop_active_vertex(state) else {
             break;
@@ -69,8 +105,13 @@ pub(crate) fn step_async_erosion_automaton(
             enqueue_active_vertex(state, v);
         }
     }
+    breakdown.cell_process_ms += profile_elapsed_ms(cell_phase_start);
 
+    let queue_phase_start = profile_now();
     compact_active_queue(state);
+    breakdown.queue_update_ms += profile_elapsed_ms(queue_phase_start);
+    state.scratch_changed_mark = changed_mark;
+    breakdown
 }
 
 #[derive(Default)]

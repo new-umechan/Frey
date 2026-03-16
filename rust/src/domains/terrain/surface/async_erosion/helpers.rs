@@ -63,9 +63,9 @@ fn enqueue_active_vertex(state: &mut crate::ErosionAutomatonState, v: usize) {
 fn enqueue_neighbors(state: &mut crate::ErosionAutomatonState, v: usize) {
     let start = state.nbr_offsets[v] as usize;
     let end = state.nbr_offsets[v + 1] as usize;
-    let neighbors = state.nbrs[start..end].to_vec();
-    for n_u32 in neighbors {
-        enqueue_active_vertex(state, n_u32 as usize);
+    for idx in start..end {
+        let n = state.nbrs[idx] as usize;
+        enqueue_active_vertex(state, n);
     }
 }
 
