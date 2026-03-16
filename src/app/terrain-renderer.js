@@ -7,6 +7,9 @@ export function createTerrainRenderer({
     buildRenderPositions,
     buildRiverMaskTexture,
 }) {
+    const NORMAL_REFRESH_INTERVAL_TICKS = 4;
+    const BOUNDING_SPHERE_REFRESH_INTERVAL_TICKS = 8;
+
     let currentRiverMaskTexture = null;
     let plateIdBuffer = null;
     let positionBuffer = null;
@@ -89,14 +92,21 @@ export function createTerrainRenderer({
         positionBuffer.set(positions);
         const positionAttribute = ensureAttribute("position", positionBuffer, 3);
         positionAttribute.needsUpdate = true;
+        const currentTick = Number.isFinite(options.tick) ? options.tick : -1;
         const shouldRefreshNormals = options.force
             || surfaceModeChanged
-            || (options.heightChanged && (options.tick - lastNormalRefreshTick >= 2));
+            || (options.heightChanged && (currentTick - lastNormalRefreshTick >= NORMAL_REFRESH_INTERVAL_TICKS));
         if (shouldRefreshNormals) {
             geometry.computeVertexNormals();
-            lastNormalRefreshTick = options.tick ?? lastNormalRefreshTick;
+            lastNormalRefreshTick = currentTick;
         }
-        geometry.computeBoundingSphere();
+        const shouldRefreshBoundingSphere = options.force
+            || surfaceModeChanged
+            || currentTick < 0
+            || currentTick % BOUNDING_SPHERE_REFRESH_INTERVAL_TICKS === 0;
+        if (shouldRefreshBoundingSphere) {
+            geometry.computeBoundingSphere();
+        }
         lastSurfaceMode = currentSurfaceMode;
     }
 

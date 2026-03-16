@@ -7,7 +7,7 @@ use super::types::{DeltaRange, FieldDeltaResponse};
 
 pub(super) const DEFAULT_HISTORY_LIMIT: usize = 512;
 pub(super) const HISTORY_SNAPSHOT_INTERVAL: u64 = 32;
-pub(super) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.25;
+pub(super) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
 
 #[derive(Clone)]
 pub(super) struct RangeDelta {

@@ -223,8 +223,13 @@ export function refreshWorldStatsFromController({
 function applyNumericDelta(target, fieldDelta) {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
     const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? [];
+    const canFastCopy = typeof target?.set === "function" && ArrayBuffer.isView(values);
     if (fieldDelta?.mode === "full") {
         const copyLength = Math.min(target.length, values.length);
+        if (canFastCopy) {
+            target.set(values.subarray(0, copyLength), 0);
+            return copyLength > 0;
+        }
         for (let i = 0; i < copyLength; i += 1) {
             target[i] = values[i];
         }
@@ -240,6 +245,11 @@ function applyNumericDelta(target, fieldDelta) {
         }
         const rangeLength = end - start;
         const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
+        if (canFastCopy && copyLength > 0) {
+            target.set(values.subarray(offset, offset + copyLength), start);
+            offset += rangeLength;
+            continue;
+        }
         for (let i = 0; i < copyLength; i += 1) {
             target[start + i] = values[offset + i];
         }

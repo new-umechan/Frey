@@ -8,5 +8,8 @@ export function buildRenderPositions(basePositions, heightData, surfaceMode = "g
         height_data: heightData,
         surface_mode: surfaceMode,
     });
-    return new Float32Array(positions);
+    if (positions instanceof Float32Array) {
+        return positions;
+    }
+    return Float32Array.from(positions ?? []);
 }
