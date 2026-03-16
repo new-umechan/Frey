@@ -11,6 +11,8 @@
         "dev": "npm run runtime:sync && npm run terrain:sync && node scripts/dev-hotreload.mjs",
         "build": "npm run runtime:sync && npm run wasm:build && vite build",
         "preview": "vite preview",
+        "bench": "node scripts/bench.mjs",
+        "bench:dev": "npm run wasm:build:dev:no-sync && node scripts/bench.mjs",
         "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --release",
         "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../src/wasm --dev"
