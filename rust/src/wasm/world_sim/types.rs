@@ -174,3 +174,19 @@ pub(super) struct WorldDeltaResponse {
     pub budgets: BudgetSummary,
     pub deltas: Vec<FieldDeltaResponse>,
 }
+
+#[derive(Serialize)]
+pub(super) struct StepWorldProfiledResponse {
+    pub world_id: String,
+    pub steps: u32,
+    pub step_feedback_ms: f64,
+    pub step_geology_terrain_ms: f64,
+    pub step_climate_ms: f64,
+    pub step_geology_river_ms: f64,
+    pub step_ecology_ms: f64,
+    pub step_civilization_ms: f64,
+    pub step_transition_ms: f64,
+    pub step_sync_erosion_ms: f64,
+    pub step_observe_world_change_ms: f64,
+    pub step_history_snapshot_ms: f64,
+}

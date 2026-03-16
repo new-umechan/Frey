@@ -30,6 +30,21 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct StepWorldProfiledResponse {
+        steps: u32,
+        step_feedback_ms: f64,
+        step_geology_terrain_ms: f64,
+        step_climate_ms: f64,
+        step_geology_river_ms: f64,
+        step_ecology_ms: f64,
+        step_civilization_ms: f64,
+        step_transition_ms: f64,
+        step_sync_erosion_ms: f64,
+        step_observe_world_change_ms: f64,
+        step_history_snapshot_ms: f64,
+    }
+
+    #[derive(Deserialize)]
     struct HistoryTicksResponse {
         interval: u32,
         ticks: Vec<f64>,
@@ -72,6 +87,33 @@ mod tests {
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert!(metrics_data.tick >= 1.0);
+    }
+
+    #[test]
+    fn step_world_profiled_returns_breakdown() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-profile".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+
+        let profiled = controller
+            .step_world_profiled_js(init_data.world_id, 1)
+            .expect("step world profiled");
+        let profiled_data: StepWorldProfiledResponse =
+            serde_wasm_bindgen::from_value(profiled).expect("parse profiled");
+
+        assert_eq!(profiled_data.steps, 1);
+        assert!(profiled_data.step_feedback_ms >= 0.0);
+        assert!(profiled_data.step_geology_terrain_ms >= 0.0);
+        assert!(profiled_data.step_climate_ms >= 0.0);
+        assert!(profiled_data.step_geology_river_ms >= 0.0);
+        assert!(profiled_data.step_ecology_ms >= 0.0);
+        assert!(profiled_data.step_civilization_ms >= 0.0);
+        assert!(profiled_data.step_transition_ms >= 0.0);
+        assert!(profiled_data.step_sync_erosion_ms >= 0.0);
+        assert!(profiled_data.step_observe_world_change_ms >= 0.0);
+        assert!(profiled_data.step_history_snapshot_ms >= 0.0);
     }
 
     #[test]

@@ -456,6 +456,31 @@ export async function createApp() {
         if (!activeWorldId || !currentTerrainData) {
             return false;
         }
+        const pushStepBreakdownSamples = (profiledResult) => {
+            if (!perfRecorder || !profiledResult) {
+                return;
+            }
+            const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
+            const breakdownMetricNames = [
+                "step_feedback",
+                "step_geology_terrain",
+                "step_climate",
+                "step_geology_river",
+                "step_ecology",
+                "step_civilization",
+                "step_transition",
+                "step_sync_erosion",
+                "step_observe_world_change",
+                "step_history_snapshot",
+            ];
+            for (const metricName of breakdownMetricNames) {
+                const rawValue = profiledResult[`${metricName}_ms`];
+                if (!Number.isFinite(rawValue)) {
+                    continue;
+                }
+                perfRecorder.pushSample(metricName, rawValue / steps);
+            }
+        };
         const runTick = () => {
             const benchmarkMode = options?.benchmarkMode === true;
             const nextTick = world.tick + 1;
@@ -465,7 +490,8 @@ export async function createApp() {
 
             if (perfRecorder) {
                 perfRecorder.measure("step_world", () => {
-                    worldSimController.step_world(activeWorldId, 1);
+                    const profiled = worldSimController.step_world_profiled(activeWorldId, 1);
+                    pushStepBreakdownSamples(profiled);
                 });
             } else {
                 worldSimController.step_world(activeWorldId, 1);

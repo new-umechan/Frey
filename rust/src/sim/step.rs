@@ -23,6 +23,7 @@ use climate::run_climate_step;
 use ecology::run_ecology_step;
 use feedback::apply_feedback_queue;
 use geology::{run_geology_river_step, run_geology_terrain_step};
+use std::time::Instant;
 use transition::update_era_transition;
 
 use super::world::{EraKind, World};
@@ -43,6 +44,33 @@ pub(super) const CHANNEL_TRANSFER_MAX: f32 = 0.72;
 #[cfg(test)]
 pub(super) const FLUX_LOCAL_DECAY: f32 = 0.82;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StepWorldBreakdown {
+    pub step_feedback_ms: f64,
+    pub step_geology_terrain_ms: f64,
+    pub step_climate_ms: f64,
+    pub step_geology_river_ms: f64,
+    pub step_ecology_ms: f64,
+    pub step_civilization_ms: f64,
+    pub step_transition_ms: f64,
+}
+
+impl StepWorldBreakdown {
+    fn capture_elapsed(elapsed_from: Instant) -> f64 {
+        elapsed_from.elapsed().as_secs_f64() * 1000.0
+    }
+
+    pub fn accumulate(&mut self, other: &Self) {
+        self.step_feedback_ms += other.step_feedback_ms;
+        self.step_geology_terrain_ms += other.step_geology_terrain_ms;
+        self.step_climate_ms += other.step_climate_ms;
+        self.step_geology_river_ms += other.step_geology_river_ms;
+        self.step_ecology_ms += other.step_ecology_ms;
+        self.step_civilization_ms += other.step_civilization_ms;
+        self.step_transition_ms += other.step_transition_ms;
+    }
+}
+
 pub fn step_world(world: &mut World) {
     world.exec.budgets = world.exec.era.budgets();
     world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
@@ -55,6 +83,45 @@ pub fn step_world(world: &mut World) {
     run_civilization_step(world, world.exec.budgets.civilization);
     update_era_transition(world);
     world.exec.tick = world.exec.tick.saturating_add(1);
+}
+
+pub fn step_world_profiled(world: &mut World) -> StepWorldBreakdown {
+    world.exec.budgets = world.exec.era.budgets();
+    world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
+    world.exec.runtime_tick_ms = world.exec.era.runtime_tick_ms();
+
+    let mut breakdown = StepWorldBreakdown::default();
+
+    let phase_start = Instant::now();
+    apply_feedback_queue(world);
+    breakdown.step_feedback_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    run_geology_terrain_step(world, world.exec.budgets.geology);
+    breakdown.step_geology_terrain_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    run_climate_step(world, world.exec.budgets.climate);
+    breakdown.step_climate_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    run_geology_river_step(world, world.exec.budgets.geology);
+    breakdown.step_geology_river_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    run_ecology_step(world, world.exec.budgets.ecology);
+    breakdown.step_ecology_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    run_civilization_step(world, world.exec.budgets.civilization);
+    breakdown.step_civilization_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = Instant::now();
+    update_era_transition(world);
+    breakdown.step_transition_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+
+    world.exec.tick = world.exec.tick.saturating_add(1);
+    breakdown
 }
 
 pub(super) fn geology_river_budget(era: EraKind, geology_budget: u32) -> u32 {
