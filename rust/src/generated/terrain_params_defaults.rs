@@ -78,3 +78,4 @@ pub(crate) fn build_default_terrain_params() -> TerrainParams {
         isostatic_relax_gain: 0.012f32,
     }
 }
+

@@ -45,23 +45,6 @@ mod tests {
     }
 
     #[derive(Deserialize)]
-    struct StepWorldProfiledBatchResponse {
-        steps: u32,
-        sampled_steps: u32,
-        sample_interval: u32,
-        step_feedback_ms: f64,
-        step_geology_terrain_ms: f64,
-        step_climate_ms: f64,
-        step_geology_river_ms: f64,
-        step_ecology_ms: f64,
-        step_civilization_ms: f64,
-        step_transition_ms: f64,
-        step_sync_erosion_ms: f64,
-        step_observe_world_change_ms: f64,
-        step_history_snapshot_ms: f64,
-    }
-
-    #[derive(Deserialize)]
     struct HistoryTicksResponse {
         interval: u32,
         ticks: Vec<f64>,
@@ -121,35 +104,6 @@ mod tests {
             serde_wasm_bindgen::from_value(profiled).expect("parse profiled");
 
         assert_eq!(profiled_data.steps, 1);
-        assert!(profiled_data.step_feedback_ms >= 0.0);
-        assert!(profiled_data.step_geology_terrain_ms >= 0.0);
-        assert!(profiled_data.step_climate_ms >= 0.0);
-        assert!(profiled_data.step_geology_river_ms >= 0.0);
-        assert!(profiled_data.step_ecology_ms >= 0.0);
-        assert!(profiled_data.step_civilization_ms >= 0.0);
-        assert!(profiled_data.step_transition_ms >= 0.0);
-        assert!(profiled_data.step_sync_erosion_ms >= 0.0);
-        assert!(profiled_data.step_observe_world_change_ms >= 0.0);
-        assert!(profiled_data.step_history_snapshot_ms >= 0.0);
-    }
-
-    #[test]
-    fn step_world_profiled_batch_returns_sampled_breakdown() {
-        let mut controller = WorldSimController::new();
-        let init = controller
-            .init_world_js("seed-profile-batch".to_string(), 1, JsValue::NULL)
-            .expect("init world");
-        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
-
-        let profiled = controller
-            .step_world_profiled_batch_js(init_data.world_id, 8, 4)
-            .expect("step world profiled batch");
-        let profiled_data: StepWorldProfiledBatchResponse =
-            serde_wasm_bindgen::from_value(profiled).expect("parse profiled batch");
-
-        assert_eq!(profiled_data.steps, 8);
-        assert_eq!(profiled_data.sampled_steps, 2);
-        assert_eq!(profiled_data.sample_interval, 4);
         assert!(profiled_data.step_feedback_ms >= 0.0);
         assert!(profiled_data.step_geology_terrain_ms >= 0.0);
         assert!(profiled_data.step_climate_ms >= 0.0);

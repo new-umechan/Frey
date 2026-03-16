@@ -50,7 +50,6 @@ import { createPlaybackController } from "./playback-controller.js";
 import {
     createBenchmarkConsoleTable,
     createBenchmarkProfile,
-    createTickPerfRecorder,
     formatBenchmarkSummaryLine,
 } from "./perf-benchmark.js";
 
@@ -72,6 +71,7 @@ const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_observe_world_change",
     "step_history_snapshot",
 ];
+const PERF_BENCH_WORKER_URL = new URL("../workers/perf-benchmark-worker.js", import.meta.url);
 
 export async function createApp() {
     const isPerfEnabled = isPerfFeatureEnabled();
@@ -122,6 +122,8 @@ export async function createApp() {
 
     let lastPerfBenchmarkResult = null;
     let isPerfBenchmarkRunning = false;
+    let perfBenchmarkWorker = null;
+    let perfBenchmarkRunSeq = 0;
 
     function setPerfStatus(message) {
         if (!isPerfEnabled || !perfControls) {
@@ -185,6 +187,77 @@ export async function createApp() {
         }
         perfControls.runButton.disabled = isDisabled;
         perfControls.copyButton.disabled = isDisabled || !lastPerfBenchmarkResult;
+    }
+
+    function getPerfBenchmarkWorker() {
+        if (!perfBenchmarkWorker) {
+            perfBenchmarkWorker = new Worker(PERF_BENCH_WORKER_URL, { type: "module" });
+        }
+        return perfBenchmarkWorker;
+    }
+
+    function resetPerfBenchmarkWorker() {
+        if (!perfBenchmarkWorker) {
+            return;
+        }
+        perfBenchmarkWorker.terminate();
+        perfBenchmarkWorker = null;
+    }
+
+    async function runPerfBenchmarkOnWorker(profile) {
+        const worker = getPerfBenchmarkWorker();
+        const runId = perfBenchmarkRunSeq + 1;
+        perfBenchmarkRunSeq = runId;
+        return await new Promise((resolve, reject) => {
+            const handleMessage = (event) => {
+                const message = event.data ?? {};
+                if (message.runId !== runId) {
+                    return;
+                }
+                if (message.type === "progress") {
+                    const done = Math.max(0, Math.floor(message.done ?? 0));
+                    const total = Math.max(1, Math.floor(message.total ?? profile.tickCount));
+                    const percent = Math.max(0, Math.min(100, Math.floor(message.percent ?? 0)));
+                    const status = typeof message.status === "string"
+                        ? message.status
+                        : `Running ${done}/${total} ticks... (${percent}%)`;
+                    setPerfProgress(done, total);
+                    setPerfStatus(status);
+                    return;
+                }
+                if (message.type === "done") {
+                    cleanup();
+                    resolve(message.result);
+                    return;
+                }
+                if (message.type === "error") {
+                    cleanup();
+                    reject(new Error(message.message || "Worker benchmark failed"));
+                }
+            };
+            const handleError = (event) => {
+                cleanup();
+                reject(new Error(event?.message || "Worker crashed during benchmark"));
+            };
+            const cleanup = () => {
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+            };
+            worker.addEventListener("message", handleMessage);
+            worker.addEventListener("error", handleError);
+            worker.postMessage({
+                type: "run",
+                runId,
+                profile,
+                level: LEVEL,
+                terrainParams: TERRAIN_PARAMS,
+                sampleInterval: STEP_BREAKDOWN_SAMPLE_INTERVAL,
+                meta: {
+                    user_agent: navigator.userAgent,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                },
+            });
+        });
     }
 
     async function copyPerfBenchmarkResult() {
@@ -584,72 +657,35 @@ export async function createApp() {
         playbackController.setPlaybackRunning(false);
 
         try {
-            if (currentSeed !== profile.seed) {
-                await updateTerrain(profile.seed);
-            }
-            if (currentSurfaceMode !== profile.surfaceMode) {
-                setSurfaceMode(profile.surfaceMode);
-            }
-            if (currentViewMode !== profile.viewMode) {
-                setViewMode(profile.viewMode);
-            }
-
-            const startedAt = performance.now();
-            const recorder = createTickPerfRecorder();
             setPerfStatus(`Running 0/${profile.tickCount} ticks... (0%)`);
-            setPerfProgress(0, profile.tickCount + 1);
-            const tickStart = world.tick;
-            for (let i = 0; i < profile.tickCount; i += 1) {
-                stepWorldTick(recorder, { benchmarkMode: true, sampleStepBreakdown: false });
-                setPerfProgress(i + 1, profile.tickCount + 1);
-                const pct = Math.floor(((i + 1) / profile.tickCount) * 100);
-                setPerfStatus(`Running ${i + 1}/${profile.tickCount} ticks... (${pct}%)`);
-                await new Promise((resolve) => {
-                    requestAnimationFrame(() => resolve());
-                });
+            setPerfProgress(0, profile.tickCount);
+            let result = null;
+            try {
+                result = await runPerfBenchmarkOnWorker(profile);
+            } catch (error) {
+                const errorText = String(error?.message ?? error);
+                const looksLikeWasmTrap = /unreachable|wasm|worker crashed/i.test(errorText);
+                if (!looksLikeWasmTrap) {
+                    setPerfStatus(`Benchmark failed: ${errorText}`);
+                    console.error(error);
+                    return;
+                }
+                console.warn("[perf-bench] worker trap detected. restarting worker and retrying once.", error);
+                resetPerfBenchmarkWorker();
+                setPerfStatus("Worker trapped. Restarting benchmark worker and retrying once...");
+                try {
+                    result = await runPerfBenchmarkOnWorker(profile);
+                } catch (retryError) {
+                    setPerfStatus(`Benchmark failed: ${String(retryError?.message ?? retryError)}`);
+                    console.error(retryError);
+                    return;
+                }
             }
-            const wallTimeMainMs = performance.now() - startedAt;
-
-            setPerfStatus("Collecting step breakdown...");
-            const breakdownStartedAt = performance.now();
-            const breakdownWorld = worldSimController.init_world(profile.seed, LEVEL, {
-                terrain_params: TERRAIN_PARAMS,
-            });
-            const breakdownResult = worldSimController.step_world_profiled_batch(
-                breakdownWorld.world_id,
-                profile.tickCount,
-                STEP_BREAKDOWN_SAMPLE_INTERVAL,
-            );
-            pushStepBreakdownSamples(recorder, breakdownResult, { stepCountKey: "sampled_steps" });
-            setPerfProgress(profile.tickCount + 1, profile.tickCount + 1);
-            await new Promise((resolve) => {
-                requestAnimationFrame(() => resolve());
-            });
-            const breakdownCollectionMs = performance.now() - breakdownStartedAt;
-
-            const result = {
-                meta: {
-                    generated_at: new Date().toISOString(),
-                    user_agent: navigator.userAgent,
-                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                },
-                profile: {
-                    ...profile,
-                    tickStart,
-                    tickEnd: world.tick,
-                },
-                totals: {
-                    wall_time_ms: Math.round(wallTimeMainMs * 1000) / 1000,
-                    breakdown_collection_ms: Math.round(breakdownCollectionMs * 1000) / 1000,
-                    processed_ticks: profile.tickCount,
-                },
-                metrics: recorder.buildSummary(),
-            };
             lastPerfBenchmarkResult = result;
             renderPerfStats(result);
             const summaryLine = formatBenchmarkSummaryLine(result);
             setPerfStatus(`Done: ${summaryLine}`);
-            setPerfProgress(profile.tickCount + 1, profile.tickCount + 1);
+            setPerfProgress(profile.tickCount, profile.tickCount);
             console.group(`[perf-bench] ${profile.tickCount} tick benchmark`);
             console.log("result", result);
             console.table(createBenchmarkConsoleTable(result));
