@@ -64,70 +64,72 @@ fn run_river_step_with_erosion_state(
     runoff: &[f32],
     river_driver: f32,
 ) -> bool {
-    let expected_height = world.state.geology.height.len();
-    let expected_flux = world.state.geology.river_flux.len();
-    let expected_next = world.state.geology.river_next.len();
-    let (next_height, next_flux, next_next) = {
-        let Some(state) = world.exec.river_erosion_state.as_mut() else {
-            return false;
-        };
-        if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
-            return false;
-        }
+    let tick = world.exec.tick;
+    let mesh_positions = &world.mesh.positions;
+    let mesh_nbr_offsets = &world.mesh.nbr_offsets;
+    let mesh_nbrs = &world.mesh.nbrs;
+    let geology = &mut world.state.geology;
+    let expected_height = geology.height.len();
+    let expected_flux = geology.river_flux.len();
+    let expected_next = geology.river_next.len();
 
-        let effective_runoff = apply_baseflow_storage(
-            state,
-            &world.state.geology.height,
-            &world.mesh.nbr_offsets,
-            &world.mesh.nbrs,
-            runoff,
-        );
-        sync_erosion_rain(state, &effective_runoff);
-        let cell_count = expected_height as u32;
-        let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
-        domains::step_erosion_automaton(state, budget_cells);
-        let next_height = state.height.clone();
-
-        state.last_river_driver = river_driver;
-        let (next_flux, next_next) = if should_rebuild_network(world.exec.tick, state, river_driver)
-        {
-            let (mut rebuilt_flux, mut rebuilt_next, mut rebuilt_heading) = build_river_network(
-                &world.mesh.positions,
-                &world.mesh.nbr_offsets,
-                &world.mesh.nbrs,
-                &next_height,
-                &effective_runoff,
-                &state.params,
-                Some(&*state),
-            );
-            smooth_and_normalize_flux(
-                &mut rebuilt_flux,
-                &state.river_flux,
-                &mut state.flux_scale_ema,
-            );
-            apply_river_network_constraints(
-                &next_height,
-                &mut rebuilt_flux,
-                &mut rebuilt_next,
-                &state.river_flux,
-                state.params.river_accumulation_threshold,
-            );
-            align_flow_heading(&world.mesh.positions, &mut rebuilt_heading, &rebuilt_next);
-            state.prev_river_next.clone_from(&state.river_next);
-            state.river_flux = rebuilt_flux;
-            state.river_next = rebuilt_next;
-            state.flow_heading = rebuilt_heading;
-            state.last_rebuild_tick = world.exec.tick;
-            (state.river_flux.clone(), state.river_next.clone())
-        } else {
-            (state.river_flux.clone(), state.river_next.clone())
-        };
-        (next_height, next_flux, next_next)
+    let Some(state) = world.exec.river_erosion_state.as_mut() else {
+        return false;
     };
+    if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
+        return false;
+    }
 
-    world.state.geology.height = next_height;
-    world.state.geology.river_flux = next_flux;
-    world.state.geology.river_next = next_next;
+    let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
+    apply_baseflow_storage(
+        &mut state.groundwater_storage,
+        &state.params,
+        &geology.height,
+        mesh_nbr_offsets,
+        mesh_nbrs,
+        runoff,
+        &mut effective_runoff,
+    );
+    sync_erosion_rain(state, effective_runoff.as_slice());
+    let cell_count = expected_height as u32;
+    let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
+    domains::step_erosion_automaton(state, budget_cells);
+
+    state.last_river_driver = river_driver;
+    if should_rebuild_network(tick, state, river_driver) {
+        let (mut rebuilt_flux, mut rebuilt_next, mut rebuilt_heading) = build_river_network(
+            mesh_positions,
+            mesh_nbr_offsets,
+            mesh_nbrs,
+            &state.height,
+            effective_runoff.as_slice(),
+            &state.params,
+            Some(&*state),
+        );
+        smooth_and_normalize_flux(
+            &mut rebuilt_flux,
+            &state.river_flux,
+            &mut state.flux_scale_ema,
+        );
+        apply_river_network_constraints(
+            &state.height,
+            &mut rebuilt_flux,
+            &mut rebuilt_next,
+            &state.river_flux,
+            state.params.river_accumulation_threshold,
+        );
+        align_flow_heading(mesh_positions, &mut rebuilt_heading, &rebuilt_next);
+        state.prev_river_next.clone_from(&state.river_next);
+        state.river_flux = rebuilt_flux;
+        state.river_next = rebuilt_next;
+        state.flow_heading = rebuilt_heading;
+        state.last_rebuild_tick = tick;
+    }
+    state.scratch_effective_runoff = effective_runoff;
+
+    geology.height.clone_from(&state.height);
+    geology.river_flux.clone_from(&state.river_flux);
+    geology.river_next.clone_from(&state.river_next);
     world.state.geology.erosion_rate.fill(0.0);
     world.state.geology.deposition_rate.fill(0.0);
     true
@@ -189,12 +191,12 @@ fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     );
 
     world.state.geology.river_next = river_next;
-    world.state.geology.river_flux = flux.clone();
+    world.state.geology.river_flux = flux;
     if let Some(state) = world.exec.river_erosion_state.as_mut() {
-        if state.river_flux.len() == flux.len() {
+        if state.river_flux.len() == world.state.geology.river_flux.len() {
             sync_erosion_rain(state, runoff);
             state.prev_river_next.clone_from(&state.river_next);
-            state.river_flux.clone_from(&flux);
+            state.river_flux.clone_from(&world.state.geology.river_flux);
             state.river_next.clone_from(&world.state.geology.river_next);
             state.height.clone_from(&world.state.geology.height);
             state.last_rebuild_tick = world.exec.tick;
@@ -241,7 +243,11 @@ pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32
     }
 
     let mut order = (0..cell_count).collect::<Vec<_>>();
-    order.sort_by(|&a, &b| height[b].partial_cmp(&height[a]).unwrap_or(Ordering::Equal));
+    order.sort_unstable_by(|&a, &b| {
+        height[b]
+            .partial_cmp(&height[a])
+            .unwrap_or(Ordering::Equal)
+    });
     for i in order {
         let next = river_next.get(i).copied().unwrap_or(-1);
         if next < 0 {
@@ -354,7 +360,7 @@ fn build_river_network(
     align_flow_heading(positions, &mut heading, &river_next);
 
     let mut order = (0..v_count).collect::<Vec<_>>();
-    order.sort_by(|a, b| {
+    order.sort_unstable_by(|a, b| {
         spill_level[*b]
             .partial_cmp(&spill_level[*a])
             .unwrap_or(Ordering::Equal)
@@ -382,41 +388,43 @@ fn build_river_network(
 }
 
 fn apply_baseflow_storage(
-    state: &mut crate::ErosionAutomatonState,
+    groundwater_storage: &mut Vec<f32>,
+    params: &TerrainParams,
     height: &[f32],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     runoff: &[f32],
-) -> Vec<f32> {
+    effective: &mut Vec<f32>,
+) {
     let v_count = runoff.len();
-    if state.groundwater_storage.len() != v_count {
-        state.groundwater_storage = vec![0.0; v_count];
+    if groundwater_storage.len() != v_count {
+        groundwater_storage.resize(v_count, 0.0);
+    }
+    if effective.len() != v_count {
+        effective.resize(v_count, 0.0);
     }
 
-    let infiltration_rate = state.params.baseflow_infiltration_rate.clamp(0.0, 0.95);
-    let release_rate = state.params.baseflow_release_rate.clamp(0.0, 1.0);
-    let storage_cap = state.params.baseflow_storage_cap.max(1e-4);
+    let infiltration_rate = params.baseflow_infiltration_rate.clamp(0.0, 0.95);
+    let release_rate = params.baseflow_release_rate.clamp(0.0, 1.0);
+    let storage_cap = params.baseflow_storage_cap.max(1e-4);
 
-    let mut effective = vec![0.0; v_count];
     for i in 0..v_count {
         let rain = runoff[i].max(0.0);
         if height.get(i).copied().unwrap_or(-1.0) <= 0.0 {
-            state.groundwater_storage[i] = 0.0;
+            groundwater_storage[i] = 0.0;
             effective[i] = rain;
             continue;
         }
 
         let wetness = local_topographic_wetness(i, height, nbr_offsets, nbrs);
         let recharge = rain * infiltration_rate;
-        let mut storage = (state.groundwater_storage[i] + recharge).min(storage_cap);
+        let mut storage = (groundwater_storage[i] + recharge).min(storage_cap);
         let release = (storage * release_rate * (0.35 + 0.65 * wetness)).min(storage);
         storage = (storage - release).max(0.0);
-        state.groundwater_storage[i] = storage;
+        groundwater_storage[i] = storage;
 
         effective[i] = rain * (1.0 - infiltration_rate) + release;
     }
-
-    effective
 }
 
 fn local_topographic_wetness(i: usize, height: &[f32], nbr_offsets: &[u32], nbrs: &[u32]) -> f32 {
@@ -543,19 +551,23 @@ fn smooth_and_normalize_flux(flux: &mut [f32], previous_flux: &[f32], flux_scale
 }
 
 fn robust_flux_scale(flux: &[f32]) -> f32 {
-    let mut positives = flux
-        .iter()
-        .copied()
-        .filter(|v| v.is_finite() && *v > 0.0)
-        .collect::<Vec<_>>();
+    let mut max_flux = 0.0f32;
+    let mut positives = Vec::new();
+    positives.reserve(flux.len() / 2);
+    for &value in flux {
+        if value.is_finite() && value > 0.0 {
+            max_flux = max_flux.max(value);
+            positives.push(value);
+        }
+    }
     if positives.is_empty() {
         return 1.0;
     }
 
-    positives.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
     let idx = ((positives.len() as f32) * 0.995).floor() as usize;
-    let q = positives[idx.min(positives.len() - 1)];
-    let max_flux = *positives.last().unwrap_or(&q);
+    let nth = idx.min(positives.len() - 1);
+    positives.select_nth_unstable_by(nth, |a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let q = positives[nth];
     q.max(max_flux * 0.5).max(1e-6)
 }
 

@@ -151,6 +151,7 @@ impl WorldSimController {
             .ok_or_else(|| history_tick_not_available_error(tick_u64))?;
 
         managed.world = restored_world;
+        sync_erosion_state(&mut managed.world, &managed.terrain_params);
         managed.sync_state = WorldSyncState::from_world(&managed.world);
         managed
             .history

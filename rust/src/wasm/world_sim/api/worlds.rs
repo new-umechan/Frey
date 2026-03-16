@@ -6,7 +6,7 @@ use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::domains;
 use crate::sim::{step_world, step_world_profiled, world, StepWorldBreakdown};
 
-use super::super::helpers::{build_erosion_state, sync_erosion_state};
+use super::super::helpers::{build_erosion_state, post_step_sync_light};
 use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
@@ -35,7 +35,7 @@ fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
 }
 
 fn run_post_step(managed: &mut ManagedWorld) {
-    sync_erosion_state(&mut managed.world, &managed.terrain_params);
+    post_step_sync_light(&mut managed.world, &managed.terrain_params);
     managed.observe_after_world_change();
     managed.save_history_snapshot_if_needed();
 }
@@ -196,7 +196,7 @@ impl WorldSimController {
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
-            sync_erosion_state(&mut managed.world, &managed.terrain_params);
+            post_step_sync_light(&mut managed.world, &managed.terrain_params);
             step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();

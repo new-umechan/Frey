@@ -1222,6 +1222,7 @@ mod tests {
             prev_river_next: world.state.geology.river_next.clone(),
             flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
             groundwater_storage: vec![0.0; world.cell_count()],
+            scratch_effective_runoff: vec![0.0; world.cell_count()],
             recent_changed: Vec::new(),
             sink_id: vec![-1; world.cell_count()],
             sink_route_next: vec![-1; world.cell_count()],

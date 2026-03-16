@@ -260,6 +260,7 @@ mod tests {
             prev_river_next: world.state.geology.river_next.clone(),
             flow_heading: vec![[0.0, 0.0, 0.0]; 4],
             groundwater_storage: vec![0.0; 4],
+            scratch_effective_runoff: vec![0.0; 4],
             recent_changed: Vec::new(),
             sink_id: vec![-1; 4],
             sink_route_next: vec![-1; 4],

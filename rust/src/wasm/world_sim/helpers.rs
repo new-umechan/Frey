@@ -38,6 +38,7 @@ pub(super) fn build_erosion_state(
         prev_river_next: world.state.geology.river_next.clone(),
         flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
         groundwater_storage: vec![0.0; cell_count],
+        scratch_effective_runoff: vec![0.0; cell_count],
         recent_changed: Vec::new(),
         sink_id: vec![-1; cell_count],
         sink_route_next: vec![-1; cell_count],
@@ -54,6 +55,10 @@ pub(super) fn build_erosion_state(
 }
 
 pub(super) fn sync_erosion_state(world: &mut world::World, params: &TerrainParams) {
+    sync_erosion_state_full(world, params);
+}
+
+pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &TerrainParams) {
     let expected = world.state.geology.height.len();
     let Some(state) = world.exec.river_erosion_state.as_mut() else {
         let state = build_erosion_state(world, params.clone());
@@ -85,6 +90,25 @@ pub(super) fn sync_erosion_state(world: &mut world::World, params: &TerrainParam
     ensure_sink_buffers(state, expected);
 }
 
+pub(super) fn post_step_sync_light(world: &mut world::World, params: &TerrainParams) {
+    let expected = world.state.geology.height.len();
+    let Some(state) = world.exec.river_erosion_state.as_mut() else {
+        let state = build_erosion_state(world, params.clone());
+        let _ = world.attach_river_erosion_state(state);
+        return;
+    };
+    if !erosion_state_shape_matches(state, expected) {
+        let state = build_erosion_state(world, params.clone());
+        let _ = world.attach_river_erosion_state(state);
+        return;
+    }
+    state.tick = world.exec.tick;
+    state.last_river_driver = 1.0;
+    state.params = params.clone();
+    state.recent_changed.clear();
+    ensure_sink_buffers(state, expected);
+}
+
 fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -> bool {
     state.height.len() == expected
         && state.river_flux.len() == expected
@@ -93,6 +117,7 @@ fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -
         && state.prev_river_next.len() == expected
         && state.flow_heading.len() == expected
         && state.groundwater_storage.len() == expected
+        && state.scratch_effective_runoff.len() == expected
 }
 
 fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
@@ -112,6 +137,9 @@ fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
     }
     if state.groundwater_storage.len() != expected {
         state.groundwater_storage = vec![0.0; expected];
+    }
+    if state.scratch_effective_runoff.len() != expected {
+        state.scratch_effective_runoff = vec![0.0; expected];
     }
 }
 
