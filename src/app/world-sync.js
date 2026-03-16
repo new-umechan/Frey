@@ -326,6 +326,7 @@ function syncWorldState({
     setEraScale,
     initializeTerrain = false,
     changes = WORLD_CHANGESET,
+    perfRecorder = null,
 }) {
     world.core = core;
     applyWorldMetrics({
@@ -338,7 +339,13 @@ function syncWorldState({
     if (initializeTerrain) {
         terrainRenderer.initializeTerrain(core, currentSurfaceMode);
     } else {
-        terrainRenderer.applyCoreChanges(core, changes, currentSurfaceMode, world.tick);
+        terrainRenderer.applyCoreChanges(
+            core,
+            changes,
+            currentSurfaceMode,
+            world.tick,
+            perfRecorder,
+        );
     }
     return {
         changes,
@@ -414,6 +421,7 @@ export function syncWorldDeltaFromController({
     refreshStats,
     refreshWorldStats,
     deltaFieldKinds,
+    perfRecorder = null,
 }) {
     if (!world.core) {
         return {
@@ -424,13 +432,20 @@ export function syncWorldDeltaFromController({
         };
     }
 
-    const worldDelta = worldSimController.get_world_delta(
-        worldId,
-        Array.isArray(deltaFieldKinds) && deltaFieldKinds.length > 0
-            ? { include_fields: deltaFieldKinds }
-            : undefined,
-    );
-    const changes = applyWorldDeltaToCore(world.core, worldDelta);
+    const deltaTask = () => {
+        const worldDelta = worldSimController.get_world_delta(
+            worldId,
+            Array.isArray(deltaFieldKinds) && deltaFieldKinds.length > 0
+                ? { include_fields: deltaFieldKinds }
+                : undefined,
+        );
+        const changes = applyWorldDeltaToCore(world.core, worldDelta);
+        return { worldDelta, changes };
+    };
+    const {
+        worldDelta,
+        changes,
+    } = perfRecorder ? perfRecorder.measure("delta_sync", deltaTask) : deltaTask();
     const result = syncWorldState({
         world,
         metrics: worldDelta,
@@ -441,6 +456,7 @@ export function syncWorldDeltaFromController({
         buildEraMetricsFromRuntime,
         setEraScale,
         changes,
+        perfRecorder,
     });
     const refreshed = maybeRefreshStats({ refreshStats, refreshWorldStats });
     return {

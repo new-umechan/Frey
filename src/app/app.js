@@ -47,8 +47,20 @@ import {
 } from "./world-sync.js";
 import { advanceWorldLoop, resetWorldProgress } from "./world-loop.js";
 import { createPlaybackController } from "./playback-controller.js";
+import {
+    createBenchmarkConsoleTable,
+    createBenchmarkProfile,
+    createTickPerfRecorder,
+    formatBenchmarkSummaryLine,
+} from "./perf-benchmark.js";
+
+function isPerfFeatureEnabled() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("perf") === "1" || params.get("bench") === "1";
+}
 
 export async function createApp() {
+    const isPerfEnabled = isPerfFeatureEnabled();
     const {
         appShell,
         canvas,
@@ -71,8 +83,11 @@ export async function createApp() {
         controlHelpCloseButton,
         playbackControls,
         eventLogList,
+        perfPanel,
+        perfControls,
+        perfStatFields,
         statFields,
-    } = collectAppElements();
+    } = collectAppElements({ perfEnabled: isPerfEnabled });
 
     function setStatus(message) {
         statusMessage.textContent = message;
@@ -83,7 +98,80 @@ export async function createApp() {
         sidebarToggle.setAttribute("aria-expanded", String(isOpen));
     }
 
+    if (isPerfEnabled) {
+        perfPanel.hidden = false;
+        perfPanel.setAttribute("aria-hidden", "false");
+    } else {
+        perfPanel.hidden = true;
+        perfPanel.setAttribute("aria-hidden", "true");
+    }
+
+    let lastPerfBenchmarkResult = null;
+    let isPerfBenchmarkRunning = false;
+
+    function setPerfStatus(message) {
+        if (!isPerfEnabled || !perfControls) {
+            return;
+        }
+        perfControls.status.textContent = message;
+    }
+
+    function formatMs(value) {
+        if (!Number.isFinite(value)) {
+            return "-";
+        }
+        return `${value.toFixed(3)} ms`;
+    }
+
+    function renderPerfStats(result) {
+        if (!isPerfEnabled || !perfStatFields) {
+            return;
+        }
+        const metrics = result?.metrics ?? {};
+        perfStatFields.tickP50.textContent = formatMs(metrics.tick_total?.p50);
+        perfStatFields.tickP95.textContent = formatMs(metrics.tick_total?.p95);
+        perfStatFields.stepMean.textContent = formatMs(metrics.step_world?.mean);
+        perfStatFields.deltaMean.textContent = formatMs(metrics.delta_sync?.mean);
+        perfStatFields.geomMean.textContent = formatMs(metrics.geometry_update?.mean);
+        perfStatFields.riverMean.textContent = formatMs(metrics.river_mask_update?.mean);
+    }
+
+    function setPerfControlsDisabled(isDisabled) {
+        if (!isPerfEnabled || !perfControls) {
+            return;
+        }
+        perfControls.runButton.disabled = isDisabled;
+        perfControls.copyButton.disabled = isDisabled || !lastPerfBenchmarkResult;
+    }
+
+    async function copyPerfBenchmarkResult() {
+        if (!isPerfEnabled) {
+            return;
+        }
+        if (!lastPerfBenchmarkResult) {
+            setPerfStatus("No result to copy.");
+            return;
+        }
+        const payload = JSON.stringify(lastPerfBenchmarkResult, null, 2);
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(payload);
+                setPerfStatus("Copied benchmark JSON.");
+                return;
+            }
+        } catch (error) {
+            console.warn("clipboard write failed", error);
+        }
+        console.log("[perf-bench][json]", payload);
+        setPerfStatus("Clipboard unavailable. JSON logged to console.");
+    }
+
     setSidebarOpen(true);
+    if (isPerfEnabled && perfControls) {
+        setPerfStatus("Idle");
+        renderPerfStats(null);
+        perfControls.copyButton.disabled = true;
+    }
     seedInput.value = DEFAULT_TERRAIN_SEED;
     setStatus("Loading WASM...");
 
@@ -364,57 +452,147 @@ export async function createApp() {
         terrainRenderer.applyCoreChanges(currentTerrainData, changes, currentSurfaceMode, world.tick);
     }
 
-    function stepWorldTick() {
+    function stepWorldTick(perfRecorder = null, options = {}) {
         if (!activeWorldId || !currentTerrainData) {
             return false;
         }
+        const runTick = () => {
+            const benchmarkMode = options?.benchmarkMode === true;
+            const nextTick = world.tick + 1;
+            const prevHeightForSnapshot = debugSnapshotTickSet.has(nextTick) && currentTerrainData?.heightData
+                ? currentTerrainData.heightData.slice()
+                : null;
 
-        const nextTick = world.tick + 1;
-        const prevHeightForSnapshot = debugSnapshotTickSet.has(nextTick) && currentTerrainData?.heightData
-            ? currentTerrainData.heightData.slice()
-            : null;
+            if (perfRecorder) {
+                perfRecorder.measure("step_world", () => {
+                    worldSimController.step_world(activeWorldId, 1);
+                });
+            } else {
+                worldSimController.step_world(activeWorldId, 1);
+            }
+            const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsAtTick(nextTick);
+            const { changes, statsRefreshed } = syncWorldDeltaFromController({
+                worldSimController,
+                worldId: activeWorldId,
+                world,
+                currentSurfaceMode,
+                terrainRenderer,
+                createEraMetrics,
+                buildEraMetricsFromRuntime,
+                setEraScale,
+                refreshStats: shouldRefreshStats,
+                refreshWorldStats: refreshActiveWorldStats,
+                deltaFieldKinds: getCurrentDeltaFieldKinds(),
+                perfRecorder,
+            });
+            if (!benchmarkMode && (changes?.climate || statsRefreshed)) {
+                syncClimateUi();
+            }
 
-        worldSimController.step_world(activeWorldId, 1);
-        const shouldRefreshStats = shouldRefreshStatsAtTick(nextTick);
-        const { changes, statsRefreshed } = syncWorldDeltaFromController({
-            worldSimController,
-            worldId: activeWorldId,
-            world,
-            currentSurfaceMode,
-            terrainRenderer,
-            createEraMetrics,
-            buildEraMetricsFromRuntime,
-            setEraScale,
-            refreshStats: shouldRefreshStats,
-            refreshWorldStats: refreshActiveWorldStats,
-            deltaFieldKinds: getCurrentDeltaFieldKinds(),
-        });
-        if (changes?.climate || statsRefreshed) {
-            syncClimateUi();
+            if (!benchmarkMode) {
+                void saveDebugSnapshotIfNeeded({
+                    isDev: import.meta.env.DEV,
+                    tick: world.tick,
+                    debugSnapshotTickSet,
+                    debugSnapshotSavedTicks,
+                    currentTerrainData,
+                    currentSeed,
+                    currentEraScale,
+                    world,
+                    worldState,
+                    prevHeightForSnapshot,
+                    setStatus,
+                });
+            }
+
+            if (!benchmarkMode && world.tick > 0 && shouldRefreshStats) {
+                const preset = getEraScalePreset(currentEraScale);
+                setStatus(
+                    `Running (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,
+                );
+            }
+            if (!benchmarkMode) {
+                playbackController.syncAfterWorldStep();
+            }
+            return true;
+        };
+        if (perfRecorder) {
+            return perfRecorder.measure("tick_total", runTick);
         }
+        return runTick();
+    }
 
-        void saveDebugSnapshotIfNeeded({
-            isDev: import.meta.env.DEV,
-            tick: world.tick,
-            debugSnapshotTickSet,
-            debugSnapshotSavedTicks,
-            currentTerrainData,
-            currentSeed,
-            currentEraScale,
-            world,
-            worldState,
-            prevHeightForSnapshot,
-            setStatus,
-        });
-
-        if (world.tick > 0 && shouldRefreshStats) {
-            const preset = getEraScalePreset(currentEraScale);
-            setStatus(
-                `Running (${currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,
-            );
+    async function runPerfBenchmark() {
+        if (!isPerfEnabled || isPerfBenchmarkRunning || !activeWorldId || !currentTerrainData) {
+            return;
         }
-        playbackController.syncAfterWorldStep();
-        return true;
+        const profile = createBenchmarkProfile();
+        isPerfBenchmarkRunning = true;
+        setPerfControlsDisabled(true);
+        setPerfStatus("Preparing benchmark profile...");
+        const wasPlaying = playbackState.isPlaying;
+        playbackController.setPlaybackRunning(false);
+
+        try {
+            if (currentSeed !== profile.seed) {
+                await updateTerrain(profile.seed);
+            }
+            if (currentSurfaceMode !== profile.surfaceMode) {
+                setSurfaceMode(profile.surfaceMode);
+            }
+            if (currentViewMode !== profile.viewMode) {
+                setViewMode(profile.viewMode);
+            }
+
+            const startedAt = performance.now();
+            const recorder = createTickPerfRecorder();
+            setPerfStatus(`Running ${profile.tickCount} ticks...`);
+            const tickStart = world.tick;
+            for (let i = 0; i < profile.tickCount; i += 1) {
+                stepWorldTick(recorder, { benchmarkMode: true });
+                if ((i + 1) % 8 === 0 || i + 1 === profile.tickCount) {
+                    setPerfStatus(`Running ${i + 1}/${profile.tickCount} ticks...`);
+                    await new Promise((resolve) => {
+                        requestAnimationFrame(() => resolve());
+                    });
+                }
+            }
+            const wallTimeMs = performance.now() - startedAt;
+            const result = {
+                meta: {
+                    generated_at: new Date().toISOString(),
+                    user_agent: navigator.userAgent,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                },
+                profile: {
+                    ...profile,
+                    tickStart,
+                    tickEnd: world.tick,
+                },
+                totals: {
+                    wall_time_ms: Math.round(wallTimeMs * 1000) / 1000,
+                    processed_ticks: profile.tickCount,
+                },
+                metrics: recorder.buildSummary(),
+            };
+            lastPerfBenchmarkResult = result;
+            renderPerfStats(result);
+            const summaryLine = formatBenchmarkSummaryLine(result);
+            setPerfStatus(`Done: ${summaryLine}`);
+            console.group(`[perf-bench] ${profile.tickCount} tick benchmark`);
+            console.log("result", result);
+            console.table(createBenchmarkConsoleTable(result));
+            console.groupEnd();
+        } finally {
+            playbackController.syncAfterWorldSync();
+            playbackController.setPlaybackRunning(wasPlaying);
+            isPerfBenchmarkRunning = false;
+            setPerfControlsDisabled(false);
+        }
+    }
+
+    function getLastPerfBenchmarkResult() {
+        return isPerfEnabled ? lastPerfBenchmarkResult : null;
     }
 
     function setViewMode(nextMode) {
@@ -520,6 +698,8 @@ export async function createApp() {
         controlHelpCloseButton,
         playbackControls,
         eventLogList,
+        perfEnabled: isPerfEnabled,
+        perfControls,
         seedForm,
         seedInput,
         onResize,
@@ -548,6 +728,8 @@ export async function createApp() {
         onHistorySeek: playbackController.handleHistorySeek,
         onHistoryStepDirection: playbackController.handleHistoryStepDirection,
         onEventLogJump: playbackController.handleHistoryJump,
+        onRunPerfBenchmark: runPerfBenchmark,
+        onCopyPerfBenchmark: copyPerfBenchmarkResult,
         getDebugEnabled: () => debugEnabled,
         getCurrentSurfaceMode: () => currentSurfaceMode,
         getCurrentViewMode: () => currentViewMode,
@@ -591,5 +773,6 @@ export async function createApp() {
             cameraController.getActiveControls().update();
             renderer.render(scene, cameraController.getCamera());
         },
+        getLastPerfBenchmarkResult,
     };
 }

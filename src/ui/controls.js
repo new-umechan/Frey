@@ -10,6 +10,8 @@ export function setupUiControls({
     controlHelpCloseButton,
     playbackControls,
     eventLogList,
+    perfEnabled,
+    perfControls,
     seedForm,
     seedInput,
     onResize,
@@ -28,6 +30,8 @@ export function setupUiControls({
     onHistorySeek,
     onHistoryStepDirection,
     onEventLogJump,
+    onRunPerfBenchmark,
+    onCopyPerfBenchmark,
     getDebugEnabled,
     getCurrentSurfaceMode,
     getCurrentViewMode,
@@ -104,6 +108,15 @@ export function setupUiControls({
         }
         onEventLogJump(tickText);
     });
+
+    if (perfEnabled && perfControls) {
+        perfControls.runButton.addEventListener("click", () => {
+            onRunPerfBenchmark();
+        });
+        perfControls.copyButton.addEventListener("click", () => {
+            onCopyPerfBenchmark();
+        });
+    }
 
     function isHelpToggleKey(event) {
         return event.key === "?" || (event.code === "Slash" && event.shiftKey);

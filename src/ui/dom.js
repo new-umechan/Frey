@@ -6,7 +6,8 @@ export function requireElement(id, type) {
     return element;
 }
 
-export function collectAppElements() {
+export function collectAppElements(options = {}) {
+    const perfEnabled = options.perfEnabled === true;
     const canvas = requireElement("mesh-canvas", HTMLCanvasElement);
     const appShell = canvas.closest(".app-shell");
     const viewportPanel = requireElement("viewport-panel", HTMLDivElement);
@@ -48,6 +49,24 @@ export function collectAppElements() {
         seekForwardButton: requireElement("seek-forward-button", HTMLButtonElement),
     };
     const eventLogList = requireElement("event-log-list", HTMLUListElement);
+    const perfPanel = requireElement("perf-panel", HTMLElement);
+    const perfControls = perfEnabled
+        ? {
+            runButton: requireElement("perf-run-button", HTMLButtonElement),
+            copyButton: requireElement("perf-copy-button", HTMLButtonElement),
+            status: requireElement("perf-status", HTMLElement),
+        }
+        : null;
+    const perfStatFields = perfEnabled
+        ? {
+            tickP50: requireElement("perf-tick-p50", HTMLElement),
+            tickP95: requireElement("perf-tick-p95", HTMLElement),
+            stepMean: requireElement("perf-step-mean", HTMLElement),
+            deltaMean: requireElement("perf-delta-mean", HTMLElement),
+            geomMean: requireElement("perf-geom-mean", HTMLElement),
+            riverMean: requireElement("perf-river-mean", HTMLElement),
+        }
+        : null;
 
     if (!(appShell instanceof HTMLElement)) {
         throw new Error("required app shell is missing");
@@ -88,6 +107,9 @@ export function collectAppElements() {
         controlHelpCloseButton,
         playbackControls,
         eventLogList,
+        perfPanel,
+        perfControls,
+        perfStatFields,
         statFields,
     };
 }

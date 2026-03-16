@@ -604,6 +604,24 @@ body {
     font-weight: 600;
 }
 
+.perf-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+}
+
+.perf-status {
+    margin: 0.5rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.76rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.perf-stats {
+    margin-top: 0.5rem;
+}
+
 .era-scale-summary {
     margin-top: 0.55rem;
     padding-top: 0.5rem;

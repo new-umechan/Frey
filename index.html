@@ -109,6 +109,26 @@
                                 <div><dt>Land</dt><dd id="stat-land">-</dd></div>
                             </dl>
                         </section>
+                        <section id="perf-panel" class="panel">
+                            <h2>Perf Bench</h2>
+                            <div class="perf-actions">
+                                <button id="perf-run-button" class="control-button" type="button">
+                                    Run 32 ticks
+                                </button>
+                                <button id="perf-copy-button" class="control-button" type="button">
+                                    Copy JSON
+                                </button>
+                            </div>
+                            <p id="perf-status" class="perf-status">Idle</p>
+                            <dl class="stats-list perf-stats">
+                                <div><dt>Tick p50</dt><dd id="perf-tick-p50">-</dd></div>
+                                <div><dt>Tick p95</dt><dd id="perf-tick-p95">-</dd></div>
+                                <div><dt>Step mean</dt><dd id="perf-step-mean">-</dd></div>
+                                <div><dt>Delta mean</dt><dd id="perf-delta-mean">-</dd></div>
+                                <div><dt>Geom mean</dt><dd id="perf-geom-mean">-</dd></div>
+                                <div><dt>River mean</dt><dd id="perf-river-mean">-</dd></div>
+                            </dl>
+                        </section>
                         <section class="panel">
                             <h2>View</h2>
                             <div class="view-mode-group" role="radiogroup" aria-label="View mode">

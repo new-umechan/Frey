@@ -126,14 +126,35 @@ export function createTerrainRenderer({
         updateRiverMaskTexture(currentTerrainData);
     }
 
-    function applyCoreChanges(currentTerrainData, changes, currentSurfaceMode, tick) {
+    function applyCoreChanges(
+        currentTerrainData,
+        changes,
+        currentSurfaceMode,
+        tick,
+        perfRecorder = null,
+    ) {
         if (!currentTerrainData) {
             return;
         }
         ensureTerrainAttributes(currentTerrainData);
         markTerrainChanges(changes);
         if (changes?.river) {
-            updateRiverMaskTexture(currentTerrainData);
+            if (perfRecorder) {
+                perfRecorder.measure("river_mask_update", () => {
+                    updateRiverMaskTexture(currentTerrainData);
+                });
+            } else {
+                updateRiverMaskTexture(currentTerrainData);
+            }
+        }
+        if (perfRecorder) {
+            perfRecorder.measure("geometry_update", () => {
+                updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
+                    heightChanged: changes?.height,
+                    tick,
+                });
+            });
+            return;
         }
         updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
             heightChanged: changes?.height,
