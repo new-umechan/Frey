@@ -12,6 +12,42 @@ const NETWORK_BLEND_ALPHA: f32 = 0.38;
 const FLUX_SCALE_EMA_ALPHA: f32 = 0.20;
 const ACTIVE_OFF_THRESHOLD_SCALE: f32 = 0.65;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct RiverStepDetailBreakdown {
+    pub river_prepare_ms: f64,
+    pub river_automaton_ms: f64,
+    pub river_network_ms: f64,
+    pub river_sync_ms: f64,
+    pub river_fallback_ms: f64,
+    pub network_rebuild_count: u32,
+    pub fallback_count: u32,
+}
+
+#[cfg(target_arch = "wasm32")]
+type ProfileClock = f64;
+#[cfg(not(target_arch = "wasm32"))]
+type ProfileClock = std::time::Instant;
+
+#[cfg(target_arch = "wasm32")]
+fn profile_now() -> ProfileClock {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_now() -> ProfileClock {
+    std::time::Instant::now()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn profile_elapsed_ms(start: ProfileClock) -> f64 {
+    js_sys::Date::now() - start
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn profile_elapsed_ms(start: ProfileClock) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
+}
+
 #[derive(Clone, Copy)]
 struct FlowRouteState {
     vertex: usize,
@@ -46,16 +82,23 @@ impl PartialEq for FlowRouteState {
 
 impl Eq for FlowRouteState {}
 
-pub(super) fn run_river_step(world: &mut World, budget: u32) {
+pub(super) fn run_river_step(world: &mut World, budget: u32) -> RiverStepDetailBreakdown {
+    let mut detail = RiverStepDetailBreakdown::default();
     if budget == 0 {
-        return;
+        return detail;
     }
 
+    let phase_start = profile_now();
     let runoff = build_runoff_for_routing(world);
+    detail.river_prepare_ms += profile_elapsed_ms(phase_start);
     let river_driver = river_rebuild_driver(world);
-    if !run_river_step_with_erosion_state(world, budget, &runoff, river_driver) {
+    if !run_river_step_with_erosion_state(world, budget, &runoff, river_driver, &mut detail) {
+        let phase_start = profile_now();
         run_river_fallback(world, &runoff);
+        detail.river_fallback_ms += profile_elapsed_ms(phase_start);
+        detail.fallback_count = detail.fallback_count.saturating_add(1);
     }
+    detail
 }
 
 fn run_river_step_with_erosion_state(
@@ -63,6 +106,7 @@ fn run_river_step_with_erosion_state(
     budget: u32,
     runoff: &[f32],
     river_driver: f32,
+    detail: &mut RiverStepDetailBreakdown,
 ) -> bool {
     let tick = world.exec.tick;
     let mesh_positions = &world.mesh.positions;
@@ -81,6 +125,7 @@ fn run_river_step_with_erosion_state(
     }
 
     let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
+    let phase_start = profile_now();
     apply_baseflow_storage(
         &mut state.groundwater_storage,
         &state.params,
@@ -91,12 +136,16 @@ fn run_river_step_with_erosion_state(
         &mut effective_runoff,
     );
     sync_erosion_rain(state, effective_runoff.as_slice());
+    detail.river_prepare_ms += profile_elapsed_ms(phase_start);
     let cell_count = expected_height as u32;
     let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
+    let phase_start = profile_now();
     domains::step_erosion_automaton(state, budget_cells);
+    detail.river_automaton_ms += profile_elapsed_ms(phase_start);
 
     state.last_river_driver = river_driver;
     if should_rebuild_network(tick, state, river_driver) {
+        let phase_start = profile_now();
         let (mut rebuilt_flux, mut rebuilt_next, mut rebuilt_heading) = build_river_network(
             mesh_positions,
             mesh_nbr_offsets,
@@ -124,14 +173,18 @@ fn run_river_step_with_erosion_state(
         state.river_next = rebuilt_next;
         state.flow_heading = rebuilt_heading;
         state.last_rebuild_tick = tick;
+        detail.river_network_ms += profile_elapsed_ms(phase_start);
+        detail.network_rebuild_count = detail.network_rebuild_count.saturating_add(1);
     }
     state.scratch_effective_runoff = effective_runoff;
 
+    let phase_start = profile_now();
     geology.height.clone_from(&state.height);
     geology.river_flux.clone_from(&state.river_flux);
     geology.river_next.clone_from(&state.river_next);
     world.state.geology.erosion_rate.fill(0.0);
     world.state.geology.deposition_rate.fill(0.0);
+    detail.river_sync_ms += profile_elapsed_ms(phase_start);
     true
 }
 

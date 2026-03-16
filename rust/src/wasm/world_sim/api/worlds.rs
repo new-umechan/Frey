@@ -4,12 +4,20 @@ use wasm_bindgen::prelude::*;
 
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::domains;
-use crate::sim::{step_world, step_world_profiled, world, StepWorldBreakdown};
+use crate::sim::{
+    step_world,
+    step_world_profiled,
+    step_world_profiled_detailed,
+    world,
+    StepWorldBreakdown,
+    StepWorldBreakdownDetailed,
+};
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
 use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
+use super::super::types::StepWorldProfiledDetailResponse;
 use super::super::types::StepWorldProfiledResponse;
 use super::super::WorldSimController;
 use super::common::world_not_found_error;
@@ -224,6 +232,97 @@ impl WorldSimController {
         };
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize step_world_profiled: {err}")))
+    }
+
+    #[wasm_bindgen(js_name = step_world_profiled_detail)]
+    pub fn step_world_profiled_detail_js(
+        &mut self,
+        world_id: String,
+        tick_count: u32,
+    ) -> Result<JsValue, JsValue> {
+        if tick_count == 0 {
+            let response = StepWorldProfiledDetailResponse {
+                world_id,
+                steps: 0,
+                step_feedback_ms: 0.0,
+                step_geology_terrain_ms: 0.0,
+                step_climate_ms: 0.0,
+                step_geology_river_ms: 0.0,
+                step_ecology_ms: 0.0,
+                step_civilization_ms: 0.0,
+                step_transition_ms: 0.0,
+                step_sync_erosion_ms: 0.0,
+                step_observe_world_change_ms: 0.0,
+                step_history_snapshot_ms: 0.0,
+                step_geology_river_prepare_ms: 0.0,
+                step_geology_river_automaton_ms: 0.0,
+                step_geology_river_network_ms: 0.0,
+                step_geology_river_sync_ms: 0.0,
+                step_geology_river_fallback_ms: 0.0,
+                river_network_rebuild_count: 0,
+                river_fallback_count: 0,
+            };
+            return serde_wasm_bindgen::to_value(&response).map_err(|err| {
+                JsValue::from_str(&format!(
+                    "failed to serialize step_world_profiled_detail: {err}"
+                ))
+            });
+        }
+        let managed = self
+            .worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+
+        let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
+        let steps = scaled_ticks.max(1);
+        let mut sim_breakdown = StepWorldBreakdownDetailed::default();
+        let mut step_sync_erosion_ms = 0.0;
+        let mut step_observe_world_change_ms = 0.0;
+        let mut step_history_snapshot_ms = 0.0;
+
+        for _ in 0..steps {
+            let step_breakdown = step_world_profiled_detailed(&mut managed.world);
+            sim_breakdown.accumulate(&step_breakdown);
+
+            let phase_start = profile_now_ms();
+            post_step_sync_light(&mut managed.world, &managed.terrain_params);
+            step_sync_erosion_ms += profile_elapsed_ms(phase_start);
+
+            let phase_start = profile_now_ms();
+            managed.observe_after_world_change();
+            step_observe_world_change_ms += profile_elapsed_ms(phase_start);
+
+            let phase_start = profile_now_ms();
+            managed.save_history_snapshot_if_needed();
+            step_history_snapshot_ms += profile_elapsed_ms(phase_start);
+        }
+
+        let response = StepWorldProfiledDetailResponse {
+            world_id,
+            steps,
+            step_feedback_ms: sim_breakdown.breakdown.step_feedback_ms,
+            step_geology_terrain_ms: sim_breakdown.breakdown.step_geology_terrain_ms,
+            step_climate_ms: sim_breakdown.breakdown.step_climate_ms,
+            step_geology_river_ms: sim_breakdown.breakdown.step_geology_river_ms,
+            step_ecology_ms: sim_breakdown.breakdown.step_ecology_ms,
+            step_civilization_ms: sim_breakdown.breakdown.step_civilization_ms,
+            step_transition_ms: sim_breakdown.breakdown.step_transition_ms,
+            step_sync_erosion_ms,
+            step_observe_world_change_ms,
+            step_history_snapshot_ms,
+            step_geology_river_prepare_ms: sim_breakdown.river.step_geology_river_prepare_ms,
+            step_geology_river_automaton_ms: sim_breakdown.river.step_geology_river_automaton_ms,
+            step_geology_river_network_ms: sim_breakdown.river.step_geology_river_network_ms,
+            step_geology_river_sync_ms: sim_breakdown.river.step_geology_river_sync_ms,
+            step_geology_river_fallback_ms: sim_breakdown.river.step_geology_river_fallback_ms,
+            river_network_rebuild_count: sim_breakdown.river.river_network_rebuild_count,
+            river_fallback_count: sim_breakdown.river.river_fallback_count,
+        };
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!(
+                "failed to serialize step_world_profiled_detail: {err}"
+            ))
+        })
     }
 
     #[wasm_bindgen(js_name = set_simulation_rate)]

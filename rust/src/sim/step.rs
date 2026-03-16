@@ -22,7 +22,7 @@ use civilization::run_civilization_step;
 use climate::run_climate_step;
 use ecology::run_ecology_step;
 use feedback::apply_feedback_queue;
-use geology::{run_geology_river_step, run_geology_terrain_step};
+use geology::{run_geology_river_step, run_geology_river_step_profiled, run_geology_terrain_step};
 use transition::update_era_transition;
 
 use super::world::{EraKind, World};
@@ -52,6 +52,23 @@ pub struct StepWorldBreakdown {
     pub step_ecology_ms: f64,
     pub step_civilization_ms: f64,
     pub step_transition_ms: f64,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StepWorldRiverBreakdown {
+    pub step_geology_river_prepare_ms: f64,
+    pub step_geology_river_automaton_ms: f64,
+    pub step_geology_river_network_ms: f64,
+    pub step_geology_river_sync_ms: f64,
+    pub step_geology_river_fallback_ms: f64,
+    pub river_network_rebuild_count: u32,
+    pub river_fallback_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StepWorldBreakdownDetailed {
+    pub breakdown: StepWorldBreakdown,
+    pub river: StepWorldRiverBreakdown,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -95,6 +112,29 @@ impl StepWorldBreakdown {
     }
 }
 
+impl StepWorldRiverBreakdown {
+    pub fn accumulate(&mut self, other: &Self) {
+        self.step_geology_river_prepare_ms += other.step_geology_river_prepare_ms;
+        self.step_geology_river_automaton_ms += other.step_geology_river_automaton_ms;
+        self.step_geology_river_network_ms += other.step_geology_river_network_ms;
+        self.step_geology_river_sync_ms += other.step_geology_river_sync_ms;
+        self.step_geology_river_fallback_ms += other.step_geology_river_fallback_ms;
+        self.river_network_rebuild_count = self
+            .river_network_rebuild_count
+            .saturating_add(other.river_network_rebuild_count);
+        self.river_fallback_count = self
+            .river_fallback_count
+            .saturating_add(other.river_fallback_count);
+    }
+}
+
+impl StepWorldBreakdownDetailed {
+    pub fn accumulate(&mut self, other: &Self) {
+        self.breakdown.accumulate(&other.breakdown);
+        self.river.accumulate(&other.river);
+    }
+}
+
 pub fn step_world(world: &mut World) {
     world.exec.budgets = world.exec.era.budgets();
     world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
@@ -110,11 +150,16 @@ pub fn step_world(world: &mut World) {
 }
 
 pub fn step_world_profiled(world: &mut World) -> StepWorldBreakdown {
+    step_world_profiled_detailed(world).breakdown
+}
+
+pub fn step_world_profiled_detailed(world: &mut World) -> StepWorldBreakdownDetailed {
     world.exec.budgets = world.exec.era.budgets();
     world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
     world.exec.runtime_tick_ms = world.exec.era.runtime_tick_ms();
 
     let mut breakdown = StepWorldBreakdown::default();
+    let mut river_breakdown = StepWorldRiverBreakdown::default();
 
     let phase_start = profile_now();
     apply_feedback_queue(world);
@@ -129,8 +174,15 @@ pub fn step_world_profiled(world: &mut World) -> StepWorldBreakdown {
     breakdown.step_climate_ms = StepWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    run_geology_river_step(world, world.exec.budgets.geology);
+    let river_profile = run_geology_river_step_profiled(world, world.exec.budgets.geology);
     breakdown.step_geology_river_ms = StepWorldBreakdown::capture_elapsed(phase_start);
+    river_breakdown.step_geology_river_prepare_ms = river_profile.river_prepare_ms;
+    river_breakdown.step_geology_river_automaton_ms = river_profile.river_automaton_ms;
+    river_breakdown.step_geology_river_network_ms = river_profile.river_network_ms;
+    river_breakdown.step_geology_river_sync_ms = river_profile.river_sync_ms;
+    river_breakdown.step_geology_river_fallback_ms = river_profile.river_fallback_ms;
+    river_breakdown.river_network_rebuild_count = river_profile.network_rebuild_count;
+    river_breakdown.river_fallback_count = river_profile.fallback_count;
 
     let phase_start = profile_now();
     run_ecology_step(world, world.exec.budgets.ecology);
@@ -145,7 +197,10 @@ pub fn step_world_profiled(world: &mut World) -> StepWorldBreakdown {
     breakdown.step_transition_ms = StepWorldBreakdown::capture_elapsed(phase_start);
 
     world.exec.tick = world.exec.tick.saturating_add(1);
-    breakdown
+    StepWorldBreakdownDetailed {
+        breakdown,
+        river: river_breakdown,
+    }
 }
 
 pub(super) fn geology_river_budget(era: EraKind, geology_budget: u32) -> u32 {

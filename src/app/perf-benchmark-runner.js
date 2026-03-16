@@ -13,6 +13,14 @@ const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_history_snapshot",
 ];
 
+const RIVER_BREAKDOWN_METRIC_NAMES = [
+    "step_geology_river_prepare",
+    "step_geology_river_automaton",
+    "step_geology_river_network",
+    "step_geology_river_sync",
+    "step_geology_river_fallback",
+];
+
 const FLOAT32_FIELDS = new Set([
     "height",
     "river_flux",
@@ -192,6 +200,20 @@ function pushStepBreakdownSamples(recorder, profiledResult) {
     }
 }
 
+function pushRiverBreakdownSamples(recorder, profiledResult) {
+    if (!profiledResult) {
+        return;
+    }
+    const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
+    for (const metricName of RIVER_BREAKDOWN_METRIC_NAMES) {
+        const rawValue = profiledResult[`${metricName}_ms`];
+        if (!Number.isFinite(rawValue)) {
+            continue;
+        }
+        recorder.pushSample(metricName, rawValue / steps);
+    }
+}
+
 function createControllerState(WorldSimController, profile, level, terrainParams) {
     const controller = new WorldSimController();
     const initResult = controller.init_world(profile.seed ?? "alpha", level, {
@@ -310,6 +332,8 @@ export function createPerfBenchmarkRunner(deps = {}) {
             replay_ticks_total: 0,
             replay_time_ms_total: 0,
             step_world_time_ms_total: 0,
+            river_network_rebuild_count_total: 0,
+            river_fallback_count_total: 0,
         };
 
         for (let i = 0; i < totalTicks; i += 1) {
@@ -328,8 +352,19 @@ export function createPerfBenchmarkRunner(deps = {}) {
             if (shouldSampleBreakdown) {
                 diagnostics.profile_attempt_count += 1;
                 try {
-                    const profiled = controller.step_world_profiled(worldId, 1);
+                    const profiled = typeof controller.step_world_profiled_detail === "function"
+                        ? controller.step_world_profiled_detail(worldId, 1)
+                        : controller.step_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
+                    pushRiverBreakdownSamples(recorder, profiled);
+                    diagnostics.river_network_rebuild_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.river_network_rebuild_count) || 0),
+                    );
+                    diagnostics.river_fallback_count_total += Math.max(
+                        0,
+                        Math.floor(Number(profiled?.river_fallback_count) || 0),
+                    );
                     diagnostics.profile_success_count += 1;
                 } catch (error) {
                     diagnostics.profile_fallback_count += 1;
@@ -449,6 +484,8 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 step_world_time_ms_total: roundMs(diagnostics.step_world_time_ms_total),
                 replay_time_share_of_wall: roundRatio(replayShareOfWall),
                 replay_time_share_of_step_world: roundRatio(replayShareOfStepWorld),
+                river_network_rebuild_count_total: diagnostics.river_network_rebuild_count_total,
+                river_fallback_count_total: diagnostics.river_fallback_count_total,
             },
         };
     }
