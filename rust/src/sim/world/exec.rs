@@ -42,6 +42,14 @@ pub struct FeedbackFields {
     pub water_withdrawal: Vec<f32>,
     pub dam_pressure: Vec<f32>,
     pub pollution: Vec<f32>,
+    #[serde(default)]
+    pub extra: Vec<FeedbackChannel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackChannel {
+    pub key: String,
+    pub values: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -65,11 +73,16 @@ impl FeedbackQueue {
 }
 
 impl FeedbackFields {
+    pub const WATER_WITHDRAWAL_KEY: &'static str = "water_withdrawal";
+    pub const DAM_PRESSURE_KEY: &'static str = "dam_pressure";
+    pub const POLLUTION_KEY: &'static str = "pollution";
+
     pub fn zeros(cell_count: usize) -> Self {
         Self {
             water_withdrawal: vec![0.0; cell_count],
             dam_pressure: vec![0.0; cell_count],
             pollution: vec![0.0; cell_count],
+            extra: Vec::new(),
         }
     }
 
@@ -77,6 +90,48 @@ impl FeedbackFields {
         self.water_withdrawal.fill(0.0);
         self.dam_pressure.fill(0.0);
         self.pollution.fill(0.0);
+        for channel in &mut self.extra {
+            channel.values.fill(0.0);
+        }
+    }
+
+    pub fn channel(&self, key: &str) -> Option<&[f32]> {
+        match key {
+            Self::WATER_WITHDRAWAL_KEY => Some(self.water_withdrawal.as_slice()),
+            Self::DAM_PRESSURE_KEY => Some(self.dam_pressure.as_slice()),
+            Self::POLLUTION_KEY => Some(self.pollution.as_slice()),
+            _ => self
+                .extra
+                .iter()
+                .find(|channel| channel.key == key)
+                .map(|channel| channel.values.as_slice()),
+        }
+    }
+
+    pub fn channel_mut(&mut self, key: &str, cell_count: usize) -> &mut [f32] {
+        let values = match key {
+            Self::WATER_WITHDRAWAL_KEY => &mut self.water_withdrawal,
+            Self::DAM_PRESSURE_KEY => &mut self.dam_pressure,
+            Self::POLLUTION_KEY => &mut self.pollution,
+            _ => {
+                let channel_index = self
+                    .extra
+                    .iter()
+                    .position(|channel| channel.key == key)
+                    .unwrap_or_else(|| {
+                        self.extra.push(FeedbackChannel {
+                            key: key.to_string(),
+                            values: vec![0.0; cell_count],
+                        });
+                        self.extra.len() - 1
+                    });
+                &mut self.extra[channel_index].values
+            }
+        };
+        if values.len() != cell_count {
+            values.resize(cell_count, 0.0);
+        }
+        values.as_mut_slice()
     }
 }
 

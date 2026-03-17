@@ -1,7 +1,8 @@
-use super::feedback::apply_feedback_queue;
 use super::geology::{run_geology_step, run_hydrology_step_profiled};
-use super::pipeline::prepare_step;
-use super::transition::update_era_transition;
+use super::pipeline::{
+    finalize_tick, prepare_step, run_climate_stage, run_ecology_stage, run_feedback_stage,
+    run_society_stage, run_transition_stage,
+};
 
 use crate::sim::world::World;
 
@@ -130,7 +131,7 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     let mut river_breakdown = ExecWorldRiverBreakdown::default();
 
     let phase_start = profile_now();
-    apply_feedback_queue(world);
+    run_feedback_stage(world);
     breakdown.exec_feedback_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
@@ -138,7 +139,7 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     breakdown.exec_geology_terrain_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    crate::sim::climate::run_climate_step(world, world.exec.budgets.climate);
+    run_climate_stage(world);
     breakdown.exec_climate_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
@@ -161,23 +162,18 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
         river_profile.sink_rebuild_fallback_full_count;
 
     let phase_start = profile_now();
-    crate::sim::ecology::run_ecology_step(world, world.exec.budgets.ecology);
+    run_ecology_stage(world);
     breakdown.exec_ecology_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    crate::sim::domesticates::update_domesticates(world, world.exec.budgets.ecology);
-    crate::sim::subsistence::update_subsistence(world, world.exec.budgets.civilization);
-    crate::sim::population::update_population(world, world.exec.budgets.civilization);
-    crate::sim::settlement::update_settlement(world, world.exec.budgets.civilization);
-    crate::sim::polity::update_polity(world, world.exec.budgets.civilization);
-    crate::sim::conflict::update_conflict(world, world.exec.budgets.civilization);
+    run_society_stage(world);
     breakdown.exec_society_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    update_era_transition(world);
+    run_transition_stage(world);
     breakdown.exec_transition_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
-    world.exec.tick = world.exec.tick.saturating_add(1);
+    finalize_tick(world);
     ExecWorldBreakdownDetailed {
         breakdown,
         river: river_breakdown,

@@ -4,7 +4,7 @@ pub mod types;
 pub use crate::sim::subsistence::types::*;
 
 use crate::sim::exec::lerp;
-use crate::sim::world::World;
+use crate::sim::world::{FeedbackFields, World};
 
 pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -12,6 +12,8 @@ pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
     }
     let alpha = 0.2_f32;
     let n = world.state.geology.height.len();
+    let mut water_withdrawal = vec![0.0_f32; n];
+    let mut dam_pressure = vec![0.0_f32; n];
     let max_flow = world
         .state
         .hydrology
@@ -38,9 +40,15 @@ pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
             lerp(world.state.subsistence.land_use[i], land_use, alpha * budget.max(1) as f32);
         world.state.subsistence.subsistence_mix[i] =
             lerp(world.state.subsistence.subsistence_mix[i], food, alpha * 0.5);
-        world.exec.feedback_queue.pending.water_withdrawal[i] =
-            (food * world.state.population.population[i] / 180.0).clamp(0.0, 1.0);
-        world.exec.feedback_queue.pending.dam_pressure[i] =
-            (river * world.state.population.population[i] / 220.0).clamp(0.0, 1.0);
+        water_withdrawal[i] = (food * world.state.population.population[i] / 180.0).clamp(0.0, 1.0);
+        dam_pressure[i] = (river * world.state.population.population[i] / 220.0).clamp(0.0, 1.0);
     }
+
+    let pending = &mut world.exec.feedback_queue.pending;
+    pending
+        .channel_mut(FeedbackFields::WATER_WITHDRAWAL_KEY, n)
+        .copy_from_slice(&water_withdrawal);
+    pending
+        .channel_mut(FeedbackFields::DAM_PRESSURE_KEY, n)
+        .copy_from_slice(&dam_pressure);
 }

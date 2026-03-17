@@ -63,6 +63,34 @@
     }
 
     #[test]
+    fn feedback_queue_supports_generic_channels() {
+        let mut queue = FeedbackQueue::new(3);
+        queue.pending.channel_mut("custom_flow", 3)[1] = 0.25;
+        assert_eq!(
+            queue.pending.channel("custom_flow").and_then(|v| v.get(1).copied()),
+            Some(0.25)
+        );
+
+        queue.pending.clear();
+        assert_eq!(
+            queue.pending.channel("custom_flow").and_then(|v| v.get(1).copied()),
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn civilization_indicators_aggregate_population_and_polity() {
+        let mut world = build_world();
+        world.state.population.population = vec![12.0, 5.0, 11.0, 0.0];
+        world.state.polity.polity_id = vec![1, 0, 2, 0];
+
+        let indicators = world.state.civilization_state().indicators();
+        assert_eq!(indicators.settled_cells, 2);
+        assert!((indicators.total_population - 28.0).abs() < 1e-6);
+        assert_eq!(indicators.state_cells, 2);
+    }
+
+    #[test]
     fn metrics_collects_height_and_flux_stats() {
         let mut world = World::new(
             WorldMesh {

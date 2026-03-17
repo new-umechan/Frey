@@ -3,13 +3,14 @@ pub mod types;
 #[allow(unused_imports)]
 pub use crate::sim::population::types::*;
 
-use crate::sim::world::World;
+use crate::sim::world::{FeedbackFields, World};
 
 pub(crate) fn update_population(world: &mut World, budget: u32) {
     if budget == 0 {
         return;
     }
     let n = world.state.geology.height.len();
+    let mut pollution = vec![0.0_f32; n];
     for i in 0..n {
         if world.state.geology.height[i] <= 0.0 {
             world.state.population.population[i] *= 0.98;
@@ -27,6 +28,13 @@ pub(crate) fn update_population(world: &mut World, budget: u32) {
         world.state.population.population[i] = next;
         world.state.population.population_density[i] = next;
         world.state.population.migration_pressure[i] = (next / carrying).clamp(0.0, 1.0);
-        world.exec.feedback_queue.pending.pollution[i] = (next / 260.0).clamp(0.0, 1.0);
+        pollution[i] = (next / 260.0).clamp(0.0, 1.0);
     }
+
+    world
+        .exec
+        .feedback_queue
+        .pending
+        .channel_mut(FeedbackFields::POLLUTION_KEY, n)
+        .copy_from_slice(&pollution);
 }

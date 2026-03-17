@@ -56,6 +56,11 @@ JSから利用する現行WASM公開APIを定義する。
 - `min_height: number`
 - `max_river_flux: number`
 - `top10_river_flux_sum: number`
+- `river_active_cells: number`
+- `river_fragmentation_ratio: number`
+- `river_ocean_reach_ratio: number`
+- `river_mainstem_persistence: number`
+- `river_flux_concentration: number`
 - `continent_count: number`
 - `largest_continent_cells: number`
 
@@ -79,3 +84,10 @@ JSから利用する現行WASM公開APIを定義する。
 - `world_id`や`snapshot_id`が不正な場合は`JsValue`エラーを返す。
 - `mesh_level > 8`はエラー。
 - `exec_world(world_id, 0)`はno-opで成功する。
+
+## 4. 互換性方針
+
+- 既存の公開APIシグネチャ（関数名・引数・戻り値の基本構造）は維持する。
+- `MetricsResponse` の既存フィールドは後方互換のため削除しない。
+- 新規フィールド追加は後方互換な拡張として扱い、既存クライアントの読み取りを破壊しない。
+- 内部実装（`WorldState` 分割、実行パイプライン、Feedback構造）の再編は非公開詳細とし、互換レイヤで既存挙動を維持する。

@@ -129,6 +129,62 @@ pub struct ConflictState {
     pub frontline: Vec<f32>,
 }
 
+pub struct CivilizationState<'a> {
+    pub population: &'a PopulationState,
+    pub settlement: &'a SettlementState,
+    pub polity: &'a PolityState,
+    pub conflict: &'a ConflictState,
+}
+
+pub struct CivilizationStateMut<'a> {
+    pub population: &'a mut PopulationState,
+    pub settlement: &'a mut SettlementState,
+    pub polity: &'a mut PolityState,
+    pub conflict: &'a mut ConflictState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct CivilizationIndicators {
+    pub settled_cells: usize,
+    pub total_population: f32,
+    pub state_cells: usize,
+}
+
+impl WorldState {
+    pub fn civilization_state(&self) -> CivilizationState<'_> {
+        CivilizationState {
+            population: &self.population,
+            settlement: &self.settlement,
+            polity: &self.polity,
+            conflict: &self.conflict,
+        }
+    }
+
+    pub fn civilization_state_mut(&mut self) -> CivilizationStateMut<'_> {
+        CivilizationStateMut {
+            population: &mut self.population,
+            settlement: &mut self.settlement,
+            polity: &mut self.polity,
+            conflict: &mut self.conflict,
+        }
+    }
+}
+
+impl CivilizationState<'_> {
+    pub fn indicators(&self) -> CivilizationIndicators {
+        CivilizationIndicators {
+            settled_cells: self
+                .population
+                .population
+                .iter()
+                .filter(|&&value| value >= 10.0)
+                .count(),
+            total_population: self.population.population.iter().copied().sum::<f32>(),
+            state_cells: self.polity.polity_id.iter().filter(|&&id| id > 0).count(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeologyDynamicsState {
     #[serde(default)]
