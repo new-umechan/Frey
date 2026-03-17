@@ -87,6 +87,7 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 - 対応コード:
   - `rust/src/sim/world.rs`
   - `src/sim/runtime/state.js`
+  - 役割: `World State` / `Exec State` / `Graph State` の配置と責務を定義
 
 ### `docs/interface/wasm_api.md`
 

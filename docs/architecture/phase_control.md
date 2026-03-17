@@ -29,10 +29,10 @@ class Tick:
 | 時代 | 主対象 | 1tickの意味 | 重点 |
 | --- | --- | --- | --- |
 | 地殻形成期 | `Geology` | 500万年 | プレート運動、境界活動、海陸骨格 |
-| 環境形成期 | `Climate` | 1万年 | 降水、流量、侵食、堆積 |
-| 生命誕生期 | `Ecology` | 1000年 | 可住性、生産性、土地利用ポテンシャル |
-| 文明成立期 | `Civilization` | 100年 | 定住、農業、初期国家形成 |
-| 歴史展開期 | `Civilization` | 1年 | 国家、文化、技術、戦争 |
+| 環境形成期 | `Climate` / `Hydrology` | 1万年 | 降水、流出、流路、流量、侵食、堆積 |
+| 生命誕生期 | `Ecology` / `Domesticates` / `Subsistence` | 1000年 | 可住性、生産性、作物・家畜分布、生業成立 |
+| 文明成立期 | `Population` / `Settlement` / `Polity` | 100年 | 定住、都市化、初期国家形成 |
+| 歴史展開期 | `Conflict`（+Tier 2） | 1年 | 国家競合、戦争、交易、技術変化 |
 
 時代は、モジュールを開始停止する排他的な段階ではない。
 どのモジュールをどれだけ強く更新するかを決める時間スケールである。
@@ -44,9 +44,9 @@ class Tick:
 | 時代 | 有効な状態 |
 | --- | --- |
 | 地殻形成期 | `Geology` のみ |
-| 環境形成期 | `Climate` を初回有効化 |
-| 生命誕生期 | `Ecology` を初回有効化 |
-| 文明成立期 | `Civilization` を初回有効化 |
+| 環境形成期 | `Climate` と `Hydrology` を初回有効化 |
+| 生命誕生期 | `Ecology` / `Domesticates` / `Subsistence` を初回有効化 |
+| 文明成立期 | `Population` / `Settlement` / `Polity` を初回有効化 |
 | 歴史展開期 | 既存状態をすべて保持したまま運用 |
 
 地殻形成期では、`Climate` と `Ecology` がまだ有効でなくても `Geology` が未初期化値を読まないようにする。
@@ -61,15 +61,15 @@ class Tick:
 `SubsystemBudgets` は、各モジュールに与える内部更新回数の近似である。
 初版では整数回数として扱う。
 
-| 時代 | `Geology` | `Climate` | `Ecology` | `Civilization` |
-| --- | --- | --- | --- | --- |
-| 地殻形成期 | 高 | 低 | なし | なし |
-| 環境形成期 | 中 | 高 | 低 | なし |
-| 生命誕生期 | 低 | 中 | 高 | 低 |
-| 文明成立期 | 低 | 低 | 中 | 高 |
-| 歴史展開期 | 低 | 低 | 低 | 高 |
+| 時代 | `Geology` | `Climate` | `Hydrology` | `Ecology` | `Domesticates` | `Subsistence` | `Population` | `Settlement` | `Polity` | `Conflict` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 地殻形成期 | 高 | 低 | なし | なし | なし | なし | なし | なし | なし | なし |
+| 環境形成期 | 中 | 高 | 高 | 低 | なし | なし | なし | なし | なし | なし |
+| 生命誕生期 | 低 | 中 | 中 | 高 | 中 | 中 | 低 | なし | なし | なし |
+| 文明成立期 | 低 | 低 | 中 | 中 | 中 | 高 | 高 | 高 | 高 | 低 |
+| 歴史展開期 | 低 | 低 | 低 | 低 | 低 | 中 | 高 | 高 | 高 | 高 |
 
-歴史展開期のように `Civilization` 以外の活動量が低い時代では、低活動モジュールはスキップ可能とする。
+歴史展開期のように活動量が低いモジュールはスキップ可能とする。
 スキップ条件の閾値は後続バージョンで定義する。
 
 ## 時代遷移
@@ -92,13 +92,19 @@ EPOCH_TRANSITIONS = {
 
 1tickの標準順序は次の通り。
 
-1. tick開始時に `FeedbackQueue` の内容を `World State` に適用する
+1. tick開始時に `FeedbackQueue` の内容を `World State` と `Graph State` に適用する
 2. `Geology`
 3. `Climate`
-4. `Ecology`
-5. `Civilization`
-6. `Civilization` が環境影響を `FeedbackQueue` に格納する
-7. 時代遷移判定
+4. `Hydrology`
+5. `Ecology`
+6. `Domesticates`
+7. `Subsistence`
+8. `Population`
+9. `Settlement`
+10. `Polity`
+11. `Conflict`
+12. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
+13. 時代遷移判定
 
 補足:
 

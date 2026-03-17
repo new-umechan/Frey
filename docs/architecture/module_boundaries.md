@@ -8,30 +8,79 @@
 モジュール間の共有面は `World State` である。
 進行管理入力は `Exec State` である。
 
-## `Exec`
+## 現状
+Tier1までのモジュールについて、詳細を決定している。
 
-### 読むもの
+---
 
-- 現在の `World State`
-- 現在の `Exec State`
+## モジュール一覧
 
-### 書くもの
+### Tier 1（必須）
 
-- 次tick
-- 時代
-- `SubsystemBudgets`
-- `FeedbackQueue` の適用結果
-- 履歴とスナップショット
+| モジュール | 概要 |
+| --- | --- |
+| `Geology` | 地形変化、侵食・堆積 |
+| `Climate` | 降水・気温・水循環 |
+| `Hydrology` | 流路・流量・集積 |
+| `Ecology` | 植生・可住性・生産性 |
+| `Domesticates` | 作物・家畜の分布 |
+| `Subsistence` | 地域ごとの生業構成 |
+| `Population` | 人口変動 |
+| `Settlement` | 集落・都市形成 |
+| `Polity` | 国家・領域変化 |
+| `Conflict` | 戦争・境界変化 |
 
-### 書かないもの
+### Tier 2（粗いモデルで可）
 
-- 地形、気候、生態、文明の各属性値そのもの
+| モジュール | 概要 |
+| --- | --- |
+| `Disease` | 感染拡大・人口への影響 |
+| `Resources` | 資源埋蔵・採掘・枯渇 |
+| `Trade` | 地域間交換・交易流量 |
+| `Technology` | 技術水準更新 |
+| `Infrastructure` | 地形書き換え能力 |
 
-### 補足
+### Tier 3（スコープ外）
 
-`Exec` は進行管理だけを担当する。
-`FeedbackQueue` を tick開始時に `World State` へ適用する責務も持つ。
-個別の自然法則や社会法則は持たない。
+| モジュール | 概要 |
+| --- | --- |
+| `Institutions` | 制度（属性として保持のみ） |
+
+---
+
+## tick内依存（UPDATE_DAG）
+
+```python
+UPDATE_DAG = {
+    Geology:      [],
+    Climate:      [Geology],
+    Hydrology:    [Geology, Climate],
+    Ecology:      [Geology, Climate, Hydrology],
+    Domesticates: [Geology, Climate, Hydrology, Ecology],
+    Subsistence:  [Geology, Hydrology, Ecology, Domesticates],
+    Population:   [Subsistence, Ecology],
+    Settlement:   [Population, Subsistence, Hydrology, Geology],
+    Polity:       [Settlement, Population],
+    Conflict:     [Polity, Population],
+}
+```
+
+## フィードバック（FEEDBACK_EDGES）
+
+逆方向の影響は次tickへ遅延させる。
+
+```python
+FEEDBACK_EDGES = {
+    # 文明→環境・文明内逆向き
+    Conflict:    [Geology, Hydrology, Ecology, Population, Settlement, Polity],
+    Population:  [Ecology],
+    Subsistence: [Ecology, Hydrology],
+    Polity:      [Settlement, Domesticates],
+    Settlement:  [Domesticates],  # 隣接地域への作物・家畜拡散を含む
+}
+```
+
+---
 
 ## `Geology`
 
@@ -39,30 +88,30 @@
 
 - 標高
 - プレートID
-- 流出量
-- 流量
-- 流域植生
-- 文明による取水、ダム、汚染などの次tick向けフィードバック
+- 流出量 ← `Climate` が書く
+- 流域植生 ← `Ecology` が書く
+- FeedbackQueue（`Conflict` による焦土・地形破壊）
 
 ### 書くもの
 
 - 標高
 - 侵食量
 - 堆積量
-- 流路
-- 地形由来の境界条件
+- プレートID
 
 ### 書かないもの
 
-- 降水
-- 気温
-- 可住性
-- 人口
+- 流路・流量（`Hydrology` に移管）
+- 降水・気温
+- 植生・可住性
+- 人口・国家
 
 ### 補足
 
 地形を書き換える責任は `Geology` に一本化する。
-地殻形成期に `Climate` や `Ecology` が未有効な間は、流出量に簡易な初期値、流量に 0、流域植生に なし を既定値として使う。
+`Hydrology` 切り出し以前は流路・流量も担当していたが、v2では `Hydrology` に移管する。
+
+---
 
 ## `Climate`
 
@@ -85,15 +134,44 @@
 ### 書かないもの
 
 - 標高
-- 侵食量
-- 堆積量
-- 集積流量
+- 侵食量・堆積量
+- 流路・流量
 - 人口
 
 ### 補足
 
-`Climate` は地形を読むが、地形そのものは書き換えない。
-また、局所水収支までは担当するが、河川流量の集積は `Geology` が引き受ける。
+局所水収支までを担当する。流量の集積は `Hydrology` が引き受ける。
+
+---
+
+## `Hydrology`
+
+### 読むもの
+
+- 標高 ← `Geology` が書く
+- 流出量 ← `Climate` が書く
+- 侵食量・堆積量 ← `Geology` が書く
+- FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
+
+### 書くもの
+
+- 流路
+- 流量
+- 河川輸送コスト
+
+### 書かないもの
+
+- 標高
+- 降水・流出量
+- 植生
+- 人口・国家
+
+### 補足
+
+流路計算は、標高を読んで流路グラフを返す純粋関数として切り出す。
+河川輸送コストは `Settlement` と `Trade` が読む。
+
+---
 
 ## `Ecology`
 
@@ -104,13 +182,14 @@
 - 気温
 - 流量
 - 前tickまでの生態状態
+- FeedbackQueue（`Population`・`Subsistence` による土地利用変化）
 
 ### 書くもの
 
 - 植生
 - 可住性
 - 生産性
-- 流域植生との交換量
+- 流域植生
 
 ### 書かないもの
 
@@ -121,82 +200,177 @@
 
 ### 補足
 
-`Ecology` は環境応答を `World State` に書く。
-社会変化は直接扱わない。
+環境応答を `World State` に書く。社会変化は直接扱わない。
 
-## `Civilization`
+---
+
+## `Domesticates`
 
 ### 読むもの
 
 - 標高
+- 気温
 - 降水
+- 植生 ← `Ecology` が書く
+- 可住性 ← `Ecology` が書く
+- FeedbackQueue（`Settlement` 隣接地域からの拡散）
+
+### 書くもの
+
+- 作物分布（栽培可能種・栽培実績）
+- 家畜分布（利用可能種・利用実績）
+
+### 書かないもの
+
+- 標高
+- 気候属性
+- 人口
+- 国家
+
+### 補足
+
+伝播（隣接 `Settlement` からの拡散）はFeedbackQueue経由で次tickに適用する。
+環境条件から栽培・利用可能かどうかを判定し、分布を更新する。
+
+---
+
+## `Subsistence`
+
+### 読むもの
+
+- 標高
 - 流量
-- 可住性
-- 生産性
-- 前tickまでの文明状態
+- 植生・生産性 ← `Ecology` が書く
+- 作物・家畜分布 ← `Domesticates` が書く
+- 前tickまでの生業構成
+
+### 書くもの
+
+- 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
+- 食料生産量
+- 土地利用
+
+### 書かないもの
+
+- 人口（`Population` が読む値として提供するが、直接書かない）
+- 標高
+- 気候属性
+- 国家
+
+### 補足
+
+生産量と生業様式は別物として扱う。
+生業構成の変化は環境条件と前tickの状態から決まる。
+
+---
+
+## `Population`
+
+### 読むもの
+
+- 食料生産量 ← `Subsistence` が書く
+- 可住性 ← `Ecology` が書く
+- 前tickまでの人口
+- FeedbackQueue（`Conflict` による人口減）
 
 ### 書くもの
 
 - 人口
-- 国家ID
-- 農業状態
-- 取水
-- ダム
-- 汚染
-- `FeedbackQueue` への環境フィードバック要求
+- 人口密度
+- 人口移動圧
 
 ### 書かないもの
 
-- 標高の直接更新
-- 降水の直接更新
-- 流路の直接更新
+- 標高
+- 気候属性
+- 国家・領域
 
 ### 補足
 
-`Civilization` は環境へ影響を与えうるが、その影響は次tickへ遅延させる。
-tick N では `FeedbackQueue` に書き込むだけで、その場では適用しない。
-同一tick内で `Geology` や `Climate` を逆流更新しない。
+`Disease`（Tier 2）が有効化された場合、死亡率への影響をFeedbackQueue経由で受け取る。
 
-## tick内依存
+---
 
-同一tick内の依存は次で固定する。
+## `Settlement`
 
-```python
-UPDATE_DAG = {
-    Geology:      [],
-    Climate:      [Geology],
-    Ecology:      [Geology, Climate],
-    Civilization: [Geology, Climate, Ecology],
-}
-```
+### 読むもの
 
-## フィードバック
+- 人口・人口移動圧 ← `Population` が書く
+- 食料生産量・生業構成 ← `Subsistence` が書く
+- 河川輸送コスト ← `Hydrology` が書く
+- 標高・地形
+- FeedbackQueue（`Polity` による遷都・強制移住、`Conflict` による都市破壊）
 
-逆方向の影響は、同一tickではなく次tickへ遅延させる。
+### 書くもの
 
-```python
-FEEDBACK_EDGES = {
-    Civilization: [Geology, Climate, Ecology],
-}
-```
+- 集落位置・規模
+- 都市化度
+- 中心地階層
+- 居住地分布
 
-処理は2段階に分ける。
+### 書かないもの
 
-- tick N で `Civilization` が `FeedbackQueue` に書く
-- tick N+1 の開始時に `Exec` が `FeedbackQueue` を `World State` に適用する
+- 標高
+- 気候属性
+- 国家・領域（`Polity` が書く）
 
-これにより、依存グラフはDAGのまま保たれる。
+### 補足
 
-## 河川の責務分担
+港市・河港・峠都市などの立地は、地形と河川輸送コストから自然に決まる。
 
-河川は単独モジュールにしない。
-`World State` 上の属性群として分担して扱う。
+---
 
-| モジュール | 河川に関する担当 |
-| --- | --- |
-| `Geology` | 流路の決定、流量集積、侵食、堆積による地形書き換え |
-| `Climate` | 降水量、実蒸発散量、流出量 |
-| `Ecology` | 流域植生との交換 |
-| `Civilization` | 取水、ダム、汚染 |
+## `Polity`
 
-流路計算は、標高を読んで流路グラフを返す純粋関数として切り出す。
+### 読むもの
+
+- 集落・都市分布 ← `Settlement` が書く
+- 人口 ← `Population` が書く
+- 前tickまでの国家状態
+- FeedbackQueue（`Conflict` による領土変化）
+
+### 書くもの
+
+- 国家ID
+- 領域
+- 言語・文化圏
+- 国家安定度
+
+### 書かないもの
+
+- 標高
+- 気候属性
+- 人口の直接更新
+- 集落の直接更新
+
+### 補足
+
+言語・文化圏は国家の安定度に影響する変数として保持する。
+多民族構成（言語圏と国家境界の不一致）は国家安定度を下げる。
+
+---
+
+## `Conflict`
+
+### 読むもの
+
+- 国家ID・領域・安定度 ← `Polity` が書く
+- 人口 ← `Population` が書く
+- 前tickまでの戦争状態
+
+### 書くもの
+
+- 戦争状態
+- 戦線位置
+
+### 書かないもの（FeedbackQueueに回すもの）
+
+- 領土変化（→ `Polity` へ次tick）
+- 人口減（→ `Population` へ次tick）
+- 集落破壊（→ `Settlement` へ次tick）
+- 地形破壊（→ `Geology`・`Hydrology`・`Ecology` へ次tick）
+
+### 補足
+
+`Conflict` の結果はすべてFeedbackQueue経由で次tickに適用する。
+同一tick内で他モジュールを逆流更新しない。

@@ -104,13 +104,13 @@ Climateの補助入力として、各セルに次の固定地理量を持つ。
 これらは地形初期化時に前計算して`World State`へ保持する。
 毎tickで再構築しない。
 
-## Geologyとの責務分担
+## Hydrologyとの責務分担
 
 Climateは局所的な水収支を担当する。
-河川の流路決定と集積流量はGeologyが担当する。
+河川の流路決定と集積流量はHydrologyが担当する。
 
 したがって、Climateは`runoff`までを書き、`river_flux`は書かない。
-GeologyはClimateが書いた`runoff`を読んで河川流量を集積する。
+HydrologyはClimateが書いた`runoff`を読んで河川流量を集積する。
 
 関連:
 
