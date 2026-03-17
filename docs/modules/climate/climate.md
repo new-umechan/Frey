@@ -116,4 +116,4 @@ HydrologyはClimateが書いた`runoff`を読んで河川流量を集積する�
 
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
-- `docs/core/hydrology.md`
+- `docs/modules/hydrology/hydrology.md`

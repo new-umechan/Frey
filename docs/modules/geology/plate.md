@@ -64,7 +64,7 @@ heat_release_rate: プルーム発生時の放熱率
         ↓
 7. 各セルの標高・地殻厚を更新
         ↓
-8. 侵食・堆積・河川更新（詳細はdocs/core/errosion.md）
+8. 侵食・堆積・河川更新（詳細はdocs/modules/hydrology/erosion.md）
         ↓
 9. 活動量メトリクス更新
 
