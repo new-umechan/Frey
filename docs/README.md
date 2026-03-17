@@ -17,9 +17,9 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 
 ### フロントエンド
 
-- `src/main.js`
+- `web/src/main.js`
   - 起動エントリーポイント
-- `src/app/`
+- `web/src/app/`
   - アプリの組み立て、UI状態、WASM同期
   - `app.js`: 依存の組み立てとアプリ起動
   - `world-sync.js`: WASM応答をアプリ状態へ同期
@@ -27,20 +27,22 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
   - `era-presets.js`: 時代プリセット表示と変換
   - `plate-hover.js`: プレートhover表示
   - `terrain-renderer.js`: 地形属性の描画反映
-- `src/gfx/`
+- `web/src/gfx/`
   - Three.js描画、カメラ、地形ビジュアル
-- `src/ui/`
+- `web/src/ui/`
   - DOM取得とイベント配線
-- `src/interface/`
+- `web/src/interface/`
   - UIとWASMの境界
-- `src/sim/`
-  - フロントエンド側のランタイム状態とデバッグ補助
+- `web/src/app/runtime/`
+  - フロントエンド側のランタイム状態
+- `web/src/app/debug/`
+  - デバッグ補助
 
 ### Rust / WASM
 
 - `rust/src/lib.rs`
   - 公開エントリーポイント
-- `rust/src/wasm/world_sim/`
+- `rust/src/wasm_api/world_sim/`
   - `WorldSimController` のWASM境界
   - `mod.rs`: コントローラ本体
   - `api/worlds.rs`: world生成と進行
@@ -58,10 +60,10 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
   - `step/surface_dynamics.rs`: 応力から地表更新
   - `step/river.rs`: 河川と侵食オートマトン接続
   - `step/geology.rs`: Geology全体の束ね
-- `rust/src/domains/types.rs`
+- `rust/src/sim/terrain_types.rs`
   - 地形生成の公開型
   - `TerrainParams`、`TerrainOutput`、`MeshOutput`
-- `rust/src/domains/terrain/`
+- `rust/src/sim/terrain/`
   - 地形生成ドメイン
   - `terrain.rs` は `noise`、`plates`、`boundaries`、`surface`、`pipeline` を束ねる
   - `plates/`、`boundaries/`、`surface/` 配下は大物ファイルを責務単位で細分化した内部実装
@@ -73,7 +75,7 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 - 対応コード:
   - `rust/src/sim/world.rs`
   - `rust/src/sim/step.rs`
-  - `src/app/app.js`
+  - `web/src/app/app.js`
 
 ### `docs/architecture/module_boundaries.md`
 
@@ -86,22 +88,22 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 
 - 対応コード:
   - `rust/src/sim/world.rs`
-  - `src/sim/runtime/state.js`
+  - `web/src/app/runtime/state.js`
   - 役割: `World State` / `Exec State` / `Graph State` の配置と責務を定義
 
 ### `docs/interface/wasm_api.md`
 
 - 対応コード:
-  - `rust/src/wasm/world_sim/`
-  - `src/interface/wasm.js`
-  - `src/app/world-sync.js`
+  - `rust/src/wasm_api/world_sim/`
+  - `web/src/interface/wasm.js`
+  - `web/src/app/world-sync.js`
 
 ### `docs/interface/ui_spec.md`
 
 - 対応コード:
-  - `src/app/`
-  - `src/ui/`
-  - `src/gfx/`
+  - `web/src/app/`
+  - `web/src/ui/`
+  - `web/src/gfx/`
 
 ## 更新ルール
 

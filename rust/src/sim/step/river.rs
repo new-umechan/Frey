@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::domains;
+use crate::sim;
 use crate::sim::world::{EraKind, World};
 use crate::TerrainParams;
 
@@ -147,7 +147,7 @@ fn run_river_step_with_erosion_state(
     let cell_count = expected_height as u32;
     let budget_cells = (cell_count.saturating_mul(budget).max(1) / 12).max(32);
     let phase_start = profile_now();
-    let automaton_breakdown = domains::step_erosion_automaton(state, budget_cells);
+    let automaton_breakdown = sim::step_erosion_automaton(state, budget_cells);
     detail.river_automaton_ms += profile_elapsed_ms(phase_start);
     detail.river_automaton_sink_ms += automaton_breakdown.sink_rebuild_ms;
     detail.river_automaton_cell_ms += automaton_breakdown.cell_process_ms;

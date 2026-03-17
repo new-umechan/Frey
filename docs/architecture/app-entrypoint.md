@@ -2,7 +2,7 @@
 
 ## main.jsの責務
 
-`src/main.js`は次の3つだけを担う。
+`web/src/main.js`は次の3つだけを担う。
 
 1. アプリケーション起動
 2. メインループ実行
@@ -12,7 +12,7 @@
 
 ## 実装配置
 
-- エントリ: `src/main.js`
-- アプリ統合: `src/app/app.js`
-- UI操作: `src/ui/controls.js`
-- カメラ/表示面切替: `src/gfx/views/camera-controller.js`
+- エントリ: `web/src/main.js`
+- アプリ統合: `web/src/app/app.js`
+- UI操作: `web/src/ui/controls.js`
+- カメラ/表示面切替: `web/src/gfx/views/camera-controller.js`

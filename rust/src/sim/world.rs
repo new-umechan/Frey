@@ -1098,8 +1098,8 @@ mod tests {
         params.level = 2;
         let seed = "metrics-regression-seed";
 
-        let terrain_a = crate::domains::build_terrain(seed, params.clone());
-        let terrain_b = crate::domains::build_terrain(seed, params);
+        let terrain_a = crate::sim::build_terrain(seed, params.clone());
+        let terrain_b = crate::sim::build_terrain(seed, params);
         let (positions, indices) = generate_icosphere(2);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
         let plate_id_a = terrain_a
@@ -1174,7 +1174,7 @@ mod tests {
         params.level = 2;
         let seed = "river-network-stability-seed";
 
-        let terrain = crate::domains::build_terrain(seed, params.clone());
+        let terrain = crate::sim::build_terrain(seed, params.clone());
         let (positions, indices) = generate_icosphere(2);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
         let plate_id = terrain

@@ -78,8 +78,8 @@ npm run seed:gate:heavy
 
 baselineファイル:
 
-- `testdata/seed-regression/seed-regression-quick-baseline.json`
-- `testdata/seed-regression/seed-regression-heavy-baseline.json`
+- `test/seed-regression/seed-regression-quick-baseline.json`
+- `test/seed-regression/seed-regression-heavy-baseline.json`
 
 baseline誤用防止:
 
@@ -94,8 +94,8 @@ baseline誤用防止:
 
 #### perfベースラインゲート（2026-03-17）
 
-- `scripts/bench.mjs` の `--baseline` / `--threshold` をCIで常時実行する
-- baselineファイルは `testdata/perf/bench-baseline.json`
+- `tools/bench/bench.mjs` の `--baseline` / `--threshold` をCIで常時実行する
+- baselineファイルは `test/perf/bench-baseline.json`
 - コマンド:
 
 ```sh
