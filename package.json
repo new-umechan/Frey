@@ -13,6 +13,12 @@
         "preview": "vite preview",
         "bench": "node scripts/bench.mjs",
         "bench:dev": "npm run wasm:build:dev:no-sync && node scripts/bench.mjs",
+        "perf:baseline": "npm run bench:dev -- --ticks 16 --seed alpha --no-geometry --sample-interval 4 --out testdata/perf/bench-baseline.json",
+        "perf:gate": "npm run bench:dev -- --ticks 16 --seed alpha --no-geometry --sample-interval 4 --baseline testdata/perf/bench-baseline.json --threshold 0.1",
+        "seed:regression": "node scripts/seed-regression.mjs",
+        "seed:regression:dev": "npm run wasm:build:dev:no-sync && node scripts/seed-regression.mjs",
+        "seed:gate:quick": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta --ticks 16 --baseline testdata/seed-regression/seed-regression-quick-baseline.json --check --threshold 0.005",
+        "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline testdata/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005",
         "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --release",
         "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../src/wasm --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../src/wasm --dev"

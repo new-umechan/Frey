@@ -30,6 +30,101 @@
 現時点では、手動スクリプトまたは補助コマンドでの実行を想定。
 将来的に `World` 実装後は自動化する。
 
+#### seed固定回帰CLIの運用ルール（2026-03-17）
+
+- 実行は `npm run seed:regression:dev -- ...` を基本とする
+- `npm run seed:regression -- ...` はWASMを自動ビルドしないため、古い生成物を参照する可能性がある
+
+ゲート運用:
+
+1. 常時ゲート（毎回）
+2. 重ゲート（PR前）
+
+採用している比較指標:
+
+- `land_cells`
+- `height_mean`
+- `height_std`
+- `max_river_flux`
+- `top10_river_flux_sum`
+
+許容誤差の決定手順:
+
+1. 条件を固定して実測する（12 seeds x 5 runs, 32 tick, level=6）
+2. run1をbaselineとし、run2-5の差分を集計する
+3. 各指標で `abs(current - baseline) / abs(baseline)` を計算する（baselineが0のときは絶対差）
+4. 各指標のP95に安全余白 `+0.005` を加算する
+5. 小数第4位で切り上げて最終閾値とする
+
+実測結果（2026-03-17, サンプル数48/指標）:
+
+- 全5指標で差分の `min=max=p95=0`
+- よって最終閾値は全指標 `0.005`
+
+推奨コマンド例:
+
+```sh
+npm run seed:gate:quick
+```
+
+```sh
+npm run seed:gate:heavy
+```
+
+ゲート条件:
+
+- `seed:gate:quick`: 4 seeds x 16 ticks x 1run
+- `seed:gate:heavy`: 8 seeds x 24 ticks x 1run
+
+baselineファイル:
+
+- `testdata/seed-regression/seed-regression-quick-baseline.json`
+- `testdata/seed-regression/seed-regression-heavy-baseline.json`
+
+baseline誤用防止:
+
+- `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は即FAILにする
+
+自動化:
+
+- 重ゲートは `.github/workflows/seed-regression-heavy-gate.yml` で次の契機で自動実行する
+  - `pull_request`
+  - `push` to `main`
+  - `workflow_dispatch`（手動実行）
+
+#### perfベースラインゲート（2026-03-17）
+
+- `scripts/bench.mjs` の `--baseline` / `--threshold` をCIで常時実行する
+- baselineファイルは `testdata/perf/bench-baseline.json`
+- コマンド:
+
+```sh
+npm run perf:gate
+```
+
+自動化:
+
+- `.github/workflows/perf-gate.yml` で次の契機で自動実行する
+  - `pull_request`
+  - `push` to `main`
+  - `workflow_dispatch`（手動実行）
+
+#### wasm APIテスト（2026-03-17）
+
+- `tick/restore/checkpoint` を含むwasm APIテストは `wasm-pack test --node` で実行する
+- コマンド:
+
+```sh
+cd rust && wasm-pack test --node
+```
+
+自動化:
+
+- `.github/workflows/wasm-api-tests.yml` で次の契機で自動実行する
+  - `pull_request`
+  - `push` to `main`
+  - `workflow_dispatch`（手動実行）
+
 ### 3. 手動確認（UI/統合）
 
 - 表示崩れ
@@ -106,7 +201,7 @@ let metrics = world.metrics();
 1. `save_checkpoint` 実行後、`list_checkpoints` に新規idが追加される
 2. `load_checkpoint` 実行後、tickとeraが保存時点へ戻る
 3. 不正idで `load_checkpoint` を呼んだ場合、例外になる
-4. `get_layer` は既知kindに対してFloat32Arrayを返す
+4. `get_field` は既知kindに対してFloat32Arrayを返す
 5. 未生成レイヤーkindと不正kindは例外になる
 6. `tick()` は `step(1)` ごとに単調増加する
 7. `tick()` は時代名ではなく累積管理Tickカウンタを返す

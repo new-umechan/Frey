@@ -7,6 +7,7 @@ mod worlds;
 mod tests {
     use serde::Deserialize;
     use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::super::WorldSimController;
 
@@ -71,7 +72,7 @@ mod tests {
         checkpoints: Vec<CheckpointListEntry>,
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn init_step_and_metrics_work() {
         let mut controller = WorldSimController::new();
         let init = controller
@@ -89,7 +90,7 @@ mod tests {
         assert!(metrics_data.tick >= 1.0);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn step_world_profiled_returns_breakdown() {
         let mut controller = WorldSimController::new();
         let init = controller
@@ -116,7 +117,7 @@ mod tests {
         assert!(profiled_data.step_history_snapshot_ms >= 0.0);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn init_metrics_expose_crust_budgets_before_first_tick() {
         let mut controller = WorldSimController::new();
         let init = controller
@@ -137,7 +138,7 @@ mod tests {
         assert_eq!(metrics_data.budgets.civilization, 0);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn history_ticks_and_restore_work() {
         let mut controller = WorldSimController::new();
         let init = controller
@@ -183,7 +184,7 @@ mod tests {
         assert_eq!(metrics_data.tick, 32.0);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn list_checkpoints_returns_saved_entries() {
         let mut controller = WorldSimController::new();
         let init = controller
