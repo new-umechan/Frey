@@ -1,17 +1,20 @@
-pub mod state;
-pub mod climate;
-pub mod conflict;
-pub mod domesticates;
-pub mod ecology;
+// 横断層
 pub mod exec;
-pub mod geology;
+pub mod world;
+pub mod state;
 pub mod geology_types;
+
+// Tier 1（UPDATE_DAG 順）
+pub mod geology;
+pub mod climate;
 pub mod hydrology;
-pub mod polity;
+pub mod ecology;
+pub mod domesticates;
+pub mod subsistence;
 pub mod population;
 pub mod settlement;
-pub mod subsistence;
-pub mod world;
+pub mod polity;
+pub mod conflict;
 pub use state::erosion;
 pub(crate) use crate::common::geo;
 

@@ -1,3 +1,8 @@
+pub mod types;
+
+#[allow(unused_imports)]
+pub use crate::sim::polity::types::*;
+
 use crate::sim::world::World;
 
 pub(crate) fn update_polity(world: &mut World, budget: u32) {

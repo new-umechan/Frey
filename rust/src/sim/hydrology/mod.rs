@@ -7,6 +7,8 @@ use crate::GeologyParams;
 
 use crate::sim::exec::{geology_river_budget, CRUST_RAIN_LAND, CRUST_RAIN_SEA};
 
+pub mod surface;
+
 mod fallback;
 mod network;
 mod profiling;

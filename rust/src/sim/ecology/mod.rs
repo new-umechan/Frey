@@ -1,3 +1,8 @@
+pub mod types;
+
+#[allow(unused_imports)]
+pub use crate::sim::ecology::types::*;
+
 use crate::sim::exec::{blend_alpha, lerp};
 use crate::sim::world::World;
 

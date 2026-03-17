@@ -1,3 +1,8 @@
+pub mod types;
+
+#[allow(unused_imports)]
+pub use crate::sim::subsistence::types::*;
+
 use crate::sim::exec::lerp;
 use crate::sim::world::World;
 
