@@ -64,7 +64,7 @@ pub(super) fn update_era_transition(world: &mut World) {
         .precipitation
         .iter()
         .copied()
-        .map(|value| (value / 1_500.0).clamp(0.0, 1.0))
+        .map(|value| (value / 1_500.0_f32).clamp(0.0_f32, 1.0_f32))
         .sum::<f32>()
         / cell_count;
     let ecology_activity = world

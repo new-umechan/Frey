@@ -1,4 +1,6 @@
-fn compute_spherical_coords(positions: &[[f32; 3]]) -> Vec<(f32, f32)> {
+use super::*;
+
+pub(super) fn compute_spherical_coords(positions: &[[f32; 3]]) -> Vec<(f32, f32)> {
     positions
         .iter()
         .map(|p| {
@@ -9,7 +11,7 @@ fn compute_spherical_coords(positions: &[[f32; 3]]) -> Vec<(f32, f32)> {
         .collect()
 }
 
-fn evaluate_phi(
+pub(super) fn evaluate_phi(
     spherical: &[(f32, f32)],
     harmonic_max_l: u32,
     spectral_alpha: f32,
@@ -44,7 +46,7 @@ fn evaluate_phi(
     phi
 }
 
-fn real_spherical_harmonic(l: i32, m: i32, theta: f32, lambda: f32) -> f32 {
+pub(super) fn real_spherical_harmonic(l: i32, m: i32, theta: f32, lambda: f32) -> f32 {
     let abs_m = m.abs();
     let x = theta.cos();
     let p_lm = associated_legendre(l, abs_m, x);
@@ -63,7 +65,7 @@ fn real_spherical_harmonic(l: i32, m: i32, theta: f32, lambda: f32) -> f32 {
     }
 }
 
-fn associated_legendre(l: i32, m: i32, x: f32) -> f32 {
+pub(super) fn associated_legendre(l: i32, m: i32, x: f32) -> f32 {
     if m > l {
         return 0.0;
     }
@@ -100,14 +102,14 @@ fn associated_legendre(l: i32, m: i32, x: f32) -> f32 {
     p_curr
 }
 
-fn factorial(n: u32) -> f32 {
+pub(super) fn factorial(n: u32) -> f32 {
     if n <= 1 {
         return 1.0;
     }
     (2..=n).fold(1.0, |acc, v| acc * v as f32)
 }
 
-fn normalize_zscore(data: &mut [f32]) {
+pub(super) fn normalize_zscore(data: &mut [f32]) {
     let mean = data.iter().sum::<f32>() / data.len() as f32;
     let variance = data
         .iter()
@@ -124,7 +126,7 @@ fn normalize_zscore(data: &mut [f32]) {
     }
 }
 
-fn normalize_zscore_if_var(data: &mut [f32]) {
+pub(super) fn normalize_zscore_if_var(data: &mut [f32]) {
     if data.is_empty() {
         return;
     }
@@ -147,7 +149,7 @@ fn normalize_zscore_if_var(data: &mut [f32]) {
     }
 }
 
-fn generate_frequency_bands(
+pub(super) fn generate_frequency_bands(
     spherical: &[(f32, f32)],
     nbr_offsets: &[u32],
     nbrs: &[u32],
@@ -173,7 +175,7 @@ fn generate_frequency_bands(
     (low, mid, high)
 }
 
-fn evaluate_phi_band(
+pub(super) fn evaluate_phi_band(
     spherical: &[(f32, f32)],
     l_min: u32,
     harmonic_max_l: u32,
@@ -209,7 +211,7 @@ fn evaluate_phi_band(
     out
 }
 
-fn generate_smoothed_noise_band(
+pub(super) fn generate_smoothed_noise_band(
     count: usize,
     nbr_offsets: &[u32],
     nbrs: &[u32],
@@ -230,7 +232,7 @@ fn generate_smoothed_noise_band(
     a.iter().zip(b.iter()).map(|(x, y)| x - y).collect()
 }
 
-fn smooth_scalar_field(nbr_offsets: &[u32], nbrs: &[u32], field: &mut [f32], iter: u32) {
+pub(super) fn smooth_scalar_field(nbr_offsets: &[u32], nbrs: &[u32], field: &mut [f32], iter: u32) {
     if iter == 0 || field.is_empty() {
         return;
     }
@@ -255,7 +257,7 @@ fn smooth_scalar_field(nbr_offsets: &[u32], nbrs: &[u32], field: &mut [f32], ite
     }
 }
 
-fn compute_plate_boundary_proximity(
+pub(super) fn compute_plate_boundary_proximity(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     plate_id: &[u32],

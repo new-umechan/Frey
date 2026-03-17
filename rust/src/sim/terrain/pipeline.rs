@@ -1,3 +1,5 @@
+use super::*;
+
 pub(super) fn generate(seed: &str, mut params: TerrainParams) -> TerrainOutput {
     sanitize_params(&mut params);
 

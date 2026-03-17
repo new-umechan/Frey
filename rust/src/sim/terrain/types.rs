@@ -1,102 +1,104 @@
+use super::*;
+
 #[derive(Clone)]
-struct PlateAttr {
-    is_ocean: bool,
-    velocity: [f32; 3],
-    drift_axis_primary: [f32; 3],
-    drift_axis_secondary: [f32; 3],
-    drift_mix_axis: [f32; 3],
-    drift_variability: f32,
-    base_height: f32,
-    base_weight: f32,
+pub(super) struct PlateAttr {
+    pub(super) is_ocean: bool,
+    pub(super) velocity: [f32; 3],
+    pub(super) drift_axis_primary: [f32; 3],
+    pub(super) drift_axis_secondary: [f32; 3],
+    pub(super) drift_mix_axis: [f32; 3],
+    pub(super) drift_variability: f32,
+    pub(super) base_height: f32,
+    pub(super) base_weight: f32,
 }
 
 #[derive(Clone, Copy)]
-enum BoundaryType {
+pub(super) enum BoundaryType {
     Convergent,
     Divergent,
     Transform,
 }
 
 #[derive(Clone, Copy)]
-enum ConvergentMode {
+pub(super) enum ConvergentMode {
     OceanContinent,
     OceanOcean,
     ContinentContinent,
 }
 
 #[derive(Clone, Copy)]
-enum SubductionPolarity {
+pub(super) enum SubductionPolarity {
     AUnderB,
     BUnderA,
     None,
 }
 
 #[derive(Clone, Copy)]
-struct BoundaryEdge {
-    a: usize,
-    b: usize,
-    plate_a: usize,
-    plate_b: usize,
-    boundary_type: BoundaryType,
-    strength: f32,
-    obliquity: f32,
+pub(super) struct BoundaryEdge {
+    pub(super) a: usize,
+    pub(super) b: usize,
+    pub(super) plate_a: usize,
+    pub(super) plate_b: usize,
+    pub(super) boundary_type: BoundaryType,
+    pub(super) strength: f32,
+    pub(super) obliquity: f32,
 }
 
 #[derive(Clone, Copy)]
-struct VertexLithosphere {
-    age_norm: f32,
-    weight: f32,
-    buoyancy: f32,
-    competence: f32,
+pub(super) struct VertexLithosphere {
+    pub(super) age_norm: f32,
+    pub(super) weight: f32,
+    pub(super) buoyancy: f32,
+    pub(super) competence: f32,
 }
 
-struct BoundaryFields {
-    preserve_strength: Vec<f32>,
-    debug_trench_strength: Vec<f32>,
-    debug_arc_strength: Vec<f32>,
-    debug_backarc_strength: Vec<f32>,
-    debug_ocean_ocean_arc_strength: Vec<f32>,
-}
-
-#[derive(Clone, Copy)]
-struct BoundaryDistState {
-    cost: f32,
-    vertex: usize,
-    source_edge: usize,
+pub(super) struct BoundaryFields {
+    pub(super) preserve_strength: Vec<f32>,
+    pub(super) debug_trench_strength: Vec<f32>,
+    pub(super) debug_arc_strength: Vec<f32>,
+    pub(super) debug_backarc_strength: Vec<f32>,
+    pub(super) debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 
 #[derive(Clone, Copy)]
-struct QueueState {
-    cost: f32,
-    vertex: usize,
-    plate: usize,
+pub(super) struct BoundaryDistState {
+    pub(super) cost: f32,
+    pub(super) vertex: usize,
+    pub(super) source_edge: usize,
 }
 
-struct PlateGrowthProfile {
-    spread: f32,
-    preferred_axis: [f32; 3],
-    secondary_axis: [f32; 3],
-    axis_blend_axis: [f32; 3],
-    anisotropy: f32,
-    roughness: f32,
-    warp_weights: [f32; 3],
-    warp_gain: f32,
+#[derive(Clone, Copy)]
+pub(super) struct QueueState {
+    pub(super) cost: f32,
+    pub(super) vertex: usize,
+    pub(super) plate: usize,
 }
 
-struct BoundaryVertices {
-    mask: Vec<bool>,
-    indices: Vec<usize>,
+pub(super) struct PlateGrowthProfile {
+    pub(super) spread: f32,
+    pub(super) preferred_axis: [f32; 3],
+    pub(super) secondary_axis: [f32; 3],
+    pub(super) axis_blend_axis: [f32; 3],
+    pub(super) anisotropy: f32,
+    pub(super) roughness: f32,
+    pub(super) warp_weights: [f32; 3],
+    pub(super) warp_gain: f32,
+}
+
+pub(super) struct BoundaryVertices {
+    pub(super) mask: Vec<bool>,
+    pub(super) indices: Vec<usize>,
 }
 
 impl BoundaryVertices {
-    fn new(len: usize) -> Self {
+    pub(super) fn new(len: usize) -> Self {
         Self {
             mask: vec![false; len],
             indices: Vec::new(),
         }
     }
 
-    fn insert(&mut self, v: usize) {
+    pub(super) fn insert(&mut self, v: usize) {
         if self.mask[v] {
             return;
         }
@@ -167,27 +169,27 @@ pub(super) enum CrustUpdatePhase {
 }
 
 pub(crate) struct CrustTerrainUpdateState {
-    phase: CrustUpdatePhase,
-    params: TerrainParams,
-    rng: DeterministicRng,
-    positions: Vec<[f32; 3]>,
-    indices: Vec<u32>,
-    nbr_offsets: Vec<u32>,
-    nbrs: Vec<u32>,
-    spherical: Vec<(f32, f32)>,
-    phi: Vec<f32>,
-    plate_count_target: usize,
-    plate_id: Vec<u32>,
-    attributes: Vec<PlateAttr>,
-    boundary_edges: Vec<BoundaryEdge>,
-    vertex_lithosphere: Vec<VertexLithosphere>,
-    plate_boundary_proximity: Vec<f32>,
-    band_low: Vec<f32>,
-    band_mid: Vec<f32>,
-    band_high: Vec<f32>,
-    height: Vec<f32>,
-    boundary_fields: Option<BoundaryFields>,
-    river_flux: Vec<f32>,
-    river_next: Vec<i32>,
-    lake_depth: Vec<f32>,
+    pub(super) phase: CrustUpdatePhase,
+    pub(super) params: TerrainParams,
+    pub(super) rng: DeterministicRng,
+    pub(super) positions: Vec<[f32; 3]>,
+    pub(super) indices: Vec<u32>,
+    pub(super) nbr_offsets: Vec<u32>,
+    pub(super) nbrs: Vec<u32>,
+    pub(super) spherical: Vec<(f32, f32)>,
+    pub(super) phi: Vec<f32>,
+    pub(super) plate_count_target: usize,
+    pub(super) plate_id: Vec<u32>,
+    pub(super) attributes: Vec<PlateAttr>,
+    pub(super) boundary_edges: Vec<BoundaryEdge>,
+    pub(super) vertex_lithosphere: Vec<VertexLithosphere>,
+    pub(super) plate_boundary_proximity: Vec<f32>,
+    pub(super) band_low: Vec<f32>,
+    pub(super) band_mid: Vec<f32>,
+    pub(super) band_high: Vec<f32>,
+    pub(super) height: Vec<f32>,
+    pub(super) boundary_fields: Option<BoundaryFields>,
+    pub(super) river_flux: Vec<f32>,
+    pub(super) river_next: Vec<i32>,
+    pub(super) lake_depth: Vec<f32>,
 }

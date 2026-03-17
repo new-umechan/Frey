@@ -1,3 +1,5 @@
+use super::*;
+
 fn choose_plate_count(min_count: u32, max_count: u32, rng: &mut DeterministicRng) -> usize {
     if min_count == max_count {
         min_count as usize

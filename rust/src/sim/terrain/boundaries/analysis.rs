@@ -1,3 +1,5 @@
+use super::*;
+
 fn extract_boundary_edges(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],

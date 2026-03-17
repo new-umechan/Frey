@@ -1,3 +1,5 @@
+use super::*;
+
 fn compute_river_flux_and_next(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],

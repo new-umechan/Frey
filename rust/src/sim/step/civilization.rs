@@ -36,8 +36,10 @@ pub(super) fn run_civilization_step(world: &mut World, budget: u32) {
         } else {
             current
         };
-        let growth =
-            0.18 * eco_habitability[i].max(0.05) * seeded * (1.0 - seeded / carrying).max(-0.5);
+        let growth = 0.18_f32
+            * eco_habitability[i].max(0.05_f32)
+            * seeded
+            * (1.0_f32 - seeded / carrying).max(-0.5_f32);
         let next_population = (seeded + growth * alpha * 4.0).max(0.0);
         let agriculture = (eco_productivity[i] * 0.65 + river_support * 0.35).clamp(0.0, 1.0);
         let withdrawal = (agriculture * next_population / 180.0).clamp(0.0, 1.0);

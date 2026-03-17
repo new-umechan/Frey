@@ -1,8 +1,6 @@
 use crate::TerrainParams;
 
-#[path = "boundary_dynamics.rs"]
 mod boundary_dynamics;
-#[path = "surface_dynamics.rs"]
 mod surface_dynamics;
 
 use crate::sim::world::{

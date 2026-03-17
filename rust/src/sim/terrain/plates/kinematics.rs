@@ -1,3 +1,5 @@
+use super::*;
+
 fn edge_noise_signed(a: usize, b: usize, plate: usize) -> f32 {
     let (lo, hi) = if a <= b { (a as u64, b as u64) } else { (b as u64, a as u64) };
     let mut x = lo

@@ -1,2 +1,7 @@
-include!("shaping/postprocess.rs");
-include!("shaping/erosion.rs");
+use super::*;
+
+mod erosion;
+use erosion::*;
+
+mod postprocess;
+use postprocess::*;

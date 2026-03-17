@@ -1,3 +1,5 @@
+use super::*;
+
 fn apply_hydraulic_erosion(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],

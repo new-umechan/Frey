@@ -1,3 +1,5 @@
+use super::*;
+
 fn build_precipitation_map(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],

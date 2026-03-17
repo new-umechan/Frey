@@ -1,3 +1,5 @@
+use super::*;
+
 fn assign_plate_attributes(
     plate_id: &[u32],
     plate_count: usize,
