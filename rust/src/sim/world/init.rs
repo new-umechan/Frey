@@ -10,8 +10,9 @@ use crate::sim::geo::{
 use super::era::EraKind;
 use super::exec::{FeedbackQueue, TransitionState};
 use super::state::{
-    CivilizationState, ClimateState, CoastSide, EcologyState, GeoState, GeologyState, World,
-    WorldMesh, WorldState,
+    ClimateState, CoastSide, ConflictState, DomesticatesState, EcologyState, GeoState,
+    GeologyState, HydrologyState, PolityState, PopulationState, SettlementState, SubsistenceState,
+    World, WorldMesh, WorldState,
 };
 use super::ExecState;
 
@@ -20,6 +21,8 @@ impl World {
         let cell_count = geology.height.len();
         let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
         let geo = build_geo_state(&mesh, &geology.height);
+        let initial_river_path = geology.river_next.clone();
+        let initial_river_flow = geology.river_flux.clone();
         let ocean_temperature = geo
             .latitude_deg
             .iter()
@@ -39,18 +42,52 @@ impl World {
                     aridity: vec![1.0; cell_count],
                     ocean_temperature,
                 },
+                hydrology: HydrologyState {
+                    river_path: initial_river_path,
+                    river_flow: initial_river_flow,
+                    river_transport_cost: vec![1.0; cell_count],
+                },
                 ecology: EcologyState {
                     vegetation: vec![0.0; cell_count],
                     habitability: vec![0.0; cell_count],
                     productivity: vec![0.0; cell_count],
+                    riparian_vegetation: vec![0.0; cell_count],
                 },
-                civilization: CivilizationState {
-                    population: vec![0.0; cell_count],
-                    state_id: vec![0; cell_count],
-                    agriculture: vec![0.0; cell_count],
+                domesticates: DomesticatesState {
+                    crop_available: vec![0; cell_count],
+                    crop_adopted: vec![0; cell_count],
+                    livestock_available: vec![0; cell_count],
+                    livestock_adopted: vec![0; cell_count],
+                },
+                subsistence: SubsistenceState {
+                    subsistence_mix: vec![0.0; cell_count],
+                    food_production: vec![0.0; cell_count],
+                    land_use: vec![0.0; cell_count],
                     water_withdrawal: vec![0.0; cell_count],
-                    dam_level: vec![0.0; cell_count],
+                    dam_pressure: vec![0.0; cell_count],
                     pollution: vec![0.0; cell_count],
+                },
+                population: PopulationState {
+                    population: vec![0.0; cell_count],
+                    population_density: vec![0.0; cell_count],
+                    migration_pressure: vec![0.0; cell_count],
+                },
+                settlement: SettlementState {
+                    settlement_size: vec![0.0; cell_count],
+                    urbanization: vec![0.0; cell_count],
+                    centrality: vec![0.0; cell_count],
+                    residence: vec![0.0; cell_count],
+                },
+                polity: PolityState {
+                    polity_id: vec![0; cell_count],
+                    territory_status: vec![0; cell_count],
+                    language_group: vec![0; cell_count],
+                    polity_stability: vec![0.0; cell_count],
+                },
+                conflict: ConflictState {
+                    war_state: vec![0; cell_count],
+                    occupier_id: vec![0; cell_count],
+                    frontline: vec![0.0; cell_count],
                 },
             },
             exec: ExecState {
@@ -70,8 +107,8 @@ impl World {
                     ema_ecology_activity: 1.0,
                     ema_civilization_activity: 1.0,
                 },
-                terrain_dynamics: None,
-                river_erosion_state: None,
+                geology_dynamics: None,
+                hydrology_dynamics: None,
             },
         }
     }
@@ -80,7 +117,7 @@ impl World {
         self.state.geology.height.len()
     }
 
-    pub fn attach_river_erosion_state(
+    pub fn attach_hydrology_dynamics(
         &mut self,
         state: ErosionAutomatonState,
     ) -> Result<(), String> {
@@ -94,7 +131,9 @@ impl World {
         self.state.geology.height = state.height.clone();
         self.state.geology.river_flux = state.river_flux.clone();
         self.state.geology.river_next = state.river_next.clone();
-        self.exec.river_erosion_state = Some(state);
+        self.state.hydrology.river_flow = state.river_flux.clone();
+        self.state.hydrology.river_path = state.river_next.clone();
+        self.exec.hydrology_dynamics = Some(state);
         Ok(())
     }
 }

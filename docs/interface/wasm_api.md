@@ -5,12 +5,12 @@ JSから利用する現行WASM公開APIを定義する。
 ## 1. Core API
 
 - `generate_mesh(level: number) -> { positions, indices }`
-- `generate_terrain(seed: string, params?: TerrainParams) -> TerrainOutput`
+- `generate_geology(seed: string, params?: GeologyParams) -> GeologyOutput`
 - `build_render_positions(input) -> number[]`
 
 補足:
-- `generate_terrain`の`params`未指定時は`TerrainParams::default()`を使用する。
-- `TerrainParams`には従来項目に加えて、プレート運動・境界再分類・沈み込み開始閾値・マントル熱場・プルーム関連の項目が含まれる。
+- `generate_geology`の`params`未指定時は`GeologyParams::default()`を使用する。
+- `GeologyParams`には従来項目に加えて、プレート運動・境界再分類・沈み込み開始閾値・マントル熱場・プルーム関連の項目が含まれる。
 
 ## 2. WorldSimController API
 
@@ -19,16 +19,16 @@ JSから利用する現行WASM公開APIを定義する。
 ### 2.1 初期化と実行
 
 - `init_world(seed: string, mesh_level: number, config?: InitWorldConfig) -> { world_id, tick, era, cell_count }`
-- `step_world(world_id: string, tick_count: number) -> void`
+- `exec_world(world_id: string, tick_count: number) -> void`
 - `set_simulation_rate(world_id: string, rate: number) -> void`
 
 `InitWorldConfig`:
-- `terrain_params?: TerrainParams`
+- `geology_params?: GeologyParams`
 - `target_sea_ratio?: number`（内部で`0.02..=0.98`にclamp）
 - `simulation_rate?: number`（内部で`0.1..=32.0`にclamp）
 
 実行仕様:
-- `step_world`は`tick_count`に`simulation_rate`を掛けた回数だけ内部更新する。
+- `exec_world`は`tick_count`に`simulation_rate`を掛けた回数だけ内部更新する。
 - 地形更新はWorldの1Tickごとに1回実行される。
 
 ### 2.2 観測
@@ -78,4 +78,4 @@ JSから利用する現行WASM公開APIを定義する。
 
 - `world_id`や`snapshot_id`が不正な場合は`JsValue`エラーを返す。
 - `mesh_level > 8`はエラー。
-- `step_world(world_id, 0)`はno-opで成功する。
+- `exec_world(world_id, 0)`はno-opで成功する。

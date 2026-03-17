@@ -7,8 +7,8 @@ export function createDiagnostics() {
         profile_fallback_count: 0,
         replay_ticks_total: 0,
         replay_time_ms_total: 0,
-        step_world_time_ms_total: 0,
-        step_world_profiled_time_ms_total: 0,
+        exec_world_time_ms_total: 0,
+        exec_world_profiled_time_ms_total: 0,
         step_geology_river_time_ms_total: 0,
         tick_total_time_ms_total: 0,
         river_network_rebuild_count_total: 0,
@@ -22,7 +22,7 @@ export function createDiagnostics() {
 }
 
 function accumulateProfiledDiagnostics(diagnostics, profiled) {
-    diagnostics.step_geology_river_time_ms_total += Number(profiled?.step_geology_river_ms) || 0;
+    diagnostics.step_geology_river_time_ms_total += Number(profiled?.exec_hydrology_ms) || 0;
     diagnostics.river_network_rebuild_count_total += Math.max(
         0,
         Math.floor(Number(profiled?.river_network_rebuild_count) || 0),
@@ -58,14 +58,14 @@ export function buildDiagnosticsSummary(diagnostics, totalTicks, wallTimeMs) {
     const replayShareOfWall = wallTimeMs > 0
         ? diagnostics.replay_time_ms_total / wallTimeMs
         : 0;
-    const replayShareOfStepWorld = diagnostics.step_world_time_ms_total > 0
-        ? diagnostics.replay_time_ms_total / diagnostics.step_world_time_ms_total
+    const replayShareOfStepWorld = diagnostics.exec_world_time_ms_total > 0
+        ? diagnostics.replay_time_ms_total / diagnostics.exec_world_time_ms_total
         : 0;
     const stepWorldShareOfTick = diagnostics.tick_total_time_ms_total > 0
-        ? diagnostics.step_world_time_ms_total / diagnostics.tick_total_time_ms_total
+        ? diagnostics.exec_world_time_ms_total / diagnostics.tick_total_time_ms_total
         : 0;
-    const riverShareOfStepWorld = diagnostics.step_world_profiled_time_ms_total > 0
-        ? diagnostics.step_geology_river_time_ms_total / diagnostics.step_world_profiled_time_ms_total
+    const riverShareOfStepWorld = diagnostics.exec_world_profiled_time_ms_total > 0
+        ? diagnostics.step_geology_river_time_ms_total / diagnostics.exec_world_profiled_time_ms_total
         : 0;
     const riverRebuildRate = totalTicks > 0
         ? diagnostics.river_network_rebuild_count_total / totalTicks
@@ -77,14 +77,14 @@ export function buildDiagnosticsSummary(diagnostics, totalTicks, wallTimeMs) {
         profile_fallback_count: diagnostics.profile_fallback_count,
         replay_ticks_total: diagnostics.replay_ticks_total,
         replay_time_ms_total: roundMs(diagnostics.replay_time_ms_total),
-        step_world_time_ms_total: roundMs(diagnostics.step_world_time_ms_total),
-        step_world_profiled_time_ms_total: roundMs(diagnostics.step_world_profiled_time_ms_total),
+        exec_world_time_ms_total: roundMs(diagnostics.exec_world_time_ms_total),
+        exec_world_profiled_time_ms_total: roundMs(diagnostics.exec_world_profiled_time_ms_total),
         step_geology_river_time_ms_total: roundMs(diagnostics.step_geology_river_time_ms_total),
         tick_total_time_ms_total: roundMs(diagnostics.tick_total_time_ms_total),
         replay_time_share_of_wall: roundRatio(replayShareOfWall),
-        replay_time_share_of_step_world: roundRatio(replayShareOfStepWorld),
-        step_world_share_of_tick: roundRatio(stepWorldShareOfTick),
-        river_share_of_step_world: roundRatio(riverShareOfStepWorld),
+        replay_time_share_of_exec_world: roundRatio(replayShareOfStepWorld),
+        exec_world_share_of_tick: roundRatio(stepWorldShareOfTick),
+        river_share_of_exec_world: roundRatio(riverShareOfStepWorld),
         river_network_rebuild_count_total: diagnostics.river_network_rebuild_count_total,
         river_rebuild_rate: roundRatio(riverRebuildRate),
         river_fallback_count_total: diagnostics.river_fallback_count_total,

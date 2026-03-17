@@ -1,7 +1,7 @@
-import { TERRAIN_LEVEL } from "../interface/params/terrain.js";
+import { GEOLOGY_LEVEL } from "../interface/params/geology.js";
 import { RUNTIME_PARAMS } from "../interface/params/runtime.js";
 
-export const LEVEL = TERRAIN_LEVEL;
+export const LEVEL = GEOLOGY_LEVEL;
 export const DEFAULT_TERRAIN_SEED = "alpha";
 export const DEFAULT_VIEW_MODE = "normal";
 export const DEFAULT_CLIMATE_METRIC = "temperature";

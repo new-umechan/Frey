@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import initWasm, { WorldSimController } from "../../generated/wasm/web/frey_wasm.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../web/src/interface/params/terrain.js";
+import { GEOLOGY_LEVEL, GEOLOGY_PARAMS } from "../../web/src/interface/params/geology.js";
 
 const DEFAULT_TICKS = 32;
 const DEFAULT_THRESHOLD = 0.005;
@@ -41,7 +41,7 @@ function parseArgs(argv) {
     const args = {
         ticks: DEFAULT_TICKS,
         seeds: [...DEFAULT_SEEDS],
-        level: TERRAIN_LEVEL,
+        level: GEOLOGY_LEVEL,
         out: null,
         baseline: null,
         check: false,
@@ -293,7 +293,7 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
 async function runSeedSimulation(seed, ticks, level) {
     const controller = new WorldSimController();
     const init = controller.init_world(seed, level, {
-        terrain_params: TERRAIN_PARAMS,
+        geology_params: GEOLOGY_PARAMS,
     });
     const worldId = init?.world_id;
 
@@ -302,7 +302,7 @@ async function runSeedSimulation(seed, ticks, level) {
     }
 
     if (ticks > 0) {
-        controller.step_world(worldId, ticks);
+        controller.exec_world(worldId, ticks);
     }
 
     const metricsResponse = controller.get_metrics(worldId);

@@ -9,7 +9,7 @@ import { normalizeClimateMetric } from "./climate-metric.js";
 import { createTerrainRenderer } from "./terrain-renderer.js";
 import { createGlobeScene, resizeViewport } from "../gfx/scene.js";
 import { createCameraController } from "../gfx/views/camera-controller.js";
-import { TERRAIN_PARAMS } from "../interface/params/terrain.js";
+import { GEOLOGY_PARAMS } from "../interface/params/geology.js";
 import { buildRenderPositions } from "../gfx/views/terrain-visuals.js";
 import { buildRiverMaskTexture, buildTerrainUvFromPositions } from "../gfx/materials/river-mask.js";
 import {
@@ -339,7 +339,7 @@ export async function createApp() {
         controls: perfControls,
         perfStatFields,
         workerUrl: PERF_BENCH_WORKER_URL,
-        terrainParams: TERRAIN_PARAMS,
+        terrainParams: GEOLOGY_PARAMS,
         level: LEVEL,
         createBenchmarkProfile,
         createBenchmarkConsoleTable,
@@ -391,7 +391,7 @@ export async function createApp() {
         seedInput,
         worldSimController,
         level: LEVEL,
-        terrainParams: TERRAIN_PARAMS,
+        terrainParams: GEOLOGY_PARAMS,
         world,
         worldState,
         debugSnapshotSavedTicks,

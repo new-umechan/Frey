@@ -17,7 +17,7 @@ function createPerfStatsRenderer(perfStatFields) {
         const metrics = result?.metrics ?? {};
         perfStatFields.tickP50.textContent = formatMs(metrics.tick_total?.p50);
         perfStatFields.tickP95.textContent = formatMs(metrics.tick_total?.p95);
-        perfStatFields.stepMean.textContent = formatMs(metrics.step_world?.mean);
+        perfStatFields.stepMean.textContent = formatMs(metrics.exec_world?.mean);
         perfStatFields.deltaMean.textContent = formatMs(metrics.delta_sync?.mean);
         perfStatFields.geomMean.textContent = formatMs(metrics.geometry_update?.mean);
         perfStatFields.riverMean.textContent = formatMs(metrics.river_mask_update?.mean);

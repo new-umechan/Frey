@@ -4,7 +4,7 @@ use crate::sim::erosion::ErosionAutomatonState;
 
 use super::era::EraKind;
 use super::init::default_target_sea_ratio;
-use super::state::TerrainDynamicsState;
+use super::state::GeologyDynamicsState;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExecState {
@@ -18,9 +18,9 @@ pub struct ExecState {
     pub feedback_queue: FeedbackQueue,
     pub transition: TransitionState,
     #[serde(default)]
-    pub terrain_dynamics: Option<TerrainDynamicsState>,
+    pub geology_dynamics: Option<GeologyDynamicsState>,
     #[serde(default)]
-    pub river_erosion_state: Option<ErosionAutomatonState>,
+    pub hydrology_dynamics: Option<ErosionAutomatonState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

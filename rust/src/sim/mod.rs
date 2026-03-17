@@ -1,22 +1,31 @@
 pub mod state;
-pub mod step;
-pub mod terrain;
-pub mod terrain_types;
+pub mod climate;
+pub mod conflict;
+pub mod domesticates;
+pub mod ecology;
+pub mod exec;
+pub mod geology;
+pub mod geology_types;
+pub mod hydrology;
+pub mod polity;
+pub mod population;
+pub mod settlement;
+pub mod subsistence;
 pub mod world;
 pub use state::erosion;
 pub(crate) use crate::common::geo;
 
-pub use step::{
-    step_world,
-    step_world_profiled,
-    step_world_profiled_detailed,
-    StepWorldBreakdown,
-    StepWorldBreakdownDetailed,
+pub use exec::{
+    exec_world,
+    exec_world_profiled,
+    exec_world_profiled_detailed,
+    ExecWorldBreakdown,
+    ExecWorldBreakdownDetailed,
 };
 
 use crate::common::mesh::{flatten_positions, generate_icosphere};
 
-use self::terrain_types::{MeshOutput, TerrainOutput, TerrainParams};
+use self::geology_types::{MeshOutput, GeologyOutput, GeologyParams};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ErosionAutomatonBreakdown {
@@ -42,13 +51,13 @@ pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     })
 }
 
-pub(crate) fn build_terrain(seed: &str, terrain_params: TerrainParams) -> TerrainOutput {
-    terrain::generate(seed, terrain_params)
+pub(crate) fn build_geology(seed: &str, geology_params: GeologyParams) -> GeologyOutput {
+    geology::generate(seed, geology_params)
 }
 
 pub(crate) fn step_erosion_automaton(
     state: &mut erosion::ErosionAutomatonState,
     budget_cells: u32,
 ) -> ErosionAutomatonBreakdown {
-    terrain::step_async_erosion_automaton(state, budget_cells)
+    geology::step_async_erosion_automaton(state, budget_cells)
 }

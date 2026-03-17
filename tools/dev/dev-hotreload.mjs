@@ -58,7 +58,7 @@ async function buildWasm() {
     }
 }
 
-async function syncTerrainParams() {
+async function syncGeologyParams() {
     if (syncTerrainRunning) {
         syncTerrainQueued = true;
         return;
@@ -66,7 +66,7 @@ async function syncTerrainParams() {
 
     syncTerrainRunning = true;
     console.log("[dev] syncing terrain params...");
-    const result = await runCommand("npm", ["run", "terrain:sync"]);
+    const result = await runCommand("npm", ["run", "geology:sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] terrain params sync failed (code: ${result.code ?? "null"})`);
@@ -78,7 +78,7 @@ async function syncTerrainParams() {
 
     if (syncTerrainQueued && !shutdownRequested) {
         syncTerrainQueued = false;
-        await syncTerrainParams();
+        await syncGeologyParams();
     }
 }
 
@@ -145,8 +145,8 @@ function scheduleBuild(filename) {
     }, 150);
 }
 
-function scheduleTerrainParamsSync(filename) {
-    if (filename !== "terrain.yaml") {
+function scheduleGeologyParamsSync(filename) {
+    if (filename !== "geology.yaml") {
         return;
     }
 
@@ -157,7 +157,7 @@ function scheduleTerrainParamsSync(filename) {
     syncTerrainDebounceTimer = setTimeout(() => {
         syncTerrainDebounceTimer = null;
         if (!shutdownRequested) {
-            void syncTerrainParams();
+            void syncGeologyParams();
         }
     }, 150);
 }
@@ -196,7 +196,7 @@ function startRustWatcher() {
 function startConfigWatcher() {
     const watcher = watch(configDir, { recursive: true }, (_eventType, filename) => {
         if (typeof filename === "string") {
-            scheduleTerrainParamsSync(filename);
+            scheduleGeologyParamsSync(filename);
             scheduleRuntimeParamsSync(filename);
         }
     });
@@ -222,7 +222,7 @@ async function main() {
         process.exit(runtimeSyncInitial.code ?? 1);
     }
 
-    const syncInitial = await runCommand("npm", ["run", "terrain:sync"]);
+    const syncInitial = await runCommand("npm", ["run", "geology:sync"]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }

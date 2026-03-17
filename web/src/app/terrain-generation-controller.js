@@ -34,7 +34,7 @@ export function createTerrainGenerationController(options = {}) {
 
         try {
             const initResult = worldSimController.init_world(nextSeed, level, {
-                terrain_params: terrainParams,
+                geology_params: terrainParams,
             });
             if (token !== generationToken) {
                 return;

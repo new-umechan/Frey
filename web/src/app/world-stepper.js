@@ -65,16 +65,16 @@ export function createWorldStepper(options = {}) {
                 : null;
 
             if (perfRecorder) {
-                perfRecorder.measure("step_world", () => {
+                perfRecorder.measure("exec_world", () => {
                     if (sampleStepBreakdown) {
-                        const profiled = worldSimController.step_world_profiled(liveState.activeWorldId, 1);
+                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId, 1);
                         pushStepBreakdownSamples(perfRecorder, profiled);
                         return;
                     }
-                    worldSimController.step_world(liveState.activeWorldId, 1);
+                    worldSimController.exec_world(liveState.activeWorldId, 1);
                 });
             } else {
-                worldSimController.step_world(liveState.activeWorldId, 1);
+                worldSimController.exec_world(liveState.activeWorldId, 1);
             }
 
             const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsAtTick(nextTick);

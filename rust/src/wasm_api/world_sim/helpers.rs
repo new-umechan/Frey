@@ -1,4 +1,4 @@
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::world;
 
@@ -6,7 +6,7 @@ const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
 
 pub(super) fn build_erosion_state(
     world: &world::World,
-    params: TerrainParams,
+    params: GeologyParams,
 ) -> ErosionAutomatonState {
     let cell_count = world.state.geology.height.len();
     ErosionAutomatonState {
@@ -57,20 +57,20 @@ pub(super) fn build_erosion_state(
     }
 }
 
-pub(super) fn sync_erosion_state(world: &mut world::World, params: &TerrainParams) {
+pub(super) fn sync_erosion_state(world: &mut world::World, params: &GeologyParams) {
     sync_erosion_state_full(world, params);
 }
 
-pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &TerrainParams) {
+pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &GeologyParams) {
     let expected = world.state.geology.height.len();
-    let Some(state) = world.exec.river_erosion_state.as_mut() else {
+    let Some(state) = world.exec.hydrology_dynamics.as_mut() else {
         let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_river_erosion_state(state);
+        let _ = world.attach_hydrology_dynamics(state);
         return;
     };
     if !erosion_state_shape_matches(state, expected) {
         let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_river_erosion_state(state);
+        let _ = world.attach_hydrology_dynamics(state);
         return;
     }
     state.height.clone_from(&world.state.geology.height);
@@ -93,16 +93,16 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Terrain
     ensure_sink_buffers(state, expected);
 }
 
-pub(super) fn post_step_sync_light(world: &mut world::World, params: &TerrainParams) {
+pub(super) fn post_step_sync_light(world: &mut world::World, params: &GeologyParams) {
     let expected = world.state.geology.height.len();
-    let Some(state) = world.exec.river_erosion_state.as_mut() else {
+    let Some(state) = world.exec.hydrology_dynamics.as_mut() else {
         let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_river_erosion_state(state);
+        let _ = world.attach_hydrology_dynamics(state);
         return;
     };
     if !erosion_state_shape_matches(state, expected) {
         let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_river_erosion_state(state);
+        let _ = world.attach_hydrology_dynamics(state);
         return;
     }
     state.tick = world.exec.tick;

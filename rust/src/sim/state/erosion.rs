@@ -1,4 +1,4 @@
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -59,5 +59,5 @@ pub struct ErosionAutomatonState {
     pub sink_overflow_active: Vec<u8>,
     #[serde(default)]
     pub sink_dirty: Vec<u8>,
-    pub params: TerrainParams,
+    pub params: GeologyParams,
 }

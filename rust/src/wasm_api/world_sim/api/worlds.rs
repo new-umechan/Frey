@@ -5,12 +5,12 @@ use wasm_bindgen::prelude::*;
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim;
 use crate::sim::{
-    step_world,
-    step_world_profiled,
-    step_world_profiled_detailed,
+    exec_world,
+    exec_world_profiled,
+    exec_world_profiled_detailed,
     world,
-    StepWorldBreakdown,
-    StepWorldBreakdownDetailed,
+    ExecWorldBreakdown,
+    ExecWorldBreakdownDetailed,
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
@@ -43,7 +43,7 @@ fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
 }
 
 fn run_post_step(managed: &mut ManagedWorld) {
-    post_step_sync_light(&mut managed.world, &managed.terrain_params);
+    post_step_sync_light(&mut managed.world, &managed.geology_params);
     managed.observe_after_world_change();
     managed.save_history_snapshot_if_needed();
 }
@@ -59,7 +59,7 @@ impl WorldSimController {
     ) -> Result<JsValue, JsValue> {
         let config = if config_js.is_undefined() || config_js.is_null() {
             InitWorldConfig {
-                terrain_params: None,
+                geology_params: None,
                 target_sea_ratio: None,
                 simulation_rate: None,
             }
@@ -72,10 +72,10 @@ impl WorldSimController {
             return Err(JsValue::from_str("mesh_level must be between 0 and 8"));
         }
 
-        let mut terrain_params = config.terrain_params.unwrap_or_default();
-        terrain_params.level = mesh_level;
+        let mut geology_params = config.geology_params.unwrap_or_default();
+        geology_params.level = mesh_level;
 
-        let terrain = sim::build_terrain(&seed, terrain_params.clone());
+        let terrain = sim::build_geology(&seed, geology_params.clone());
         let (positions, indices) = generate_icosphere(mesh_level);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
 
@@ -113,14 +113,14 @@ impl WorldSimController {
         }
         sim_world.exec.era = world::EraKind::Crust;
 
-        let erosion_state = build_erosion_state(&sim_world, terrain_params.clone());
-        let _ = sim_world.attach_river_erosion_state(erosion_state);
+        let erosion_state = build_erosion_state(&sim_world, geology_params.clone());
+        let _ = sim_world.attach_hydrology_dynamics(erosion_state);
         let sync_state = WorldSyncState::from_world(&sim_world);
 
         let mut managed = ManagedWorld {
             world: sim_world,
             simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
-            terrain_params,
+            geology_params,
             sync_state,
             history: BTreeMap::new(),
         };
@@ -141,8 +141,8 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize init result: {err}")))
     }
 
-    #[wasm_bindgen(js_name = step_world)]
-    pub fn step_world_js(&mut self, world_id: String, tick_count: u32) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = exec_world)]
+    pub fn exec_world_js(&mut self, world_id: String, tick_count: u32) -> Result<(), JsValue> {
         if tick_count == 0 {
             return Ok(());
         }
@@ -155,15 +155,15 @@ impl WorldSimController {
         let steps = scaled_ticks.max(1);
 
         for _ in 0..steps {
-            step_world(&mut managed.world);
+            exec_world(&mut managed.world);
             run_post_step(managed);
         }
 
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = step_world_profiled)]
-    pub fn step_world_profiled_js(
+    #[wasm_bindgen(js_name = exec_world_profiled)]
+    pub fn exec_world_profiled_js(
         &mut self,
         world_id: String,
         tick_count: u32,
@@ -172,19 +172,19 @@ impl WorldSimController {
             let response = StepWorldProfiledResponse {
                 world_id,
                 steps: 0,
-                step_feedback_ms: 0.0,
-                step_geology_terrain_ms: 0.0,
-                step_climate_ms: 0.0,
-                step_geology_river_ms: 0.0,
-                step_ecology_ms: 0.0,
-                step_civilization_ms: 0.0,
-                step_transition_ms: 0.0,
+                exec_feedback_ms: 0.0,
+                exec_geology_terrain_ms: 0.0,
+                exec_climate_ms: 0.0,
+                exec_hydrology_ms: 0.0,
+                exec_ecology_ms: 0.0,
+                exec_society_ms: 0.0,
+                exec_transition_ms: 0.0,
                 step_sync_erosion_ms: 0.0,
                 step_observe_world_change_ms: 0.0,
                 step_history_snapshot_ms: 0.0,
             };
             return serde_wasm_bindgen::to_value(&response).map_err(|err| {
-                JsValue::from_str(&format!("failed to serialize step_world_profiled: {err}"))
+                JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}"))
             });
         }
         let managed = self
@@ -194,17 +194,17 @@ impl WorldSimController {
 
         let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
         let steps = scaled_ticks.max(1);
-        let mut sim_breakdown = StepWorldBreakdown::default();
+        let mut sim_breakdown = ExecWorldBreakdown::default();
         let mut step_sync_erosion_ms = 0.0;
         let mut step_observe_world_change_ms = 0.0;
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
-            let step_breakdown = step_world_profiled(&mut managed.world);
+            let step_breakdown = exec_world_profiled(&mut managed.world);
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
-            post_step_sync_light(&mut managed.world, &managed.terrain_params);
+            post_step_sync_light(&mut managed.world, &managed.geology_params);
             step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
@@ -219,23 +219,23 @@ impl WorldSimController {
         let response = StepWorldProfiledResponse {
             world_id,
             steps,
-            step_feedback_ms: sim_breakdown.step_feedback_ms,
-            step_geology_terrain_ms: sim_breakdown.step_geology_terrain_ms,
-            step_climate_ms: sim_breakdown.step_climate_ms,
-            step_geology_river_ms: sim_breakdown.step_geology_river_ms,
-            step_ecology_ms: sim_breakdown.step_ecology_ms,
-            step_civilization_ms: sim_breakdown.step_civilization_ms,
-            step_transition_ms: sim_breakdown.step_transition_ms,
+            exec_feedback_ms: sim_breakdown.exec_feedback_ms,
+            exec_geology_terrain_ms: sim_breakdown.exec_geology_terrain_ms,
+            exec_climate_ms: sim_breakdown.exec_climate_ms,
+            exec_hydrology_ms: sim_breakdown.exec_hydrology_ms,
+            exec_ecology_ms: sim_breakdown.exec_ecology_ms,
+            exec_society_ms: sim_breakdown.exec_society_ms,
+            exec_transition_ms: sim_breakdown.exec_transition_ms,
             step_sync_erosion_ms,
             step_observe_world_change_ms,
             step_history_snapshot_ms,
         };
         serde_wasm_bindgen::to_value(&response)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize step_world_profiled: {err}")))
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}")))
     }
 
-    #[wasm_bindgen(js_name = step_world_profiled_detail)]
-    pub fn step_world_profiled_detail_js(
+    #[wasm_bindgen(js_name = exec_world_profiled_detail)]
+    pub fn exec_world_profiled_detail_js(
         &mut self,
         world_id: String,
         tick_count: u32,
@@ -244,13 +244,13 @@ impl WorldSimController {
             let response = StepWorldProfiledDetailResponse {
                 world_id,
                 steps: 0,
-                step_feedback_ms: 0.0,
-                step_geology_terrain_ms: 0.0,
-                step_climate_ms: 0.0,
-                step_geology_river_ms: 0.0,
-                step_ecology_ms: 0.0,
-                step_civilization_ms: 0.0,
-                step_transition_ms: 0.0,
+                exec_feedback_ms: 0.0,
+                exec_geology_terrain_ms: 0.0,
+                exec_climate_ms: 0.0,
+                exec_hydrology_ms: 0.0,
+                exec_ecology_ms: 0.0,
+                exec_society_ms: 0.0,
+                exec_transition_ms: 0.0,
                 step_sync_erosion_ms: 0.0,
                 step_observe_world_change_ms: 0.0,
                 step_history_snapshot_ms: 0.0,
@@ -271,7 +271,7 @@ impl WorldSimController {
             };
             return serde_wasm_bindgen::to_value(&response).map_err(|err| {
                 JsValue::from_str(&format!(
-                    "failed to serialize step_world_profiled_detail: {err}"
+                    "failed to serialize exec_world_profiled_detail: {err}"
                 ))
             });
         }
@@ -282,17 +282,17 @@ impl WorldSimController {
 
         let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
         let steps = scaled_ticks.max(1);
-        let mut sim_breakdown = StepWorldBreakdownDetailed::default();
+        let mut sim_breakdown = ExecWorldBreakdownDetailed::default();
         let mut step_sync_erosion_ms = 0.0;
         let mut step_observe_world_change_ms = 0.0;
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
-            let step_breakdown = step_world_profiled_detailed(&mut managed.world);
+            let step_breakdown = exec_world_profiled_detailed(&mut managed.world);
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
-            post_step_sync_light(&mut managed.world, &managed.terrain_params);
+            post_step_sync_light(&mut managed.world, &managed.geology_params);
             step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
@@ -307,13 +307,13 @@ impl WorldSimController {
         let response = StepWorldProfiledDetailResponse {
             world_id,
             steps,
-            step_feedback_ms: sim_breakdown.breakdown.step_feedback_ms,
-            step_geology_terrain_ms: sim_breakdown.breakdown.step_geology_terrain_ms,
-            step_climate_ms: sim_breakdown.breakdown.step_climate_ms,
-            step_geology_river_ms: sim_breakdown.breakdown.step_geology_river_ms,
-            step_ecology_ms: sim_breakdown.breakdown.step_ecology_ms,
-            step_civilization_ms: sim_breakdown.breakdown.step_civilization_ms,
-            step_transition_ms: sim_breakdown.breakdown.step_transition_ms,
+            exec_feedback_ms: sim_breakdown.breakdown.exec_feedback_ms,
+            exec_geology_terrain_ms: sim_breakdown.breakdown.exec_geology_terrain_ms,
+            exec_climate_ms: sim_breakdown.breakdown.exec_climate_ms,
+            exec_hydrology_ms: sim_breakdown.breakdown.exec_hydrology_ms,
+            exec_ecology_ms: sim_breakdown.breakdown.exec_ecology_ms,
+            exec_society_ms: sim_breakdown.breakdown.exec_society_ms,
+            exec_transition_ms: sim_breakdown.breakdown.exec_transition_ms,
             step_sync_erosion_ms,
             step_observe_world_change_ms,
             step_history_snapshot_ms,
@@ -342,7 +342,7 @@ impl WorldSimController {
         };
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(
-                "failed to serialize step_world_profiled_detail: {err}"
+                "failed to serialize exec_world_profiled_detail: {err}"
             ))
         })
     }

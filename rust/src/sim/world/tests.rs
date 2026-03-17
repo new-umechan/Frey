@@ -1,8 +1,8 @@
     use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
     use crate::common::mesh::{build_neighbors, generate_icosphere};
     use crate::sim::erosion::ErosionAutomatonState;
-    use crate::sim::step_world;
-    use crate::TerrainParams;
+    use crate::sim::exec_world;
+    use crate::GeologyParams;
 
     fn build_world() -> World {
         World::new(
@@ -100,12 +100,12 @@
 
     #[test]
     fn metrics_are_deterministic_for_fixed_seed() {
-        let mut params = TerrainParams::default();
+        let mut params = GeologyParams::default();
         params.level = 2;
         let seed = "metrics-regression-seed";
 
-        let terrain_a = crate::sim::build_terrain(seed, params.clone());
-        let terrain_b = crate::sim::build_terrain(seed, params);
+        let terrain_a = crate::sim::build_geology(seed, params.clone());
+        let terrain_b = crate::sim::build_geology(seed, params);
         let (positions, indices) = generate_icosphere(2);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
         let plate_id_a = terrain_a
@@ -153,8 +153,8 @@
         );
 
         for _ in 0..8 {
-            step_world(&mut world_a);
-            step_world(&mut world_b);
+            exec_world(&mut world_a);
+            exec_world(&mut world_b);
         }
 
         let metrics_a = world_a.metrics();
@@ -176,11 +176,11 @@
 
     #[test]
     fn river_network_persists_without_early_collapse() {
-        let mut params = TerrainParams::default();
+        let mut params = GeologyParams::default();
         params.level = 2;
         let seed = "river-network-stability-seed";
 
-        let terrain = crate::sim::build_terrain(seed, params.clone());
+        let terrain = crate::sim::build_geology(seed, params.clone());
         let (positions, indices) = generate_icosphere(2);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
         let plate_id = terrain
@@ -245,15 +245,15 @@
             sink_dirty: vec![1; world.cell_count()],
             params,
         };
-        let _ = world.attach_river_erosion_state(erosion);
+        let _ = world.attach_hydrology_dynamics(erosion);
 
         for _ in 0..2 {
-            step_world(&mut world);
+            exec_world(&mut world);
         }
         let metrics_t2 = world.metrics();
 
         for _ in 2..28 {
-            step_world(&mut world);
+            exec_world(&mut world);
         }
         let metrics_t28 = world.metrics();
 

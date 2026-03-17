@@ -21,8 +21,14 @@ pub struct WorldState {
     pub geo: GeoState,
     pub geology: GeologyState,
     pub climate: ClimateState,
+    pub hydrology: HydrologyState,
     pub ecology: EcologyState,
-    pub civilization: CivilizationState,
+    pub domesticates: DomesticatesState,
+    pub subsistence: SubsistenceState,
+    pub population: PopulationState,
+    pub settlement: SettlementState,
+    pub polity: PolityState,
+    pub conflict: ConflictState,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -63,24 +69,70 @@ pub struct ClimateState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HydrologyState {
+    pub river_path: Vec<i32>,
+    pub river_flow: Vec<f32>,
+    pub river_transport_cost: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EcologyState {
     pub vegetation: Vec<f32>,
     pub habitability: Vec<f32>,
     pub productivity: Vec<f32>,
+    pub riparian_vegetation: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CivilizationState {
-    pub population: Vec<f32>,
-    pub state_id: Vec<u32>,
-    pub agriculture: Vec<f32>,
+pub struct DomesticatesState {
+    pub crop_available: Vec<u32>,
+    pub crop_adopted: Vec<u32>,
+    pub livestock_available: Vec<u32>,
+    pub livestock_adopted: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubsistenceState {
+    pub subsistence_mix: Vec<f32>,
+    pub food_production: Vec<f32>,
+    pub land_use: Vec<f32>,
     pub water_withdrawal: Vec<f32>,
-    pub dam_level: Vec<f32>,
+    pub dam_pressure: Vec<f32>,
     pub pollution: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TerrainDynamicsState {
+pub struct PopulationState {
+    pub population: Vec<f32>,
+    pub population_density: Vec<f32>,
+    pub migration_pressure: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettlementState {
+    pub settlement_size: Vec<f32>,
+    pub urbanization: Vec<f32>,
+    pub centrality: Vec<f32>,
+    pub residence: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PolityState {
+    pub polity_id: Vec<u32>,
+    pub territory_status: Vec<u8>,
+    pub language_group: Vec<u16>,
+    pub polity_stability: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConflictState {
+    pub war_state: Vec<u8>,
+    pub occupier_id: Vec<u32>,
+    pub frontline: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeologyDynamicsState {
     #[serde(default)]
     pub update_index: u64,
     #[serde(default)]
@@ -92,7 +144,7 @@ pub struct TerrainDynamicsState {
     #[serde(default)]
     pub mantle_heat: Vec<f32>,
     #[serde(default)]
-    pub cached_metrics: TerrainStepMetrics,
+    pub cached_metrics: GeologyStepMetrics,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -162,8 +214,8 @@ pub struct BoundaryDynamicsState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct TerrainStepMetrics {
-    pub terrain_activity: f32,
+pub struct GeologyStepMetrics {
+    pub geology_activity: f32,
     pub boundary_activity: f32,
     pub uplift_rate: f32,
     pub subsidence_rate: f32,

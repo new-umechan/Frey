@@ -192,9 +192,9 @@ q: 外力（境界応力・プルーム力）
 ### 4.1 入力
 
 - seed: String
-- params: TerrainParams
+- params: GeologyParams
 
-既存の `TerrainParams` を基本としつつ、時間発展のために以下の追加パラメータ群を持てるようにする。
+既存の `GeologyParams` を基本としつつ、時間発展のために以下の追加パラメータ群を持てるようにする。
 
 - `plate_motion_gain`: プレート速度スケール
 - `boundary_reclassify_interval`: 境界の再分類間隔
@@ -218,7 +218,7 @@ q: 外力（境界応力・プルーム力）
 最低限、他サブシステムが参照する出力は従来と同様に保持する。
 
 ```rust
-pub struct TerrainOutput {
+pub struct GeologyOutput {
     pub height: Vec<f32>,
     pub plate_id: Vec<u32>,
     pub river_flux: Vec<f32>,
@@ -240,7 +240,7 @@ pub struct TerrainOutput {
 ```rust
 pub struct TectonicTerrainState {
     pub mesh: SharedMeshRef,
-    pub params: TerrainParams,
+    pub params: GeologyParams,
 
     pub plate_state: Vec<PlateState>,
     pub vertex_state: Vec<VertexCrustState>,
@@ -298,13 +298,13 @@ struct VertexCrustState {
 
 ### 5.3 スナップショット取得API
 
-- `snapshot_tectonic_terrain(state) -> TerrainOutput`
+- `snapshot_tectonic_terrain(state) -> GeologyOutput`
 
 役割:
 - 他サブシステムや描画が参照する安定した出力を返す
 
 注意:
-- `TerrainOutput` は公開スナップショットであり、単独では `TectonicTerrainState` を完全復元できない
+- `GeologyOutput` は公開スナップショットであり、単独では `TectonicTerrainState` を完全復元できない
 
 ### 5.4 チェックポイントAPI（巻き戻し用）
 
@@ -319,7 +319,7 @@ struct VertexCrustState {
 要件:
 - 地形内部状態の完全復元ができること
 - 同一チェックポイントから同一更新列を再生したとき決定的に一致すること
-- `TerrainOutput` だけで復元しようとしないこと
+- `GeologyOutput` だけで復元しようとしないこと
 
 最低限チェックポイントへ含める項目:
 - プレート運動状態（角速度、活動度、種別）
@@ -530,7 +530,7 @@ oceanic_crust.density > subduction_density_threshold
 巻き戻し/分岐との整合:
 - `World` のキーフレームには `core` の公開状態だけでなく、地形内部状態のチェックポイントも含める
 - 差分保存を行う場合も、地形内部状態の差分または再生可能なイベント列を保存する
-- `TerrainOutput` のみを保存して地形内部状態を再構築する運用は不可とする
+- `GeologyOutput` のみを保存して地形内部状態を再構築する運用は不可とする
 
 ## 10. 決定性ルール
 

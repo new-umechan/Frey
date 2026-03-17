@@ -1,4 +1,4 @@
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 
 pub(crate) struct DeterministicRng {
     state: u64,
@@ -75,39 +75,39 @@ impl DeterministicRng {
     }
 }
 
-pub(crate) fn rng_from_seed(seed: &str, terrain_params: &TerrainParams) -> DeterministicRng {
+pub(crate) fn rng_from_seed(seed: &str, geology_params: &GeologyParams) -> DeterministicRng {
     let canonical = format!(
         "{{\"harmonic_max_l\":{},\"spectral_alpha\":{:.8},\"plate_count_min\":{},\"plate_count_max\":{},\"ocean_plate_ratio\":{:.8},\"boundary_band\":{:.8},\"boundary_convergent_base_gain\":{:.8},\"boundary_divergent_base_gain\":{:.8},\"boundary_transform_relief_gain\":{:.8},\"trench_gain\":{:.8},\"arc_gain\":{:.8},\"collision_gain\":{:.8},\"rift_gain\":{:.8},\"boundary_trench_width\":{:.8},\"boundary_arc_width\":{:.8},\"boundary_collision_width\":{:.8},\"boundary_rift_width\":{:.8},\"boundary_obliquity_mix\":{:.8},\"boundary_distance_falloff\":{:.8},\"boundary_anisotropy\":{:.8},\"river_rain_base\":{:.8},\"river_accumulation_threshold\":{:.8},\"erosion_iterations\":{},\"hydraulic_erosion_rate\":{:.8},\"hydraulic_deposit_rate\":{:.8},\"sediment_capacity_gain\":{:.8},\"erosion_min_slope\":{:.8},\"erosion_max_delta_per_iter\":{:.8},\"coastal_deposit_rate\":{:.8},\"shallow_sea_floor\":{:.8}}}",
-        terrain_params.harmonic_max_l,
-        terrain_params.spectral_alpha,
-        terrain_params.plate_count_min,
-        terrain_params.plate_count_max,
-        terrain_params.ocean_plate_ratio,
-        terrain_params.boundary_band,
-        terrain_params.boundary_convergent_base_gain,
-        terrain_params.boundary_divergent_base_gain,
-        terrain_params.boundary_transform_relief_gain,
-        terrain_params.trench_gain,
-        terrain_params.arc_gain,
-        terrain_params.collision_gain,
-        terrain_params.rift_gain,
-        terrain_params.boundary_trench_width,
-        terrain_params.boundary_arc_width,
-        terrain_params.boundary_collision_width,
-        terrain_params.boundary_rift_width,
-        terrain_params.boundary_obliquity_mix,
-        terrain_params.boundary_distance_falloff,
-        terrain_params.boundary_anisotropy,
-        terrain_params.river_rain_base,
-        terrain_params.river_accumulation_threshold,
-        terrain_params.erosion_iterations,
-        terrain_params.hydraulic_erosion_rate,
-        terrain_params.hydraulic_deposit_rate,
-        terrain_params.sediment_capacity_gain,
-        terrain_params.erosion_min_slope,
-        terrain_params.erosion_max_delta_per_iter,
-        terrain_params.coastal_deposit_rate,
-        terrain_params.shallow_sea_floor,
+        geology_params.harmonic_max_l,
+        geology_params.spectral_alpha,
+        geology_params.plate_count_min,
+        geology_params.plate_count_max,
+        geology_params.ocean_plate_ratio,
+        geology_params.boundary_band,
+        geology_params.boundary_convergent_base_gain,
+        geology_params.boundary_divergent_base_gain,
+        geology_params.boundary_transform_relief_gain,
+        geology_params.trench_gain,
+        geology_params.arc_gain,
+        geology_params.collision_gain,
+        geology_params.rift_gain,
+        geology_params.boundary_trench_width,
+        geology_params.boundary_arc_width,
+        geology_params.boundary_collision_width,
+        geology_params.boundary_rift_width,
+        geology_params.boundary_obliquity_mix,
+        geology_params.boundary_distance_falloff,
+        geology_params.boundary_anisotropy,
+        geology_params.river_rain_base,
+        geology_params.river_accumulation_threshold,
+        geology_params.erosion_iterations,
+        geology_params.hydraulic_erosion_rate,
+        geology_params.hydraulic_deposit_rate,
+        geology_params.sediment_capacity_gain,
+        geology_params.erosion_min_slope,
+        geology_params.erosion_max_delta_per_iter,
+        geology_params.coastal_deposit_rate,
+        geology_params.shallow_sea_floor,
     );
 
     let mut source = Vec::new();

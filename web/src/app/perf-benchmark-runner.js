@@ -110,9 +110,9 @@ export function createPerfBenchmarkRunner(deps = {}) {
             if (shouldSampleBreakdown) {
                 diagnostics.profile_attempt_count += 1;
                 try {
-                    const profiled = typeof controller.step_world_profiled_detail === "function"
-                        ? controller.step_world_profiled_detail(worldId, 1)
-                        : controller.step_world_profiled(worldId, 1);
+                    const profiled = typeof controller.exec_world_profiled_detail === "function"
+                        ? controller.exec_world_profiled_detail(worldId, 1)
+                        : controller.exec_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
                     recordProfiledStepSuccess(diagnostics, profiled);
@@ -133,7 +133,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
                         controller = controllerState.controller;
                         worldId = controllerState.worldId;
                         core = controllerState.core;
-                        controller.step_world(worldId, 1);
+                        controller.exec_world(worldId, 1);
                         diagnostics.replay_time_ms_total += nowMs() - replayStart;
                     } catch (recoverError) {
                         throw new Error(
@@ -143,17 +143,17 @@ export function createPerfBenchmarkRunner(deps = {}) {
                 }
             } else {
                 try {
-                    controller.step_world(worldId, 1);
+                    controller.exec_world(worldId, 1);
                 } catch (error) {
-                    throw new Error(`step_world failed at tick ${tickIndex}: ${formatError(error)}`);
+                    throw new Error(`exec_world failed at tick ${tickIndex}: ${formatError(error)}`);
                 }
             }
             const stepElapsedMs = nowMs() - stepStart;
-            diagnostics.step_world_time_ms_total += stepElapsedMs;
+            diagnostics.exec_world_time_ms_total += stepElapsedMs;
             if (shouldSampleBreakdown) {
-                diagnostics.step_world_profiled_time_ms_total += stepElapsedMs;
+                diagnostics.exec_world_profiled_time_ms_total += stepElapsedMs;
             }
-            recorder.pushSample("step_world", stepElapsedMs);
+            recorder.pushSample("exec_world", stepElapsedMs);
 
             const deltaStart = nowMs();
             let changes = {

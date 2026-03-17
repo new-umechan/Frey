@@ -159,7 +159,7 @@ impl WorldSimController {
                 let default_mantle_heat = vec![0.5; world_ref.state.geology.height.len()];
                 let mantle_heat = world_ref
                     .exec
-                    .terrain_dynamics
+                    .geology_dynamics
                     .as_ref()
                     .map(|dynamics| dynamics.mantle_heat.as_slice())
                     .filter(|data| data.len() == world_ref.state.geology.height.len())
@@ -386,7 +386,7 @@ fn matched_sink_state(
 ) -> Option<&crate::sim::erosion::ErosionAutomatonState> {
     world
         .exec
-        .river_erosion_state
+        .hydrology_dynamics
         .as_ref()
         .filter(|state| state.sink_id.len() == world.state.geology.height.len())
 }

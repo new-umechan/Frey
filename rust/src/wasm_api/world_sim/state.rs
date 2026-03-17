@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 
 use super::types::{DeltaRange, FieldDeltaResponse};
@@ -43,7 +43,7 @@ pub(super) struct WorldSyncState {
 pub(super) struct ManagedWorld {
     pub world: world::World,
     pub simulation_rate: f32,
-    pub terrain_params: TerrainParams,
+    pub geology_params: GeologyParams,
     pub sync_state: WorldSyncState,
     pub history: BTreeMap<u64, world::World>,
 }
@@ -266,7 +266,7 @@ impl WorldSyncState {
     pub fn from_world(world: &world::World) -> Self {
         let mantle_heat = world
             .exec
-            .terrain_dynamics
+            .geology_dynamics
             .as_ref()
             .map(|dynamics| dynamics.mantle_heat.clone())
             .filter(|values| values.len() == world.state.geology.height.len())
@@ -288,7 +288,7 @@ impl WorldSyncState {
 
         let mantle_heat = world
             .exec
-            .terrain_dynamics
+            .geology_dynamics
             .as_ref()
             .map(|dynamics| dynamics.mantle_heat.as_slice())
             .filter(|values| values.len() == world.state.geology.height.len());

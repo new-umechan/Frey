@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 
 #[derive(Deserialize)]
 pub(super) struct InitWorldConfig {
     #[serde(default)]
-    pub terrain_params: Option<TerrainParams>,
+    pub geology_params: Option<GeologyParams>,
     #[serde(default)]
     pub target_sea_ratio: Option<f32>,
     #[serde(default)]
@@ -179,13 +179,13 @@ pub(super) struct WorldDeltaResponse {
 pub(super) struct StepWorldProfiledResponse {
     pub world_id: String,
     pub steps: u32,
-    pub step_feedback_ms: f64,
-    pub step_geology_terrain_ms: f64,
-    pub step_climate_ms: f64,
-    pub step_geology_river_ms: f64,
-    pub step_ecology_ms: f64,
-    pub step_civilization_ms: f64,
-    pub step_transition_ms: f64,
+    pub exec_feedback_ms: f64,
+    pub exec_geology_terrain_ms: f64,
+    pub exec_climate_ms: f64,
+    pub exec_hydrology_ms: f64,
+    pub exec_ecology_ms: f64,
+    pub exec_society_ms: f64,
+    pub exec_transition_ms: f64,
     pub step_sync_erosion_ms: f64,
     pub step_observe_world_change_ms: f64,
     pub step_history_snapshot_ms: f64,
@@ -195,13 +195,13 @@ pub(super) struct StepWorldProfiledResponse {
 pub(super) struct StepWorldProfiledDetailResponse {
     pub world_id: String,
     pub steps: u32,
-    pub step_feedback_ms: f64,
-    pub step_geology_terrain_ms: f64,
-    pub step_climate_ms: f64,
-    pub step_geology_river_ms: f64,
-    pub step_ecology_ms: f64,
-    pub step_civilization_ms: f64,
-    pub step_transition_ms: f64,
+    pub exec_feedback_ms: f64,
+    pub exec_geology_terrain_ms: f64,
+    pub exec_climate_ms: f64,
+    pub exec_hydrology_ms: f64,
+    pub exec_ecology_ms: f64,
+    pub exec_society_ms: f64,
+    pub exec_transition_ms: f64,
     pub step_sync_erosion_ms: f64,
     pub step_observe_world_change_ms: f64,
     pub step_history_snapshot_ms: f64,

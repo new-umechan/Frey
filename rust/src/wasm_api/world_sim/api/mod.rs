@@ -33,13 +33,13 @@ mod tests {
     #[derive(Deserialize)]
     struct StepWorldProfiledResponse {
         steps: u32,
-        step_feedback_ms: f64,
-        step_geology_terrain_ms: f64,
-        step_climate_ms: f64,
-        step_geology_river_ms: f64,
-        step_ecology_ms: f64,
-        step_civilization_ms: f64,
-        step_transition_ms: f64,
+        exec_feedback_ms: f64,
+        exec_geology_terrain_ms: f64,
+        exec_climate_ms: f64,
+        exec_hydrology_ms: f64,
+        exec_ecology_ms: f64,
+        exec_society_ms: f64,
+        exec_transition_ms: f64,
         step_sync_erosion_ms: f64,
         step_observe_world_change_ms: f64,
         step_history_snapshot_ms: f64,
@@ -82,7 +82,7 @@ mod tests {
         let world_id = init_data.world_id;
 
         controller
-            .step_world_js(world_id.clone(), 3)
+            .exec_world_js(world_id.clone(), 3)
             .expect("step world");
         let metrics = controller.get_metrics_js(world_id).expect("get metrics");
         let metrics_data: MetricsResponse =
@@ -91,7 +91,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn step_world_profiled_returns_breakdown() {
+    fn exec_world_profiled_returns_breakdown() {
         let mut controller = WorldSimController::new();
         let init = controller
             .init_world_js("seed-profile".to_string(), 1, JsValue::NULL)
@@ -99,19 +99,19 @@ mod tests {
         let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
 
         let profiled = controller
-            .step_world_profiled_js(init_data.world_id, 1)
+            .exec_world_profiled_js(init_data.world_id, 1)
             .expect("step world profiled");
         let profiled_data: StepWorldProfiledResponse =
             serde_wasm_bindgen::from_value(profiled).expect("parse profiled");
 
         assert_eq!(profiled_data.steps, 1);
-        assert!(profiled_data.step_feedback_ms >= 0.0);
-        assert!(profiled_data.step_geology_terrain_ms >= 0.0);
-        assert!(profiled_data.step_climate_ms >= 0.0);
-        assert!(profiled_data.step_geology_river_ms >= 0.0);
-        assert!(profiled_data.step_ecology_ms >= 0.0);
-        assert!(profiled_data.step_civilization_ms >= 0.0);
-        assert!(profiled_data.step_transition_ms >= 0.0);
+        assert!(profiled_data.exec_feedback_ms >= 0.0);
+        assert!(profiled_data.exec_geology_terrain_ms >= 0.0);
+        assert!(profiled_data.exec_climate_ms >= 0.0);
+        assert!(profiled_data.exec_hydrology_ms >= 0.0);
+        assert!(profiled_data.exec_ecology_ms >= 0.0);
+        assert!(profiled_data.exec_society_ms >= 0.0);
+        assert!(profiled_data.exec_transition_ms >= 0.0);
         assert!(profiled_data.step_sync_erosion_ms >= 0.0);
         assert!(profiled_data.step_observe_world_change_ms >= 0.0);
         assert!(profiled_data.step_history_snapshot_ms >= 0.0);
@@ -148,7 +148,7 @@ mod tests {
         let world_id = init_data.world_id;
 
         controller
-            .step_world_js(world_id.clone(), 80)
+            .exec_world_js(world_id.clone(), 80)
             .expect("step world");
 
         let history_ticks = controller
@@ -193,7 +193,7 @@ mod tests {
         let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
 
         controller
-            .step_world_js(init_data.world_id.clone(), 8)
+            .exec_world_js(init_data.world_id.clone(), 8)
             .expect("step world");
         let saved = controller
             .save_checkpoint_js(init_data.world_id)

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use wasm_bindgen::prelude::*;
 
-use crate::sim::terrain_types::TerrainParams;
+use crate::sim::geology_types::GeologyParams;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
 use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
@@ -73,7 +73,7 @@ impl WorldSimController {
             }
         }
 
-        sync_erosion_state(&mut managed.world, &managed.terrain_params);
+        sync_erosion_state(&mut managed.world, &managed.geology_params);
         managed.observe_after_world_change();
         managed.save_history_snapshot_if_needed();
 
@@ -104,7 +104,7 @@ impl WorldSimController {
             (
                 snapshot,
                 source.simulation_rate,
-                source.terrain_params.clone(),
+                source.geology_params.clone(),
             )
         };
         let new_world_id = self.next_world_id();
@@ -114,7 +114,7 @@ impl WorldSimController {
         let forked = ManagedWorld {
             world: snapshot,
             simulation_rate: source_rate,
-            terrain_params: source_params,
+            geology_params: source_params,
             sync_state,
             history,
         };
@@ -151,7 +151,7 @@ impl WorldSimController {
             .ok_or_else(|| history_tick_not_available_error(tick_u64))?;
 
         managed.world = restored_world;
-        sync_erosion_state(&mut managed.world, &managed.terrain_params);
+        sync_erosion_state(&mut managed.world, &managed.geology_params);
         managed.sync_state = WorldSyncState::from_world(&managed.world);
         managed
             .history
@@ -208,7 +208,7 @@ impl WorldSimController {
                 sync_state: WorldSyncState::from_world(&snapshot.world),
                 world: snapshot.world,
                 simulation_rate: 1.0,
-                terrain_params: TerrainParams::default(),
+                geology_params: GeologyParams::default(),
                 history,
             },
         );

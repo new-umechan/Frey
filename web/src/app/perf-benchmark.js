@@ -100,7 +100,7 @@ export function formatBenchmarkSummaryLine(result) {
         return "No benchmark data.";
     }
     const tickTotal = result.metrics.tick_total;
-    const step = result.metrics.step_world;
+    const step = result.metrics.exec_world;
     const delta = result.metrics.delta_sync;
     const geom = result.metrics.geometry_update;
     const river = result.metrics.river_mask_update;

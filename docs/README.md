@@ -60,9 +60,9 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
   - `step/surface_dynamics.rs`: 応力から地表更新
   - `step/river.rs`: 河川と侵食オートマトン接続
   - `step/geology.rs`: Geology全体の束ね
-- `rust/src/sim/terrain_types.rs`
+- `rust/src/sim/geology_types.rs`
   - 地形生成の公開型
-  - `TerrainParams`、`TerrainOutput`、`MeshOutput`
+  - `GeologyParams`、`GeologyOutput`、`MeshOutput`
 - `rust/src/sim/terrain/`
   - 地形生成ドメイン
   - `terrain.rs` は `noise`、`plates`、`boundaries`、`surface`、`pipeline` を束ねる

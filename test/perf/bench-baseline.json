@@ -18,7 +18,7 @@
     "processed_ticks": 16
   },
   "metrics": {
-    "step_world": {
+    "exec_world": {
       "count": 16,
       "mean": 276.632,
       "min": 169.81,
@@ -223,14 +223,14 @@
     "profile_fallback_count": 0,
     "replay_ticks_total": 0,
     "replay_time_ms_total": 0,
-    "step_world_time_ms_total": 4426.118,
-    "step_world_profiled_time_ms_total": 729.796,
+    "exec_world_time_ms_total": 4426.118,
+    "exec_world_profiled_time_ms_total": 729.796,
     "step_geology_river_time_ms_total": 219,
     "tick_total_time_ms_total": 4829.193,
     "replay_time_share_of_wall": 0,
-    "replay_time_share_of_step_world": 0,
-    "step_world_share_of_tick": 0.916534,
-    "river_share_of_step_world": 0.300084,
+    "replay_time_share_of_exec_world": 0,
+    "exec_world_share_of_tick": 0.916534,
+    "river_share_of_exec_world": 0.300084,
     "river_network_rebuild_count_total": 0,
     "river_rebuild_rate": 0,
     "river_fallback_count_total": 0,

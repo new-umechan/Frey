@@ -1,11 +1,11 @@
 mod common;
 pub mod sim;
-#[path = "generated/terrain_params_defaults.rs"]
-mod terrain_params_defaults;
+#[path = "generated/geology_params_defaults.rs"]
+mod geology_params_defaults;
 mod wasm_api;
 pub use sim::world;
 
-pub use crate::sim::terrain_types::{MeshOutput, TerrainOutput, TerrainParams};
+pub use crate::sim::geology_types::{MeshOutput, GeologyOutput, GeologyParams};
 pub use crate::sim::erosion::ErosionAutomatonState;
 pub use crate::wasm_api::world_sim::WorldSimController;
 use wasm_bindgen::prelude::*;
@@ -18,15 +18,15 @@ pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn generate_terrain(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
-    let terrain_params = if params_js.is_undefined() || params_js.is_null() {
-        TerrainParams::default()
+pub fn generate_geology(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
+    let geology_params = if params_js.is_undefined() || params_js.is_null() {
+        GeologyParams::default()
     } else {
-        serde_wasm_bindgen::from_value::<TerrainParams>(params_js)
+        serde_wasm_bindgen::from_value::<GeologyParams>(params_js)
             .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
     };
 
-    let output = sim::build_terrain(&seed, terrain_params);
+    let output = sim::build_geology(&seed, geology_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }

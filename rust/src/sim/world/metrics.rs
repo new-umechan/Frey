@@ -28,7 +28,7 @@ pub struct WorldMetrics {
 impl World {
     pub fn metrics(&self) -> WorldMetrics {
         let height = &self.state.geology.height;
-        let river_flux = &self.state.geology.river_flux;
+        let river_flux = &self.state.hydrology.river_flow;
         let cell_count = height.len();
         if cell_count == 0 {
             return WorldMetrics::default();
@@ -74,8 +74,8 @@ impl World {
             river_flux_concentration,
         ) = river_network_metrics(
             &self.state.geology.height,
-            &self.state.geology.river_flux,
-            &self.state.geology.river_next,
+            &self.state.hydrology.river_flow,
+            &self.state.hydrology.river_path,
             top10_river_flux_sum,
             sum_flux,
             max_flux,

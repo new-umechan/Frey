@@ -5,10 +5,10 @@
     "type": "module",
     "scripts": {
         "runtime:sync": "node tools/sync/sync-runtime-params.mjs",
-        "terrain:sync": "node tools/sync/sync-terrain-params.mjs",
+        "geology:sync": "node tools/sync/sync-geology-params.mjs",
         "runtime-params:sync": "npm run runtime:sync",
-        "terrain-params:sync": "npm run terrain:sync",
-        "dev": "npm run runtime:sync && npm run terrain:sync && node tools/dev/dev-hotreload.mjs",
+        "geology-params:sync": "npm run geology:sync",
+        "dev": "npm run runtime:sync && npm run geology:sync && node tools/dev/dev-hotreload.mjs",
         "build": "npm run runtime:sync && npm run wasm:build && vite build --config web/vite.config.js",
         "preview": "vite preview --config web/vite.config.js",
         "bench": "node tools/bench/bench.mjs",
@@ -19,8 +19,8 @@
         "seed:regression:dev": "npm run wasm:build:dev:no-sync && node tools/bench/seed-regression.mjs",
         "seed:gate:quick": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta --ticks 16 --baseline test/seed-regression/seed-regression-quick-baseline.json --check --threshold 0.005",
         "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline test/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005",
-        "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
-        "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
+        "wasm:build": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
+        "wasm:build:dev": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
     },
     "dependencies": {

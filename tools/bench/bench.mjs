@@ -8,7 +8,7 @@ import initWasm, {
 } from "../../generated/wasm/web/frey_wasm.js";
 import { createBenchmarkProfile } from "../../web/src/app/perf-benchmark.js";
 import { createPerfBenchmarkRunner } from "../../web/src/app/perf-benchmark-runner.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../web/src/interface/params/terrain.js";
+import { GEOLOGY_LEVEL, GEOLOGY_PARAMS } from "../../web/src/interface/params/geology.js";
 
 const DEFAULT_THRESHOLD = 0.10;
 
@@ -27,7 +27,7 @@ function parseArgs(argv) {
         surfaceMode: "globe",
         viewMode: "normal",
         sampleInterval: 4,
-        level: TERRAIN_LEVEL,
+        level: GEOLOGY_LEVEL,
         out: null,
         baseline: null,
         threshold: DEFAULT_THRESHOLD,
@@ -169,8 +169,8 @@ function evaluateRegression(current, baseline, args) {
             threshold: args.thresholdTickTotal ?? args.threshold,
         },
         {
-            label: "step_world.mean",
-            path: "metrics.step_world.mean",
+            label: "exec_world.mean",
+            path: "metrics.exec_world.mean",
             threshold: args.thresholdStepWorld ?? args.threshold,
         },
         {
@@ -246,7 +246,7 @@ async function main() {
         runId: "cli",
         profile,
         level: args.level,
-        terrainParams: TERRAIN_PARAMS,
+        terrainParams: GEOLOGY_PARAMS,
         sampleInterval: args.sampleInterval,
         profileEveryTick: args.profileEveryTick,
         skipGeometry: args.noGeometry,
