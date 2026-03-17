@@ -15,8 +15,6 @@ fn build_test_world() -> World {
     let geology = GeologyState {
         height: vec![0.45, 0.15, -0.25, 0.05],
         plate_id: vec![0, 0, 1, 1],
-        river_flux: vec![0.0; 4],
-        river_next: vec![-1; 4],
         erosion_rate: vec![0.0; 4],
         deposition_rate: vec![0.0; 4],
         boundary_condition: vec![0.0; 4],

@@ -273,8 +273,8 @@ impl WorldSyncState {
             .unwrap_or_else(|| vec![0.5; world.state.geology.height.len()]);
         Self {
             height: F32FieldTracker::new(&world.state.geology.height),
-            river_flux: F32FieldTracker::new(&world.state.geology.river_flux),
-            river_next: I32FieldTracker::new(&world.state.geology.river_next),
+            river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
+            river_next: I32FieldTracker::new(&world.state.hydrology.river_path),
             mantle_heat: F32FieldTracker::new(&mantle_heat),
             temperature: F32FieldTracker::new(&world.state.climate.temperature),
             precipitation: F32FieldTracker::new(&world.state.climate.precipitation),
@@ -283,8 +283,8 @@ impl WorldSyncState {
 
     pub fn observe_world(&mut self, world: &world::World) {
         self.height.observe(&world.state.geology.height);
-        self.river_flux.observe(&world.state.geology.river_flux);
-        self.river_next.observe(&world.state.geology.river_next);
+        self.river_flux.observe(&world.state.hydrology.river_flow);
+        self.river_next.observe(&world.state.hydrology.river_path);
 
         let mantle_heat = world
             .exec

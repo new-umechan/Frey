@@ -91,11 +91,11 @@ impl WorldSimController {
             .map(|&v| u16::try_from(v).map_err(|_| JsValue::from_str("plate id exceeds u16 range")))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let river_flow = terrain.river_flux;
+        let river_path = terrain.river_next;
         let geology = world::GeologyState {
             height: terrain.height,
             plate_id,
-            river_flux: terrain.river_flux,
-            river_next: terrain.river_next,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
             boundary_condition: vec![0.0; positions.len()],
@@ -108,6 +108,8 @@ impl WorldSimController {
         };
 
         let mut sim_world = world::World::new(mesh, geology);
+        sim_world.state.hydrology.river_flow = river_flow;
+        sim_world.state.hydrology.river_path = river_path;
         if let Some(target) = config.target_sea_ratio {
             sim_world.exec.target_sea_ratio = target.clamp(0.02, 0.98);
         }

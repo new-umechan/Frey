@@ -44,12 +44,12 @@ impl WorldSimController {
                     op.value as f32,
                 ),
                 "river_flux" => apply_f32(
-                    &mut managed.world.state.geology.river_flux,
+                    &mut managed.world.state.hydrology.river_flow,
                     idx,
                     (op.value as f32).max(0.0),
                 ),
                 "river_next" => apply_i32(
-                    &mut managed.world.state.geology.river_next,
+                    &mut managed.world.state.hydrology.river_path,
                     idx,
                     op.value as i32,
                 ),

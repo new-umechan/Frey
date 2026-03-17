@@ -14,8 +14,6 @@
             GeologyState {
                 height: vec![0.2, -0.1, 0.1, -0.2],
                 plate_id: vec![0, 0, 1, 1],
-                river_flux: vec![0.0; 4],
-                river_next: vec![-1; 4],
                 erosion_rate: vec![0.0; 4],
                 deposition_rate: vec![0.0; 4],
                 boundary_condition: vec![0.0; 4],
@@ -47,8 +45,6 @@
             GeologyState {
                 height: vec![0.3, 0.1, 0.2, -0.4],
                 plate_id: vec![0, 0, 1, 1],
-                river_flux: vec![0.0; 4],
-                river_next: vec![-1; 4],
                 erosion_rate: vec![0.0; 4],
                 deposition_rate: vec![0.0; 4],
                 boundary_condition: vec![0.0; 4],
@@ -68,7 +64,7 @@
 
     #[test]
     fn metrics_collects_height_and_flux_stats() {
-        let world = World::new(
+        let mut world = World::new(
             WorldMesh {
                 positions: vec![[0.0, 0.0, 1.0]; 4],
                 nbr_offsets: vec![0, 3, 5, 7, 8],
@@ -77,13 +73,13 @@
             GeologyState {
                 height: vec![1.0, -1.0, 2.0, -2.0],
                 plate_id: vec![0, 0, 1, 1],
-                river_flux: vec![0.5, 1.2, 3.0, 0.1],
-                river_next: vec![1, 2, -1, 0],
                 erosion_rate: vec![0.0; 4],
                 deposition_rate: vec![0.0; 4],
                 boundary_condition: vec![0.0; 4],
             },
         );
+        world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
+        world.state.hydrology.river_path = vec![1, 2, -1, 0];
 
         let metrics = world.metrics();
         assert_eq!(metrics.cell_count, 4);
@@ -128,8 +124,6 @@
             GeologyState {
                 height: terrain_a.height,
                 plate_id: plate_id_a,
-                river_flux: terrain_a.river_flux,
-                river_next: terrain_a.river_next,
                 erosion_rate: vec![0.0; positions.len()],
                 deposition_rate: vec![0.0; positions.len()],
                 boundary_condition: vec![0.0; positions.len()],
@@ -144,8 +138,6 @@
             GeologyState {
                 height: terrain_b.height,
                 plate_id: plate_id_b,
-                river_flux: terrain_b.river_flux,
-                river_next: terrain_b.river_next,
                 erosion_rate: vec![0.0; world_a.cell_count()],
                 deposition_rate: vec![0.0; world_a.cell_count()],
                 boundary_condition: vec![0.0; world_a.cell_count()],
@@ -198,8 +190,6 @@
             GeologyState {
                 height: terrain.height.clone(),
                 plate_id,
-                river_flux: terrain.river_flux.clone(),
-                river_next: terrain.river_next.clone(),
                 erosion_rate: vec![0.0; positions.len()],
                 deposition_rate: vec![0.0; positions.len()],
                 boundary_condition: vec![0.0; positions.len()],
@@ -226,7 +216,7 @@
             last_sink_full_rebuild_tick: 0,
             flux_scale_ema: 1.0,
             last_river_driver: 1.0,
-            prev_river_next: world.state.geology.river_next.clone(),
+            prev_river_next: world.state.hydrology.river_path.clone(),
             flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
             groundwater_storage: vec![0.0; world.cell_count()],
             scratch_effective_runoff: vec![0.0; world.cell_count()],

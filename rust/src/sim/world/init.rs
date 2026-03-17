@@ -21,8 +21,6 @@ impl World {
         let cell_count = geology.height.len();
         let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
         let geo = build_geo_state(&mesh, &geology.height);
-        let initial_river_path = geology.river_next.clone();
-        let initial_river_flow = geology.river_flux.clone();
         let ocean_temperature = geo
             .latitude_deg
             .iter()
@@ -43,8 +41,8 @@ impl World {
                     ocean_temperature,
                 },
                 hydrology: HydrologyState {
-                    river_path: initial_river_path,
-                    river_flow: initial_river_flow,
+                    river_path: vec![-1; cell_count],
+                    river_flow: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
                 },
                 ecology: EcologyState {
@@ -129,8 +127,8 @@ impl World {
             return Err("river erosion state length does not match core cell count".to_string());
         }
         self.state.geology.height = state.height.clone();
-        self.state.geology.river_flux = state.river_flux.clone();
-        self.state.geology.river_next = state.river_next.clone();
+        self.state.hydrology.river_flow.clone_from(&state.river_flux);
+        self.state.hydrology.river_path.clone_from(&state.river_next);
         self.state.hydrology.river_flow = state.river_flux.clone();
         self.state.hydrology.river_path = state.river_next.clone();
         self.exec.hydrology_dynamics = Some(state);

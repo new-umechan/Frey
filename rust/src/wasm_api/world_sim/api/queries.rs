@@ -41,9 +41,9 @@ impl WorldSimController {
             "river_flux" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.state.geology.river_flux.len() as u32,
-                sampled_count: sampled_len(world_ref.state.geology.river_flux.len(), stride),
-                f32_data: Some(sample_f32(&world_ref.state.geology.river_flux, stride)),
+                cell_count: world_ref.state.hydrology.river_flow.len() as u32,
+                sampled_count: sampled_len(world_ref.state.hydrology.river_flow.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.hydrology.river_flow, stride)),
                 u32_data: None,
                 i32_data: None,
             },
@@ -101,11 +101,11 @@ impl WorldSimController {
             "river_next" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.state.geology.river_next.len() as u32,
-                sampled_count: sampled_len(world_ref.state.geology.river_next.len(), stride),
+                cell_count: world_ref.state.hydrology.river_path.len() as u32,
+                sampled_count: sampled_len(world_ref.state.hydrology.river_path.len(), stride),
                 f32_data: None,
                 u32_data: None,
-                i32_data: Some(sample_i32(&world_ref.state.geology.river_next, stride)),
+                i32_data: Some(sample_i32(&world_ref.state.hydrology.river_path, stride)),
             },
             "sink_id" => {
                 let values = sink_id_values_by_cell(world_ref);
@@ -304,7 +304,7 @@ impl WorldSimController {
             }
             counts[pid] = counts[pid].saturating_add(1);
             let h = w.state.geology.height.get(i).copied().unwrap_or(0.0);
-            let flux = w.state.geology.river_flux.get(i).copied().unwrap_or(0.0);
+            let flux = w.state.hydrology.river_flow.get(i).copied().unwrap_or(0.0);
             if h > 0.0 {
                 land_counts[pid] = land_counts[pid].saturating_add(1);
             }

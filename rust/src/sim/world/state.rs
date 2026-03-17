@@ -51,8 +51,6 @@ pub enum CoastSide {
 pub struct GeologyState {
     pub height: Vec<f32>,
     pub plate_id: Vec<u16>,
-    pub river_flux: Vec<f32>,
-    pub river_next: Vec<i32>,
     pub erosion_rate: Vec<f32>,
     pub deposition_rate: Vec<f32>,
     pub boundary_condition: Vec<f32>,
