@@ -1,5 +1,5 @@
-use crate::sim::geology_types::GeologyParams;
 use crate::sim::erosion::ErosionAutomatonState;
+use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
@@ -74,11 +74,15 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Geology
         return;
     }
     state.height.clone_from(&world.state.geology.height);
-    state.river_flux.clone_from(&world.state.hydrology.river_flow);
+    state
+        .river_flux
+        .clone_from(&world.state.hydrology.river_flow);
     state
         .prev_river_next
         .clone_from(&world.state.hydrology.river_path);
-    state.river_next.clone_from(&world.state.hydrology.river_path);
+    state
+        .river_next
+        .clone_from(&world.state.hydrology.river_path);
     for (rain, runoff) in state
         .rain
         .iter_mut()
@@ -149,7 +153,8 @@ fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
         state.scratch_changed_mark = vec![0; expected];
     }
     if state.scratch_flux_samples.capacity() < expected / 2 {
-        state.scratch_flux_samples
+        state
+            .scratch_flux_samples
             .reserve((expected / 2).saturating_sub(state.scratch_flux_samples.capacity()));
     }
 }

@@ -4,8 +4,8 @@ mod boundary_dynamics;
 mod surface_dynamics;
 
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, PlateKinematicsState, StressTensor,
-    GeologyDynamicsState, GeologyStepMetrics, VertexCrustState, World,
+    BoundaryDynamicsState, BoundaryType, CrustType, GeologyDynamicsState, GeologyStepMetrics,
+    PlateKinematicsState, StressTensor, VertexCrustState, World,
 };
 
 use crate::sim::exec::math::{hash01, seeded_axis};

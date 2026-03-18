@@ -49,7 +49,10 @@ pub(crate) struct HydrologyStepDetailBreakdown {
     pub sink_rebuild_fallback_full_count: u32,
 }
 
-pub(crate) fn run_hydrology_step(world: &mut World, geology_budget: u32) -> HydrologyStepDetailBreakdown {
+pub(crate) fn run_hydrology_step(
+    world: &mut World,
+    geology_budget: u32,
+) -> HydrologyStepDetailBreakdown {
     let mut detail = HydrologyStepDetailBreakdown::default();
     let budget = geology_river_budget(world.exec.era, geology_budget);
     if budget == 0 {

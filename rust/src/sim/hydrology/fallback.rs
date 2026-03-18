@@ -47,8 +47,12 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         if state.river_flux.len() == world.state.hydrology.river_flow.len() {
             sync_erosion_rain(state, runoff);
             state.prev_river_next.clone_from(&state.river_next);
-            state.river_flux.clone_from(&world.state.hydrology.river_flow);
-            state.river_next.clone_from(&world.state.hydrology.river_path);
+            state
+                .river_flux
+                .clone_from(&world.state.hydrology.river_flow);
+            state
+                .river_next
+                .clone_from(&world.state.hydrology.river_path);
             state.height.clone_from(&world.state.geology.height);
             state.last_rebuild_tick = world.exec.tick;
             state.flux_scale_ema = 1.0;

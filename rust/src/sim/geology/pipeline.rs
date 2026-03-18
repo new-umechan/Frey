@@ -16,7 +16,10 @@ pub(super) fn generate(seed: &str, mut params: GeologyParams) -> GeologyOutput {
     finalize_crust_update_state(state)
 }
 
-pub(super) fn init_crust_update_state(seed: &str, params: GeologyParams) -> CrustTerrainUpdateState {
+pub(super) fn init_crust_update_state(
+    seed: &str,
+    params: GeologyParams,
+) -> CrustTerrainUpdateState {
     CrustTerrainUpdateState {
         phase: CrustUpdatePhase::InitMeshAndNoise,
         rng: rng_from_seed(seed, &params),
@@ -151,7 +154,11 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
             for v in 0..state.positions.len() {
                 let pid = state.plate_id[v] as usize;
                 let boundary_w = state.plate_boundary_proximity[v];
-                let land_ocean_scale = if state.attributes[pid].is_ocean { 0.85 } else { 1.0 };
+                let land_ocean_scale = if state.attributes[pid].is_ocean {
+                    0.85
+                } else {
+                    1.0
+                };
                 let low_amp = 0.12;
                 let mid_amp = lerp(0.045, 0.085, boundary_w) * land_ocean_scale;
                 let high_amp = lerp(0.010, 0.030, boundary_w) * land_ocean_scale;
@@ -250,8 +257,12 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 state.params.river_rain_base,
                 state.params.river_accumulation_threshold,
             );
-            let lake_depth =
-                compute_lake_depth_map(&state.positions, &state.nbr_offsets, &state.nbrs, &state.height);
+            let lake_depth = compute_lake_depth_map(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &state.height,
+            );
             state.river_flux = river_flux;
             state.river_next = river_next;
             state.lake_depth = lake_depth;
@@ -262,16 +273,13 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
 }
 
 pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) -> GeologyOutput {
-    let boundary_fields = state
-        .boundary_fields
-        .take()
-        .unwrap_or(BoundaryFields {
-            preserve_strength: vec![0.0; state.positions.len()],
-            debug_trench_strength: vec![0.0; state.positions.len()],
-            debug_arc_strength: vec![0.0; state.positions.len()],
-            debug_backarc_strength: vec![0.0; state.positions.len()],
-            debug_ocean_ocean_arc_strength: vec![0.0; state.positions.len()],
-        });
+    let boundary_fields = state.boundary_fields.take().unwrap_or(BoundaryFields {
+        preserve_strength: vec![0.0; state.positions.len()],
+        debug_trench_strength: vec![0.0; state.positions.len()],
+        debug_arc_strength: vec![0.0; state.positions.len()],
+        debug_backarc_strength: vec![0.0; state.positions.len()],
+        debug_ocean_ocean_arc_strength: vec![0.0; state.positions.len()],
+    });
     let vertex_weight = state
         .vertex_lithosphere
         .iter()
@@ -369,7 +377,8 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
     params.erosion_max_delta_per_iter = params.erosion_max_delta_per_iter.max(0.0);
     params.coastal_deposit_rate = clamp(params.coastal_deposit_rate, 0.0, 1.0);
     params.shallow_sea_floor = clamp(params.shallow_sea_floor, -1.0, 0.0);
-    params.continent_competence_noise_gain = clamp(params.continent_competence_noise_gain, 0.0, 0.5);
+    params.continent_competence_noise_gain =
+        clamp(params.continent_competence_noise_gain, 0.0, 0.5);
     params.continent_competence_large_scale = params.continent_competence_large_scale.max(0.1);
     params.continent_competence_mid_scale = params
         .continent_competence_mid_scale

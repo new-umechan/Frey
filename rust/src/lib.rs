@@ -1,12 +1,12 @@
 mod common;
-pub mod sim;
 #[path = "generated/geology_params_defaults.rs"]
 mod geology_params_defaults;
+pub mod sim;
 mod wasm_api;
 pub use sim::world;
 
-pub use crate::sim::geology_types::{MeshOutput, GeologyOutput, GeologyParams};
 pub use crate::sim::erosion::ErosionAutomatonState;
+pub use crate::sim::geology_types::{GeologyOutput, GeologyParams, MeshOutput};
 pub use crate::wasm_api::world_sim::WorldSimController;
 use wasm_bindgen::prelude::*;
 

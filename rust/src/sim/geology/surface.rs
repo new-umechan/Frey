@@ -1,6 +1,5 @@
 use super::*;
 
-
 pub(super) fn postprocess_height(
     nbr_offsets: &[u32],
     nbrs: &[u32],
@@ -12,7 +11,11 @@ pub(super) fn postprocess_height(
     let mut adjusted = Vec::with_capacity(height.len());
     for v in 0..height.len() {
         let pid = plate_id[v] as usize;
-        let buoyancy_bias = if attributes[pid].is_ocean { -0.09 } else { 0.09 };
+        let buoyancy_bias = if attributes[pid].is_ocean {
+            -0.09
+        } else {
+            0.09
+        };
         adjusted.push(height[v] + buoyancy_bias);
     }
 
@@ -207,8 +210,6 @@ pub(super) fn apply_hotspot_island_chains(
     }
 }
 
-
-
 pub(super) fn apply_hydraulic_erosion(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
@@ -303,7 +304,8 @@ pub(super) fn apply_hydraulic_erosion(
                 0.15,
                 2.5,
             );
-            let capacity = params.sediment_capacity_gain * flux_term * slope_term * transport_context;
+            let capacity =
+                params.sediment_capacity_gain * flux_term * slope_term * transport_context;
 
             if h_i > 0.0 {
                 let competence = vertex_competence.get(i).copied().unwrap_or(0.5);
@@ -337,12 +339,15 @@ pub(super) fn apply_hydraulic_erosion(
             let overload = (sediment - capacity).max(0.0);
             if overload > 0.0 {
                 let deposit_context = clamp(
-                    1.0
-                        + 0.85 * flattening
+                    1.0 + 0.85 * flattening
                         + 0.55 * openness
                         + 0.85 * estuary_factor
                         + 0.75 * shallow_factor
-                        + if next_idx.is_none() && h_i > 0.0 { 0.8 } else { 0.0 },
+                        + if next_idx.is_none() && h_i > 0.0 {
+                            0.8
+                        } else {
+                            0.0
+                        },
                     0.3,
                     4.0,
                 );
@@ -379,8 +384,11 @@ pub(super) fn apply_hydraulic_erosion(
                 let loss = sediment * deep_sea_loss_factor;
                 sediment = (sediment - loss).max(0.0);
                 if h_i <= params.shallow_sea_floor && sediment > 0.0 {
-                    let residual_deep_deposit =
-                        clamp(sediment * 0.20, 0.0, params.erosion_max_delta_per_iter * 0.75);
+                    let residual_deep_deposit = clamp(
+                        sediment * 0.20,
+                        0.0,
+                        params.erosion_max_delta_per_iter * 0.75,
+                    );
                     if residual_deep_deposit > 0.0 {
                         distribute_deposition_by_context(
                             nbr_offsets,
@@ -434,7 +442,12 @@ pub(super) fn is_coastal_cell(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32],
     })
 }
 
-pub(super) fn local_open_basin_factor(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32], v: usize) -> f32 {
+pub(super) fn local_open_basin_factor(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    v: usize,
+) -> f32 {
     let start = nbr_offsets[v] as usize;
     let end = nbr_offsets[v + 1] as usize;
     if end <= start {
@@ -505,7 +518,13 @@ pub(super) fn distribute_deposition_by_context(
         center_amount += amount * 0.08 * estuary_factor;
     }
 
-    apply_deposit_to_cell(delta, deposition_armor, params, center, center_amount.min(amount));
+    apply_deposit_to_cell(
+        delta,
+        deposition_armor,
+        params,
+        center,
+        center_amount.min(amount),
+    );
 
     let spread_pool = (amount - center_amount.min(amount)).max(0.0);
     if spread_pool <= 1e-8 {
@@ -556,11 +575,15 @@ pub(super) fn distribute_deposition_by_context(
     }
 
     for (m, w) in weights {
-        apply_deposit_to_cell(delta, deposition_armor, params, m, spread_pool * (w / weight_sum));
+        apply_deposit_to_cell(
+            delta,
+            deposition_armor,
+            params,
+            m,
+            spread_pool * (w / weight_sum),
+        );
     }
 }
-
-
 
 #[cfg(target_arch = "wasm32")]
 type ProfileClock = f64;
@@ -646,9 +669,7 @@ pub(crate) fn step_async_erosion_automaton(
     let force_full_rebuild = state.tick <= 1
         || !sink_buffers_ready(state, v_count)
         || changed_ratio >= FULL_REBUILD_CHANGED_RATIO
-        || state
-            .tick
-            .saturating_sub(state.last_sink_full_rebuild_tick)
+        || state.tick.saturating_sub(state.last_sink_full_rebuild_tick)
             >= FULL_REBUILD_INTERVAL_TICKS;
     let sink_rebuild_stats = rebuild_sink_state(state, &previous_changed, force_full_rebuild);
     breakdown.sink_rebuild_ms += profile_elapsed_ms(phase_start);
@@ -764,10 +785,7 @@ fn process_async_erosion_cell(
     } else {
         0.0
     };
-    let estuary_factor = if h_i > 0.0
-        && next_idx.is_some()
-        && next_h <= 0.0
-    {
+    let estuary_factor = if h_i > 0.0 && next_idx.is_some() && next_h <= 0.0 {
         1.0
     } else if h_i <= 0.0 && source_is_coastal && state.sediment[i] > 0.0 {
         0.65
@@ -794,9 +812,7 @@ fn process_async_erosion_cell(
     let capacity = params.sediment_capacity_gain * flux_term * slope_term * transport_context;
 
     if h_i > 0.0 {
-        let competence = state
-            .params
-            .continent_erodibility_from_competence;
+        let competence = state.params.continent_erodibility_from_competence;
         let erodibility = lerp(1.0, 0.5, clamp(competence, 0.0, 1.0));
         let armor_factor = 1.0 - 0.60 * clamp(state.armor[i], 0.0, 1.0);
         let erosion_demand = (capacity - sediment).max(0.0);
@@ -815,12 +831,15 @@ fn process_async_erosion_cell(
     let overload = (sediment - capacity).max(0.0);
     if overload > 0.0 {
         let deposit_context = clamp(
-            1.0
-                + 0.85 * flattening
+            1.0 + 0.85 * flattening
                 + 0.55 * openness
                 + 0.85 * estuary_factor
                 + 0.75 * shallow_factor
-                + if next_idx.is_none() && h_i > 0.0 { 0.8 } else { 0.0 },
+                + if next_idx.is_none() && h_i > 0.0 {
+                    0.8
+                } else {
+                    0.0
+                },
             0.3,
             4.0,
         );
@@ -872,7 +891,11 @@ fn process_async_erosion_cell(
         let move_base = if uphill { 0.08 } else { 0.22 };
         let slope_drive = local_slope / (local_slope + 0.02);
         let water_drive = water / (water + 0.05);
-        let move_frac = clamp(move_base + 0.55 * slope_drive + 0.20 * water_drive, 0.03, 0.92);
+        let move_frac = clamp(
+            move_base + 0.55 * slope_drive + 0.20 * water_drive,
+            0.03,
+            0.92,
+        );
         outflow_water = water * move_frac;
         outflow_sediment = sediment * move_frac;
         state.water[n] += outflow_water;
@@ -990,7 +1013,11 @@ pub(super) fn compact_active_queue(state: &mut crate::ErosionAutomatonState) {
     }
 }
 
-pub(super) fn mark_changed_vertex(v: usize, changed_mark: &mut [u8], recent_changed: &mut Vec<u32>) {
+pub(super) fn mark_changed_vertex(
+    v: usize,
+    changed_mark: &mut [u8],
+    recent_changed: &mut Vec<u32>,
+) {
     if v >= changed_mark.len() {
         return;
     }
@@ -1049,7 +1076,9 @@ pub(super) fn find_local_flow_target(
             score += params.river_inertia_gain * 0.4;
         }
         let prev_dir = flow_heading.get(v).copied().unwrap_or([0.0, 0.0, 0.0]);
-        let prev_len = (prev_dir[0] * prev_dir[0] + prev_dir[1] * prev_dir[1] + prev_dir[2] * prev_dir[2]).sqrt();
+        let prev_len =
+            (prev_dir[0] * prev_dir[0] + prev_dir[1] * prev_dir[1] + prev_dir[2] * prev_dir[2])
+                .sqrt();
         if prev_len > 1e-6 {
             let cand_dir = normalize3([
                 positions[n][0] - positions[v][0],
@@ -1113,7 +1142,11 @@ pub(super) fn apply_deposit_direct_to_cell(
         return;
     }
     height[v] = clamp(height[v] + amount, -1.2, 1.2);
-    let armor_gain = clamp(amount / params.erosion_max_delta_per_iter.max(1e-6), 0.0, 1.0);
+    let armor_gain = clamp(
+        amount / params.erosion_max_delta_per_iter.max(1e-6),
+        0.0,
+        1.0,
+    );
     armor[v] = clamp(armor[v] + 0.55 * armor_gain, 0.0, 1.0);
 }
 
@@ -1252,11 +1285,7 @@ pub(super) fn rebuild_sink_state_full(state: &mut crate::ErosionAutomatonState) 
     }
     reset_sink_buffers(state, v_count);
 
-    let downhill = compute_downhill_links(
-        &state.height,
-        &state.nbr_offsets,
-        &state.nbrs,
-    );
+    let downhill = compute_downhill_links(&state.height, &state.nbr_offsets, &state.nbrs);
 
     let mut terminal = vec![-2_i32; v_count];
     for i in 0..v_count {
@@ -1273,7 +1302,10 @@ pub(super) fn rebuild_sink_state_full(state: &mut crate::ErosionAutomatonState) 
     }
 }
 
-pub(super) fn rebuild_sink_state_partial(state: &mut crate::ErosionAutomatonState, changed: &[u32]) -> (usize, usize) {
+pub(super) fn rebuild_sink_state_partial(
+    state: &mut crate::ErosionAutomatonState,
+    changed: &[u32],
+) -> (usize, usize) {
     let v_count = state.height.len();
     if v_count == 0 {
         return (0, 0);
@@ -1416,7 +1448,11 @@ pub(super) fn reset_sink_buffers(state: &mut crate::ErosionAutomatonState, v_cou
     }
 }
 
-pub(super) fn compute_downhill_links(height: &[f32], nbr_offsets: &[u32], nbrs: &[u32]) -> Vec<i32> {
+pub(super) fn compute_downhill_links(
+    height: &[f32],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+) -> Vec<i32> {
     let mut downhill = vec![-1_i32; height.len()];
     for i in 0..height.len() {
         if height[i] <= 0.0 {
@@ -1439,7 +1475,11 @@ pub(super) fn compute_downhill_links(height: &[f32], nbr_offsets: &[u32], nbrs: 
     downhill
 }
 
-pub(super) fn build_sink_members(height: &[f32], terminal: &[i32], sink_id: &mut [i32]) -> Vec<Vec<usize>> {
+pub(super) fn build_sink_members(
+    height: &[f32],
+    terminal: &[i32],
+    sink_id: &mut [i32],
+) -> Vec<Vec<usize>> {
     let mut root_to_sink = std::collections::HashMap::<usize, usize>::new();
     let mut sink_members = Vec::<Vec<usize>>::new();
     for i in 0..terminal.len() {
@@ -1468,7 +1508,11 @@ pub(super) fn snapshot_sink_state(
     for sid in 0..state.sink_spill_cell.len() {
         let spill_cell = state.sink_spill_cell[sid];
         let spill_to = state.sink_spill_to.get(sid).copied().unwrap_or(-1);
-        let remain = state.sink_capacity_remaining.get(sid).copied().unwrap_or(0.0);
+        let remain = state
+            .sink_capacity_remaining
+            .get(sid)
+            .copied()
+            .unwrap_or(0.0);
         let storage = state.sink_storage_sediment.get(sid).copied().unwrap_or(0.0);
         let active = state.sink_overflow_active.get(sid).copied().unwrap_or(0);
         old_state.insert((spill_cell, spill_to), (remain, storage, active));
@@ -1476,7 +1520,10 @@ pub(super) fn snapshot_sink_state(
     old_state
 }
 
-pub(super) fn resize_sink_state_arrays(state: &mut crate::ErosionAutomatonState, sink_count: usize) {
+pub(super) fn resize_sink_state_arrays(
+    state: &mut crate::ErosionAutomatonState,
+    sink_count: usize,
+) {
     state.sink_spill_cell = vec![-1; sink_count];
     state.sink_spill_to = vec![-1; sink_count];
     state.sink_spill_level = vec![0.0; sink_count];
@@ -1516,7 +1563,12 @@ pub(super) fn find_sink_spill_edge(
     (best_level, best_from, best_to)
 }
 
-pub(super) fn sink_capacity(height: &[f32], members: &[usize], spill_level: f32, sink_min_capacity: f32) -> f32 {
+pub(super) fn sink_capacity(
+    height: &[f32],
+    members: &[usize],
+    spill_level: f32,
+    sink_min_capacity: f32,
+) -> f32 {
     let mut capacity = 0.0f32;
     for &v in members {
         capacity += (spill_level - height[v]).max(0.0);
@@ -1543,7 +1595,12 @@ pub(super) fn restore_sink_snapshot(
     }
 }
 
-pub(super) fn trace_terminal(i: usize, height: &[f32], downhill: &[i32], terminal: &mut [i32]) -> i32 {
+pub(super) fn trace_terminal(
+    i: usize,
+    height: &[f32],
+    downhill: &[i32],
+    terminal: &mut [i32],
+) -> i32 {
     if i >= downhill.len() {
         return -1;
     }
@@ -1668,7 +1725,11 @@ pub(super) fn apply_sink_capacity_rule(
     {
         return;
     }
-    let spill_level = state.sink_spill_level.get(sid).copied().unwrap_or(f32::INFINITY);
+    let spill_level = state
+        .sink_spill_level
+        .get(sid)
+        .copied()
+        .unwrap_or(f32::INFINITY);
     let hysteresis = state.params.sink_overflow_hysteresis.max(0.0);
     let is_pond_cell = state.height[cell] <= spill_level + hysteresis;
     if !is_pond_cell {
@@ -1750,7 +1811,6 @@ pub(super) fn enqueue_sink_local_area(state: &mut crate::ErosionAutomatonState, 
         }
     }
 }
-
 
 pub(super) fn compute_river_flux_and_next(
     positions: &[[f32; 3]],
@@ -1998,8 +2058,6 @@ pub(super) fn generate_rivers(
 
     (river_flux, river_next)
 }
-
-
 
 pub(super) fn build_precipitation_map(
     positions: &[[f32; 3]],

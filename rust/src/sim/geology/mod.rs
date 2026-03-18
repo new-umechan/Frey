@@ -23,8 +23,8 @@ use boundaries::*;
 mod surface;
 use surface::*;
 
-mod pipeline;
 pub mod dynamics;
+mod pipeline;
 
 pub(super) fn generate(seed: &str, params: GeologyParams) -> GeologyOutput {
     pipeline::generate(seed, params)

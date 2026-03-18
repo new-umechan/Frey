@@ -50,11 +50,7 @@ pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32
     }
 
     let mut order = (0..cell_count).collect::<Vec<_>>();
-    order.sort_unstable_by(|&a, &b| {
-        height[b]
-            .partial_cmp(&height[a])
-            .unwrap_or(Ordering::Equal)
-    });
+    order.sort_unstable_by(|&a, &b| height[b].partial_cmp(&height[a]).unwrap_or(Ordering::Equal));
     for i in order {
         let next = river_next.get(i).copied().unwrap_or(-1);
         if next < 0 {
@@ -67,8 +63,7 @@ pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32
                 continue;
             }
             let drop = drop_raw.max(0.0);
-            let transfer = (CHANNEL_TRANSFER_BASE
-                + drop * CHANNEL_TRANSFER_SLOPE_GAIN)
+            let transfer = (CHANNEL_TRANSFER_BASE + drop * CHANNEL_TRANSFER_SLOPE_GAIN)
                 .clamp(CHANNEL_TRANSFER_BASE, CHANNEL_TRANSFER_MAX);
             let carried =
                 (flux[i] - local_runoff[i] * (1.0 - FLUX_LOCAL_DECAY)).max(0.0) * transfer;
@@ -194,7 +189,10 @@ pub(super) fn build_river_network(
     (flux, river_next, heading)
 }
 
-pub(super) fn enforce_sink_overflow_routes(state: &crate::ErosionAutomatonState, river_next: &mut [i32]) {
+pub(super) fn enforce_sink_overflow_routes(
+    state: &crate::ErosionAutomatonState,
+    river_next: &mut [i32],
+) {
     let v_count = river_next.len();
     if state.sink_id.len() != v_count || state.sink_overflow_active.is_empty() {
         return;
@@ -253,7 +251,11 @@ pub(super) fn apply_river_network_constraints(
     }
 }
 
-pub(super) fn align_flow_heading(positions: &[[f32; 3]], heading: &mut [[f32; 3]], river_next: &[i32]) {
+pub(super) fn align_flow_heading(
+    positions: &[[f32; 3]],
+    heading: &mut [[f32; 3]],
+    river_next: &[i32],
+) {
     for i in 0..heading.len() {
         let next = river_next.get(i).copied().unwrap_or(-1);
         if next < 0 {
@@ -296,9 +298,8 @@ pub(super) fn robust_flux_scale(flux: &[f32], scratch_flux_samples: &mut Vec<f32
     let mut max_flux = 0.0f32;
     scratch_flux_samples.clear();
     if scratch_flux_samples.capacity() < flux.len() / 2 {
-        scratch_flux_samples.reserve(
-            (flux.len() / 2).saturating_sub(scratch_flux_samples.capacity()),
-        );
+        scratch_flux_samples
+            .reserve((flux.len() / 2).saturating_sub(scratch_flux_samples.capacity()));
     }
     for &value in flux {
         if value.is_finite() && value > 0.0 {

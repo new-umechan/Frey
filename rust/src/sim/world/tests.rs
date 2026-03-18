@@ -1,284 +1,291 @@
-    use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
-    use crate::common::mesh::{build_neighbors, generate_icosphere};
-    use crate::sim::erosion::ErosionAutomatonState;
-    use crate::sim::exec_world;
-    use crate::GeologyParams;
 
-    fn build_world() -> World {
-        World::new(
-            WorldMesh {
-                positions: vec![[0.0, 0.0, 1.0]; 4],
-                nbr_offsets: vec![0, 1, 2, 3, 4],
-                nbrs: vec![1, 2, 3, 0],
-            },
-            GeologyState {
-                height: vec![0.2, -0.1, 0.1, -0.2],
-                plate_id: vec![0, 0, 1, 1],
-                erosion_rate: vec![0.0; 4],
-                deposition_rate: vec![0.0; 4],
-                boundary_condition: vec![0.0; 4],
-            },
-        )
-    }
+use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
+use crate::common::mesh::{build_neighbors, generate_icosphere};
+use crate::sim::erosion::ErosionAutomatonState;
+use crate::sim::exec_world;
+use crate::GeologyParams;
 
-    #[test]
-    fn world_initializes_exec_state() {
-        let world = build_world();
-        assert_eq!(world.exec.era, EraKind::Crust);
-        assert_eq!(
-            world.exec.real_years_per_tick,
-            EraKind::Crust.real_years_per_tick()
-        );
-        assert_eq!(world.exec.budgets, EraKind::Crust.budgets());
-        assert_eq!(world.exec.transition.last_land_ratio, 0.5);
-        assert_eq!(world.exec.feedback_queue.pending.pollution.len(), 4);
-    }
+fn build_world() -> World {
+    World::new(
+        WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]; 4],
+            nbr_offsets: vec![0, 1, 2, 3, 4],
+            nbrs: vec![1, 2, 3, 0],
+        },
+        GeologyState {
+            height: vec![0.2, -0.1, 0.1, -0.2],
+            plate_id: vec![0, 0, 1, 1],
+            erosion_rate: vec![0.0; 4],
+            deposition_rate: vec![0.0; 4],
+            boundary_condition: vec![0.0; 4],
+        },
+    )
+}
 
-    #[test]
-    fn world_initializes_land_ratio_independently_from_sea_ratio() {
-        let world = World::new(
-            WorldMesh {
-                positions: vec![[0.0, 0.0, 1.0]; 4],
-                nbr_offsets: vec![0, 1, 2, 3, 4],
-                nbrs: vec![1, 2, 3, 0],
-            },
-            GeologyState {
-                height: vec![0.3, 0.1, 0.2, -0.4],
-                plate_id: vec![0, 0, 1, 1],
-                erosion_rate: vec![0.0; 4],
-                deposition_rate: vec![0.0; 4],
-                boundary_condition: vec![0.0; 4],
-            },
-        );
+#[test]
+fn world_initializes_exec_state() {
+    let world = build_world();
+    assert_eq!(world.exec.era, EraKind::Crust);
+    assert_eq!(
+        world.exec.real_years_per_tick,
+        EraKind::Crust.real_years_per_tick()
+    );
+    assert_eq!(world.exec.budgets, EraKind::Crust.budgets());
+    assert_eq!(world.exec.transition.last_land_ratio, 0.5);
+    assert_eq!(world.exec.feedback_queue.pending.pollution.len(), 4);
+}
 
-        assert_eq!(world.exec.target_sea_ratio, 0.25);
-        assert_eq!(world.exec.transition.last_land_ratio, 0.75);
-    }
+#[test]
+fn world_initializes_land_ratio_independently_from_sea_ratio() {
+    let world = World::new(
+        WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]; 4],
+            nbr_offsets: vec![0, 1, 2, 3, 4],
+            nbrs: vec![1, 2, 3, 0],
+        },
+        GeologyState {
+            height: vec![0.3, 0.1, 0.2, -0.4],
+            plate_id: vec![0, 0, 1, 1],
+            erosion_rate: vec![0.0; 4],
+            deposition_rate: vec![0.0; 4],
+            boundary_condition: vec![0.0; 4],
+        },
+    );
 
-    #[test]
-    fn feedback_queue_sizes_match_world() {
-        let queue = FeedbackQueue::new(8);
-        assert_eq!(queue.active.water_withdrawal.len(), 8);
-        assert_eq!(queue.pending.dam_pressure.len(), 8);
-    }
+    assert_eq!(world.exec.target_sea_ratio, 0.25);
+    assert_eq!(world.exec.transition.last_land_ratio, 0.75);
+}
 
-    #[test]
-    fn feedback_queue_supports_generic_channels() {
-        let mut queue = FeedbackQueue::new(3);
-        queue.pending.channel_mut("custom_flow", 3)[1] = 0.25;
-        assert_eq!(
-            queue.pending.channel("custom_flow").and_then(|v| v.get(1).copied()),
-            Some(0.25)
-        );
+#[test]
+fn feedback_queue_sizes_match_world() {
+    let queue = FeedbackQueue::new(8);
+    assert_eq!(queue.active.water_withdrawal.len(), 8);
+    assert_eq!(queue.pending.dam_pressure.len(), 8);
+}
 
-        queue.pending.clear();
-        assert_eq!(
-            queue.pending.channel("custom_flow").and_then(|v| v.get(1).copied()),
-            Some(0.0)
-        );
-    }
+#[test]
+fn feedback_queue_supports_generic_channels() {
+    let mut queue = FeedbackQueue::new(3);
+    queue.pending.channel_mut("custom_flow", 3)[1] = 0.25;
+    assert_eq!(
+        queue
+            .pending
+            .channel("custom_flow")
+            .and_then(|v| v.get(1).copied()),
+        Some(0.25)
+    );
 
-    #[test]
-    fn civilization_indicators_aggregate_population_and_polity() {
-        let mut world = build_world();
-        world.state.population.population = vec![12.0, 5.0, 11.0, 0.0];
-        world.state.polity.polity_id = vec![1, 0, 2, 0];
+    queue.pending.clear();
+    assert_eq!(
+        queue
+            .pending
+            .channel("custom_flow")
+            .and_then(|v| v.get(1).copied()),
+        Some(0.0)
+    );
+}
 
-        let indicators = world.state.civilization_state().indicators();
-        assert_eq!(indicators.settled_cells, 2);
-        assert!((indicators.total_population - 28.0).abs() < 1e-6);
-        assert_eq!(indicators.state_cells, 2);
-    }
+#[test]
+fn civilization_indicators_aggregate_population_and_polity() {
+    let mut world = build_world();
+    world.state.population.population = vec![12.0, 5.0, 11.0, 0.0];
+    world.state.polity.polity_id = vec![1, 0, 2, 0];
 
-    #[test]
-    fn metrics_collects_height_and_flux_stats() {
-        let mut world = World::new(
-            WorldMesh {
-                positions: vec![[0.0, 0.0, 1.0]; 4],
-                nbr_offsets: vec![0, 3, 5, 7, 8],
-                nbrs: vec![1, 2, 3, 0, 2, 0, 1, 0],
-            },
-            GeologyState {
-                height: vec![1.0, -1.0, 2.0, -2.0],
-                plate_id: vec![0, 0, 1, 1],
-                erosion_rate: vec![0.0; 4],
-                deposition_rate: vec![0.0; 4],
-                boundary_condition: vec![0.0; 4],
-            },
-        );
-        world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
-        world.state.hydrology.river_path = vec![1, 2, -1, 0];
+    let indicators = world.state.civilization_state().indicators();
+    assert_eq!(indicators.settled_cells, 2);
+    assert!((indicators.total_population - 28.0).abs() < 1e-6);
+    assert_eq!(indicators.state_cells, 2);
+}
 
-        let metrics = world.metrics();
-        assert_eq!(metrics.cell_count, 4);
-        assert_eq!(metrics.land_cells, 2);
-        assert!((metrics.land_ratio - 0.5).abs() < 1e-6);
-        assert!((metrics.mean_height - 0.0).abs() < 1e-6);
-        assert!((metrics.height_std_dev - 1.5811388).abs() < 1e-5);
-        assert!((metrics.mean_river_flux - 1.2).abs() < 1e-6);
-        assert!((metrics.max_river_flux - 3.0).abs() < 1e-6);
-        assert!((metrics.top10_river_flux_sum - 4.8).abs() < 1e-6);
-        assert_eq!(metrics.continent_count, 1);
-        assert_eq!(metrics.largest_continent_cells, 2);
-    }
+#[test]
+fn metrics_collects_height_and_flux_stats() {
+    let mut world = World::new(
+        WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]; 4],
+            nbr_offsets: vec![0, 3, 5, 7, 8],
+            nbrs: vec![1, 2, 3, 0, 2, 0, 1, 0],
+        },
+        GeologyState {
+            height: vec![1.0, -1.0, 2.0, -2.0],
+            plate_id: vec![0, 0, 1, 1],
+            erosion_rate: vec![0.0; 4],
+            deposition_rate: vec![0.0; 4],
+            boundary_condition: vec![0.0; 4],
+        },
+    );
+    world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
+    world.state.hydrology.river_path = vec![1, 2, -1, 0];
 
-    #[test]
-    fn metrics_are_deterministic_for_fixed_seed() {
-        let mut params = GeologyParams::default();
-        params.level = 2;
-        let seed = "metrics-regression-seed";
+    let metrics = world.metrics();
+    assert_eq!(metrics.cell_count, 4);
+    assert_eq!(metrics.land_cells, 2);
+    assert!((metrics.land_ratio - 0.5).abs() < 1e-6);
+    assert!((metrics.mean_height - 0.0).abs() < 1e-6);
+    assert!((metrics.height_std_dev - 1.5811388).abs() < 1e-5);
+    assert!((metrics.mean_river_flux - 1.2).abs() < 1e-6);
+    assert!((metrics.max_river_flux - 3.0).abs() < 1e-6);
+    assert!((metrics.top10_river_flux_sum - 4.8).abs() < 1e-6);
+    assert_eq!(metrics.continent_count, 1);
+    assert_eq!(metrics.largest_continent_cells, 2);
+}
 
-        let terrain_a = crate::sim::build_geology(seed, params.clone());
-        let terrain_b = crate::sim::build_geology(seed, params);
-        let (positions, indices) = generate_icosphere(2);
-        let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-        let plate_id_a = terrain_a
-            .plate_id
-            .iter()
-            .map(|&v| v as u16)
-            .collect::<Vec<_>>();
-        let plate_id_b = terrain_b
-            .plate_id
-            .iter()
-            .map(|&v| v as u16)
-            .collect::<Vec<_>>();
+#[test]
+fn metrics_are_deterministic_for_fixed_seed() {
+    let mut params = GeologyParams::default();
+    params.level = 2;
+    let seed = "metrics-regression-seed";
 
-        let mut world_a = World::new(
-            WorldMesh {
-                positions: positions.clone(),
-                nbr_offsets: nbr_offsets.clone(),
-                nbrs: nbrs.clone(),
-            },
-            GeologyState {
-                height: terrain_a.height,
-                plate_id: plate_id_a,
-                erosion_rate: vec![0.0; positions.len()],
-                deposition_rate: vec![0.0; positions.len()],
-                boundary_condition: vec![0.0; positions.len()],
-            },
-        );
-        let mut world_b = World::new(
-            WorldMesh {
-                positions,
-                nbr_offsets,
-                nbrs,
-            },
-            GeologyState {
-                height: terrain_b.height,
-                plate_id: plate_id_b,
-                erosion_rate: vec![0.0; world_a.cell_count()],
-                deposition_rate: vec![0.0; world_a.cell_count()],
-                boundary_condition: vec![0.0; world_a.cell_count()],
-            },
-        );
+    let terrain_a = crate::sim::build_geology(seed, params.clone());
+    let terrain_b = crate::sim::build_geology(seed, params);
+    let (positions, indices) = generate_icosphere(2);
+    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+    let plate_id_a = terrain_a
+        .plate_id
+        .iter()
+        .map(|&v| v as u16)
+        .collect::<Vec<_>>();
+    let plate_id_b = terrain_b
+        .plate_id
+        .iter()
+        .map(|&v| v as u16)
+        .collect::<Vec<_>>();
 
-        for _ in 0..8 {
-            exec_world(&mut world_a);
-            exec_world(&mut world_b);
-        }
-
-        let metrics_a = world_a.metrics();
-        let metrics_b = world_b.metrics();
-
-        assert_eq!(metrics_a.cell_count, metrics_b.cell_count);
-        assert_eq!(metrics_a.land_cells, metrics_b.land_cells);
-        assert!((metrics_a.land_ratio - metrics_b.land_ratio).abs() < 1e-6);
-        assert!((metrics_a.mean_height - metrics_b.mean_height).abs() < 1e-6);
-        assert!((metrics_a.height_std_dev - metrics_b.height_std_dev).abs() < 1e-6);
-        assert!((metrics_a.max_river_flux - metrics_b.max_river_flux).abs() < 1e-6);
-        assert!((metrics_a.top10_river_flux_sum - metrics_b.top10_river_flux_sum).abs() < 1e-6);
-        assert_eq!(metrics_a.continent_count, metrics_b.continent_count);
-        assert_eq!(
-            metrics_a.largest_continent_cells,
-            metrics_b.largest_continent_cells
-        );
-    }
-
-    #[test]
-    fn river_network_persists_without_early_collapse() {
-        let mut params = GeologyParams::default();
-        params.level = 2;
-        let seed = "river-network-stability-seed";
-
-        let terrain = crate::sim::build_geology(seed, params.clone());
-        let (positions, indices) = generate_icosphere(2);
-        let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-        let plate_id = terrain
-            .plate_id
-            .iter()
-            .map(|&v| v as u16)
-            .collect::<Vec<_>>();
-
-        let mut world = World::new(
-            WorldMesh {
-                positions: positions.clone(),
-                nbr_offsets: nbr_offsets.clone(),
-                nbrs: nbrs.clone(),
-            },
-            GeologyState {
-                height: terrain.height.clone(),
-                plate_id,
-                erosion_rate: vec![0.0; positions.len()],
-                deposition_rate: vec![0.0; positions.len()],
-                boundary_condition: vec![0.0; positions.len()],
-            },
-        );
-
-        let erosion = ErosionAutomatonState {
+    let mut world_a = World::new(
+        WorldMesh {
+            positions: positions.clone(),
+            nbr_offsets: nbr_offsets.clone(),
+            nbrs: nbrs.clone(),
+        },
+        GeologyState {
+            height: terrain_a.height,
+            plate_id: plate_id_a,
+            erosion_rate: vec![0.0; positions.len()],
+            deposition_rate: vec![0.0; positions.len()],
+            boundary_condition: vec![0.0; positions.len()],
+        },
+    );
+    let mut world_b = World::new(
+        WorldMesh {
             positions,
             nbr_offsets,
             nbrs,
-            height: terrain.height,
-            water: vec![0.0; terrain.river_flux.len()],
-            sediment: vec![0.0; terrain.river_flux.len()],
-            armor: vec![0.0; terrain.river_flux.len()],
-            rain: vec![0.12; terrain.river_flux.len()],
-            river_flux: terrain.river_flux,
-            river_next: terrain.river_next,
-            active_queue: (0..world.cell_count() as u32).collect(),
-            active_head: 0,
-            in_queue: vec![1; world.cell_count()],
-            rain_cursor: 0,
-            tick: 0,
-            last_rebuild_tick: 0,
-            last_sink_full_rebuild_tick: 0,
-            flux_scale_ema: 1.0,
-            last_river_driver: 1.0,
-            prev_river_next: world.state.hydrology.river_path.clone(),
-            flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
-            groundwater_storage: vec![0.0; world.cell_count()],
-            scratch_effective_runoff: vec![0.0; world.cell_count()],
-            scratch_changed_mark: vec![0; world.cell_count()],
-            scratch_flux_samples: Vec::with_capacity(world.cell_count() / 2),
-            recent_changed: Vec::new(),
-            sink_id: vec![-1; world.cell_count()],
-            sink_route_next: vec![-1; world.cell_count()],
-            sink_spill_cell: Vec::new(),
-            sink_spill_to: Vec::new(),
-            sink_capacity_total: Vec::new(),
-            sink_capacity_remaining: Vec::new(),
-            sink_storage_sediment: Vec::new(),
-            sink_spill_level: Vec::new(),
-            sink_overflow_active: Vec::new(),
-            sink_dirty: vec![1; world.cell_count()],
-            params,
-        };
-        let _ = world.attach_hydrology_dynamics(erosion);
+        },
+        GeologyState {
+            height: terrain_b.height,
+            plate_id: plate_id_b,
+            erosion_rate: vec![0.0; world_a.cell_count()],
+            deposition_rate: vec![0.0; world_a.cell_count()],
+            boundary_condition: vec![0.0; world_a.cell_count()],
+        },
+    );
 
-        for _ in 0..2 {
-            exec_world(&mut world);
-        }
-        let metrics_t2 = world.metrics();
-
-        for _ in 2..28 {
-            exec_world(&mut world);
-        }
-        let metrics_t28 = world.metrics();
-
-        assert!(metrics_t2.river_active_cells > 0);
-        assert!(metrics_t28.river_active_cells > 0);
-        assert!(metrics_t2.river_ocean_reach_ratio > 0.10);
-        assert!(metrics_t28.river_ocean_reach_ratio > 0.05);
-        assert!(metrics_t2.river_fragmentation_ratio < 0.95);
-        assert!(metrics_t28.river_fragmentation_ratio < 0.98);
+    for _ in 0..8 {
+        exec_world(&mut world_a);
+        exec_world(&mut world_b);
     }
+
+    let metrics_a = world_a.metrics();
+    let metrics_b = world_b.metrics();
+
+    assert_eq!(metrics_a.cell_count, metrics_b.cell_count);
+    assert_eq!(metrics_a.land_cells, metrics_b.land_cells);
+    assert!((metrics_a.land_ratio - metrics_b.land_ratio).abs() < 1e-6);
+    assert!((metrics_a.mean_height - metrics_b.mean_height).abs() < 1e-6);
+    assert!((metrics_a.height_std_dev - metrics_b.height_std_dev).abs() < 1e-6);
+    assert!((metrics_a.max_river_flux - metrics_b.max_river_flux).abs() < 1e-6);
+    assert!((metrics_a.top10_river_flux_sum - metrics_b.top10_river_flux_sum).abs() < 1e-6);
+    assert_eq!(metrics_a.continent_count, metrics_b.continent_count);
+    assert_eq!(
+        metrics_a.largest_continent_cells,
+        metrics_b.largest_continent_cells
+    );
+}
+
+#[test]
+fn river_network_persists_without_early_collapse() {
+    let mut params = GeologyParams::default();
+    params.level = 2;
+    let seed = "river-network-stability-seed";
+
+    let terrain = crate::sim::build_geology(seed, params.clone());
+    let (positions, indices) = generate_icosphere(2);
+    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+    let plate_id = terrain
+        .plate_id
+        .iter()
+        .map(|&v| v as u16)
+        .collect::<Vec<_>>();
+
+    let mut world = World::new(
+        WorldMesh {
+            positions: positions.clone(),
+            nbr_offsets: nbr_offsets.clone(),
+            nbrs: nbrs.clone(),
+        },
+        GeologyState {
+            height: terrain.height.clone(),
+            plate_id,
+            erosion_rate: vec![0.0; positions.len()],
+            deposition_rate: vec![0.0; positions.len()],
+            boundary_condition: vec![0.0; positions.len()],
+        },
+    );
+
+    let erosion = ErosionAutomatonState {
+        positions,
+        nbr_offsets,
+        nbrs,
+        height: terrain.height,
+        water: vec![0.0; terrain.river_flux.len()],
+        sediment: vec![0.0; terrain.river_flux.len()],
+        armor: vec![0.0; terrain.river_flux.len()],
+        rain: vec![0.12; terrain.river_flux.len()],
+        river_flux: terrain.river_flux,
+        river_next: terrain.river_next,
+        active_queue: (0..world.cell_count() as u32).collect(),
+        active_head: 0,
+        in_queue: vec![1; world.cell_count()],
+        rain_cursor: 0,
+        tick: 0,
+        last_rebuild_tick: 0,
+        last_sink_full_rebuild_tick: 0,
+        flux_scale_ema: 1.0,
+        last_river_driver: 1.0,
+        prev_river_next: world.state.hydrology.river_path.clone(),
+        flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
+        groundwater_storage: vec![0.0; world.cell_count()],
+        scratch_effective_runoff: vec![0.0; world.cell_count()],
+        scratch_changed_mark: vec![0; world.cell_count()],
+        scratch_flux_samples: Vec::with_capacity(world.cell_count() / 2),
+        recent_changed: Vec::new(),
+        sink_id: vec![-1; world.cell_count()],
+        sink_route_next: vec![-1; world.cell_count()],
+        sink_spill_cell: Vec::new(),
+        sink_spill_to: Vec::new(),
+        sink_capacity_total: Vec::new(),
+        sink_capacity_remaining: Vec::new(),
+        sink_storage_sediment: Vec::new(),
+        sink_spill_level: Vec::new(),
+        sink_overflow_active: Vec::new(),
+        sink_dirty: vec![1; world.cell_count()],
+        params,
+    };
+    let _ = world.attach_hydrology_dynamics(erosion);
+
+    for _ in 0..2 {
+        exec_world(&mut world);
+    }
+    let metrics_t2 = world.metrics();
+
+    for _ in 2..28 {
+        exec_world(&mut world);
+    }
+    let metrics_t28 = world.metrics();
+
+    assert!(metrics_t2.river_active_cells > 0);
+    assert!(metrics_t28.river_active_cells > 0);
+    assert!(metrics_t2.river_ocean_reach_ratio > 0.10);
+    assert!(metrics_t28.river_ocean_reach_ratio > 0.05);
+    assert!(metrics_t2.river_fragmentation_ratio < 0.95);
+    assert!(metrics_t28.river_fragmentation_ratio < 0.98);
+}

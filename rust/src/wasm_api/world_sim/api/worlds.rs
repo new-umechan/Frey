@@ -5,11 +5,7 @@ use wasm_bindgen::prelude::*;
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim;
 use crate::sim::{
-    exec_world,
-    exec_world_profiled,
-    exec_world_profiled_detailed,
-    world,
-    ExecWorldBreakdown,
+    exec_world, exec_world_profiled, exec_world_profiled_detailed, world, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed,
 };
 
@@ -232,8 +228,9 @@ impl WorldSimController {
             step_observe_world_change_ms,
             step_history_snapshot_ms,
         };
-        serde_wasm_bindgen::to_value(&response)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}")))
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = exec_world_profiled_detail)]
@@ -338,9 +335,7 @@ impl WorldSimController {
             sink_rebuild_full_count: sim_breakdown.river.sink_rebuild_full_count,
             sink_rebuild_partial_count: sim_breakdown.river.sink_rebuild_partial_count,
             sink_rebuild_skipped_count: sim_breakdown.river.sink_rebuild_skipped_count,
-            sink_rebuild_fallback_full_count: sim_breakdown
-                .river
-                .sink_rebuild_fallback_full_count,
+            sink_rebuild_fallback_full_count: sim_breakdown.river.sink_rebuild_fallback_full_count,
         };
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(

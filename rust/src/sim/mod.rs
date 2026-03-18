@@ -1,34 +1,31 @@
 // 横断層
 pub mod exec;
-pub mod world;
-pub mod state;
 pub mod geology_types;
+pub mod state;
+pub mod world;
 
 // Tier 1（UPDATE_DAG 順）
-pub mod geology;
 pub mod climate;
-pub mod hydrology;
-pub mod ecology;
+pub mod conflict;
 pub mod domesticates;
-pub mod subsistence;
+pub mod ecology;
+pub mod geology;
+pub mod hydrology;
+pub mod polity;
 pub mod population;
 pub mod settlement;
-pub mod polity;
-pub mod conflict;
-pub use state::erosion;
+pub mod subsistence;
 pub(crate) use crate::common::geo;
+pub use state::erosion;
 
 pub use exec::{
-    exec_world,
-    exec_world_profiled,
-    exec_world_profiled_detailed,
-    ExecWorldBreakdown,
+    exec_world, exec_world_profiled, exec_world_profiled_detailed, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed,
 };
 
 use crate::common::mesh::{flatten_positions, generate_icosphere};
 
-use self::geology_types::{MeshOutput, GeologyOutput, GeologyParams};
+use self::geology_types::{GeologyOutput, GeologyParams, MeshOutput};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ErosionAutomatonBreakdown {

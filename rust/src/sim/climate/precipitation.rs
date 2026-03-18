@@ -27,8 +27,7 @@ pub(crate) fn build_precipitation_map(
         let barrier_strength = upwind_h.max(0.0_f32);
 
         let orographic_factor = clamp(
-            1.0_f32
-                + 0.60_f32 * windward_boost * (1.0_f32 + 0.6_f32 * height[i].max(0.0_f32))
+            1.0_f32 + 0.60_f32 * windward_boost * (1.0_f32 + 0.6_f32 * height[i].max(0.0_f32))
                 - 1.10_f32 * leeward_drop * (1.0_f32 + 0.8_f32 * barrier_strength),
             0.12_f32,
             2.20_f32,
@@ -115,7 +114,11 @@ fn directional_neighbor_heights(
         }
     }
 
-    let upwind_h = if up_w > 0.0_f32 { up_sum / up_w } else { height[i] };
+    let upwind_h = if up_w > 0.0_f32 {
+        up_sum / up_w
+    } else {
+        height[i]
+    };
     let downwind_h = if down_w > 0.0_f32 {
         down_sum / down_w
     } else {

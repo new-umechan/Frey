@@ -1,7 +1,10 @@
 use super::*;
 
-
-pub(super) fn choose_plate_count(min_count: u32, max_count: u32, rng: &mut DeterministicRng) -> usize {
+pub(super) fn choose_plate_count(
+    min_count: u32,
+    max_count: u32,
+    rng: &mut DeterministicRng,
+) -> usize {
     if min_count == max_count {
         min_count as usize
     } else {
@@ -58,7 +61,13 @@ pub(super) fn pick_plate_seeds(
     let mut min_spacing = estimate_seed_min_spacing(plate_count);
     for _ in 0..5 {
         take_spaced_candidates(&mut seeds, &max_candidates, positions, k_up, min_spacing);
-        take_spaced_candidates(&mut seeds, &min_candidates, positions, k_up + k_down, min_spacing);
+        take_spaced_candidates(
+            &mut seeds,
+            &min_candidates,
+            positions,
+            k_up + k_down,
+            min_spacing,
+        );
         if seeds.len() >= plate_count {
             break;
         }
@@ -67,7 +76,8 @@ pub(super) fn pick_plate_seeds(
 
     while seeds.len() < plate_count {
         let next = farthest_point_seed(positions, &seeds, rng);
-        if !seeds.contains(&next) && is_seed_far_enough(positions, &seeds, next, min_spacing * 0.7) {
+        if !seeds.contains(&next) && is_seed_far_enough(positions, &seeds, next, min_spacing * 0.7)
+        {
             seeds.push(next);
         } else {
             break;
@@ -81,7 +91,9 @@ pub(super) fn pick_plate_seeds(
     while seeds.len() < plate_count {
         let mut next = rng.gen_range_usize(0, phi.len());
         let mut attempts = 0;
-        while attempts < 12 && (seeds.contains(&next) || !is_seed_far_enough(positions, &seeds, next, min_spacing * 0.45))
+        while attempts < 12
+            && (seeds.contains(&next)
+                || !is_seed_far_enough(positions, &seeds, next, min_spacing * 0.45))
         {
             next = rng.gen_range_usize(0, phi.len());
             attempts += 1;
@@ -178,7 +190,10 @@ pub(super) fn farthest_point_seed(
     best_idx
 }
 
-pub(super) fn build_plate_growth_profiles(plate_count: usize, rng: &mut DeterministicRng) -> Vec<PlateGrowthProfile> {
+pub(super) fn build_plate_growth_profiles(
+    plate_count: usize,
+    rng: &mut DeterministicRng,
+) -> Vec<PlateGrowthProfile> {
     let mut profiles = Vec::with_capacity(plate_count);
     for _ in 0..plate_count {
         let mut warp_weights = [
@@ -208,10 +223,12 @@ pub(super) fn build_plate_growth_profiles(plate_count: usize, rng: &mut Determin
     profiles
 }
 
-
-
 pub(super) fn edge_noise_signed(a: usize, b: usize, plate: usize) -> f32 {
-    let (lo, hi) = if a <= b { (a as u64, b as u64) } else { (b as u64, a as u64) };
+    let (lo, hi) = if a <= b {
+        (a as u64, b as u64)
+    } else {
+        (b as u64, a as u64)
+    };
     let mut x = lo
         .wrapping_mul(0x9E37_79B9_7F4A_7C15)
         .wrapping_add(hi.wrapping_mul(0xBF58_476D_1CE4_E5B9))
@@ -329,8 +346,6 @@ pub(super) fn local_plate_velocity(attr: &PlateAttr, plate: usize, position: [f3
         tangent
     }
 }
-
-
 
 pub(super) fn partition_plates(
     positions: &[[f32; 3]],
@@ -492,8 +507,8 @@ pub(super) fn cleanup_plate_components(
             }
 
             let is_enclave = unique_neighbors == 1 && best_neighbor.is_some();
-            let is_small_fragment = component.len() <= small_component_max
-                && component.len() < largest[plate as usize];
+            let is_small_fragment =
+                component.len() <= small_component_max && component.len() < largest[plate as usize];
 
             if !(is_enclave || is_small_fragment) {
                 continue;
@@ -588,8 +603,6 @@ pub(super) fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> V
 
     plate_id
 }
-
-
 
 pub(super) fn assign_plate_attributes(
     plate_id: &[u32],

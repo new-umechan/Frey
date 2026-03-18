@@ -3,7 +3,8 @@ use super::*;
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_lake_depth_map, generate_icosphere, generate_rivers, normalize_zscore, rng_from_seed,
+        compute_lake_depth_map, generate_icosphere, generate_rivers, normalize_zscore,
+        rng_from_seed,
     };
     use crate::{GeologyOutput, GeologyParams};
 
@@ -13,7 +14,12 @@ mod tests {
         let (nbr_offsets, nbrs) = super::build_neighbors(positions.len(), &indices);
         let spherical = super::compute_spherical_coords(&positions);
 
-        let mut phi = super::evaluate_phi(&spherical, params.harmonic_max_l, params.spectral_alpha, &mut rng);
+        let mut phi = super::evaluate_phi(
+            &spherical,
+            params.harmonic_max_l,
+            params.spectral_alpha,
+            &mut rng,
+        );
         normalize_zscore(&mut phi);
         let plate_count =
             super::choose_plate_count(params.plate_count_min, params.plate_count_max, &mut rng);
@@ -63,11 +69,7 @@ mod tests {
             } else {
                 attributes[pid].base_height
             };
-            height[v] = super::clamp(
-                crust_base + 0.10 * phi[v] + noise,
-                -1.2,
-                1.2,
-            );
+            height[v] = super::clamp(crust_base + 0.10 * phi[v] + noise, -1.2, 1.2);
         }
 
         let _boundary_fields = super::apply_boundary_model(
@@ -317,7 +319,10 @@ mod tests {
         let cont_land_ratio = cont_land as f32 / cont_count as f32;
         let ocean_land_ratio = ocean_land as f32 / ocean_count as f32;
 
-        assert!(cont_mean > ocean_mean, "cont_mean={cont_mean}, ocean_mean={ocean_mean}");
+        assert!(
+            cont_mean > ocean_mean,
+            "cont_mean={cont_mean}, ocean_mean={ocean_mean}"
+        );
         assert!(
             cont_land_ratio > ocean_land_ratio,
             "cont_land_ratio={cont_land_ratio}, ocean_land_ratio={ocean_land_ratio}"
