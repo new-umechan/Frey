@@ -9,12 +9,12 @@
 
 tickは単なるカウンタではなく、そのtickが表す実時間の密度を持つ。
 
-```python
-@dataclass
-class Tick:
-    real_years: float
-    scale: EpochScale
-    budgets: SubsystemBudgets
+```rust
+struct Tick {
+    real_years: f32,
+    scale: EpochScale,
+    budgets: SubsystemBudgets,
+}
 ```
 
 - `real_years`
@@ -77,13 +77,15 @@ class Tick:
 時代遷移は固定tick数ではなく、状態条件で決める。
 これにより、惑星ごとに時代の長さが変わる。
 
-```python
-EPOCH_TRANSITIONS = {
-    GEOLOGICAL: lambda s: s.sea_land_ratio_stable(),
-    CLIMATE:    lambda s: s.river_network_formed(),
-    ECOLOGY:    lambda s: s.habitable_area() > THRESHOLD,
-    SOCIETY:    lambda s: s.has_settlement(),
-}
+```rust
+type EpochGuard = fn(&WorldState) -> bool;
+
+const EPOCH_TRANSITIONS: &[(Epoch, EpochGuard)] = &[
+    (Epoch::Geological, sea_land_ratio_stable),
+    (Epoch::Climate, river_network_formed),
+    (Epoch::Ecology, habitable_area_above_threshold),
+    (Epoch::Society, has_settlement),
+];
 ```
 
 上の擬似コードは概念を示したものであり、実際の閾値や判定式は未確定である。

@@ -12,11 +12,11 @@
 
 ## 目標構造
 
-```python
-World = {
+```rust
+struct World {
     state: WorldState,
     graph: GraphState,
-    exec:  ExecState,
+    exec: ExecState,
 }
 ```
 
@@ -27,101 +27,96 @@ World = {
 各セルが持つ属性の現在値である。
 モジュールはこれを読んで書く。
 
-```python
-WorldState = {
+```rust
+struct WorldState {
+    geo: GeoState,
+    geology: GeologyState,
+    climate: ClimateState,
+    hydrology: HydrologyState,
+    ecology: EcologyState,
+    domesticates: DomesticatesState,
+    subsistence: SubsistenceState,
+    population: PopulationState,
+    settlement: SettlementState,
+    polity: PolityState,
+    conflict: ConflictState,
+}
 
-    geo: {
-        # 固定地理量（tickごとに変化しないが全モジュールが読む）
-        latitude_deg,
-        distance_from_ocean_km,
-        coast_side,
-        is_coastal,
-    },
+// 固定地理量（tickごとに変化しないが全モジュールが読む）
+struct GeoState {
+    latitude_deg: f32,
+    distance_from_ocean_km: f32,
+    coast_side: CoastSide,
+    is_coastal: bool,
+}
 
-    geology: {
-        # 書き手: Geology
-        height,
-        plate_id,
-        erosion_rate,
-        deposition_rate,
-    },
+struct GeologyState {
+    height: f32,
+    plate_id: PlateId,
+    erosion_rate: f32,
+    deposition_rate: f32,
+}
 
-    climate: {
-        # 書き手: Climate
-        precipitation,
-        temperature,
-        evapotranspiration,
-        runoff,
-        aridity,
-        ocean_temperature,
-    },
+struct ClimateState {
+    precipitation: f32,
+    temperature: f32,
+    evapotranspiration: f32,
+    runoff: f32,
+    aridity: f32,
+    ocean_temperature: f32,
+}
 
-    hydrology: {
-        # 書き手: Hydrology
-        river_path,
-        river_flow,
-        river_transport_cost,
-    },
+struct HydrologyState {
+    river_path: RiverPath,
+    river_flow: f32,
+    river_transport_cost: f32,
+}
 
-    ecology: {
-        # 公開I/O
-        biome,               # 派生, enum (詳細: docs/modules/ecology/ecology.md)
+struct EcologyState {
+    biome: Biome, // 派生, enum (詳細: docs/modules/ecology/ecology.md)
+    tree_cover: f32, // 0..1
+    ground_cover: f32, // 0..1  草本層（tree_coverと独立、重複あり）
+    disturbance: f32, // 0..1（減衰あり）
+    soil_fertility: f32, // 0..1（遅い）
+}
 
-        tree_cover,          # 0..1
-        ground_cover,        # 0..1  草本層（tree_coverと独立、重複あり）
-        disturbance,         # 0..1（減衰あり）
-        soil_fertility,        # 0..1（遅い）
+struct DomesticatesState {
+    crop_available: CropBitmap, // 栽培可能種ビットマップ
+    crop_adopted: CropBitmap, // 栽培実績ビットマップ
+    livestock_available: LivestockBitmap, // 利用可能種ビットマップ
+    livestock_adopted: LivestockBitmap, // 利用実績ビットマップ
+}
 
-        # tier2で追加予定。
-        # shrub_cover         # 0..1
-        # soil_moisture     # 1年程度の短いスパンでは必要となるが、それ以上ではほとんど無視できるため
-    }
+struct SubsistenceState {
+    subsistence_mix: SubsistenceMix, // 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
+    productivity: f32, // 生産性
+    food_production: f32, // 食料生産量
+    habitability: f32, // biome + productivity + river_flow + height → 立地適性
+    land_use: LandUse, // 土地利用（Ecologyへのフィードバック元）
+}
 
-    domesticates: {
-        # 書き手: Domesticates
-        crop_available,         # 栽培可能種ビットマップ
-        crop_adopted,           # 栽培実績ビットマップ
-        livestock_available,    # 利用可能種ビットマップ
-        livestock_adopted,      # 利用実績ビットマップ
-    },
+struct PopulationState {
+    population: f32, // 人口
+    population_density: f32, // 人口密度
+    migration_pressure: f32, // 人口移動圧（Settlementが読む）
+}
 
-    subsistence: {
-        # 書き手: Subsistence
-        subsistence_mix,        # 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
-        productivity,           # 生産性
-        food_production,        # 食料生産量
-        habitability,           # biome + productivity + river_flow + height → 立地適性
-        land_use,               # 土地利用（Ecologyへのフィードバック元）
-    },
+struct SettlementState {
+    settlement_size: f32, // 集落規模
+    urbanization: f32, // 都市化度
+    centrality: f32, // 中心地階層
+}
 
-    population: {
-        # 書き手: Population
-        population,
-        population_density,
-        migration_pressure,     # 人口移動圧（Settlementが読む）
-    },
+struct PolityState {
+    polity_id: Option<PolityId>,
+    territory_status: TerritoryStatus, // settled / occupied / neutral
+    language_group: Option<LanguageGroupId>, // 言語・文化圏ID
+    polity_stability: f32, // 国家安定度
+}
 
-    settlement: {
-        # 書き手: Settlement
-        settlement_size,        # 集落規模
-        urbanization,           # 都市化度
-        centrality,             # 中心地階層
-    },
-
-    polity: {
-        # 書き手: Polity
-        polity_id,
-        territory_status,       # settled / occupied / neutral
-        language_group,         # 言語・文化圏ID
-        polity_stability,       # 国家安定度
-    },
-
-    conflict: {
-        # 書き手: Conflict
-        war_state,              # このセルが戦闘地帯かどうか
-        occupier_id,            # 占領中の国家ID（中立なら null）
-    },
-
+struct ConflictState {
+    war_state: bool, // このセルが戦闘地帯かどうか
+    occupier_id: Option<PolityId>, // 占領中の国家ID（中立なら null）
 }
 ```
 
@@ -132,15 +127,14 @@ WorldState = {
 セルに還元できないグラフ構造の現在値である。
 国家間関係のように「セルAとセルB」ではなく「国家Aと国家B」の関係として自然に表現されるものを置く。
 
-```python
-GraphState = {
+```rust
+struct GraphState {
+    polity_relations: HashMap<(PolityId, PolityId), f32>, // 重み付きグラフ: (polity_id, polity_id) → relation_weight
+                                                          // 同盟(+1.0) ～ 戦争中(-1.0)
 
-    polity_relations,   # 重み付きグラフ: (polity_id, polity_id) → relation_weight
-                        # 同盟(+1.0) ～ 戦争中(-1.0)
-
-    # Tier 2追加時の拡張予定
-    # trade_network     # 交易ネットワーク: (polity_id, polity_id) → trade_volume
-    # diffusion_graph   # 技術・作物伝播グラフ
+    // Tier 2 追加時の拡張予定
+    // trade_network: HashMap<(PolityId, PolityId), f32>,
+    // diffusion_graph: DiffusionGraph,
 }
 ```
 
@@ -151,14 +145,14 @@ GraphState = {
 世界を進めるための進行管理状態である。
 各モジュールの対象世界そのものではない。
 
-```python
-ExecState = {
-    tick,
-    epoch,
-    budgets,            # SubsystemBudgets
-    feedback_queue,     # FeedbackQueue
-    history,
-    snapshots,
+```rust
+struct ExecState {
+    tick: Tick,
+    epoch: Epoch,
+    budgets: SubsystemBudgets, // SubsystemBudgets
+    feedback_queue: FeedbackQueue, // FeedbackQueue
+    history: History,
+    snapshots: SnapshotStore,
 }
 ```
 
@@ -169,17 +163,66 @@ ExecState = {
 更新器はステートレスに保つ。
 `World State`・`Graph State`・`Exec State` を引数として受け取り、次の状態を書き戻すだけにする。
 
-```python
-def update_geology(world_state, graph_state, exec_state): ...
-def update_climate(world_state, graph_state, exec_state): ...
-def update_hydrology(world_state, graph_state, exec_state): ...
-def update_ecology(world_state, graph_state, exec_state): ...
-def update_domesticates(world_state, graph_state, exec_state): ...
-def update_subsistence(world_state, graph_state, exec_state): ...
-def update_population(world_state, graph_state, exec_state): ...
-def update_settlement(world_state, graph_state, exec_state): ...
-def update_polity(world_state, graph_state, exec_state): ...
-def update_conflict(world_state, graph_state, exec_state): ...
+```rust
+fn update_geology(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_climate(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_hydrology(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_ecology(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_domesticates(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_subsistence(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_population(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_settlement(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_polity(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
+
+fn update_conflict(
+    world_state: &mut WorldState,
+    graph_state: &mut GraphState,
+    exec_state: &ExecState,
+) { }
 ```
 
 `FeedbackQueue` は `Exec State` に置く。
@@ -191,40 +234,35 @@ tick N で各モジュールが書き込み、tick N+1 の開始時に `Exec` �
 
 Tier 2モジュールが有効化された際に追加される名前空間。
 
-```python
-# Disease
-disease: {
-    infection_rate,
-    mortality_modifier,
+```rust
+struct DiseaseState {
+    infection_rate: f32,
+    mortality_modifier: f32,
 }
 
-# Resources
-resources: {
-    energy_deposit,       # エネルギー資源埋蔵量
-    mineral_deposit,      # 鉱産資源埋蔵量
-    extraction_rate,      # 採掘量
+struct ResourcesState {
+    energy_deposit: f32, // エネルギー資源埋蔵量
+    mineral_deposit: f32, // 鉱産資源埋蔵量
+    extraction_rate: f32, // 採掘量
 }
 
-# Trade
-trade: {
-    trade_flow,           # 交易流量
-    market_access,        # 市場アクセス度
+struct TradeState {
+    trade_flow: f32, // 交易流量
+    market_access: f32, // 市場アクセス度
 }
 
-# Technology
-technology: {
-    ag_tools,           # 農具・灌漑
-    metallurgy,         # 金属器
-    navigation,         # 航海術
-    military_tech,      # 軍事技術
-    recording,          # 記録技術
-    transport,          # 輸送技術
+struct TechnologyState {
+    ag_tools: bool, // 農具・灌漑
+    metallurgy: bool, // 金属器
+    navigation: bool, // 航海術
+    military_tech: bool, // 軍事技術
+    recording: bool, // 記録技術
+    transport: bool, // 輸送技術
 }
 
-# Infrastructure
-infrastructure: {
-    road_cost_modifier,   # 地上移動コスト修正
-    irrigation,           # 灌漑
+struct InfrastructureState {
+    road_cost_modifier: f32, // 地上移動コスト修正
+    irrigation: f32, // 灌漑
 }
 ```
 
