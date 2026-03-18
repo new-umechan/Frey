@@ -1,10 +1,10 @@
 use std::f32::consts::{PI, TAU};
 
 use crate::sim::exec::{blend_alpha, lerp};
-use crate::sim::world::World;
 use crate::sim::geo::{
     dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, scale3, sub3,
 };
+use crate::sim::world::World;
 use crate::sim::world::{CoastSide, EraKind};
 
 const CLIMATE_BLEND_BASE: f32 = 0.32;
@@ -77,7 +77,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
         let mut precipitation = target_precipitation[i] * precip_factor[i];
         precipitation = precipitation.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
-        let vegetation_density = vegetation_density(world, i);
+        let vegetation_density = vegetation_density_proxy(world, i);
         let pet = annual_pet_mm(target_temperature[i], latitude_deg);
         let evapotranspiration =
             actual_evapotranspiration_mm(precipitation, pet, vegetation_density);
@@ -295,18 +295,27 @@ fn best_downwind_land_neighbor(world: &World, index: usize, wind_sign: f32) -> O
     best.map(|(n, _)| n)
 }
 
-fn vegetation_density(world: &World, index: usize) -> f32 {
+fn vegetation_density_proxy(world: &World, index: usize) -> f32 {
     if world.exec.era == EraKind::Crust || world.exec.era == EraKind::Environment {
         return 0.5;
     }
-    world
+    let tree_cover = world
         .state
         .ecology
-        .vegetation
+        .tree_cover
         .get(index)
         .copied()
-        .unwrap_or(0.5)
-        .clamp(0.0, 1.0)
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    let ground_cover = world
+        .state
+        .ecology
+        .ground_cover
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    (tree_cover + 0.6 * ground_cover * (1.0 - tree_cover)).clamp(0.0, 1.0)
 }
 
 fn annual_pet_mm(annual_temperature_c: f32, latitude_deg: f32) -> f32 {

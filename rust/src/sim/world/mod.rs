@@ -12,9 +12,9 @@ pub use exec::{ExecState, FeedbackFields, FeedbackQueue, SubsystemBudgets, Trans
 pub use init::default_target_sea_ratio;
 pub use metrics::WorldMetrics;
 pub use state::{
-    BoundaryDynamicsState, BoundaryType, CivilizationIndicators, CivilizationState,
+    Biome, BoundaryDynamicsState, BoundaryType, CivilizationIndicators, CivilizationState,
     CivilizationStateMut, ClimateState, CoastSide, ConflictState, CrustType, DomesticatesState,
-    EcologyState, GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics,
-    HydrologyState, PlateKinematicsState, PolityState, PopulationState, SettlementState,
-    StressTensor, SubsistenceState, VertexCrustState, World, WorldMesh, WorldState,
+    EcologyState, GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics, HydrologyState,
+    PlateKinematicsState, PolityState, PopulationState, SettlementState, StressTensor,
+    SubsistenceState, VertexCrustState, World, WorldMesh, WorldState,
 };

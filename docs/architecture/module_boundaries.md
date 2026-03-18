@@ -185,7 +185,11 @@ FEEDBACK_EDGES = {
 
 ### 書くもの
 
-- 植生
+- `biome`
+- `tree_cover`
+- `ground_cover`
+- `disturbance`
+- `soil_fertility`
 
 ### 書かないもの
 
@@ -194,7 +198,8 @@ FEEDBACK_EDGES = {
 
 ### 補足
 
-環境応答を `World State` に書く。社会変化は直接扱わない。
+環境応答を `World State` に書く。社会変化はFeedbackQueue経由の入力としてのみ扱う。
+`Climate` は `tree_cover` と `ground_cover` から `vegetation_density_proxy` を内部計算して使う。
 
 ---
 
@@ -205,7 +210,7 @@ FEEDBACK_EDGES = {
 - 標高
 - 気温
 - 降水
-- 植生 ← `Ecology` が書く
+- 生態状態（`tree_cover` / `ground_cover` / `soil_fertility`）← `Ecology` が書く
 - FeedbackQueue（`Settlement` 隣接地域からの拡散）
 
 ### 書くもの
@@ -233,7 +238,7 @@ FEEDBACK_EDGES = {
 
 - 標高
 - 流量
-- 植生 ← `Ecology` が書く
+- 生態状態（`tree_cover` / `ground_cover` / `soil_fertility`）← `Ecology` が書く
 - 作物・家畜分布 ← `Domesticates` が書く
 - 前tickまでの生業構成
 

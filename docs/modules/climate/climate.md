@@ -24,9 +24,18 @@ Climateが読む主な値は次のとおり。
 - `geo.distance_from_ocean_km`
 - `geo.coast_side`
 - `geo.is_coastal`
-- `ecology.vegetation`
+- `ecology.tree_cover`
+- `ecology.ground_cover`
 
-`ecology.vegetation`が未生成とみなされる段階では、植生密度の既定値として0.5を使う。
+`Crust` / `Environment` では植生密度は既定値0.5を使う。`Life`以降は
+`tree_cover` と `ground_cover` から、次の proxy をClimate内部で計算して使う。
+
+```text
+vegetation_density_proxy = clamp(
+  tree_cover + 0.6 * ground_cover * (1 - tree_cover),
+  0, 1
+)
+```
 
 ## 出力
 

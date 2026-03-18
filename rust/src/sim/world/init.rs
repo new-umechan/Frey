@@ -10,7 +10,7 @@ use crate::sim::geo::{
 use super::era::EraKind;
 use super::exec::{FeedbackQueue, TransitionState};
 use super::state::{
-    ClimateState, CoastSide, ConflictState, DomesticatesState, EcologyState, GeoState,
+    Biome, ClimateState, CoastSide, ConflictState, DomesticatesState, EcologyState, GeoState,
     GeologyState, HydrologyState, PolityState, PopulationState, SettlementState, SubsistenceState,
     World, WorldMesh, WorldState,
 };
@@ -46,10 +46,11 @@ impl World {
                     river_transport_cost: vec![1.0; cell_count],
                 },
                 ecology: EcologyState {
-                    vegetation: vec![0.0; cell_count],
-                    habitability: vec![0.0; cell_count],
-                    productivity: vec![0.0; cell_count],
-                    riparian_vegetation: vec![0.0; cell_count],
+                    biome: vec![Biome::TemperateForest; cell_count],
+                    tree_cover: vec![0.0; cell_count],
+                    ground_cover: vec![0.0; cell_count],
+                    disturbance: vec![0.0; cell_count],
+                    soil_fertility: vec![0.35; cell_count],
                 },
                 domesticates: DomesticatesState {
                     crop_available: vec![0; cell_count],
@@ -127,15 +128,20 @@ impl World {
             return Err("river erosion state length does not match core cell count".to_string());
         }
         self.state.geology.height = state.height.clone();
-        self.state.hydrology.river_flow.clone_from(&state.river_flux);
-        self.state.hydrology.river_path.clone_from(&state.river_next);
+        self.state
+            .hydrology
+            .river_flow
+            .clone_from(&state.river_flux);
+        self.state
+            .hydrology
+            .river_path
+            .clone_from(&state.river_next);
         self.state.hydrology.river_flow = state.river_flux.clone();
         self.state.hydrology.river_path = state.river_next.clone();
         self.exec.hydrology_dynamics = Some(state);
         Ok(())
     }
 }
-
 
 fn land_and_sea_ratios(height: &[f32]) -> (f32, f32) {
     if height.is_empty() {

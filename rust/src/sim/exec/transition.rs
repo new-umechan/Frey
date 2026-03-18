@@ -3,12 +3,18 @@ use crate::sim::world::{EraKind, World};
 pub(super) fn update_era_transition(world: &mut World) {
     let inputs = collect_transition_inputs(world);
 
-    world.exec.transition.ema_geology_activity =
-        update_ema(world.exec.transition.ema_geology_activity, inputs.geology_activity);
-    world.exec.transition.ema_climate_activity =
-        update_ema(world.exec.transition.ema_climate_activity, inputs.climate_activity);
-    world.exec.transition.ema_ecology_activity =
-        update_ema(world.exec.transition.ema_ecology_activity, inputs.ecology_activity);
+    world.exec.transition.ema_geology_activity = update_ema(
+        world.exec.transition.ema_geology_activity,
+        inputs.geology_activity,
+    );
+    world.exec.transition.ema_climate_activity = update_ema(
+        world.exec.transition.ema_climate_activity,
+        inputs.climate_activity,
+    );
+    world.exec.transition.ema_ecology_activity = update_ema(
+        world.exec.transition.ema_ecology_activity,
+        inputs.ecology_activity,
+    );
     world.exec.transition.ema_civilization_activity = update_ema(
         world.exec.transition.ema_civilization_activity,
         inputs.civilization_activity,
@@ -106,14 +112,18 @@ fn collect_transition_inputs(world: &World) -> EraTransitionInputs {
     let cell_count = world.state.geology.height.len().max(1) as f32;
     let civilization = world.state.civilization_state();
     let indicators = civilization.indicators();
-    let land_ratio = ratio_of(&world.state.geology.height, |value| *value > 0.0, cell_count);
+    let land_ratio = ratio_of(
+        &world.state.geology.height,
+        |value| *value > 0.0,
+        cell_count,
+    );
     let river_network = ratio_of(
         &world.state.hydrology.river_flow,
         |value| *value > 0.8,
         cell_count,
     );
     let habitable_ratio = ratio_of(
-        &world.state.ecology.habitability,
+        &world.state.subsistence.food_production,
         |value| *value > 0.45,
         cell_count,
     );
@@ -137,7 +147,15 @@ fn collect_transition_inputs(world: &World) -> EraTransitionInputs {
         .map(|value| (value / 1_500.0_f32).clamp(0.0_f32, 1.0_f32))
         .sum::<f32>()
         / cell_count;
-    let ecology_activity = world.state.ecology.productivity.iter().copied().sum::<f32>() / cell_count;
+    let ecology_activity = world
+        .state
+        .ecology
+        .tree_cover
+        .iter()
+        .zip(world.state.ecology.ground_cover.iter())
+        .map(|(tree_cover, ground_cover)| vegetation_density_proxy(*tree_cover, *ground_cover))
+        .sum::<f32>()
+        / cell_count;
     let civilization_activity = (indicators.total_population / cell_count / 40.0).clamp(0.0, 1.0);
 
     EraTransitionInputs {
@@ -173,4 +191,10 @@ fn ticks_in_era(world: &World) -> u64 {
         .exec
         .tick
         .saturating_sub(world.exec.transition.era_enter_tick)
+}
+
+fn vegetation_density_proxy(tree_cover: f32, ground_cover: f32) -> f32 {
+    let tree = tree_cover.clamp(0.0, 1.0);
+    let ground = ground_cover.clamp(0.0, 1.0);
+    (tree + 0.6 * ground * (1.0 - tree)).clamp(0.0, 1.0)
 }

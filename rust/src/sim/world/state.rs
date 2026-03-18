@@ -75,10 +75,25 @@ pub struct HydrologyState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EcologyState {
-    pub vegetation: Vec<f32>,
-    pub habitability: Vec<f32>,
-    pub productivity: Vec<f32>,
-    pub riparian_vegetation: Vec<f32>,
+    pub biome: Vec<Biome>,
+    pub tree_cover: Vec<f32>,
+    pub ground_cover: Vec<f32>,
+    pub disturbance: Vec<f32>,
+    pub soil_fertility: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Biome {
+    TropicalForest,
+    Savanna,
+    Desert,
+    Grassland,
+    #[default]
+    TemperateForest,
+    BorealForest,
+    Tundra,
+    Wetland,
+    Alpine,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
