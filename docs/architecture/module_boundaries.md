@@ -22,9 +22,9 @@ Tier1までのモジュールについて、詳細を決定している。
 | `Geology` | 地形変化、侵食・堆積 |
 | `Climate` | 降水・気温・水循環 |
 | `Hydrology` | 流路・流量・集積 |
-| `Ecology` | 植生・可住性・生産性 |
+| `Ecology` | 植生 |
 | `Domesticates` | 作物・家畜の分布 |
-| `Subsistence` | 地域ごとの生業構成 |
+| `Subsistence` | 居住適性・地域ごとの生業構成 |
 | `Population` | 人口変動 |
 | `Settlement` | 集落・都市形成 |
 | `Polity` | 国家・領域変化 |
@@ -82,6 +82,8 @@ FEEDBACK_EDGES = {
 
 ---
 
+以下の内容は、あくまでまとめであり、docs/architecture/data_model.mdや、docs/modules/以下のファイルと記述が食い違った場合、
+
 ## `Geology`
 
 ### 読むもの
@@ -89,7 +91,6 @@ FEEDBACK_EDGES = {
 - 標高
 - プレートID
 - 流出量 ← `Climate` が書く
-- 流域植生 ← `Ecology` が書く
 - FeedbackQueue（`Conflict` による焦土・地形破壊）
 
 ### 書くもの
@@ -103,8 +104,7 @@ FEEDBACK_EDGES = {
 
 - 流路・流量（`Hydrology` に移管）
 - 降水・気温
-- 植生・可住性
-- 人口・国家
+- 植生
 
 ### 補足
 
@@ -136,7 +136,6 @@ FEEDBACK_EDGES = {
 - 標高
 - 侵食量・堆積量
 - 流路・流量
-- 人口
 
 ### 補足
 
@@ -164,7 +163,6 @@ FEEDBACK_EDGES = {
 - 標高
 - 降水・流出量
 - 植生
-- 人口・国家
 
 ### 補足
 
@@ -187,16 +185,11 @@ FEEDBACK_EDGES = {
 ### 書くもの
 
 - 植生
-- 可住性
-- 生産性
-- 流域植生
 
 ### 書かないもの
 
 - 標高
 - 流路
-- 人口
-- 国家
 
 ### 補足
 
@@ -212,7 +205,6 @@ FEEDBACK_EDGES = {
 - 気温
 - 降水
 - 植生 ← `Ecology` が書く
-- 可住性 ← `Ecology` が書く
 - FeedbackQueue（`Settlement` 隣接地域からの拡散）
 
 ### 書くもの
@@ -240,15 +232,17 @@ FEEDBACK_EDGES = {
 
 - 標高
 - 流量
-- 植生・生産性 ← `Ecology` が書く
+- 植生 ← `Ecology` が書く
 - 作物・家畜分布 ← `Domesticates` が書く
 - 前tickまでの生業構成
 
 ### 書くもの
 
 - 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
+- 生産性
 - 食料生産量
 - 土地利用
+- 居住性
 
 ### 書かないもの
 
@@ -269,7 +263,6 @@ FEEDBACK_EDGES = {
 ### 読むもの
 
 - 食料生産量 ← `Subsistence` が書く
-- 可住性 ← `Ecology` が書く
 - 前tickまでの人口
 - FeedbackQueue（`Conflict` による人口減）
 
@@ -281,8 +274,6 @@ FEEDBACK_EDGES = {
 
 ### 書かないもの
 
-- 標高
-- 気候属性
 - 国家・領域
 
 ### 補足
@@ -310,8 +301,6 @@ FEEDBACK_EDGES = {
 
 ### 書かないもの
 
-- 標高
-- 気候属性
 - 国家・領域（`Polity` が書く）
 
 ### 補足
@@ -338,8 +327,6 @@ FEEDBACK_EDGES = {
 
 ### 書かないもの
 
-- 標高
-- 気候属性
 - 人口の直接更新
 - 集落の直接更新
 

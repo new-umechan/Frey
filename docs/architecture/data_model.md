@@ -64,12 +64,18 @@ WorldState = {
     },
 
     ecology: {
-        # 書き手: Ecology
-        vegetation,
-        habitability,
-        productivity,
-        riparian_vegetation,    # 流域植生（Geologyが読む）
-    },
+        # 公開I/O
+        biome,               # 派生, enum (詳細: docs/modules/ecology/ecology.md)
+
+        tree_cover,          # 0..1
+        ground_cover,        # 0..1  草本層（tree_coverと独立、重複あり）
+        disturbance,         # 0..1（減衰あり）
+        soil_fertility,        # 0..1（遅い）
+
+        # tier2で追加予定。
+        # shrub_cover         # 0..1
+        # soil_moisture     # 1年程度の短いスパンでは必要となるが、それ以上ではほとんど無視できるため
+    }
 
     domesticates: {
         # 書き手: Domesticates
@@ -82,7 +88,9 @@ WorldState = {
     subsistence: {
         # 書き手: Subsistence
         subsistence_mix,        # 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
+        productivity,           # 生産性
         food_production,        # 食料生産量
+        habitability,           # biome + productivity + river_flow + height → 立地適性
         land_use,               # 土地利用（Ecologyへのフィードバック元）
     },
 
@@ -176,24 +184,6 @@ def update_conflict(world_state, graph_state, exec_state): ...
 
 `FeedbackQueue` は `Exec State` に置く。
 tick N で各モジュールが書き込み、tick N+1 の開始時に `Exec` が `World State` および `Graph State` へ適用する。
-
----
-
-## 属性の書き手一覧
-
-| 名前空間 | 属性 | 書き手 |
-| --- | --- | --- |
-| `geo` | latitude_deg, distance_from_ocean_km, coast_side, is_coastal | 固定（初期化時のみ） |
-| `geology` | height, plate_id, erosion_rate, deposition_rate | `Geology` |
-| `climate` | precipitation, temperature, evapotranspiration, runoff, aridity, ocean_temperature | `Climate` |
-| `hydrology` | river_path, river_flow, river_transport_cost | `Hydrology` |
-| `ecology` | vegetation, habitability, productivity, riparian_vegetation | `Ecology` |
-| `domesticates` | crop_available, crop_adopted, livestock_available, livestock_adopted | `Domesticates` |
-| `subsistence` | subsistence_mix, food_production, land_use | `Subsistence` |
-| `population` | population, population_density, migration_pressure | `Population` |
-| `settlement` | settlement_size, urbanization, centrality | `Settlement` |
-| `polity` | polity_id, territory_status, language_group, polity_stability | `Polity` |
-| `conflict` | war_state, occupier_id | `Conflict` |
 
 ---
 
