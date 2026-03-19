@@ -31,9 +31,9 @@ pub(super) fn build_erosion_state(
         active_head: 0,
         in_queue: vec![1; cell_count],
         rain_cursor: 0,
-        tick: world.exec.tick,
-        last_rebuild_tick: world.exec.tick.saturating_sub(1),
-        last_sink_full_rebuild_tick: world.exec.tick.saturating_sub(8),
+        tick: world.clock.tick,
+        last_rebuild_tick: world.clock.tick.saturating_sub(1),
+        last_sink_full_rebuild_tick: world.clock.tick.saturating_sub(8),
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
         prev_river_next: world.state.hydrology.river_path.clone(),
@@ -63,7 +63,7 @@ pub(super) fn sync_erosion_state(world: &mut world::World, params: &GeologyParam
 
 pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &GeologyParams) {
     let expected = world.state.geology.height.len();
-    let Some(state) = world.exec.hydrology_dynamics.as_mut() else {
+    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
         let state = build_erosion_state(world, params.clone());
         let _ = world.attach_hydrology_dynamics(state);
         return;
@@ -90,7 +90,7 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Geology
     {
         *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
     }
-    state.tick = world.exec.tick;
+    state.tick = world.clock.tick;
     state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();
@@ -99,7 +99,7 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Geology
 
 pub(super) fn post_step_sync_light(world: &mut world::World, params: &GeologyParams) {
     let expected = world.state.geology.height.len();
-    let Some(state) = world.exec.hydrology_dynamics.as_mut() else {
+    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
         let state = build_erosion_state(world, params.clone());
         let _ = world.attach_hydrology_dynamics(state);
         return;
@@ -109,7 +109,7 @@ pub(super) fn post_step_sync_light(world: &mut world::World, params: &GeologyPar
         let _ = world.attach_hydrology_dynamics(state);
         return;
     }
-    state.tick = world.exec.tick;
+    state.tick = world.clock.tick;
     state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();

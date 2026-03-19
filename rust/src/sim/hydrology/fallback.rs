@@ -9,7 +9,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     let previous_flux = vec![0.0; cell_count];
     let default_params = GeologyParams::default();
     let params = world
-        .exec
+        .runtime
         .hydrology_dynamics
         .as_ref()
         .map(|state| &state.params)
@@ -43,7 +43,21 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
 
     world.state.hydrology.river_path = river_next;
     world.state.hydrology.river_flow = flux;
-    if let Some(state) = world.exec.hydrology_dynamics.as_mut() {
+    world
+        .state
+        .hydrology
+        .river_downstream
+        .clone_from(&world.state.hydrology.river_path);
+    world.state.hydrology.river_upstream.fill(-1);
+    for (cell, &next) in world.state.hydrology.river_path.iter().enumerate() {
+        if next >= 0 {
+            let next_i = next as usize;
+            if next_i < world.state.hydrology.river_upstream.len() {
+                world.state.hydrology.river_upstream[next_i] = cell as i32;
+            }
+        }
+    }
+    if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
         if state.river_flux.len() == world.state.hydrology.river_flow.len() {
             sync_erosion_rain(state, runoff);
             state.prev_river_next.clone_from(&state.river_next);
@@ -54,7 +68,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
                 .river_next
                 .clone_from(&world.state.hydrology.river_path);
             state.height.clone_from(&world.state.geology.height);
-            state.last_rebuild_tick = world.exec.tick;
+            state.last_rebuild_tick = world.clock.tick;
             state.flux_scale_ema = 1.0;
             state.last_river_driver = 1.0;
         }

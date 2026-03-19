@@ -265,7 +265,7 @@ impl I32FieldTracker {
 impl WorldSyncState {
     pub fn from_world(world: &world::World) -> Self {
         let mantle_heat = world
-            .exec
+            .runtime
             .geology_dynamics
             .as_ref()
             .map(|dynamics| dynamics.mantle_heat.clone())
@@ -287,7 +287,7 @@ impl WorldSyncState {
         self.river_next.observe(&world.state.hydrology.river_path);
 
         let mantle_heat = world
-            .exec
+            .runtime
             .geology_dynamics
             .as_ref()
             .map(|dynamics| dynamics.mantle_heat.as_slice())
@@ -361,11 +361,15 @@ impl ManagedWorld {
     }
 
     pub fn save_history_snapshot_if_needed(&mut self) {
-        if self.world.exec.tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
+        if self.world.clock.tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
             return;
         }
+        self.world
+            .archive
+            .history_ticks
+            .insert(self.world.clock.tick, "auto".to_string());
         self.history
-            .insert(self.world.exec.tick, self.world.clone());
+            .insert(self.world.clock.tick, self.world.clone());
         while self.history.len() > DEFAULT_HISTORY_LIMIT {
             if let Some(oldest) = self.history.keys().next().copied() {
                 self.history.remove(&oldest);

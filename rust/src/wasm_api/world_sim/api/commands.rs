@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 use crate::sim::geology_types::GeologyParams;
+use crate::sim::world::SnapshotMeta;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
 use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
@@ -109,15 +110,20 @@ impl WorldSimController {
         };
         let new_world_id = self.next_world_id();
         let mut history = BTreeMap::new();
-        history.insert(snapshot.exec.tick, snapshot.clone());
+        history.insert(snapshot.clock.tick, snapshot.clone());
         let sync_state = WorldSyncState::from_world(&snapshot);
-        let forked = ManagedWorld {
+        let mut forked = ManagedWorld {
             world: snapshot,
             simulation_rate: source_rate,
             geology_params: source_params,
             sync_state,
             history,
         };
+        forked
+            .world
+            .archive
+            .history_ticks
+            .insert(tick_u64, "fork".to_string());
         self.worlds.insert(new_world_id.clone(), forked);
 
         let result = ForkWorldResult {
@@ -154,12 +160,17 @@ impl WorldSimController {
         sync_erosion_state(&mut managed.world, &managed.geology_params);
         managed.sync_state = WorldSyncState::from_world(&managed.world);
         managed
+            .world
+            .archive
+            .history_ticks
+            .insert(managed.world.clock.tick, "restore".to_string());
+        managed
             .history
-            .insert(managed.world.exec.tick, managed.world.clone());
+            .insert(managed.world.clock.tick, managed.world.clone());
 
         let result = RestoreWorldResult {
             world_id,
-            tick: managed.world.exec.tick as f64,
+            tick: managed.world.clock.tick as f64,
         };
         serde_wasm_bindgen::to_value(&result).map_err(|err| {
             JsValue::from_str(&format!("failed to serialize restore world result: {err}"))
@@ -173,7 +184,7 @@ impl WorldSimController {
                 .worlds
                 .get(&world_id)
                 .ok_or_else(|| world_not_found_error(&world_id))?;
-            (managed.world.clone(), managed.world.exec.tick)
+            (managed.world.clone(), managed.world.clock.tick)
         };
         let snapshot_id = self.next_snapshot_id();
         let entry = SnapshotEntry {
@@ -181,6 +192,15 @@ impl WorldSimController {
             world: world_clone,
         };
         self.snapshots.insert(snapshot_id.clone(), entry);
+        if let Some(managed) = self.worlds.get_mut(&world_id) {
+            managed.world.archive.snapshots.insert(
+                snapshot_id.clone(),
+                SnapshotMeta {
+                    tick,
+                    source_world_id: Some(world_id.clone()),
+                },
+            );
+        }
 
         let result = CheckpointResult {
             snapshot_id,
@@ -202,16 +222,19 @@ impl WorldSimController {
         let world_id = self.next_world_id();
         let mut history = BTreeMap::new();
         history.insert(snapshot.tick, snapshot.world.clone());
-        self.worlds.insert(
-            world_id.clone(),
-            ManagedWorld {
-                sync_state: WorldSyncState::from_world(&snapshot.world),
-                world: snapshot.world,
-                simulation_rate: 1.0,
-                geology_params: GeologyParams::default(),
-                history,
-            },
-        );
+        let mut restored = ManagedWorld {
+            sync_state: WorldSyncState::from_world(&snapshot.world),
+            world: snapshot.world,
+            simulation_rate: 1.0,
+            geology_params: GeologyParams::default(),
+            history,
+        };
+        restored
+            .world
+            .archive
+            .history_ticks
+            .insert(restored.world.clock.tick, "load-checkpoint".to_string());
+        self.worlds.insert(world_id.clone(), restored);
 
         let result = LoadCheckpointResult {
             source_snapshot_id: snapshot_id,

@@ -1,12 +1,202 @@
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 
-use super::exec::ExecState;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use super::exec::{ClockState, FeedbackQueue, RuntimeState};
+use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub mesh: WorldMesh,
     pub state: WorldState,
-    pub exec: ExecState,
+    pub entities: EntitiesState,
+    pub clock: ClockState,
+    pub feedback: FeedbackQueue,
+    pub runtime: RuntimeState,
+    #[serde(default)]
+    pub polity_relations: HashMap<(u32, u32), PolityRelation>,
+    #[serde(default)]
+    pub polity_groups: Vec<PolityGroup>,
+    #[serde(default)]
+    pub archive: ArchiveState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ArchiveState {
+    #[serde(default)]
+    pub history_ticks: BTreeMap<u64, String>,
+    #[serde(default)]
+    pub snapshots: BTreeMap<String, SnapshotMeta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotMeta {
+    pub tick: u64,
+    #[serde(default)]
+    pub source_world_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PolityComponent {
+    pub polity_id: u32,
+    pub capital_cell: u32,
+    pub stability: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettlementComponent {
+    pub settlement_id: u32,
+    pub cell: u32,
+    pub size: f32,
+    pub urbanization: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegionComponent {
+    pub region_id: u32,
+    pub cells: Vec<u32>,
+}
+
+pub struct EntitiesState {
+    pub polity_components: Vec<PolityComponent>,
+    pub settlement_components: Vec<SettlementComponent>,
+    pub region_components: Vec<RegionComponent>,
+    pub world: hecs::World,
+}
+
+#[derive(Serialize, Deserialize)]
+struct EntitiesSerde {
+    polity_components: Vec<PolityComponent>,
+    settlement_components: Vec<SettlementComponent>,
+    region_components: Vec<RegionComponent>,
+}
+
+impl std::fmt::Debug for EntitiesState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EntitiesState")
+            .field("polity_components", &self.polity_components)
+            .field("settlement_components", &self.settlement_components)
+            .field("region_components", &self.region_components)
+            .finish()
+    }
+}
+
+impl Clone for EntitiesState {
+    fn clone(&self) -> Self {
+        Self::from_components(
+            self.polity_components.clone(),
+            self.settlement_components.clone(),
+            self.region_components.clone(),
+        )
+    }
+}
+
+impl PartialEq for EntitiesState {
+    fn eq(&self, other: &Self) -> bool {
+        self.polity_components == other.polity_components
+            && self.settlement_components == other.settlement_components
+            && self.region_components == other.region_components
+    }
+}
+
+impl Default for EntitiesState {
+    fn default() -> Self {
+        Self::from_components(Vec::new(), Vec::new(), Vec::new())
+    }
+}
+
+impl Serialize for EntitiesState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        EntitiesSerde {
+            polity_components: self.polity_components.clone(),
+            settlement_components: self.settlement_components.clone(),
+            region_components: self.region_components.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for EntitiesState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let parsed = EntitiesSerde::deserialize(deserializer)?;
+        Ok(Self::from_components(
+            parsed.polity_components,
+            parsed.settlement_components,
+            parsed.region_components,
+        ))
+    }
+}
+
+impl EntitiesState {
+    pub fn from_components(
+        polity_components: Vec<PolityComponent>,
+        settlement_components: Vec<SettlementComponent>,
+        region_components: Vec<RegionComponent>,
+    ) -> Self {
+        let mut entities = Self {
+            polity_components,
+            settlement_components,
+            region_components,
+            world: hecs::World::new(),
+        };
+        entities.sync_world_from_components();
+        entities
+    }
+
+    pub fn sync_world_from_components(&mut self) {
+        self.world = hecs::World::new();
+        for component in &self.polity_components {
+            self.world.spawn((component.clone(),));
+        }
+        for component in &self.settlement_components {
+            self.world.spawn((component.clone(),));
+        }
+        for component in &self.region_components {
+            self.world.spawn((component.clone(),));
+        }
+    }
+
+    pub fn sync_components_from_world(&mut self) {
+        self.polity_components.clear();
+        self.settlement_components.clear();
+        self.region_components.clear();
+
+        for (_, component) in self.world.query::<&PolityComponent>().iter() {
+            self.polity_components.push(component.clone());
+        }
+        for (_, component) in self.world.query::<&SettlementComponent>().iter() {
+            self.settlement_components.push(component.clone());
+        }
+        for (_, component) in self.world.query::<&RegionComponent>().iter() {
+            self.region_components.push(component.clone());
+        }
+
+        self.polity_components.sort_by_key(|c| c.polity_id);
+        self.settlement_components.sort_by_key(|c| c.settlement_id);
+        self.region_components.sort_by_key(|c| c.region_id);
+    }
+
+    pub fn replace_polities(&mut self, components: Vec<PolityComponent>) {
+        self.polity_components = components;
+        self.sync_world_from_components();
+    }
+
+    pub fn replace_settlements(&mut self, components: Vec<SettlementComponent>) {
+        self.settlement_components = components;
+        self.sync_world_from_components();
+    }
+
+    pub fn replace_regions(&mut self, components: Vec<RegionComponent>) {
+        self.region_components = components;
+        self.sync_world_from_components();
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -37,6 +227,10 @@ pub struct GeoState {
     pub distance_from_ocean_km: Vec<f32>,
     pub coast_side: Vec<CoastSide>,
     pub is_coastal: Vec<bool>,
+    #[serde(default)]
+    pub neighbors_offsets: Vec<u32>,
+    #[serde(default)]
+    pub neighbors: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -71,6 +265,10 @@ pub struct HydrologyState {
     pub river_path: Vec<i32>,
     pub river_flow: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
+    #[serde(default)]
+    pub river_upstream: Vec<i32>,
+    #[serde(default)]
+    pub river_downstream: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,6 +278,13 @@ pub struct EcologyState {
     pub ground_cover: Vec<f32>,
     pub disturbance: Vec<f32>,
     pub soil_fertility: Vec<f32>,
+    #[serde(default)]
+    pub ecology_internal: Vec<EcologyInternal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct EcologyInternal {
+    pub recovery_memory: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -102,6 +307,13 @@ pub struct DomesticatesState {
     pub crop_adopted: Vec<u32>,
     pub livestock_available: Vec<u32>,
     pub livestock_adopted: Vec<u32>,
+    #[serde(default)]
+    pub domesticates_internal: Vec<DomesticatesInternal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct DomesticatesInternal {
+    pub diffusion_memory: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -8,13 +8,12 @@ use crate::sim::geo::{
 };
 
 use super::era::EraKind;
-use super::exec::{FeedbackQueue, TransitionState};
+use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
 use super::state::{
-    Biome, ClimateState, CoastSide, ConflictState, DomesticatesState, EcologyState, GeoState,
-    GeologyState, HydrologyState, PolityState, PopulationState, SettlementState, SubsistenceState,
-    World, WorldMesh, WorldState,
+    Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
+    EcologyInternal, EcologyState, EntitiesState, GeoState, GeologyState, HydrologyState,
+    PolityState, PopulationState, SettlementState, SubsistenceState, World, WorldMesh, WorldState,
 };
-use super::ExecState;
 
 impl World {
     pub fn new(mesh: WorldMesh, geology: GeologyState) -> Self {
@@ -44,6 +43,8 @@ impl World {
                     river_path: vec![-1; cell_count],
                     river_flow: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
+                    river_upstream: vec![-1; cell_count],
+                    river_downstream: vec![-1; cell_count],
                 },
                 ecology: EcologyState {
                     biome: vec![Biome::TemperateForest; cell_count],
@@ -51,12 +52,14 @@ impl World {
                     ground_cover: vec![0.0; cell_count],
                     disturbance: vec![0.0; cell_count],
                     soil_fertility: vec![0.35; cell_count],
+                    ecology_internal: vec![EcologyInternal::default(); cell_count],
                 },
                 domesticates: DomesticatesState {
                     crop_available: vec![0; cell_count],
                     crop_adopted: vec![0; cell_count],
                     livestock_available: vec![0; cell_count],
                     livestock_adopted: vec![0; cell_count],
+                    domesticates_internal: vec![DomesticatesInternal::default(); cell_count],
                 },
                 subsistence: SubsistenceState {
                     subsistence_mix: vec![0.0; cell_count],
@@ -89,14 +92,17 @@ impl World {
                     frontline: vec![0.0; cell_count],
                 },
             },
-            exec: ExecState {
+            entities: EntitiesState::default(),
+            clock: ClockState {
                 tick: 0,
-                era,
+                epoch: era,
                 real_years_per_tick: era.real_years_per_tick(),
                 runtime_tick_ms: era.runtime_tick_ms(),
-                target_sea_ratio,
                 budgets: era.budgets(),
-                feedback_queue: FeedbackQueue::new(cell_count),
+            },
+            feedback: FeedbackQueue::new(cell_count),
+            runtime: RuntimeState {
+                target_sea_ratio,
                 transition: TransitionState {
                     era_enter_tick: 0,
                     stable_ticks_in_era: 0,
@@ -109,6 +115,9 @@ impl World {
                 geology_dynamics: None,
                 hydrology_dynamics: None,
             },
+            polity_relations: std::collections::HashMap::new(),
+            polity_groups: Vec::new(),
+            archive: super::state::ArchiveState::default(),
         }
     }
 
@@ -138,7 +147,7 @@ impl World {
             .clone_from(&state.river_next);
         self.state.hydrology.river_flow = state.river_flux.clone();
         self.state.hydrology.river_path = state.river_next.clone();
-        self.exec.hydrology_dynamics = Some(state);
+        self.runtime.hydrology_dynamics = Some(state);
         Ok(())
     }
 }
@@ -195,6 +204,8 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
         distance_from_ocean_km,
         coast_side,
         is_coastal,
+        neighbors_offsets: mesh.nbr_offsets.clone(),
+        neighbors: mesh.nbrs.clone(),
     }
 }
 

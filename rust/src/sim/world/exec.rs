@@ -4,18 +4,21 @@ use crate::sim::erosion::ErosionAutomatonState;
 
 use super::era::EraKind;
 use super::init::default_target_sea_ratio;
-use super::state::GeologyDynamicsState;
+use super::state::{GeologyDynamicsState, PolityComponent, RegionComponent, SettlementComponent};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExecState {
+pub struct ClockState {
     pub tick: u64,
-    pub era: EraKind,
+    pub epoch: EraKind,
     pub real_years_per_tick: f32,
     pub runtime_tick_ms: u32,
+    pub budgets: SubsystemBudgets,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeState {
     #[serde(default = "default_target_sea_ratio")]
     pub target_sea_ratio: f32,
-    pub budgets: SubsystemBudgets,
-    pub feedback_queue: FeedbackQueue,
     pub transition: TransitionState,
     #[serde(default)]
     pub geology_dynamics: Option<GeologyDynamicsState>,
@@ -33,23 +36,105 @@ pub struct SubsystemBudgets {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeedbackQueue {
-    pub active: FeedbackFields,
-    pub pending: FeedbackFields,
+    pub entries: Vec<FeedbackEntry>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ModuleId {
+    Exec,
+    Geology,
+    Climate,
+    Hydrology,
+    Ecology,
+    Domesticates,
+    Subsistence,
+    Population,
+    Settlement,
+    Polity,
+    Conflict,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CellFieldId {
+    WaterWithdrawal,
+    DamPressure,
+    Pollution,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FeedbackFields {
-    pub water_withdrawal: Vec<f32>,
-    pub dam_pressure: Vec<f32>,
-    pub pollution: Vec<f32>,
-    #[serde(default)]
-    pub extra: Vec<FeedbackChannel>,
+pub enum FieldValue {
+    F32(f32),
+    U32(u32),
+    Bool(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FeedbackChannel {
-    pub key: String,
-    pub values: Vec<f32>,
+pub enum EntityBundle {
+    Polity(PolityComponent),
+    Settlement(SettlementComponent),
+    Region(RegionComponent),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ComponentPatch {
+    Polity {
+        capital_cell: Option<u32>,
+        stability: Option<f32>,
+    },
+    Settlement {
+        cell: Option<u32>,
+        size: Option<f32>,
+        urbanization: Option<f32>,
+    },
+    Region {
+        cells: Option<Vec<u32>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TargetRef {
+    Cell(u32),
+    Polity(u32),
+    Settlement(u32),
+    Edge(u32),
+    Region(u32),
+    Global,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FeedbackPayload {
+    DeltaF32 {
+        field: CellFieldId,
+        cell: u32,
+        delta: f32,
+    },
+    SetValue {
+        field: CellFieldId,
+        cell: u32,
+        value: FieldValue,
+    },
+    SpawnEntity {
+        bundle: EntityBundle,
+    },
+    DestroyEntity {
+        id: u32,
+    },
+    MutateEntity {
+        id: u32,
+        patch: ComponentPatch,
+    },
+    TriggerEpochTransition {
+        to: EraKind,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedbackEntry {
+    pub source: ModuleId,
+    pub target_module: ModuleId,
+    pub target_ref: TargetRef,
+    pub enqueued_tick: u64,
+    pub payload: FeedbackPayload,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -64,74 +149,14 @@ pub struct TransitionState {
 }
 
 impl FeedbackQueue {
-    pub fn new(cell_count: usize) -> Self {
+    pub fn new(_cell_count: usize) -> Self {
         Self {
-            active: FeedbackFields::zeros(cell_count),
-            pending: FeedbackFields::zeros(cell_count),
-        }
-    }
-}
-
-impl FeedbackFields {
-    pub const WATER_WITHDRAWAL_KEY: &'static str = "water_withdrawal";
-    pub const DAM_PRESSURE_KEY: &'static str = "dam_pressure";
-    pub const POLLUTION_KEY: &'static str = "pollution";
-
-    pub fn zeros(cell_count: usize) -> Self {
-        Self {
-            water_withdrawal: vec![0.0; cell_count],
-            dam_pressure: vec![0.0; cell_count],
-            pollution: vec![0.0; cell_count],
-            extra: Vec::new(),
+            entries: Vec::new(),
         }
     }
 
-    pub fn clear(&mut self) {
-        self.water_withdrawal.fill(0.0);
-        self.dam_pressure.fill(0.0);
-        self.pollution.fill(0.0);
-        for channel in &mut self.extra {
-            channel.values.fill(0.0);
-        }
-    }
-
-    pub fn channel(&self, key: &str) -> Option<&[f32]> {
-        match key {
-            Self::WATER_WITHDRAWAL_KEY => Some(self.water_withdrawal.as_slice()),
-            Self::DAM_PRESSURE_KEY => Some(self.dam_pressure.as_slice()),
-            Self::POLLUTION_KEY => Some(self.pollution.as_slice()),
-            _ => self
-                .extra
-                .iter()
-                .find(|channel| channel.key == key)
-                .map(|channel| channel.values.as_slice()),
-        }
-    }
-
-    pub fn channel_mut(&mut self, key: &str, cell_count: usize) -> &mut [f32] {
-        let values = match key {
-            Self::WATER_WITHDRAWAL_KEY => &mut self.water_withdrawal,
-            Self::DAM_PRESSURE_KEY => &mut self.dam_pressure,
-            Self::POLLUTION_KEY => &mut self.pollution,
-            _ => {
-                let channel_index = self
-                    .extra
-                    .iter()
-                    .position(|channel| channel.key == key)
-                    .unwrap_or_else(|| {
-                        self.extra.push(FeedbackChannel {
-                            key: key.to_string(),
-                            values: vec![0.0; cell_count],
-                        });
-                        self.extra.len() - 1
-                    });
-                &mut self.extra[channel_index].values
-            }
-        };
-        if values.len() != cell_count {
-            values.resize(cell_count, 0.0);
-        }
-        values.as_mut_slice()
+    pub fn push(&mut self, entry: FeedbackEntry) {
+        self.entries.push(entry);
     }
 }
 

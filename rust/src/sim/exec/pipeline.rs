@@ -5,9 +5,9 @@ use super::transition::update_era_transition;
 use crate::sim::world::World;
 
 pub(super) fn prepare_step(world: &mut World) {
-    world.exec.budgets = world.exec.era.budgets();
-    world.exec.real_years_per_tick = world.exec.era.real_years_per_tick();
-    world.exec.runtime_tick_ms = world.exec.era.runtime_tick_ms();
+    world.clock.budgets = world.clock.epoch.budgets();
+    world.clock.real_years_per_tick = world.clock.epoch.real_years_per_tick();
+    world.clock.runtime_tick_ms = world.clock.epoch.runtime_tick_ms();
 }
 
 pub(super) fn run_feedback_stage(world: &mut World) {
@@ -15,28 +15,28 @@ pub(super) fn run_feedback_stage(world: &mut World) {
 }
 
 pub(super) fn run_geology_stage(world: &mut World) {
-    run_geology_step(world, world.exec.budgets.geology);
+    run_geology_step(world, world.clock.budgets.geology);
 }
 
 pub(super) fn run_climate_stage(world: &mut World) {
-    crate::sim::climate::run_climate_step(world, world.exec.budgets.climate);
+    crate::sim::climate::run_climate_step(world, world.clock.budgets.climate);
 }
 
 pub(super) fn run_hydrology_stage(world: &mut World) {
-    run_hydrology_step_unprofiled(world, world.exec.budgets.geology);
+    run_hydrology_step_unprofiled(world, world.clock.budgets.geology);
 }
 
 pub(super) fn run_ecology_stage(world: &mut World) {
-    crate::sim::ecology::run_ecology_step(world, world.exec.budgets.ecology);
+    crate::sim::ecology::run_ecology_step(world, world.clock.budgets.ecology);
 }
 
 pub(super) fn run_society_stage(world: &mut World) {
-    crate::sim::domesticates::update_domesticates(world, world.exec.budgets.ecology);
-    crate::sim::subsistence::update_subsistence(world, world.exec.budgets.civilization);
-    crate::sim::population::update_population(world, world.exec.budgets.civilization);
-    crate::sim::settlement::update_settlement(world, world.exec.budgets.civilization);
-    crate::sim::polity::update_polity(world, world.exec.budgets.civilization);
-    crate::sim::conflict::update_conflict(world, world.exec.budgets.civilization);
+    crate::sim::domesticates::update_domesticates(world, world.clock.budgets.ecology);
+    crate::sim::subsistence::update_subsistence(world, world.clock.budgets.civilization);
+    crate::sim::population::update_population(world, world.clock.budgets.civilization);
+    crate::sim::settlement::update_settlement(world, world.clock.budgets.civilization);
+    crate::sim::polity::update_polity(world, world.clock.budgets.civilization);
+    crate::sim::conflict::update_conflict(world, world.clock.budgets.civilization);
 }
 
 pub(super) fn run_transition_stage(world: &mut World) {
@@ -44,7 +44,7 @@ pub(super) fn run_transition_stage(world: &mut World) {
 }
 
 pub(super) fn finalize_tick(world: &mut World) {
-    world.exec.tick = world.exec.tick.saturating_add(1);
+    world.clock.tick = world.clock.tick.saturating_add(1);
 }
 
 pub fn exec_world(world: &mut World) {

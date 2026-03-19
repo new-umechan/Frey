@@ -296,7 +296,7 @@ fn best_downwind_land_neighbor(world: &World, index: usize, wind_sign: f32) -> O
 }
 
 fn vegetation_density_proxy(world: &World, index: usize) -> f32 {
-    if world.exec.era == EraKind::Crust || world.exec.era == EraKind::Environment {
+    if world.clock.epoch == EraKind::Crust || world.clock.epoch == EraKind::Environment {
         return 0.5;
     }
     let tree_cover = world

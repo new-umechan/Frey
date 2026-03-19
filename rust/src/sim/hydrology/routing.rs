@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
-    if world.exec.era != EraKind::Crust {
+    if world.clock.epoch != EraKind::Crust {
         return world
             .state
             .climate
@@ -98,7 +98,7 @@ fn local_topographic_wetness(i: usize, height: &[f32], nbr_offsets: &[u32], nbrs
 
 pub(super) fn river_rebuild_driver(world: &World) -> f32 {
     world
-        .exec
+        .runtime
         .geology_dynamics
         .as_ref()
         .map(|state| {

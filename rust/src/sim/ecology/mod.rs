@@ -54,7 +54,7 @@ pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
 
         let temp = world.state.climate.temperature[i];
         let precipitation = world.state.climate.precipitation[i];
-        let pollution = world.exec.feedback_queue.active.pollution[i].clamp(0.0, 1.0);
+        let pollution = world.state.subsistence.pollution[i].clamp(0.0, 1.0);
         let logging = feedback_value(world, LOGGING_FEEDBACK_KEY, i);
         let grazing = feedback_value(world, GRAZING_FEEDBACK_KEY, i);
         let slash_burn = feedback_value(world, SLASH_BURN_FEEDBACK_KEY, i);
@@ -126,14 +126,8 @@ pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
 }
 
 fn feedback_value(world: &World, key: &str, index: usize) -> f32 {
-    world
-        .exec
-        .feedback_queue
-        .active
-        .channel(key)
-        .and_then(|values| values.get(index).copied())
-        .unwrap_or(0.0)
-        .max(0.0)
+    let _ = (world, key, index);
+    0.0
 }
 
 fn converge_toward(current: f32, potential: f32, rate_up: f32, rate_down: f32, dt: f32) -> f32 {

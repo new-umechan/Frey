@@ -54,7 +54,7 @@ pub(crate) fn run_hydrology_step(
     geology_budget: u32,
 ) -> HydrologyStepDetailBreakdown {
     let mut detail = HydrologyStepDetailBreakdown::default();
-    let budget = geology_river_budget(world.exec.era, geology_budget);
+    let budget = geology_river_budget(world.clock.epoch, geology_budget);
     if budget == 0 {
         return detail;
     }
@@ -79,7 +79,7 @@ fn run_river_step_with_erosion_state(
     river_driver: f32,
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
-    let tick = world.exec.tick;
+    let tick = world.clock.tick;
     let mesh_positions = &world.mesh.positions;
     let mesh_nbr_offsets = &world.mesh.nbr_offsets;
     let mesh_nbrs = &world.mesh.nbrs;
@@ -89,7 +89,7 @@ fn run_river_step_with_erosion_state(
     let expected_flux = hydrology.river_flow.len();
     let expected_next = hydrology.river_path.len();
 
-    let Some(state) = world.exec.hydrology_dynamics.as_mut() else {
+    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
         return false;
     };
     if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
@@ -170,6 +170,16 @@ fn run_river_step_with_erosion_state(
     geology.height.clone_from(&state.height);
     hydrology.river_flow.clone_from(&state.river_flux);
     hydrology.river_path.clone_from(&state.river_next);
+    hydrology.river_downstream.clone_from(&state.river_next);
+    hydrology.river_upstream.fill(-1);
+    for (cell, &next) in hydrology.river_path.iter().enumerate() {
+        if next >= 0 {
+            let next_i = next as usize;
+            if next_i < hydrology.river_upstream.len() {
+                hydrology.river_upstream[next_i] = cell as i32;
+            }
+        }
+    }
     world.state.geology.erosion_rate.fill(0.0);
     world.state.geology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {

@@ -4,7 +4,9 @@ pub mod types;
 pub use crate::sim::subsistence::types::*;
 
 use crate::sim::exec::lerp;
-use crate::sim::world::{FeedbackFields, World};
+use crate::sim::world::{
+    CellFieldId, FeedbackEntry, FeedbackPayload, FieldValue, ModuleId, TargetRef, World,
+};
 
 pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -58,11 +60,28 @@ pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
         dam_pressure[i] = (river * world.state.population.population[i] / 220.0).clamp(0.0, 1.0);
     }
 
-    let pending = &mut world.exec.feedback_queue.pending;
-    pending
-        .channel_mut(FeedbackFields::WATER_WITHDRAWAL_KEY, n)
-        .copy_from_slice(&water_withdrawal);
-    pending
-        .channel_mut(FeedbackFields::DAM_PRESSURE_KEY, n)
-        .copy_from_slice(&dam_pressure);
+    for i in 0..n {
+        world.feedback.push(FeedbackEntry {
+            source: ModuleId::Subsistence,
+            target_module: ModuleId::Hydrology,
+            target_ref: TargetRef::Cell(i as u32),
+            enqueued_tick: world.clock.tick,
+            payload: FeedbackPayload::SetValue {
+                field: CellFieldId::WaterWithdrawal,
+                cell: i as u32,
+                value: FieldValue::F32(water_withdrawal[i]),
+            },
+        });
+        world.feedback.push(FeedbackEntry {
+            source: ModuleId::Subsistence,
+            target_module: ModuleId::Hydrology,
+            target_ref: TargetRef::Cell(i as u32),
+            enqueued_tick: world.clock.tick,
+            payload: FeedbackPayload::SetValue {
+                field: CellFieldId::DamPressure,
+                cell: i as u32,
+                value: FieldValue::F32(dam_pressure[i]),
+            },
+        });
+    }
 }

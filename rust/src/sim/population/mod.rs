@@ -3,7 +3,9 @@ pub mod types;
 #[allow(unused_imports)]
 pub use crate::sim::population::types::*;
 
-use crate::sim::world::{FeedbackFields, World};
+use crate::sim::world::{
+    CellFieldId, FeedbackEntry, FeedbackPayload, FieldValue, ModuleId, TargetRef, World,
+};
 
 pub(crate) fn update_population(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -37,10 +39,17 @@ pub(crate) fn update_population(world: &mut World, budget: u32) {
         pollution[i] = (next / 260.0).clamp(0.0, 1.0);
     }
 
-    world
-        .exec
-        .feedback_queue
-        .pending
-        .channel_mut(FeedbackFields::POLLUTION_KEY, n)
-        .copy_from_slice(&pollution);
+    for i in 0..n {
+        world.feedback.push(FeedbackEntry {
+            source: ModuleId::Population,
+            target_module: ModuleId::Ecology,
+            target_ref: TargetRef::Cell(i as u32),
+            enqueued_tick: world.clock.tick,
+            payload: FeedbackPayload::SetValue {
+                field: CellFieldId::Pollution,
+                cell: i as u32,
+                value: FieldValue::F32(pollution[i]),
+            },
+        });
+    }
 }

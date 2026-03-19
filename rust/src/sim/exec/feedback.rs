@@ -1,37 +1,194 @@
-use crate::sim::world::{FeedbackFields, World};
+use crate::sim::world::{
+    CellFieldId, ComponentPatch, EntityBundle, FeedbackPayload, FieldValue, TargetRef, World,
+};
 
 pub(super) fn apply_feedback_queue(world: &mut World) {
-    let active = world.exec.feedback_queue.pending.clone();
-    world.exec.feedback_queue.active = active;
-    world.exec.feedback_queue.pending.clear();
+    apply_payload_entries(world);
+}
 
+fn apply_payload_entries(world: &mut World) {
     let cell_count = world.cell_count();
-    for i in 0..cell_count {
-        let withdrawal = channel_value(
-            &world.exec.feedback_queue.active,
-            FeedbackFields::WATER_WITHDRAWAL_KEY,
-            i,
-        );
-        let dam_pressure = channel_value(
-            &world.exec.feedback_queue.active,
-            FeedbackFields::DAM_PRESSURE_KEY,
-            i,
-        );
-        let pollution = channel_value(
-            &world.exec.feedback_queue.active,
-            FeedbackFields::POLLUTION_KEY,
-            i,
-        );
+    let entries = std::mem::take(&mut world.feedback.entries);
+    let mut remaining = Vec::new();
+    for entry in entries {
+        if entry.enqueued_tick >= world.clock.tick {
+            remaining.push(entry);
+            continue;
+        }
+        match entry.payload {
+            FeedbackPayload::DeltaF32 { field, cell, delta } => {
+                apply_feedback_f32_delta(
+                    world,
+                    field,
+                    cell as usize,
+                    delta,
+                    cell_count,
+                    &entry.target_ref,
+                );
+            }
+            FeedbackPayload::SetValue {
+                field,
+                cell,
+                value: FieldValue::F32(value),
+            } => {
+                apply_feedback_f32_set(
+                    world,
+                    field,
+                    cell as usize,
+                    value,
+                    cell_count,
+                    &entry.target_ref,
+                );
+            }
+            FeedbackPayload::SpawnEntity { bundle } => {
+                apply_spawn_entity(world, bundle);
+            }
+            FeedbackPayload::DestroyEntity { id } => {
+                apply_destroy_entity(world, &entry.target_ref, id);
+            }
+            FeedbackPayload::MutateEntity { id, patch } => {
+                apply_mutate_entity(world, &entry.target_ref, id, patch);
+            }
+            FeedbackPayload::TriggerEpochTransition { to } => {
+                world.clock.epoch = to;
+            }
+            _ => {}
+        }
+    }
+    world.entities.sync_world_from_components();
+    world.feedback.entries = remaining;
+}
 
-        world.state.subsistence.water_withdrawal[i] = withdrawal;
-        world.state.subsistence.dam_pressure[i] = dam_pressure;
-        world.state.subsistence.pollution[i] = pollution;
+fn apply_feedback_f32_delta(
+    world: &mut World,
+    field: CellFieldId,
+    cell: usize,
+    value: f32,
+    cell_count: usize,
+    _target_ref: &TargetRef,
+) {
+    if cell >= cell_count {
+        return;
+    }
+    let target = match field {
+        CellFieldId::WaterWithdrawal => &mut world.state.subsistence.water_withdrawal,
+        CellFieldId::DamPressure => &mut world.state.subsistence.dam_pressure,
+        CellFieldId::Pollution => &mut world.state.subsistence.pollution,
+    };
+    target[cell] += value;
+}
+
+fn apply_feedback_f32_set(
+    world: &mut World,
+    field: CellFieldId,
+    cell: usize,
+    value: f32,
+    cell_count: usize,
+    _target_ref: &TargetRef,
+) {
+    if cell >= cell_count {
+        return;
+    }
+    let target = match field {
+        CellFieldId::WaterWithdrawal => &mut world.state.subsistence.water_withdrawal,
+        CellFieldId::DamPressure => &mut world.state.subsistence.dam_pressure,
+        CellFieldId::Pollution => &mut world.state.subsistence.pollution,
+    };
+    target[cell] = value;
+}
+
+fn apply_spawn_entity(world: &mut World, bundle: EntityBundle) {
+    match bundle {
+        EntityBundle::Polity(component) => world.entities.polity_components.push(component),
+        EntityBundle::Settlement(component) => world.entities.settlement_components.push(component),
+        EntityBundle::Region(component) => world.entities.region_components.push(component),
     }
 }
 
-fn channel_value(fields: &FeedbackFields, key: &str, index: usize) -> f32 {
-    fields
-        .channel(key)
-        .and_then(|values| values.get(index).copied())
-        .unwrap_or(0.0)
+fn apply_destroy_entity(world: &mut World, target_ref: &TargetRef, id: u32) {
+    match target_ref {
+        TargetRef::Polity(_) => {
+            world
+                .entities
+                .polity_components
+                .retain(|component| component.polity_id != id);
+        }
+        TargetRef::Settlement(_) => {
+            world
+                .entities
+                .settlement_components
+                .retain(|component| component.settlement_id != id);
+        }
+        TargetRef::Region(_) => {
+            world
+                .entities
+                .region_components
+                .retain(|component| component.region_id != id);
+        }
+        _ => {}
+    }
+}
+
+fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch: ComponentPatch) {
+    match (target_ref, patch) {
+        (
+            TargetRef::Polity(_),
+            ComponentPatch::Polity {
+                capital_cell,
+                stability,
+            },
+        ) => {
+            if let Some(component) = world
+                .entities
+                .polity_components
+                .iter_mut()
+                .find(|component| component.polity_id == id)
+            {
+                if let Some(value) = capital_cell {
+                    component.capital_cell = value;
+                }
+                if let Some(value) = stability {
+                    component.stability = value;
+                }
+            }
+        }
+        (
+            TargetRef::Settlement(_),
+            ComponentPatch::Settlement {
+                cell,
+                size,
+                urbanization,
+            },
+        ) => {
+            if let Some(component) = world
+                .entities
+                .settlement_components
+                .iter_mut()
+                .find(|component| component.settlement_id == id)
+            {
+                if let Some(value) = cell {
+                    component.cell = value;
+                }
+                if let Some(value) = size {
+                    component.size = value;
+                }
+                if let Some(value) = urbanization {
+                    component.urbanization = value;
+                }
+            }
+        }
+        (TargetRef::Region(_), ComponentPatch::Region { cells }) => {
+            if let Some(component) = world
+                .entities
+                .region_components
+                .iter_mut()
+                .find(|component| component.region_id == id)
+            {
+                if let Some(value) = cells {
+                    component.cells = value;
+                }
+            }
+        }
+        _ => {}
+    }
 }

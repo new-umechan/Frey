@@ -107,9 +107,9 @@ impl WorldSimController {
         sim_world.state.hydrology.river_flow = river_flow;
         sim_world.state.hydrology.river_path = river_path;
         if let Some(target) = config.target_sea_ratio {
-            sim_world.exec.target_sea_ratio = target.clamp(0.02, 0.98);
+            sim_world.runtime.target_sea_ratio = target.clamp(0.02, 0.98);
         }
-        sim_world.exec.era = world::EraKind::Crust;
+        sim_world.clock.epoch = world::EraKind::Crust;
 
         let erosion_state = build_erosion_state(&sim_world, geology_params.clone());
         let _ = sim_world.attach_hydrology_dynamics(erosion_state);
@@ -123,14 +123,19 @@ impl WorldSimController {
             history: BTreeMap::new(),
         };
         managed
+            .world
+            .archive
+            .history_ticks
+            .insert(managed.world.clock.tick, "init".to_string());
+        managed
             .history
-            .insert(managed.world.exec.tick, managed.world.clone());
+            .insert(managed.world.clock.tick, managed.world.clone());
 
         let world_id = self.next_world_id();
         let output = InitWorldOutput {
             world_id: world_id.clone(),
-            tick: managed.world.exec.tick as f64,
-            era: managed.world.exec.era.as_key().to_string(),
+            tick: managed.world.clock.tick as f64,
+            era: managed.world.clock.epoch.as_key().to_string(),
             cell_count: managed.world.state.geology.height.len() as u32,
         };
         self.worlds.insert(world_id, managed);

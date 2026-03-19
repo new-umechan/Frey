@@ -21,14 +21,14 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     }
 
     ensure_geology_dynamics(world);
-    let Some(dynamics) = world.exec.geology_dynamics.as_mut() else {
+    let Some(dynamics) = world.runtime.geology_dynamics.as_mut() else {
         return;
     };
 
     let cell_count = world.state.geology.height.len();
     let default_params = GeologyParams::default();
     let params = world
-        .exec
+        .runtime
         .hydrology_dynamics
         .as_ref()
         .map(|state| &state.params)
@@ -109,7 +109,7 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         params,
     );
 
-    preserve_target_sea_ratio(&mut next_height, world.exec.target_sea_ratio, 0.35);
+    preserve_target_sea_ratio(&mut next_height, world.runtime.target_sea_ratio, 0.35);
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
@@ -117,7 +117,7 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     world.state.geology.height = next_height;
     world.state.geology.boundary_condition = dynamics.boundary_state.activity.clone();
 
-    if let Some(state) = world.exec.hydrology_dynamics.as_mut() {
+    if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
         if state.height.len() == world.state.geology.height.len() {
             state.height.clone_from(&world.state.geology.height);
         }
@@ -135,7 +135,7 @@ fn ensure_geology_dynamics(world: &mut World) {
         .max()
         .map(|v| v as usize + 1)
         .unwrap_or(0);
-    let needs_rebuild = match world.exec.geology_dynamics.as_ref() {
+    let needs_rebuild = match world.runtime.geology_dynamics.as_ref() {
         Some(state) => {
             state.vertex_states.len() != cell_count
                 || state.mantle_heat.len() != cell_count
@@ -191,7 +191,7 @@ fn ensure_geology_dynamics(world: &mut World) {
         vertex_states[i].temperature = mantle_heat[i];
     }
 
-    world.exec.geology_dynamics = Some(GeologyDynamicsState {
+    world.runtime.geology_dynamics = Some(GeologyDynamicsState {
         update_index: 0,
         plate_states,
         vertex_states,

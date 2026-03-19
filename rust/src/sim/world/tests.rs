@@ -1,4 +1,3 @@
-
 use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
@@ -25,14 +24,15 @@ fn build_world() -> World {
 #[test]
 fn world_initializes_exec_state() {
     let world = build_world();
-    assert_eq!(world.exec.era, EraKind::Crust);
+    assert_eq!(world.clock.epoch, EraKind::Crust);
     assert_eq!(
-        world.exec.real_years_per_tick,
+        world.clock.real_years_per_tick,
         EraKind::Crust.real_years_per_tick()
     );
-    assert_eq!(world.exec.budgets, EraKind::Crust.budgets());
-    assert_eq!(world.exec.transition.last_land_ratio, 0.5);
-    assert_eq!(world.exec.feedback_queue.pending.pollution.len(), 4);
+    assert_eq!(world.clock.budgets, EraKind::Crust.budgets());
+    assert_eq!(world.runtime.transition.last_land_ratio, 0.5);
+    assert!(world.feedback.entries.is_empty());
+    assert!(world.polity_relations.is_empty());
 }
 
 #[test]
@@ -52,37 +52,29 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
         },
     );
 
-    assert_eq!(world.exec.target_sea_ratio, 0.25);
-    assert_eq!(world.exec.transition.last_land_ratio, 0.75);
+    assert_eq!(world.runtime.target_sea_ratio, 0.25);
+    assert_eq!(world.runtime.transition.last_land_ratio, 0.75);
 }
 
 #[test]
 fn feedback_queue_sizes_match_world() {
     let queue = FeedbackQueue::new(8);
-    assert_eq!(queue.active.water_withdrawal.len(), 8);
-    assert_eq!(queue.pending.dam_pressure.len(), 8);
+    assert!(queue.entries.is_empty());
 }
 
 #[test]
-fn feedback_queue_supports_generic_channels() {
+fn feedback_queue_pushes_entries() {
     let mut queue = FeedbackQueue::new(3);
-    queue.pending.channel_mut("custom_flow", 3)[1] = 0.25;
-    assert_eq!(
-        queue
-            .pending
-            .channel("custom_flow")
-            .and_then(|v| v.get(1).copied()),
-        Some(0.25)
-    );
-
-    queue.pending.clear();
-    assert_eq!(
-        queue
-            .pending
-            .channel("custom_flow")
-            .and_then(|v| v.get(1).copied()),
-        Some(0.0)
-    );
+    queue.push(crate::sim::world::FeedbackEntry {
+        source: crate::sim::world::ModuleId::Exec,
+        target_module: crate::sim::world::ModuleId::Exec,
+        target_ref: crate::sim::world::TargetRef::Global,
+        enqueued_tick: 0,
+        payload: crate::sim::world::FeedbackPayload::TriggerEpochTransition {
+            to: EraKind::History,
+        },
+    });
+    assert_eq!(queue.entries.len(), 1);
 }
 
 #[test]

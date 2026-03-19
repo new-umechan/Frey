@@ -135,7 +135,7 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     breakdown.exec_feedback_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    run_geology_step(world, world.exec.budgets.geology);
+    run_geology_step(world, world.clock.budgets.geology);
     breakdown.exec_geology_terrain_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
@@ -143,7 +143,7 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     breakdown.exec_climate_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    let river_profile = run_hydrology_step_profiled(world, world.exec.budgets.geology);
+    let river_profile = run_hydrology_step_profiled(world, world.clock.budgets.geology);
     breakdown.exec_hydrology_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
     river_breakdown.step_geology_river_prepare_ms = river_profile.river_prepare_ms;
     river_breakdown.step_geology_river_automaton_ms = river_profile.river_automaton_ms;

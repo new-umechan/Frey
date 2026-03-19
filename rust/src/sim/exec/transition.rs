@@ -3,47 +3,53 @@ use crate::sim::world::{EraKind, World};
 pub(super) fn update_era_transition(world: &mut World) {
     let inputs = collect_transition_inputs(world);
 
-    world.exec.transition.ema_geology_activity = update_ema(
-        world.exec.transition.ema_geology_activity,
+    world.runtime.transition.ema_geology_activity = update_ema(
+        world.runtime.transition.ema_geology_activity,
         inputs.geology_activity,
     );
-    world.exec.transition.ema_climate_activity = update_ema(
-        world.exec.transition.ema_climate_activity,
+    world.runtime.transition.ema_climate_activity = update_ema(
+        world.runtime.transition.ema_climate_activity,
         inputs.climate_activity,
     );
-    world.exec.transition.ema_ecology_activity = update_ema(
-        world.exec.transition.ema_ecology_activity,
+    world.runtime.transition.ema_ecology_activity = update_ema(
+        world.runtime.transition.ema_ecology_activity,
         inputs.ecology_activity,
     );
-    world.exec.transition.ema_civilization_activity = update_ema(
-        world.exec.transition.ema_civilization_activity,
+    world.runtime.transition.ema_civilization_activity = update_ema(
+        world.runtime.transition.ema_civilization_activity,
         inputs.civilization_activity,
     );
 
-    let next_era = match world.exec.era {
+    let next_era = match world.clock.epoch {
         EraKind::Crust if ticks_in_era(world) >= 8 => {
             let stable_land =
-                (inputs.land_ratio - world.exec.transition.last_land_ratio).abs() < 0.002;
-            if stable_land && world.exec.transition.ema_geology_activity < 0.08 {
-                world.exec.transition.stable_ticks_in_era =
-                    world.exec.transition.stable_ticks_in_era.saturating_add(1);
+                (inputs.land_ratio - world.runtime.transition.last_land_ratio).abs() < 0.002;
+            if stable_land && world.runtime.transition.ema_geology_activity < 0.08 {
+                world.runtime.transition.stable_ticks_in_era = world
+                    .runtime
+                    .transition
+                    .stable_ticks_in_era
+                    .saturating_add(1);
             } else {
-                world.exec.transition.stable_ticks_in_era = 0;
+                world.runtime.transition.stable_ticks_in_era = 0;
             }
-            if world.exec.transition.stable_ticks_in_era >= 6 {
+            if world.runtime.transition.stable_ticks_in_era >= 6 {
                 Some(EraKind::Environment)
             } else {
                 None
             }
         }
         EraKind::Environment if ticks_in_era(world) >= 24 => {
-            if inputs.river_network > 0.06 && world.exec.transition.ema_climate_activity > 0.20 {
-                world.exec.transition.stable_ticks_in_era =
-                    world.exec.transition.stable_ticks_in_era.saturating_add(1);
+            if inputs.river_network > 0.06 && world.runtime.transition.ema_climate_activity > 0.20 {
+                world.runtime.transition.stable_ticks_in_era = world
+                    .runtime
+                    .transition
+                    .stable_ticks_in_era
+                    .saturating_add(1);
             } else {
-                world.exec.transition.stable_ticks_in_era = 0;
+                world.runtime.transition.stable_ticks_in_era = 0;
             }
-            if world.exec.transition.stable_ticks_in_era >= 8 {
+            if world.runtime.transition.stable_ticks_in_era >= 8 {
                 Some(EraKind::Life)
             } else {
                 None
@@ -51,12 +57,15 @@ pub(super) fn update_era_transition(world: &mut World) {
         }
         EraKind::Life if ticks_in_era(world) >= 24 => {
             if inputs.habitable_ratio > 0.18 {
-                world.exec.transition.stable_ticks_in_era =
-                    world.exec.transition.stable_ticks_in_era.saturating_add(1);
+                world.runtime.transition.stable_ticks_in_era = world
+                    .runtime
+                    .transition
+                    .stable_ticks_in_era
+                    .saturating_add(1);
             } else {
-                world.exec.transition.stable_ticks_in_era = 0;
+                world.runtime.transition.stable_ticks_in_era = 0;
             }
-            if world.exec.transition.stable_ticks_in_era >= 10 {
+            if world.runtime.transition.stable_ticks_in_era >= 10 {
                 Some(EraKind::Civilization)
             } else {
                 None
@@ -67,12 +76,15 @@ pub(super) fn update_era_transition(world: &mut World) {
                 + usize::from(inputs.total_population > 50.0)
                 + usize::from(inputs.state_cells > 0);
             if signal_count >= 2 {
-                world.exec.transition.stable_ticks_in_era =
-                    world.exec.transition.stable_ticks_in_era.saturating_add(1);
+                world.runtime.transition.stable_ticks_in_era = world
+                    .runtime
+                    .transition
+                    .stable_ticks_in_era
+                    .saturating_add(1);
             } else {
-                world.exec.transition.stable_ticks_in_era = 0;
+                world.runtime.transition.stable_ticks_in_era = 0;
             }
-            if world.exec.transition.stable_ticks_in_era >= 12 {
+            if world.runtime.transition.stable_ticks_in_era >= 12 {
                 Some(EraKind::History)
             } else {
                 None
@@ -81,14 +93,14 @@ pub(super) fn update_era_transition(world: &mut World) {
         _ => None,
     };
 
-    world.exec.transition.last_land_ratio = inputs.land_ratio;
+    world.runtime.transition.last_land_ratio = inputs.land_ratio;
     if let Some(next_era) = next_era {
-        world.exec.era = next_era;
-        world.exec.budgets = next_era.budgets();
-        world.exec.real_years_per_tick = next_era.real_years_per_tick();
-        world.exec.runtime_tick_ms = next_era.runtime_tick_ms();
-        world.exec.transition.reset_for_era(
-            world.exec.tick.saturating_add(1),
+        world.clock.epoch = next_era;
+        world.clock.budgets = next_era.budgets();
+        world.clock.real_years_per_tick = next_era.real_years_per_tick();
+        world.clock.runtime_tick_ms = next_era.runtime_tick_ms();
+        world.runtime.transition.reset_for_era(
+            world.clock.tick.saturating_add(1),
             next_era,
             inputs.land_ratio,
         );
@@ -128,7 +140,7 @@ fn collect_transition_inputs(world: &World) -> EraTransitionInputs {
         cell_count,
     );
     let geology_activity = world
-        .exec
+        .runtime
         .geology_dynamics
         .as_ref()
         .map(|state| {
@@ -188,9 +200,9 @@ fn update_ema(prev: f32, sample: f32) -> f32 {
 
 fn ticks_in_era(world: &World) -> u64 {
     world
-        .exec
+        .clock
         .tick
-        .saturating_sub(world.exec.transition.era_enter_tick)
+        .saturating_sub(world.runtime.transition.era_enter_tick)
 }
 
 fn vegetation_density_proxy(tree_cover: f32, ground_cover: f32) -> f32 {

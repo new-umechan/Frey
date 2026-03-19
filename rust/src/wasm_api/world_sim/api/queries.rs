@@ -158,7 +158,7 @@ impl WorldSimController {
             "mantle_heat" => {
                 let default_mantle_heat = vec![0.5; world_ref.state.geology.height.len()];
                 let mantle_heat = world_ref
-                    .exec
+                    .runtime
                     .geology_dynamics
                     .as_ref()
                     .map(|dynamics| dynamics.mantle_heat.as_slice())
@@ -196,16 +196,16 @@ impl WorldSimController {
 
         let response = MetricsResponse {
             world_id,
-            tick: w.exec.tick as f64,
-            era: w.exec.era.as_key().to_string(),
+            tick: w.clock.tick as f64,
+            era: w.clock.epoch.as_key().to_string(),
             simulation_rate: managed.simulation_rate,
-            real_years_per_tick: w.exec.real_years_per_tick,
-            runtime_tick_ms: w.exec.runtime_tick_ms,
+            real_years_per_tick: w.clock.real_years_per_tick,
+            runtime_tick_ms: w.clock.runtime_tick_ms,
             budgets: BudgetSummary {
-                geology: w.exec.budgets.geology,
-                climate: w.exec.budgets.climate,
-                ecology: w.exec.budgets.ecology,
-                civilization: w.exec.budgets.civilization,
+                geology: w.clock.budgets.geology,
+                climate: w.clock.budgets.climate,
+                ecology: w.clock.budgets.ecology,
+                civilization: w.clock.budgets.civilization,
             },
             cell_count: metrics.cell_count,
             land_cells: metrics.land_cells,
@@ -253,15 +253,15 @@ impl WorldSimController {
         let w = &managed.world;
         let response = WorldDeltaResponse {
             world_id,
-            tick: w.exec.tick as f64,
-            era: w.exec.era.as_key().to_string(),
-            real_years_per_tick: w.exec.real_years_per_tick,
-            runtime_tick_ms: w.exec.runtime_tick_ms,
+            tick: w.clock.tick as f64,
+            era: w.clock.epoch.as_key().to_string(),
+            real_years_per_tick: w.clock.real_years_per_tick,
+            runtime_tick_ms: w.clock.runtime_tick_ms,
             budgets: BudgetSummary {
-                geology: w.exec.budgets.geology,
-                climate: w.exec.budgets.climate,
-                ecology: w.exec.budgets.ecology,
-                civilization: w.exec.budgets.civilization,
+                geology: w.clock.budgets.geology,
+                climate: w.clock.budgets.climate,
+                ecology: w.clock.budgets.ecology,
+                civilization: w.clock.budgets.civilization,
             },
             deltas: managed.sync_state.take_world_field_deltas(|field_kind| {
                 include_fields
@@ -326,7 +326,7 @@ impl WorldSimController {
 
         let response = PlateStatsResponse {
             world_id,
-            tick: w.exec.tick as f64,
+            tick: w.clock.tick as f64,
             plate_count: plate_count as u32,
             stats,
         };
@@ -342,7 +342,9 @@ impl WorldSimController {
             .get(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
         let ticks = managed
-            .history
+            .world
+            .archive
+            .history_ticks
             .keys()
             .copied()
             .map(|tick| tick as f64)
@@ -362,13 +364,22 @@ impl WorldSimController {
     #[wasm_bindgen(js_name = list_checkpoints)]
     pub fn list_checkpoints_js(&self) -> Result<JsValue, JsValue> {
         let mut checkpoints = self
-            .snapshots
-            .iter()
-            .map(|(snapshot_id, snapshot)| CheckpointListEntry {
-                snapshot_id: snapshot_id.clone(),
-                tick: snapshot.tick as f64,
+            .worlds
+            .values()
+            .flat_map(|managed| {
+                managed
+                    .world
+                    .archive
+                    .snapshots
+                    .iter()
+                    .map(|(snapshot_id, snapshot)| CheckpointListEntry {
+                        snapshot_id: snapshot_id.clone(),
+                        tick: snapshot.tick as f64,
+                    })
             })
             .collect::<Vec<_>>();
+        checkpoints.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
+        checkpoints.dedup_by(|a, b| a.snapshot_id == b.snapshot_id);
         checkpoints.sort_by(|a, b| {
             a.tick
                 .total_cmp(&b.tick)
@@ -385,7 +396,7 @@ fn matched_sink_state(
     world: &crate::sim::world::World,
 ) -> Option<&crate::sim::erosion::ErosionAutomatonState> {
     world
-        .exec
+        .runtime
         .hydrology_dynamics
         .as_ref()
         .filter(|state| state.sink_id.len() == world.state.geology.height.len())
