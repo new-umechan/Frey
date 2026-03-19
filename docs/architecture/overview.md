@@ -12,72 +12,83 @@
 
 ## 全体構成
 
-時代ごとの予算配分で活動量は変わるが、Tier 1の更新器は次の通りである。
+ECSアーキテクチャを採用する。
 
 ```text
-Exec
-├── Geology
-├── Climate
-├── Hydrology
-├── Ecology
-├── Domesticates
-├── Subsistence
-├── Population
-├── Settlement
-├── Polity
-└── Conflict
+Simulation
+├── CellStore         （全セルのComponent群、SoA配列）
+├── hecs::World       （Polity・Settlement・Region等の疎なEntity）
+├── polity_relations  （国家間の二者間関係）
+├── polity_groups     （経済圏・軍事同盟・文化宗教圏などのグループ）
+├── clock             （tick・epoch・予算）
+├── feedback          （FeedbackQueue）
+└── archive           （履歴・スナップショット）
 ```
 
-詳細は `docs/architecture/module_boundaries.md` を参照。
+`hecs::World` はクレート名で修飾することで `Simulation` との名前の衝突を避ける。
 
-- `Exec`
-  - tick進行、予算配分、時代遷移、履歴、`FeedbackQueue` の適用タイミング管理を担当する
-
-
-## モジュール間通信の原則
-
-モジュール間の直接依存は持たない。
-すべてのモジュールは共有状態として `World State` と `Graph State` を読み書きする。
-すべての更新器は進行管理入力として `Exec State` を参照する。
-更新器はステートレスに保つ。
+### Tier 1 System一覧（更新順）
 
 ```text
-┌─────────────────────────────┐  ┌─────────────────────────────┐
-│         World State          │  │         Graph State          │
-│  各セルが持つ属性の現在値    │  │  セルに還元できないグラフ    │
-│ （標高・降水・植生・人口…）  │  │ （国家関係・交易網・伝播…）  │
-└─────────────────────────────┘  └─────────────────────────────┘
-         ↑読み書き↑                        ↑読み書き↑
-┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
-│Geo   │Cli   │Hyd   │Eco   │Dom   │Sub   │Pop   │Set   │Polity│Conf  │
-│更新器│更新器│更新器│更新器│更新器│更新器│更新器│更新器│更新器│更新器│
-└──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
-                     ↑全更新器が参照↑
-              ┌─────────────────────────┐
-              │         Exec State       │
-              │  tick・予算・FeedbackQueue│
-              └─────────────────────────┘
+ExecSystem
+├── GeologySystem
+├── ClimateSystem
+├── HydrologySystem
+├── EcologySystem
+├── DomesticatesSystem
+├── SubsistenceSystem
+├── PopulationSystem
+├── SettlementSystem
+├── PolitySystem
+└── ConflictSystem
 ```
 
-ここでいう `World State` は、各セルが持つ現在値の集合である。
-`Graph State` は、セル1件に還元しにくい関係構造（国家関係、交易網、伝播ネットワークなど）を保持する。
-各モジュールは他モジュールの内部実装を知らず、`World State` と `Graph State` を共有面として使う。
-`Exec State` は、`Tick.real_years`、`SubsystemBudgets`、現在の時代、`FeedbackQueue` などの進行管理情報を与える。
+`ExecSystem` はtick進行、予算配分、時代遷移、履歴、FeedbackQueueの一括適用を担当する。
 
-## 更新順序
+---
 
-同一tick内の依存はDAGで表し、順序を保証する。
-同一tick内で循環依存は作らない。
-フィードバックは次tick以降に遅延させる。
-tick N+1 の開始時に `Exec` が `FeedbackQueue` を `World State` と `Graph State` に適用する
+## ECSアーキテクチャの採用
 
-`docs/architecture/module_boundaries.md` を参照。
+### 採用理由
+
+このシミュレータの処理の本質は「全セル（約4万）に対して、同じ計算を一斉に適用する」ことである。
+ECSのComponent-per-array構造（SoA）はこのパターンに適合し、CPUキャッシュ効率を最大化する。
+
+また、Tier2モジュール追加時にSystemとComponentを登録するだけで拡張できるため、
+複雑性の増加に対してアーキテクチャが崩れにくい。
+
+### セルと非セルEntityの分離
+
+セルと非セルEntityでは性質が異なるため、管理方法を分ける。
+
+- `CellStore`（自前SoA）
+  - 全セルの現在値Componentを保持する
+- `hecs::World`（疎なEntity）
+  - Polity・Settlement・Regionなど、動的に生滅するEntityを保持する
+- `polity_relations`（国家間関係）
+  - 国家間の重み付き関係を保持する
+
+データ配置と型定義の詳細は `docs/architecture/data_model.md` を参照。
+
+---
+
+## Systemの原則
+
+Systemはステートレスな関数として実装する。
+CellStore・hecs::World・Clock・FeedbackQueue（必要に応じてArchive）を引数として受け取り、次の状態を書き戻す。
+
+同一tick内の依存はDAGで順序を保証し、逆方向の影響はFeedbackQueueで次tickへ遅延させる。
+更新順序と時代制御の詳細は `docs/architecture/phase_control.md` を参照。
+
+各Systemの読み書き境界（Read/Write/Do-not-write）は `docs/architecture/module_boundaries.md` を参照。
+
+---
 
 ## 関連文書
 
-- 時代、tick、予算、遷移
+- 時代・tick・予算・遷移
   - `docs/architecture/phase_control.md`
-- `World State` / `Exec State` / `Graph State` の状態配置
+- CellStore・hecs::World・Clock・FeedbackQueue・Archiveの構造と型定義
   - `docs/architecture/data_model.md`
-- 各モジュールが何を読み、何を書くか
+- 各Systemが何を読み、何を書くか
   - `docs/architecture/module_boundaries.md`

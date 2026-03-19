@@ -4,12 +4,19 @@
 
 この文書は、時代、tick、予算、時代遷移を定義する。
 ここで扱うのは時間制御であり、各モジュールの責務詳細ではない。
+データ構造の定義は `docs/architecture/data_model.md`、各Systemの読み書き境界は `docs/architecture/module_boundaries.md` を参照する。
 
 ## Tick
 
 tickは単なるカウンタではなく、そのtickが表す実時間の密度を持つ。
 
 ```rust
+struct Clock {
+    tick:    Tick,
+    epoch:   Epoch,
+    budgets: SubsystemBudgets,
+}
+
 struct Tick {
     real_years: f32,
     scale: EpochScale,
@@ -43,13 +50,14 @@ struct Tick {
 
 | 時代 | 有効な状態 |
 | --- | --- |
-| 地殻形成期 | `Geology` のみ |
+| 地殻形成期 | `Geology` を主とし、`Climate` は簡易・低頻度で運用 |
 | 環境形成期 | `Climate` と `Hydrology` を初回有効化 |
 | 生命誕生期 | `Ecology` / `Domesticates` / `Subsistence` を初回有効化 |
 | 文明成立期 | `Population` / `Settlement` / `Polity` を初回有効化 |
 | 歴史展開期 | 既存状態をすべて保持したまま運用 |
 
-地殻形成期では、`Climate` と `Ecology` がまだ有効でなくても `Geology` が未初期化値を読まないようにする。
+地殻形成期では、`Climate` は簡易モードとして動作し、`Ecology` は未有効である。
+この時期でも `Geology` が未初期化値を読まないようにする。
 この時期の既定入力は次の通り。
 
 - 降水は、地殻形成期向けの簡易な初期降水分布を使う
@@ -74,27 +82,34 @@ struct Tick {
 
 ## 時代遷移
 
-時代遷移は固定tick数ではなく、状態条件で決める。
-これにより、惑星ごとに時代の長さが変わる。
+時代遷移は状態条件で決めるが、デバッグと安定化のために `min_ticks`・`max_ticks` のガードを加える。
 
 ```rust
-type EpochGuard = fn(&WorldState) -> bool;
+// WorldContext は CellStore / hecs::World / Clock への参照束を表す擬似型
+type EpochGuard = fn(&WorldContext) -> bool;
 
-const EPOCH_TRANSITIONS: &[(Epoch, EpochGuard)] = &[
-    (Epoch::Geological, sea_land_ratio_stable),
-    (Epoch::Climate, river_network_formed),
-    (Epoch::Ecology, habitable_area_above_threshold),
-    (Epoch::Society, has_settlement),
+struct EpochTransition {
+    condition: EpochGuard,
+    min_ticks: u32,           // 条件達成後も最短この tick 数は保持する（安定化）
+    max_ticks: Option<u32>,   // 条件未達でも強制遷移するtick数上限（デバッグ・異常系）
+}
+
+const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
+    (Epoch::Geological, EpochTransition { condition: sea_land_ratio_stable,    min_ticks: 3, max_ticks: Some(200) }),
+    (Epoch::Climate,    EpochTransition { condition: river_network_formed,     min_ticks: 3, max_ticks: Some(200) }),
+    (Epoch::Ecology,    EpochTransition { condition: habitable_area_above_threshold, min_ticks: 3, max_ticks: Some(500) }),
+    (Epoch::Society,    EpochTransition { condition: has_settlement,           min_ticks: 3, max_ticks: None       }),
 ];
 ```
 
-上の擬似コードは概念を示したものであり、実際の閾値や判定式は未確定である。
+具体的な閾値・判定式・数値は未確定であり、実装時に調整する。
+`max_ticks: None` は強制遷移なし（歴史展開期への移行は状態条件のみで決める）を意味する。
 
 ## 更新ループ
 
 1tickの標準順序は次の通り。
 
-1. tick開始時に `FeedbackQueue` の内容を `World State` と `Graph State` に適用する
+1. tick開始時に `ExecSystem` が `FeedbackQueue` の内容を一括で `CellStore` と `hecs::World` に適用する
 2. `Geology`
 3. `Climate`
 4. `Hydrology`
@@ -115,9 +130,10 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochGuard)] = &[
 - `FeedbackQueue` の適用は tick N+1 の開始時に行う
 - 同一tick内で逆向きの即時反映は行わない
 
-## 将来の拡張候補
+## 並列化と再現性
 
-- モジュールごとの内部時間幅
-- 計算コスト上限
-- 活動量に応じたスキップ率
-- 海流、火山など複数スケール現象の扱い
+WASMではシングルスレッドで動作するため、現時点では並列化を行わない。
+
+将来的に並列化を導入する場合は、処理順序が結果に影響しないモジュールのみを対象にする。
+セル間で値を読み合う計算（拡散・流路計算など）はシングルスレッド実行を維持し、
+同一seed・同一パラメータでの再現性を保証する。

@@ -2,12 +2,13 @@
 
 ## 目的
 
-この文書は、各モジュールが `World State` の何を読み、何を書き、何を書かないかを定義する。
+この文書は、各モジュールが何を読み、何を書き、何を書かないかを定義する。
+ここで扱う共有面は `CellStore` と `hecs::World`、進行管理入力は `Clock` と `FeedbackQueue` である。
 擬似コードをpythonで記述しているが、これはrustで書くと長くなってしまい、要件定義書として不適だったためだ。
 
 各モジュールは他モジュールへ直接依存しない。
-モジュール間の共有面は `World State` である。
-進行管理入力は `Exec State` である。
+モジュール間の共有面は `CellStore` および `hecs::World` である。
+進行管理入力は `Clock` と `FeedbackQueue` である。
 
 ## 現状
 Tier1までのモジュールについて、詳細を決定している。
@@ -83,7 +84,9 @@ FEEDBACK_EDGES = {
 
 ---
 
-以下の内容は、あくまでまとめであり、docs/architecture/data_model.mdや、docs/modules/以下のファイルと記述が食い違った場合、
+以下の内容は境界定義の要約である。
+データ構造の正本は `docs/architecture/data_model.md`、更新順序と適用タイミングの正本は `docs/architecture/phase_control.md` を参照する。
+詳細なドメイン仕様は `docs/modules/` 配下を参照する。
 
 ## `Geology`
 
@@ -121,7 +124,7 @@ FEEDBACK_EDGES = {
 - 標高
 - 固定地理量
 - 植生密度
-- `Exec State`
+- `Clock`
 
 ### 書くもの
 
@@ -185,11 +188,7 @@ FEEDBACK_EDGES = {
 
 ### 書くもの
 
-- `biome`
-- `tree_cover`
-- `ground_cover`
-- `disturbance`
-- `soil_fertility`
+- 植生
 
 ### 書かないもの
 
@@ -198,8 +197,7 @@ FEEDBACK_EDGES = {
 
 ### 補足
 
-環境応答を `World State` に書く。社会変化はFeedbackQueue経由の入力としてのみ扱う。
-`Climate` は `tree_cover` と `ground_cover` から `vegetation_density_proxy` を内部計算して使う。
+環境応答を `CellStore` に書く。社会変化は直接扱わない。
 
 ---
 
@@ -210,7 +208,7 @@ FEEDBACK_EDGES = {
 - 標高
 - 気温
 - 降水
-- 生態状態（`tree_cover` / `ground_cover` / `soil_fertility`）← `Ecology` が書く
+- 植生 ← `Ecology` が書く
 - FeedbackQueue（`Settlement` 隣接地域からの拡散）
 
 ### 書くもの
@@ -238,7 +236,7 @@ FEEDBACK_EDGES = {
 
 - 標高
 - 流量
-- 生態状態（`tree_cover` / `ground_cover` / `soil_fertility`）← `Ecology` が書く
+- 植生 ← `Ecology` が書く
 - 作物・家畜分布 ← `Domesticates` が書く
 - 前tickまでの生業構成
 
@@ -322,6 +320,8 @@ FEEDBACK_EDGES = {
 - 集落・都市分布 ← `Settlement` が書く
 - 人口 ← `Population` が書く
 - 前tickまでの国家状態
+- polity_relations（同盟・宗主関係）
+- polity_groups（所属グループ）
 - FeedbackQueue（`Conflict` による領土変化）
 
 ### 書くもの
@@ -330,6 +330,7 @@ FEEDBACK_EDGES = {
 - 領域
 - 言語・文化圏
 - 国家安定度
+- polity_groups への加入・脱退・解散（FeedbackQueue経由で次tickに適用）
 
 ### 書かないもの
 
@@ -349,12 +350,14 @@ FEEDBACK_EDGES = {
 
 - 国家ID・領域・安定度 ← `Polity` が書く
 - 人口 ← `Population` が書く
+- polity_relations（同盟・敵対・宗主関係）
+- polity_groups（軍事同盟グループ）
 - 前tickまでの戦争状態
 
 ### 書くもの
 
 - 戦争状態
-- 戦線位置
+- 戦線位置（`frontline_pressure`）
 
 ### 書かないもの（FeedbackQueueに回すもの）
 

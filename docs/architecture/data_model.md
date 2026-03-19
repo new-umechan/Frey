@@ -1,279 +1,317 @@
-# World State / Graph State / Exec State
+# Data Model
 
 ## 目的
 
-この文書は、何を `World State` に置き、何を `Graph State` に置き、何を `Exec State` に置くかを定義する。
+この文書は、`Simulation` を構成する各データ構造の定義と配置方針を記述する。
 
 設計上の原則は次の通りである。
 
-- 各モジュールが共有して読む**セル単位の現在値**は `World State` に置く
-- セルに還元できない**グラフ構造の現在値**は `Graph State` に置く
-- tick進行や履歴管理のための**進行管理状態**は `Exec State` に置く
+- 全セルが持つ現在値は `CellStore` にSoAで置く
+- 他Systemが読むComponentと内部状態Componentは命名で分離する（`_internal` サフィックス）
+- 疎なEntity（国家・集落・地域など）は `hecs::World` で管理する
+- 国家間関係は `Simulation` 直下に `HashMap` で保持する
+- tick進行や履歴管理のための進行管理状態は `Clock`・`FeedbackQueue`・`Archive` に分割して置く
 
 ## 目標構造
 
 ```rust
-struct World {
-    state: WorldState,
-    graph: GraphState,
-    exec: ExecState,
+struct Simulation {
+    cells:            CellStore,
+    entities:         hecs::World,
+    polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
+    polity_groups:    Vec<PolityGroup>,
+    clock:            Clock,
+    feedback:         FeedbackQueue,
+    archive:          Archive,
 }
 ```
 
 ---
 
-## WorldState
+## CellStore
 
-各セルが持つ属性の現在値である。
-モジュールはこれを読んで書く。
+全セルのComponentをSoA（Structure of Arrays）で保持する。
+セルは常に全数存在し、全Componentを保持する。
+インデックスがそのままCellIdになる。
+
+グリッドは正二十面体分割由来のため、6角形セルが大多数だが5角形セルが12個存在する。
+このため隣接数は5または6の可変長になり、`neighbors` は `SmallVec<[CellId; 6]>` で保持する。
+隣接セル情報は初期化時に一度計算し、その後は固定とする。
 
 ```rust
-struct WorldState {
-    geo: GeoState,
-    geology: GeologyState,
-    climate: ClimateState,
-    hydrology: HydrologyState,
-    ecology: EcologyState,
-    domesticates: DomesticatesState,
-    subsistence: SubsistenceState,
-    population: PopulationState,
-    settlement: SettlementState,
-    polity: PolityState,
-    conflict: ConflictState,
-}
+struct CellStore {
+    // --- Geo（固定地理量）---
+    latitude:             Vec<f32>,
+    distance_from_ocean:  Vec<f32>,
+    coast_side:           Vec<CoastSide>,
+    is_coastal:           Vec<bool>,
+    neighbors:            Vec<SmallVec<[CellId; 6]>>,  // 5角形は5要素、6角形は6要素
 
-// 固定地理量（tickごとに変化しないが全モジュールが読む）
-struct GeoState {
-    latitude_deg: f32,
-    distance_from_ocean_km: f32,
-    coast_side: CoastSide,
-    is_coastal: bool,
-}
+    // --- Geology ---
+    height:               Vec<f32>,
+    plate_id:             Vec<PlateId>,
+    erosion_rate:         Vec<f32>,
+    deposition_rate:      Vec<f32>,
 
-struct GeologyState {
-    height: f32,
-    plate_id: PlateId,
-    erosion_rate: f32,
-    deposition_rate: f32,
-}
+    // --- Climate ---
+    temperature:          Vec<f32>,
+    precipitation:        Vec<f32>,
+    evapotranspiration:   Vec<f32>,
+    runoff:               Vec<f32>,
+    aridity:              Vec<f32>,
+    ocean_temperature:    Vec<f32>,
 
-struct ClimateState {
-    precipitation: f32,
-    temperature: f32,
-    evapotranspiration: f32,
-    runoff: f32,
-    aridity: f32,
-    ocean_temperature: f32,
-}
+    // --- Hydrology ---
+    river_upstream:       Vec<Option<CellId>>,
+    river_downstream:     Vec<Option<CellId>>,
+    river_flow:           Vec<f32>,
+    river_transport_cost: Vec<f32>,
 
-struct HydrologyState {
-    river_path: RiverPath,
-    river_flow: f32,
-    river_transport_cost: f32,
-}
+    // --- Ecology（公開）---
+    biome:                Vec<Biome>,
+    tree_cover:           Vec<f32>,   // 0..1
+    ground_cover:         Vec<f32>,   // 0..1
+    disturbance:          Vec<f32>,   // 0..1
+    soil_fertility:       Vec<f32>,   // 0..1
 
-struct EcologyState {
-    biome: Biome, // 派生, enum (詳細: docs/modules/ecology/ecology.md)
-    tree_cover: f32, // 0..1
-    ground_cover: f32, // 0..1  草本層（tree_coverと独立、重複あり）
-    disturbance: f32, // 0..1（減衰あり）
-    soil_fertility: f32, // 0..1（遅い）
-}
+    // --- Ecology（内部状態）---
+    // EcologySystem以外は読まない
+    ecology_internal:     Vec<EcologyInternal>,
 
-struct DomesticatesState {
-    crop_available: CropBitmap, // 栽培可能種ビットマップ
-    crop_adopted: CropBitmap, // 栽培実績ビットマップ
-    livestock_available: LivestockBitmap, // 利用可能種ビットマップ
-    livestock_adopted: LivestockBitmap, // 利用実績ビットマップ
-}
+    // --- Domesticates（公開）---
+    crop_available:       Vec<CropBitmap>,
+    crop_adopted:         Vec<CropBitmap>,
+    livestock_available:  Vec<LivestockBitmap>,
+    livestock_adopted:    Vec<LivestockBitmap>,
 
-struct SubsistenceState {
-    subsistence_mix: SubsistenceMix, // 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
-    productivity: f32, // 生産性
-    food_production: f32, // 食料生産量
-    habitability: f32, // biome + productivity + river_flow + height → 立地適性
-    land_use: LandUse, // 土地利用（Ecologyへのフィードバック元）
-}
+    // --- Domesticates（内部状態）---
+    // DomesticatesSystem以外は読まない
+    domesticates_internal: Vec<DomesticatesInternal>,
 
-struct PopulationState {
-    population: f32, // 人口
-    population_density: f32, // 人口密度
-    migration_pressure: f32, // 人口移動圧（Settlementが読む）
-}
+    // --- Subsistence ---
+    subsistence_mix:      Vec<SubsistenceMix>,
+    productivity:         Vec<f32>,
+    food_production:      Vec<f32>,
+    habitability:         Vec<f32>,
+    land_use:             Vec<LandUse>,
 
-struct SettlementState {
-    settlement_size: f32, // 集落規模
-    urbanization: f32, // 都市化度
-    centrality: f32, // 中心地階層
-}
+    // --- Population ---
+    population:           Vec<f32>,
+    population_density:   Vec<f32>,
+    migration_pressure:   Vec<f32>,
 
-struct PolityState {
-    polity_id: Option<PolityId>,
-    territory_status: TerritoryStatus, // settled / occupied / neutral
-    language_group: Option<LanguageGroupId>, // 言語・文化圏ID
-    polity_stability: f32, // 国家安定度
-}
+    // --- Settlement ---
+    settlement_size:      Vec<f32>,
+    urbanization:         Vec<f32>,
+    centrality:           Vec<f32>,
 
-struct ConflictState {
-    war_state: bool, // このセルが戦闘地帯かどうか
-    occupier_id: Option<PolityId>, // 占領中の国家ID（中立なら null）
+    // --- Polity ---
+    polity_id:            Vec<Option<PolityId>>,
+    territory_status:     Vec<TerritoryStatus>,
+    language_group:       Vec<Option<LanguageGroupId>>,
+    polity_stability:     Vec<f32>,
+
+    // --- Conflict ---
+    war_state:            Vec<bool>,
+    frontline_pressure:   Vec<f32>,   // 0..1, 戦線強度
+    occupier_id:          Vec<Option<PolityId>>,
 }
 ```
 
----
+### 内部状態Componentの型定義
 
-## GraphState
+他モジュールが読む公開Componentと、所有モジュール以外が読まない内部状態Componentは、
+同じ `CellStore` 内に置いたまま命名で分離する（`_internal` サフィックス）。
+読み取り規約の境界は `docs/architecture/module_boundaries.md` で定義する。
 
-セルに還元できないグラフ構造の現在値である。
-国家間関係のように「セルAとセルB」ではなく「国家Aと国家B」の関係として自然に表現されるものを置く。
+## hecs::World
+
+Polity・Settlement・Regionなど、数が少なく動的に生滅する疎なEntityを管理する。
+各EntityはComponentの組み合わせとして表現する。
 
 ```rust
-struct GraphState {
-    polity_relations: HashMap<(PolityId, PolityId), f32>, // 重み付きグラフ: (polity_id, polity_id) → relation_weight
-                                                          // 同盟(+1.0) ～ 戦争中(-1.0)
+// Polity Entity
+struct PolityComponent {
+    polity_id:    PolityId,
+    capital_cell: CellId,
+    stability:    f32,
+}
 
-    // Tier 2 追加時の拡張予定
-    // trade_network: HashMap<(PolityId, PolityId), f32>,
-    // diffusion_graph: DiffusionGraph,
+struct LanguageGroupComponent {
+    group_id: LanguageGroupId,
+}
+
+// Settlement Entity
+struct SettlementComponent {
+    settlement_id: SettlementId,
+    cell:          CellId,
+    size:          f32,
+    urbanization:  f32,
+}
+
+// Region Entity（流域・文化圏・前線帯など）
+struct RegionComponent {
+    region_id: RegionId,
+    cells:     Vec<CellId>,
 }
 ```
 
+`SettlementComponent.cell` を集落位置の正本とする。
+居住地分布は `CellStore` の `settlement_size`・`urbanization`・`centrality` などの公開列から導出して扱う。
+
 ---
 
-## ExecState
+## polity_relations
 
-世界を進めるための進行管理状態である。
-各モジュールの対象世界そのものではない。
+国家間の二者間関係グラフ。
+hecsのArchetype最適化の恩恵を受けにくいため、`Simulation` 直下に `HashMap` で保持する。
+関係は有向であり、`(from, to)` と `(to, from)` は独立したエントリを持つ。
 
 ```rust
-struct ExecState {
-    tick: Tick,
-    epoch: Epoch,
-    budgets: SubsystemBudgets, // SubsystemBudgets
-    feedback_queue: FeedbackQueue, // FeedbackQueue
-    history: History,
+// (from, to) → 二者間関係
+HashMap<(PolityId, PolityId), PolityRelation>
+
+struct PolityRelation {
+    alliance: f32,             // -1.0（敵対）〜 +1.0（同盟）
+    trade:    f32,             // 0.0（無交流）〜 1.0（強い交易依存）
+    at_war:   bool,
+    suzerain: Option<PolityId>, // この国の宗主国（親子関係）
+}
+```
+
+`suzerain` は `from` 側が `to` 側を宗主国として認めていることを表す。
+宗主関係の集約（衛星国家の一覧取得など）はクエリ時にHashMapを走査して導出する。
+
+---
+
+## polity_groups
+
+経済圏・軍事同盟・文化宗教圏など、複数国家をまとめるグループ。
+二者間関係では表現できない多者間の連帯を保持する。
+
+```rust
+Vec<PolityGroup>
+
+struct PolityGroup {
+    id:      PolityGroupId,
+    kind:    GroupKind,
+    members: Vec<PolityId>,
+    leader:  Option<PolityId>,  // 盟主・中心国（任意）
+}
+
+enum GroupKind {
+    EconomicZone,      // 経済圏
+    MilitaryAlliance,  // 軍事同盟
+    CulturalSphere,    // 文化・宗教圏（ゆるやかな連帯）
+}
+```
+
+グループへの加入・脱退・解散は `Polity` モジュールが `FeedbackQueue` 経由で次tickに適用する。
+
+---
+
+## Clock
+
+tick進行・時代・予算を管理する。「世界の状態」ではなく「世界を進めるための時間制御」を担う。
+
+```rust
+struct Clock {
+    tick:    Tick,
+    epoch:   Epoch,
+    budgets: SubsystemBudgets,
+}
+```
+
+`Tick` の定義は `docs/architecture/phase_control.md` を参照。
+
+---
+
+## FeedbackQueue
+
+同一tick内で循環依存を作らないための遅延反映キュー。
+tick開始時に `ExecSystem` が一括で `CellStore` と `hecs::World` に適用する。
+
+```rust
+struct FeedbackQueue {
+    entries: Vec<FeedbackEntry>,
+}
+
+struct FeedbackEntry {
+    source:        ModuleId,
+    target_module: ModuleId,
+    target_ref:    TargetRef,
+    enqueued_tick: Tick,
+    payload:       FeedbackPayload,
+}
+
+enum TargetRef {
+    Cell(CellId),
+    Polity(PolityId),
+    Settlement(SettlementId),
+    Edge(GraphEdgeId),
+    Region(RegionId),
+    Global,
+}
+
+enum FeedbackPayload {
+    // セルのf32フィールドに加算する（競合時は単純加算）
+    DeltaF32     { field: CellFieldId, cell: CellId, delta: f32 },
+    // セルのフィールドを直接上書きする
+    SetValue     { field: CellFieldId, cell: CellId, value: FieldValue },
+    // hecs::World 側のエンティティ操作
+    SpawnEntity  { bundle: EntityBundle },
+    DestroyEntity{ id: EntityId },
+    MutateEntity { id: EntityId, patch: ComponentPatch },
+    // 将来の拡張用
+    TriggerEpochTransition { to: Epoch },
+}
+```
+
+複数エントリが同一フィールド・同一セルに `DeltaF32` を積んだ場合、単純加算で解決する。
+適用タイミングと更新順序は `docs/architecture/phase_control.md` を参照。
+
+---
+
+## Archive
+
+履歴と過去スナップショットの記録。世界の現在状態ではなく観測・再生用途。
+
+```rust
+struct Archive {
+    history:   History,
     snapshots: SnapshotStore,
 }
 ```
 
 ---
 
-## 更新器との関係
-
-更新器はステートレスに保つ。
-`World State`・`Graph State`・`Exec State` を引数として受け取り、次の状態を書き戻すだけにする。
-
-```rust
-fn update_geology(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_climate(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_hydrology(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_ecology(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_domesticates(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_subsistence(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_population(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_settlement(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_polity(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-
-fn update_conflict(
-    world_state: &mut WorldState,
-    graph_state: &mut GraphState,
-    exec_state: &ExecState,
-) { }
-```
-
-`FeedbackQueue` は `Exec State` に置く。
-tick N で各モジュールが書き込み、tick N+1 の開始時に `Exec` が `World State` および `Graph State` へ適用する。
-
----
-
 ## Tier 2 追加時の拡張予定
 
-Tier 2モジュールが有効化された際に追加される名前空間。
+Tier2モジュールが有効化された際にCellStoreへ追加されるComponent列。
 
 ```rust
-struct DiseaseState {
-    infection_rate: f32,
-    mortality_modifier: f32,
-}
+// Disease
+infection_rate:       Vec<f32>,
+mortality_modifier:   Vec<f32>,
 
-struct ResourcesState {
-    energy_deposit: f32, // エネルギー資源埋蔵量
-    mineral_deposit: f32, // 鉱産資源埋蔵量
-    extraction_rate: f32, // 採掘量
-}
+// Resources
+energy_deposit:       Vec<f32>,
+mineral_deposit:      Vec<f32>,
+extraction_rate:      Vec<f32>,
 
-struct TradeState {
-    trade_flow: f32, // 交易流量
-    market_access: f32, // 市場アクセス度
-}
+// Trade
+trade_flow:           Vec<f32>,
+market_access:        Vec<f32>,
 
-struct TechnologyState {
-    ag_tools: bool, // 農具・灌漑
-    metallurgy: bool, // 金属器
-    navigation: bool, // 航海術
-    military_tech: bool, // 軍事技術
-    recording: bool, // 記録技術
-    transport: bool, // 輸送技術
-}
+// Technology
+ag_tools:             Vec<bool>,
+metallurgy:           Vec<bool>,
+navigation:           Vec<bool>,
+military_tech:        Vec<bool>,
+recording:            Vec<bool>,
+transport:            Vec<bool>,
 
-struct InfrastructureState {
-    road_cost_modifier: f32, // 地上移動コスト修正
-    irrigation: f32, // 灌漑
-}
+// Infrastructure
+road_cost_modifier:   Vec<f32>,
+irrigation:           Vec<f32>,
 ```
-
----
-
-## 現行実装との差分
-
-主な変更点は次の通り。
-
-- `Civilization` 名前空間を解体し、`subsistence` / `population` / `settlement` / `polity` / `conflict` に分割
-- `hydrology` を `geology` から切り出して独立した名前空間とした
-- `domesticates` を新設
-- `polity` に `language_group`・`polity_stability` を追加
-- Rust側に残っていた `terrain_dynamics`・`river_erosion_state` などの実装都合の保持は、目標アーキテクチャでは `geology`・`hydrology` に吸収する
