@@ -342,9 +342,7 @@ impl WorldSimController {
             .get(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
         let ticks = managed
-            .world
-            .archive
-            .history_ticks
+            .history
             .keys()
             .copied()
             .map(|tick| tick as f64)
