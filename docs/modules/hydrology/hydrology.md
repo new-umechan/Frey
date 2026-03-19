@@ -323,4 +323,4 @@ s_out_i = s_in_i + e_i - d_i - loss_to_deep_sea_i
 - 越流開始時は対象Sink近傍のみ局所再計算し、全域再計算の頻度を抑える。
 - デバッグ用にSink状態（ID、残容量、越流先、充填率）を観測可能にする。
 
-参照方針の詳細と参考文献は`docs/architecture/references`を参照。
+参照方針の詳細は`docs/search/gospl_sink_model.md`を参照。

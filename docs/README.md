@@ -13,6 +13,13 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 6. `docs/interface/ui_spec.md`
 7. `docs/manage/test.md`
 
+## 調査メモ
+
+- `docs/search/search.md`
+  - プレート、気候、河川侵食まわりのラフな調査メモ
+- `docs/search/gospl_sink_model.md`
+  - goSPLを参照したSink容量モデルの要点と、本プロジェクトへの適用方針
+
 ## 実装マップ
 
 ### フロントエンド
