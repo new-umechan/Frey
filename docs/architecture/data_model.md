@@ -50,8 +50,6 @@ struct CellStore {
     // --- Geology ---
     height:               Vec<f32>,
     plate_id:             Vec<PlateId>,
-    erosion_rate:         Vec<f32>,
-    deposition_rate:      Vec<f32>,
 
     // --- Climate ---
     temperature:          Vec<f32>,
@@ -66,6 +64,8 @@ struct CellStore {
     river_downstream:     Vec<Option<CellId>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,
+    erosion_rate:         Vec<f32>,
+    deposition_rate:      Vec<f32>,
 
     // --- Ecology（公開）---
     biome:                Vec<Biome>,

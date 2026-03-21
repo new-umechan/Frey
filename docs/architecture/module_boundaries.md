@@ -21,9 +21,9 @@ Tier1までのモジュールについて、詳細を決定している。
 
 | モジュール | 概要 |
 | --- | --- |
-| `Geology` | 地形変化、侵食・堆積 |
+| `Geology` | 地形変化（標高・プレート更新） |
 | `Climate` | 降水・気温・水循環 |
-| `Hydrology` | 流路・流量・集積 |
+| `Hydrology` | 流路・流量・集積、侵食・堆積率計算 |
 | `Ecology` | 植生 |
 | `Domesticates` | 作物・家畜の分布 |
 | `Subsistence` | 居住適性・地域ごとの生業構成 |
@@ -88,6 +88,13 @@ FEEDBACK_EDGES = {
 データ構造の正本は `docs/architecture/data_model.md`、更新順序と適用タイミングの正本は `docs/architecture/phase_control.md` を参照する。
 詳細なドメイン仕様は `docs/modules/` 配下を参照する。
 
+### 記載ルール（詳細要件が確定した項目）
+
+- 詳細要件が確定したモジュールでは、概念語に加えて具体的な変数名を併記する。
+- 変数名は `docs/modules/` 配下の定義を正本として採用する。
+- `rust/` 配下の実装は、境界定義の変数名決定の根拠にしない。
+- 詳細要件が未確定のモジュールは、従来どおり概念語のみでもよい。
+
 ## `Geology`
 
 ### 読むもの
@@ -95,13 +102,12 @@ FEEDBACK_EDGES = {
 - 標高
 - プレートID
 - 流出量 ← `Climate` が書く
+- 侵食量・堆積量（`erosion_rate`、`deposition_rate`）← `Hydrology` が書く
 - FeedbackQueue（`Conflict` による焦土・地形破壊）
 
 ### 書くもの
 
 - 標高
-- 侵食量
-- 堆積量
 - プレートID
 
 ### 書かないもの
@@ -121,19 +127,19 @@ FEEDBACK_EDGES = {
 
 ### 読むもの
 
-- 標高
-- 固定地理量
-- 植生密度
+- 標高（`geology.height`）
+- 固定地理量（`geo.latitude_deg`、`geo.distance_from_ocean_km`、`geo.coast_side`、`geo.is_coastal`）
+- 植生密度（`ecology.tree_cover`、`ecology.ground_cover` から算出）
 - `Clock`
 
 ### 書くもの
 
-- 降水
-- 気温
-- 実蒸発散量
-- 流出量
-- 乾燥指数
-- 海水温
+- 降水（`climate.precipitation`）
+- 気温（`climate.temperature`）
+- 実蒸発散量（`climate.evapotranspiration`）
+- 流出量（`climate.runoff`）
+- 乾燥指数（`climate.aridity`）
+- 海水温（`climate.ocean_temperature`）
 
 ### 書かないもの
 
@@ -151,17 +157,18 @@ FEEDBACK_EDGES = {
 
 ### 読むもの
 
-- 標高 ← `Geology` が書く
-- 流出量 ← `Climate` が書く
-- 侵食量・堆積量 ← `Geology` が書く
+- 標高（`geology.height` / `h`）← `Geology` が書く
+- 流出量（`climate.runoff`）← `Climate` が書く
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
 
 ### 書くもの
 
-- 標高（侵食・堆積の反映を、Erosion Automaton同期経路で反映する場合）
-- 流路
-- 流量
-- 河川輸送コスト
+- 流下先（`river_downstream`）
+- 主要な流入元（`river_upstream`）
+- 流量（`river_flow`）
+- 侵食量（`erosion_rate`）
+- 堆積量（`deposition_rate`）
+- 河川輸送コスト（`river_transport_cost`）
 
 ### 書かないもの
 
@@ -171,7 +178,7 @@ FEEDBACK_EDGES = {
 ### 補足
 
 流路計算は、標高を読んで流路グラフを返す純粋関数として切り出す。
-ただし現行実装では、侵食オートマトンの同期で標高を更新する経路を持つ。
+侵食・堆積率は `Hydrology` が計算して `CellStore` に書き、標高の最終反映は `Geology` が行う。
 河川輸送コストは `Settlement` と `Trade` が読む。
 
 ---
@@ -180,16 +187,20 @@ FEEDBACK_EDGES = {
 
 ### 読むもの
 
-- 標高
-- 降水
-- 気温
-- 流量
-- 前tickまでの生態状態
+- 標高（`geology.height` / `GeoState.height`）
+- 降水（`climate.precipitation` / `ClimateState.precipitation`）
+- 気温（`climate.temperature` / `ClimateState.temperature`）
+- 流量（`hydrology.river_flow` / `HydrologyState.river_flow`）
+- 前tickまでの生態状態（`biome`、`tree_cover`、`ground_cover`、`disturbance`、`soil_fertility`）
 - FeedbackQueue（`Population`・`Subsistence` による土地利用変化）
 
 ### 書くもの
 
-- 植生
+- バイオーム（`biome`）
+- 樹木被覆（`tree_cover`）
+- 地被（`ground_cover`）
+- 撹乱（`disturbance`）
+- 土壌肥沃度（`soil_fertility`）
 
 ### 書かないもの
 
