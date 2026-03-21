@@ -36,7 +36,7 @@ export const ERA_SCALE_PRESETS = Object.freeze({
         weights: { geology: 3.0, climate: 3.0, ecology: 1.0, civilization: 0.0 },
     },
     life: {
-        label: "生命誕生期",
+        label: "先史期",
         tickLabel: "1000年",
         runtimeTickMs: 110,
         weights: { geology: 2.0, climate: 3.0, ecology: 4.0, civilization: 1.0 },
