@@ -5,6 +5,7 @@ export function createWorldUiController(options = {}) {
         wireframe,
         plateHover,
         debugToggleInput,
+        statusEraLabel,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
@@ -67,6 +68,7 @@ export function createWorldUiController(options = {}) {
             currentEraMetrics,
         );
         const preset = getEraScalePreset(currentEraScale);
+        statusEraLabel.textContent = `時代: ${preset.label}`;
         setStatus(`Ready (${state.currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
         if (state.activeWorldId && previousEra !== currentEraScale) {
             const previousLabel = getEraScalePreset(previousEra).label;

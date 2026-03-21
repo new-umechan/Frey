@@ -49,7 +49,7 @@ export function buildEraMetricsFromRuntime(era, metrics) {
 
 export function renderEraScaleControls(eraScaleSelect, eraScaleTickLabel, eraScaleWeightFields, currentEraScale, currentEraMetrics) {
     eraScaleSelect.value = currentEraScale;
-    eraScaleTickLabel.textContent = `1 Tick: ${currentEraMetrics.tickLabel}`;
+    eraScaleTickLabel.textContent = `1Tick: ${currentEraMetrics.tickLabel}`;
     eraScaleWeightFields.geology.textContent = currentEraMetrics.budgets.geology.toFixed(2);
     eraScaleWeightFields.climate.textContent = currentEraMetrics.budgets.climate.toFixed(2);
     eraScaleWeightFields.ecology.textContent = currentEraMetrics.budgets.ecology.toFixed(2);

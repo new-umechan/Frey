@@ -3,277 +3,175 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Frey Mesh Viewer</title>
+        <title>Frey</title>
         <link rel="stylesheet" href="/src/style.css" />
     </head>
     <body>
         <main class="app-shell">
-            <header class="top-bar" aria-label="controls">
-                <div class="title-block">
+            <div class="viewport-panel" id="viewport-panel" aria-label="world viewport">
+                <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
+                <header class="brand-block" aria-hidden="true">
                     <h1>Frey</h1>
-                    <p class="subtitle">大陸から文明までの世界生成モデル</p>
-                </div>
-                <form id="seed-form" class="seed-form" autocomplete="off">
-                    <label for="seed-input">Seed (T)</label>
-                    <input
-                        id="seed-input"
-                        name="seed"
-                        type="text"
-                        value="alpha"
-                        placeholder="Enter seed"
-                        maxlength="64"
-                    />
-                    <button type="submit">決定</button>
-                </form>
-            </header>
-            <section class="workspace">
-                <div class="viewport-panel" id="viewport-panel">
-                    <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
-                    <section
-                        id="playback-overlay"
-                        class="playback-overlay"
-                        aria-label="playback overlay controls"
-                    >
-                        <div class="playback-head-row">
-                            <button id="play-toggle-button" class="control-button playback-play-button" type="button" aria-label="停止">⏸</button>
-                            <p class="playback-tick">Tick <span id="playback-current-tick">0</span></p>
-                        </div>
-                        <div class="playback-seek-shell">
+                    <p>プレートから文明までの<br />惑星シミュレータ</p>
+                </header>
+
+                <section
+                    id="playback-overlay"
+                    class="playback-overlay"
+                    aria-label="playback overlay controls"
+                >
+                    <div class="playback-head-row">
+                        <div class="playback-main-controls">
                             <button
                                 id="seek-backward-button"
-                                class="seek-nudge-button"
+                                class="glyph-button"
                                 type="button"
                                 aria-label="前の履歴tickへ戻る"
                             >
-                                ◀
+                                <svg class="glyph-icon glyph-icon-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M10 12L6 8L10 4" />
+                                </svg>
                             </button>
-                            <label class="playback-seek-track" for="history-seek-slider">
-                                <input
-                                    id="history-seek-slider"
-                                    class="seek-slider"
-                                    type="range"
-                                    min="0"
-                                    max="0"
-                                    value="0"
-                                    step="1"
-                                />
-                                <span class="seek-range-labels" aria-hidden="true">
-                                    <span id="history-seek-min">-</span>
-                                    <span id="history-seek-max">-</span>
-                                </span>
-                            </label>
+                            <button
+                                id="play-toggle-button"
+                                class="glyph-button glyph-play"
+                                type="button"
+                                aria-label="停止"
+                            >
+                                <svg class="glyph-icon glyph-icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M18 3H15C14.4477 3 14 3.44772 14 4V20C14 20.5523 14.4477 21 15 21H18C18.5523 21 19 20.5523 19 20V4C19 3.44772 18.5523 3 18 3Z" />
+                                    <path d="M9 3H6C5.44772 3 5 3.44772 5 4V20C5 20.5523 5.44772 21 6 21H9C9.55228 21 10 20.5523 10 20V4C10 3.44772 9.55228 3 9 3Z" />
+                                </svg>
+                            </button>
                             <button
                                 id="seek-forward-button"
-                                class="seek-nudge-button"
+                                class="glyph-button"
                                 type="button"
                                 aria-label="次の履歴tickへ進む"
                             >
-                                ▶
+                                <svg class="glyph-icon glyph-icon-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M6 4L10 8L6 12" />
+                                </svg>
                             </button>
                         </div>
-                    </section>
-                    <div
-                        id="plate-hover-popup"
-                        class="plate-hover-popup"
-                        role="status"
-                        aria-live="polite"
-                        hidden
-                    ></div>
-                </div>
-                <aside class="sidebar" id="sidebar" aria-label="sidebar">
-                    <button
-                        id="sidebar-toggle"
-                        class="sidebar-toggle"
-                        type="button"
-                        aria-expanded="true"
-                        aria-controls="sidebar-body"
-                    >
-                        <span class="sidebar-toggle-text">Sidebar</span>
-                        <span class="sidebar-toggle-icon" aria-hidden="true">›</span>
-                    </button>
-                    <div class="sidebar-body" id="sidebar-body">
-                        <section class="panel">
+                        <p class="playback-tick">
+                            <span id="playback-current-tick">0</span>/<span id="playback-max-tick">0</span> tick
+                        </p>
+                    </div>
+                    <label class="playback-seek-track" for="history-seek-slider">
+                        <input
+                            id="history-seek-slider"
+                            class="seek-slider"
+                            type="range"
+                            min="0"
+                            max="0"
+                            value="0"
+                            step="1"
+                        />
+                        <span class="seek-range-labels" aria-hidden="true">
+                            <span id="history-seek-min">-</span>
+                            <span id="history-seek-max">-</span>
+                        </span>
+                    </label>
+                </section>
+
+                <div
+                    id="plate-hover-popup"
+                    class="plate-hover-popup"
+                    role="status"
+                    aria-live="polite"
+                    hidden
+                ></div>
+            </div>
+
+            <aside class="sidebar" id="sidebar" aria-label="sidebar">
+                <div class="sidebar-body" id="sidebar-body">
+                    <div class="sidebar-main">
+                        <section class="panel status-panel">
                             <h2>Status</h2>
-                            <p id="status-message">Initializing...</p>
-                        </section>
-                        <section class="panel">
-                            <h2>Event Log</h2>
-                            <ul class="event-log-list" id="event-log-list" aria-live="polite"></ul>
-                        </section>
-                        <section class="panel">
-                            <h2>Stats</h2>
-                            <dl class="stats-list">
-                                <div><dt>Level</dt><dd id="stat-level">-</dd></div>
-                                <div><dt>Seed</dt><dd id="stat-seed">-</dd></div>
-                                <div><dt>Plates</dt><dd id="stat-plates">-</dd></div>
-                                <div><dt>Land</dt><dd id="stat-land">-</dd></div>
-                            </dl>
-                        </section>
-                        <section id="perf-panel" class="panel">
-                            <h2>Perf Bench</h2>
-                            <div class="perf-actions">
-                                <button id="perf-run-button" class="control-button" type="button">
-                                    Run 32 ticks
-                                </button>
-                                <button id="perf-copy-button" class="control-button" type="button">
-                                    Copy JSON
-                                </button>
-                            </div>
-                            <p id="perf-status" class="perf-status">Idle</p>
-                            <progress
-                                id="perf-progress"
-                                class="perf-progress"
-                                max="32"
-                                value="0"
-                                aria-label="Benchmark progress"
-                            ></progress>
-                            <dl class="stats-list perf-stats">
-                                <div><dt>Tick p50</dt><dd id="perf-tick-p50">-</dd></div>
-                                <div><dt>Tick p95</dt><dd id="perf-tick-p95">-</dd></div>
-                                <div><dt>Step mean</dt><dd id="perf-step-mean">-</dd></div>
-                                <div><dt>Delta mean</dt><dd id="perf-delta-mean">-</dd></div>
-                                <div><dt>Geom mean</dt><dd id="perf-geom-mean">-</dd></div>
-                                <div><dt>River mean</dt><dd id="perf-river-mean">-</dd></div>
-                            </dl>
-                        </section>
-                        <section class="panel">
-                            <h2>View</h2>
-                            <div class="view-mode-group" role="radiogroup" aria-label="View mode">
-                                <label class="view-mode-option">
-                                    <input
-                                        type="radio"
-                                        name="view-mode"
-                                        value="normal"
-                                        checked
-                                    />
-                                    <span>1: 通常</span>
-                                </label>
-                                <label class="view-mode-option">
-                                    <input type="radio" name="view-mode" value="plates" />
-                                    <span>2: プレート</span>
-                                </label>
-                                <label class="view-mode-option">
-                                    <input type="radio" name="view-mode" value="mantle" />
-                                    <span>3: マントル熱量</span>
-                                </label>
-                                <label class="view-mode-option">
-                                    <input type="radio" name="view-mode" value="climate" />
-                                    <span>4: Climate</span>
-                                </label>
-                            </div>
-                            <div
-                                class="climate-metric-group"
-                                id="climate-metric-group"
-                                role="radiogroup"
-                                aria-label="Climate metric"
-                                hidden
-                                aria-hidden="true"
-                            >
-                                <label class="view-mode-option">
-                                    <input
-                                        type="radio"
-                                        name="climate-metric"
-                                        value="temperature"
-                                        checked
-                                    />
-                                    <span>Q: 気温</span>
-                                </label>
-                                <label class="view-mode-option">
-                                    <input
-                                        type="radio"
-                                        name="climate-metric"
-                                        value="precipitation"
-                                    />
-                                    <span>W: 降水量</span>
-                                </label>
+                            <p id="status-era">時代: 環境形成期</p>
+                            <p id="era-scale-tick-label">1Tick: 1万年</p>
+                            <p id="status-message" hidden>Initialization failed</p>
+                            <div class="visually-hidden" aria-hidden="true">
+                                <span id="stat-level">-</span>
+                                <span id="stat-seed">-</span>
+                                <span id="stat-plates">-</span>
+                                <span id="stat-land">-</span>
                             </div>
                         </section>
-                        <section class="panel climate-legend-panel" id="climate-legend-panel" hidden aria-hidden="true">
-                            <h2>Climate Legend</h2>
-                            <p class="climate-legend-title" id="climate-legend-title">気温</p>
-                            <div class="climate-legend-bar" aria-hidden="true"></div>
-                            <dl class="climate-legend-scale">
-                                <div><dt>Low</dt><dd id="climate-legend-min">-</dd></div>
-                                <div><dt>Mid</dt><dd id="climate-legend-mid">-</dd></div>
-                                <div><dt>High</dt><dd id="climate-legend-max">-</dd></div>
-                            </dl>
-                            <p class="climate-legend-hover" id="climate-legend-hover">Hover: -</p>
-                        </section>
+
                         <section class="panel">
-                            <h2>Mode</h2>
+                            <h2>Setting</h2>
                             <label class="toggle-row" for="debug-mode-toggle">
-                                <span>Debug (D)</span>
+                                <span>D: Debug</span>
                                 <span class="toggle-switch">
-                                    <input
-                                        id="debug-mode-toggle"
-                                        type="checkbox"
-                                    />
+                                    <input id="debug-mode-toggle" type="checkbox" />
                                     <span class="toggle-slider" aria-hidden="true"></span>
                                 </span>
                             </label>
+                            <form id="seed-form" class="seed-form" autocomplete="off">
+                                <label for="seed-input">S: Seed</label>
+                                <input
+                                    id="seed-input"
+                                    name="seed"
+                                    type="text"
+                                    value="alpha"
+                                    maxlength="64"
+                                />
+                            </form>
                         </section>
+
                         <section class="panel">
-                            <h2>Era Scale</h2>
-                            <label class="field-stack" for="era-scale-select">
-                                <span class="field-label">時代プリセット</span>
-                                <select id="era-scale-select" class="select-field">
-                                    <option value="crust">地殻形成期</option>
-                                    <option value="environment">環境形成期</option>
-                                    <option value="life">生命誕生期</option>
-                                    <option value="civilization">文明成立期</option>
-                                    <option value="history">歴史展開期</option>
-                                </select>
-                            </label>
-                            <div class="era-scale-summary" id="era-scale-summary" aria-live="polite">
-                                <p id="era-scale-tick-label">1 Tick: -</p>
-                                <dl class="era-scale-weights">
-                                    <div><dt>地質</dt><dd id="era-weight-geology">-</dd></div>
-                                    <div><dt>気候</dt><dd id="era-weight-climate">-</dd></div>
-                                    <div><dt>生態</dt><dd id="era-weight-ecology">-</dd></div>
-                                    <div><dt>文明</dt><dd id="era-weight-civilization">-</dd></div>
-                                </dl>
+                            <h2>
+                                View
+                                <span class="view-context-suffix" id="view-cui-context"></span>
+                            </h2>
+                            <div class="view-cui" id="view-cui">
+                                <div class="view-tree" id="view-cui-options" aria-live="polite"></div>
+                            </div>
+                            <div class="visually-hidden" aria-hidden="true">
+                                <label class="view-item">
+                                    <input type="radio" name="view-mode" value="normal" checked />
+                                    <span>1: 通常（現在）</span>
+                                </label>
+                                <label class="view-item">
+                                    <input type="radio" name="view-mode" value="plates" />
+                                    <span>2: 地形</span>
+                                </label>
+                                <label class="view-item">
+                                    <input type="radio" name="view-mode" value="mantle" />
+                                    <span>2-2: マントル熱量</span>
+                                </label>
+                                <label class="view-item">
+                                    <input type="radio" name="view-mode" value="climate" />
+                                    <span>3: 気候</span>
+                                </label>
                             </div>
                         </section>
-                        <section class="panel">
-                            <h2>Help</h2>
-                            <p>?: CONTROLを表示</p>
-                        </section>
                     </div>
-                </aside>
-            </section>
+
+                    <section class="panel history-panel">
+                        <h2>History</h2>
+                        <ul class="event-log-list" id="event-log-list" aria-live="polite"></ul>
+                    </section>
+
+                    <select id="era-scale-select" class="visually-hidden" aria-hidden="true" tabindex="-1">
+                        <option value="crust">地殻形成期</option>
+                        <option value="environment">環境形成期</option>
+                        <option value="life">生命誕生期</option>
+                        <option value="civilization">文明成立期</option>
+                        <option value="history">歴史展開期</option>
+                    </select>
+                    <div class="visually-hidden" aria-hidden="true">
+                        <span id="era-weight-geology">-</span>
+                        <span id="era-weight-climate">-</span>
+                        <span id="era-weight-ecology">-</span>
+                        <span id="era-weight-civilization">-</span>
+                    </div>
+                </div>
+            </aside>
         </main>
-        <div
-            id="control-help-modal"
-            class="control-help-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="control-help-title"
-            hidden
-        >
-            <button
-                class="control-help-backdrop"
-                type="button"
-                aria-label="Close controls"
-                data-control-help-close
-            ></button>
-            <section class="control-help-card">
-                <header class="control-help-head">
-                    <h2 id="control-help-title">CONTROL</h2>
-                    <button id="control-help-close" class="control-help-close" type="button" aria-label="閉じる">
-                        ×
-                    </button>
-                </header>
-                <p>ドラッグ: 回転</p>
-                <p>ホイール / ピンチ: ズーム</p>
-                <p>V: 地球儀 / 地図切替</p>
-                <p>D: デバッグ表示切替</p>
-                <p>1/2/3/4: View切替</p>
-                <p>Space: 再生 / 停止</p>
-                <p>.: 1tick進行</p>
-                <p>,: 32tick巻き戻し</p>
-                <p id="control-climate-hint" hidden>Q/W: Climate指標切替</p>
-            </section>
-        </div>
+
         <script type="module" src="/src/main.js"></script>
     </body>
 </html>

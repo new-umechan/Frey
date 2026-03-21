@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import initWasm, {
     WorldSimController,
     generate_mesh,
@@ -7,11 +6,18 @@ import { collectAppElements } from "../ui/dom.js";
 import { createPlateHover } from "./plate-hover.js";
 import { normalizeClimateMetric } from "./climate-metric.js";
 import { createTerrainRenderer } from "./terrain-renderer.js";
+import {
+    createStatusController,
+    isPerfFeatureEnabled,
+    setPerfPanelVisibility,
+} from "./bootstrap/status-ui.js";
+import { setupTerrainGeometryAttributes } from "./bootstrap/terrain-geometry-setup.js";
+import { runInitialWorldAndUiSync } from "./bootstrap/post-init-sync.js";
 import { createGlobeScene, resizeViewport } from "../gfx/scene.js";
 import { createCameraController } from "../gfx/views/camera-controller.js";
 import { GEOLOGY_PARAMS } from "../interface/params/geology.js";
 import { buildRenderPositions } from "../gfx/views/terrain-visuals.js";
-import { buildRiverMaskTexture, buildTerrainUvFromPositions } from "../gfx/materials/river-mask.js";
+import { buildRiverMaskTexture } from "../gfx/materials/river-mask.js";
 import {
     buildEraMetricsFromRuntime,
     createEraMetrics,
@@ -57,10 +63,6 @@ import { createWorldUiController } from "./world-ui-controller.js";
 import { createTerrainGenerationController } from "./terrain-generation-controller.js";
 import { createWorldSessionController } from "./world-session-controller.js";
 import { bindAppUiControls } from "./ui-bindings.js";
-function isPerfFeatureEnabled() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("perf") === "1" || params.get("bench") === "1";
-}
 
 const PERF_BENCH_WORKER_URL = new URL("../workers/perf-benchmark-worker.js", import.meta.url);
 export async function createApp() {
@@ -73,16 +75,14 @@ export async function createApp() {
         seedInput,
         sidebarToggle,
         statusMessage,
+        statusEraLabel,
         plateHoverPopup,
         debugToggleInput,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
         viewModeInputs,
-        climateMetricGroup,
-        climateMetricInputs,
         climateLegend,
-        climateControlHint,
         controlHelpModal,
         controlHelpCloseButton,
         playbackControls,
@@ -92,21 +92,21 @@ export async function createApp() {
         perfStatFields,
         statFields,
     } = collectAppElements({ perfEnabled: isPerfEnabled });
-    function setStatus(message) {
-        statusMessage.textContent = message;
-    }
+    const statusRows = [statusEraLabel, eraScaleTickLabel];
+    const { setStatus } = createStatusController(statusMessage, statusRows);
+
     function setSidebarOpen(isOpen) {
+        if (!sidebarToggle) {
+            return;
+        }
         appShell.classList.toggle("is-sidebar-collapsed", !isOpen);
         sidebarToggle.setAttribute("aria-expanded", String(isOpen));
     }
-    if (isPerfEnabled) {
-        perfPanel.hidden = false;
-        perfPanel.setAttribute("aria-hidden", "false");
-    } else {
-        perfPanel.hidden = true;
-        perfPanel.setAttribute("aria-hidden", "true");
+
+    setPerfPanelVisibility(perfPanel, isPerfEnabled);
+    if (sidebarToggle) {
+        setSidebarOpen(true);
     }
-    setSidebarOpen(true);
     seedInput.value = DEFAULT_TERRAIN_SEED;
     setStatus("Loading WASM...");
     await initWasm();
@@ -171,29 +171,14 @@ export async function createApp() {
     const debugSnapshotTickSet = new Set(DEBUG_SNAPSHOT_TICKS);
     const debugSnapshotSavedTicks = new Set();
 
-    const vertexCount = basePositions.length / 3;
-    const terrainUv = buildTerrainUvFromPositions(basePositions);
-    geometry.setAttribute("terrainUv", new THREE.BufferAttribute(terrainUv, 2));
-    geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainRiverFlux", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainMantleHeat", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainTemperature", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute(
-        "terrainPrecipitation",
-        new THREE.BufferAttribute(new Float32Array(vertexCount), 1),
-    );
-    geometry.setAttribute("terrainPlateId", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainDebugTrench", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainDebugArc", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute("terrainDebugBackarc", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
-    geometry.setAttribute(
-        "terrainDebugOceanOceanArc",
-        new THREE.BufferAttribute(new Float32Array(vertexCount), 1),
-    );
-    terrainMaterial.setViewMode(currentViewMode);
-    terrainMaterial.setClimateMetric(currentClimateMetric);
-    terrainMaterial.setDebugEnabled(debugEnabled);
+    setupTerrainGeometryAttributes({
+        geometry,
+        terrainMaterial,
+        basePositions,
+        currentViewMode,
+        currentClimateMetric,
+        debugEnabled,
+    });
 
     const terrainRenderer = createTerrainRenderer({
         geometry,
@@ -203,10 +188,7 @@ export async function createApp() {
         buildRiverMaskTexture,
     });
     const climateUiController = createClimateUiController({
-        climateMetricGroup,
         climateLegend,
-        climateControlHint,
-        climateMetricInputs,
         getCurrentViewMode: () => currentViewMode,
         getCurrentClimateMetric: () => currentClimateMetric,
         getCurrentTerrainData: () => currentTerrainData,
@@ -263,6 +245,7 @@ export async function createApp() {
         wireframe,
         plateHover,
         debugToggleInput,
+        statusEraLabel,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
@@ -334,8 +317,9 @@ export async function createApp() {
     });
     const { syncVisibleFieldsForCurrentView, stepWorldTick } = worldStepper;
 
+    const perfUiEnabled = isPerfEnabled && Boolean(perfControls);
     const perfBenchmarkController = createPerfBenchmarkController({
-        enabled: isPerfEnabled && Boolean(perfControls),
+        enabled: perfUiEnabled,
         controls: perfControls,
         perfStatFields,
         workerUrl: PERF_BENCH_WORKER_URL,
@@ -435,12 +419,11 @@ export async function createApp() {
         debugToggleInput,
         eraScaleSelect,
         viewModeInputs,
-        climateMetricInputs,
         controlHelpModal,
         controlHelpCloseButton,
         playbackControls,
         eventLogList,
-        perfEnabled: isPerfEnabled,
+        perfEnabled: perfUiEnabled,
         perfControls,
         seedForm,
         seedInput,
@@ -458,29 +441,26 @@ export async function createApp() {
         getDebugEnabled: () => debugEnabled,
         getCurrentSurfaceMode: () => currentSurfaceMode,
         getCurrentViewMode: () => currentViewMode,
+        getCurrentClimateMetric: () => currentClimateMetric,
         updateTerrain,
         setStatus,
     });
 
-    await updateTerrain(DEFAULT_TERRAIN_SEED);
-    eraScaleSelect.setAttribute("disabled", "disabled");
-    eraScaleSelect.setAttribute("aria-disabled", "true");
-    eraScaleSelect.title = "時代プリセットは進行状況に応じて自動切り替えされます。";
-    renderEraScaleControls(
+    await runInitialWorldAndUiSync({
+        updateTerrain,
+        defaultTerrainSeed: DEFAULT_TERRAIN_SEED,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
-        currentEraScale,
+        currentEraScale: DEFAULT_ERA_SCALE,
         currentEraMetrics,
-    );
-    setEraScale(DEFAULT_ERA_SCALE, currentEraMetrics);
-    syncClimateUi();
-    playbackController.refreshHistoryTicks();
-    playbackController.syncPlaybackUi();
-    playbackController.notePlaybackOverlayActivity();
-    playbackController.bindOverlayActivityEvents(viewportPanel);
-    onResize();
-    plateHover.hidePopup();
+        setEraScale,
+        syncClimateUi,
+        playbackController,
+        viewportPanel,
+        onResize,
+        plateHover,
+    });
 
     return {
         tick(nowMs) {

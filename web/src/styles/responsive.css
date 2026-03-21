@@ -1,60 +1,50 @@
+@media (max-width: 1280px) {
+    .toggle-row,
+    .seed-form label,
+    .view-item span {
+        font-size: 15px;
+    }
+
+    .seed-form input {
+        font-size: 15px;
+    }
+}
+
 @media (max-width: 980px) {
     .app-shell {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(0, 1fr) auto;
-    }
-
-    .top-bar {
-        grid-column: 1;
-        grid-row: 1;
-        grid-template-columns: 1fr;
-        align-items: stretch;
-        gap: 0.55rem;
-    }
-
-    .viewport-panel {
-        grid-column: 1;
-        grid-row: 2;
-    }
-
-    .playback-overlay {
-        width: 90%;
-        bottom: 0.45rem;
+        grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .sidebar {
-        grid-column: 1;
-        grid-row: 3;
-        min-height: 12rem;
+        border-top: 1px solid #d8dde2;
     }
 
-    .app-shell.is-sidebar-collapsed {
-        grid-template-columns: minmax(0, 1fr);
+    .sidebar-body {
+        padding: 20px;
+        height: auto;
+        overflow: auto;
+        grid-template-rows: auto;
     }
 
-    .app-shell.is-sidebar-collapsed .sidebar-body {
-        display: none;
+    .sidebar-main {
+        overflow: visible;
     }
 
-    .sidebar-toggle {
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-        grid-auto-flow: column;
-        align-content: center;
-        justify-content: start;
-        gap: 0.5rem;
-        padding: 0.65rem 0.75rem;
+    .playback-overlay {
+        left: 20px;
+        right: 20px;
+        bottom: 18px;
     }
 
-    .sidebar-toggle-text {
-        writing-mode: horizontal-tb;
-        letter-spacing: 0.02em;
+    .brand-block {
+        left: 20px;
+        top: 20px;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sidebar,
-    .sidebar-toggle-icon,
+    .playback-overlay,
     .toggle-slider,
     .toggle-slider::after {
         transition: none;

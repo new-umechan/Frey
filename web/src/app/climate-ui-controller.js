@@ -26,35 +26,31 @@ function computeClimateLegendStats(values) {
 
 export function createClimateUiController(options = {}) {
     const {
-        climateMetricGroup,
         climateLegend,
-        climateControlHint,
-        climateMetricInputs,
         getCurrentViewMode,
         getCurrentClimateMetric,
         getCurrentTerrainData,
     } = options;
 
     const updateClimateHoverReadout = (payload) => {
+        if (!climateLegend) {
+            return;
+        }
         climateLegend.hover.textContent = payload
             ? `Hover: ${payload.label} ${payload.value}`
             : "Hover: -";
     };
 
     const syncClimateUi = () => {
+        if (!climateLegend) {
+            return;
+        }
         const currentViewMode = getCurrentViewMode();
         const currentClimateMetric = getCurrentClimateMetric();
         const currentTerrainData = getCurrentTerrainData();
         const isClimateMode = currentViewMode === "climate";
-        climateMetricGroup.hidden = !isClimateMode;
         climateLegend.panel.hidden = !isClimateMode;
-        climateControlHint.hidden = !isClimateMode;
-        climateMetricGroup.setAttribute("aria-hidden", String(!isClimateMode));
         climateLegend.panel.setAttribute("aria-hidden", String(!isClimateMode));
-        climateControlHint.setAttribute("aria-hidden", String(!isClimateMode));
-        for (const input of climateMetricInputs) {
-            input.checked = input.value === currentClimateMetric;
-        }
         if (!isClimateMode) {
             updateClimateHoverReadout(null);
             return;

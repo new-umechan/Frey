@@ -1,6 +1,36 @@
 import { setupUiControls } from "../ui/controls.js";
 import { renderEraScaleControls } from "./era-presets.js";
 
+function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
+    return () => {
+        if (!sidebarToggle) {
+            return;
+        }
+        const isOpen = sidebarToggle.getAttribute("aria-expanded") === "true";
+        setSidebarOpen(!isOpen);
+        requestAnimationFrame(onResize);
+    };
+}
+
+function createEraScaleChangeHandler(setEraScale) {
+    return (value, isDisabled) => {
+        if (isDisabled) {
+            renderEraScaleControls();
+            return;
+        }
+        setEraScale(value);
+    };
+}
+
+function createSubmitSeedErrorHandler(setStatus, seedInput, seedForm) {
+    return (error) => {
+        setStatus(`Generation failed: ${String(error)}`);
+        seedInput.removeAttribute("disabled");
+        seedForm.querySelector("button")?.removeAttribute("disabled");
+        console.error(error);
+    };
+}
+
 export function bindAppUiControls(options = {}) {
     const {
         canvas,
@@ -9,7 +39,6 @@ export function bindAppUiControls(options = {}) {
         debugToggleInput,
         eraScaleSelect,
         viewModeInputs,
-        climateMetricInputs,
         controlHelpModal,
         controlHelpCloseButton,
         playbackControls,
@@ -32,9 +61,14 @@ export function bindAppUiControls(options = {}) {
         getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentViewMode,
+        getCurrentClimateMetric,
         updateTerrain,
         setStatus,
     } = options;
+
+    const handleSidebarToggle = createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize);
+    const handleEraScaleChange = createEraScaleChangeHandler(setEraScale);
+    const handleSubmitSeedError = createSubmitSeedErrorHandler(setStatus, seedInput, seedForm);
 
     setupUiControls({
         canvas,
@@ -43,7 +77,6 @@ export function bindAppUiControls(options = {}) {
         debugToggleInput,
         eraScaleSelect,
         viewModeInputs,
-        climateMetricInputs,
         controlHelpModal,
         controlHelpCloseButton,
         playbackControls,
@@ -53,21 +86,11 @@ export function bindAppUiControls(options = {}) {
         seedForm,
         seedInput,
         onResize,
-        onSidebarToggle: () => {
-            const isOpen = sidebarToggle.getAttribute("aria-expanded") === "true";
-            setSidebarOpen(!isOpen);
-            requestAnimationFrame(onResize);
-        },
+        onSidebarToggle: handleSidebarToggle,
         onPointerMove: plateHover.updateFromPointer,
         onPointerLeave: plateHover.hidePopup,
         onDebugToggle: setDebugModeEnabled,
-        onEraScaleChange: (value, isDisabled) => {
-            if (isDisabled) {
-                renderEraScaleControls();
-                return;
-            }
-            setEraScale(value);
-        },
+        onEraScaleChange: handleEraScaleChange,
         onViewModeChange: setViewMode,
         onClimateMetricChange: setClimateMetric,
         onToggleSurface: setSurfaceMode,
@@ -83,12 +106,8 @@ export function bindAppUiControls(options = {}) {
         getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentViewMode,
+        getCurrentClimateMetric,
         onSubmitSeed: updateTerrain,
-        onSubmitSeedError: (error) => {
-            setStatus(`Generation failed: ${String(error)}`);
-            seedInput.removeAttribute("disabled");
-            seedForm.querySelector("button")?.removeAttribute("disabled");
-            console.error(error);
-        },
+        onSubmitSeedError: handleSubmitSeedError,
     });
 }

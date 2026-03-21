@@ -1,11 +1,21 @@
+import { createControlHelpController } from "./controls/control-help-controller.js";
+import {
+    isHelpToggleKey,
+    isInteractiveTarget,
+} from "./controls/keyboard-guards.js";
+import {
+    bindPerfEvents,
+    bindPlaybackUiEvents,
+} from "./controls/ui-event-bindings.js";
+import { createViewCuiController } from "./controls/view-cui-controller.js";
+
 export function setupUiControls({
     canvas,
     viewportPanel,
     sidebarToggle,
-    debugToggleInput,
     eraScaleSelect,
+    debugToggleInput,
     viewModeInputs,
-    climateMetricInputs,
     controlHelpModal,
     controlHelpCloseButton,
     playbackControls,
@@ -34,7 +44,7 @@ export function setupUiControls({
     onCopyPerfBenchmark,
     getDebugEnabled,
     getCurrentSurfaceMode,
-    getCurrentViewMode,
+    getCurrentClimateMetric,
     onSubmitSeed,
     onSubmitSeedError,
 }) {
@@ -44,11 +54,11 @@ export function setupUiControls({
         resizeObserver.observe(viewportPanel);
     }
 
-    sidebarToggle.addEventListener("click", onSidebarToggle);
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener("click", onSidebarToggle);
+    }
 
-    canvas.addEventListener("pointermove", (event) => {
-        onPointerMove(event);
-    });
+    canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerleave", onPointerLeave);
     canvas.addEventListener("pointercancel", onPointerLeave);
 
@@ -60,180 +70,91 @@ export function setupUiControls({
         onEraScaleChange(eraScaleSelect.value, eraScaleSelect.disabled);
     });
 
-    for (const input of viewModeInputs) {
-        input.addEventListener("change", () => {
-            if (!input.checked) {
-                return;
-            }
-            onViewModeChange(input.value);
-        });
-    }
-
-    for (const input of climateMetricInputs) {
-        input.addEventListener("change", () => {
-            if (!input.checked) {
-                return;
-            }
-            onClimateMetricChange(input.value);
-        });
-    }
-
-    playbackControls.playToggleButton.addEventListener("click", () => {
-        onTogglePlay();
-    });
-    playbackControls.historySeekSlider.addEventListener("input", () => {
-        onHistorySeek(playbackControls.historySeekSlider.value);
-    });
-    playbackControls.historySeekSlider.addEventListener("change", () => {
-        onHistorySeek(playbackControls.historySeekSlider.value);
-    });
-    playbackControls.seekBackwardButton.addEventListener("click", () => {
-        onHistoryStepDirection(-1);
-    });
-    playbackControls.seekForwardButton.addEventListener("click", () => {
-        onHistoryStepDirection(1);
-    });
-    eventLogList.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-            return;
-        }
-        const entryButton = target.closest("[data-log-tick]");
-        if (!(entryButton instanceof HTMLButtonElement)) {
-            return;
-        }
-        const tickText = entryButton.dataset.logTick;
-        if (!tickText) {
-            return;
-        }
-        onEventLogJump(tickText);
+    const controlHelp = createControlHelpController(controlHelpModal, controlHelpCloseButton);
+    const viewCui = createViewCuiController({
+        viewModeInputs,
+        getCurrentClimateMetric,
+        onViewModeChange,
+        onClimateMetricChange,
     });
 
-    if (perfEnabled && perfControls) {
-        perfControls.runButton.addEventListener("click", () => {
-            onRunPerfBenchmark();
-        });
-        perfControls.copyButton.addEventListener("click", () => {
-            onCopyPerfBenchmark();
-        });
-    }
-
-    function isHelpToggleKey(event) {
-        return event.key === "?" || (event.code === "Slash" && event.shiftKey);
-    }
-
-    function openControlHelp() {
-        controlHelpModal.hidden = false;
-    }
-
-    function closeControlHelp() {
-        controlHelpModal.hidden = true;
-    }
-
-    function toggleControlHelp() {
-        if (controlHelpModal.hidden) {
-            openControlHelp();
-            return;
-        }
-        closeControlHelp();
-    }
-
-    controlHelpCloseButton.addEventListener("click", closeControlHelp);
-    controlHelpModal.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-            return;
-        }
-        if (target.dataset.controlHelpClose !== undefined) {
-            closeControlHelp();
-        }
+    bindPlaybackUiEvents({
+        playbackControls,
+        eventLogList,
+        onTogglePlay,
+        onHistorySeek,
+        onHistoryStepDirection,
+        onEventLogJump,
     });
+    bindPerfEvents(perfEnabled, perfControls, onRunPerfBenchmark, onCopyPerfBenchmark);
 
     document.addEventListener("keydown", (event) => {
-        if (
-            event.defaultPrevented ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.altKey
-        ) {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
             return;
         }
 
-        const target = event.target;
-        if (
-            target instanceof HTMLElement &&
-            (target.isContentEditable ||
-                (target instanceof HTMLInputElement && target.type !== "range") ||
-                target instanceof HTMLTextAreaElement ||
-                target instanceof HTMLSelectElement)
-        ) {
+        if (isInteractiveTarget(event.target)) {
             return;
         }
+
+        const lowerKey = event.key.toLowerCase();
 
         if (isHelpToggleKey(event)) {
             event.preventDefault();
-            toggleControlHelp();
+            controlHelp.toggleControlHelp();
             return;
         }
 
-        if (!controlHelpModal.hidden) {
+        if (controlHelp.isOpen()) {
             if (event.key === "Escape") {
                 event.preventDefault();
-                closeControlHelp();
+                controlHelp.closeControlHelp();
             }
             return;
         }
 
-        if (event.key === "1") {
+        if (event.key === "ArrowUp" || lowerKey === "k") {
             event.preventDefault();
-            onViewModeChange("normal");
+            viewCui.moveViewCursor(-1);
             return;
         }
 
-        if (event.key === "2") {
+        if (event.key === "ArrowDown" || lowerKey === "j") {
             event.preventDefault();
-            onViewModeChange("plates");
+            viewCui.moveViewCursor(1);
             return;
         }
 
-        if (event.key === "3") {
+        if (event.key === "Enter" || lowerKey === "l") {
             event.preventDefault();
-            onViewModeChange("mantle");
+            viewCui.commitViewSelection();
             return;
         }
 
-        if (event.key === "4") {
+        if ((event.key === "Escape" || lowerKey === "h") && viewCui.backViewMenu()) {
             event.preventDefault();
-            onViewModeChange("climate");
             return;
         }
 
-        if (getCurrentViewMode() === "climate" && event.key.toLowerCase() === "q") {
+        if (viewCui.handleDigitSelect(event.key)) {
             event.preventDefault();
-            onClimateMetricChange("temperature");
             return;
         }
 
-        if (getCurrentViewMode() === "climate" && event.key.toLowerCase() === "w") {
-            event.preventDefault();
-            onClimateMetricChange("precipitation");
-            return;
-        }
-
-        if (event.key.toLowerCase() === "t") {
+        if (lowerKey === "t" || lowerKey === "s") {
             event.preventDefault();
             seedInput.focus();
             seedInput.select();
             return;
         }
 
-        if (event.key.toLowerCase() === "d") {
+        if (lowerKey === "d") {
             event.preventDefault();
             onToggleDebug(!getDebugEnabled());
             return;
         }
 
-        if (event.key.toLowerCase() === "v") {
+        if (lowerKey === "v") {
             event.preventDefault();
             onToggleSurface(getCurrentSurfaceMode() === "globe" ? "map" : "globe");
             return;

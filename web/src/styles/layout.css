@@ -1,116 +1,95 @@
-.workspace {
-    display: contents;
+.app-shell {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
 }
 
 .viewport-panel {
-    grid-column: 1;
-    grid-row: 2;
     position: relative;
     min-width: 0;
     min-height: 0;
-    border: 0;
-    background: #EDF4FA;
     overflow: hidden;
+    background: var(--bg);
+}
+
+#mesh-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.brand-block {
+    position: absolute;
+    top: 32px;
+    left: 48px;
+    margin: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.brand-block h1 {
+    margin: 0;
+    font-family: "Pathway Gothic One", sans-serif;
+    font-size: 40px;
+    line-height: normal;
+    letter-spacing: 0.16em;
+    font-weight: 400;
+    color: #2a2c2d;
+}
+
+.brand-block p {
+    margin: 8px 0 0;
+    color: #81888e;
+    font-size: 16px;
+    line-height: normal;
+    font-weight: 400;
 }
 
 .plate-hover-popup {
     position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 5;
-    min-width: 10.5rem;
-    max-width: min(18rem, calc(100% - 1rem));
-    padding: 0.45rem 0.55rem;
-    border: 1px solid color-mix(in oklab, var(--line), var(--ink) 15%);
-    background: color-mix(in oklab, var(--panel), white 16%);
-    color: var(--ink);
-    font-size: 0.78rem;
-    line-height: 1.35;
-    pointer-events: none;
-    box-shadow: 0 8px 24px color-mix(in oklab, var(--ink), transparent 88%);
+    z-index: 12;
+    min-width: 144px;
+    max-width: 240px;
+    padding: 8px 10px;
+    border: 1px solid #d3d8dd;
+    border-radius: 4px;
+    background: #f4f7fa;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.4;
     white-space: pre-line;
-}
-
-.playback-overlay {
-    position: absolute;
-    left: 50%;
-    bottom: 0.9rem;
-    transform: translate(-50%, 0);
-    width: 90%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    z-index: 8;
-    opacity: 1;
-    transition: transform 220ms ease, opacity 220ms ease;
-}
-
-.playback-overlay.is-idle-hidden {
-    transform: translate(-50%, 1.4rem);
-    opacity: 0;
     pointer-events: none;
 }
 
 .sidebar {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    min-width: 0;
+    display: block;
     min-height: 0;
-    display: grid;
-    grid-template-columns: var(--sidebar-rail) minmax(0, 1fr);
-    border: 0;
-    border-left: 1px solid var(--line);
-    background: color-mix(in oklab, var(--panel), white 5%);
-    transition: grid-template-columns 220ms ease;
-    position: relative;
-    z-index: 2;
-}
-
-.app-shell.is-sidebar-collapsed {
-    grid-template-columns: minmax(0, 1fr) var(--sidebar-rail);
-}
-
-.app-shell.is-sidebar-collapsed .sidebar {
-    grid-template-columns: var(--sidebar-rail) 0fr;
-}
-
-.sidebar-toggle {
-    border: 0;
-    border-right: 1px solid var(--line);
-    background: transparent;
-    color: var(--ink);
-    cursor: pointer;
-    padding: 0.75rem 0.45rem;
-    display: grid;
-    align-content: start;
-    justify-items: center;
-    gap: 0.7rem;
-}
-
-.sidebar-toggle-text {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    letter-spacing: 0.08em;
-    font-size: 0.75rem;
-}
-
-.sidebar-toggle-icon {
-    display: inline-block;
-    font-size: 1rem;
-    transition: transform 220ms ease;
-}
-
-.app-shell.is-sidebar-collapsed .sidebar-toggle-icon {
-    transform: rotate(180deg);
+    background: #e5eaee;
 }
 
 .sidebar-body {
     min-width: 0;
     min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: 32px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 20px;
+}
+
+.sidebar-main {
+    min-height: 0;
     overflow: auto;
-    padding: 0.3rem 0.45rem;
     display: grid;
     align-content: start;
-    gap: 0.65rem;
+    gap: 32px;
+    padding-right: 2px;
 }

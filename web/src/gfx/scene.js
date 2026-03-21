@@ -3,9 +3,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
 import { createTerrainMaterial } from "./materials/terrain.js";
 
+const PLANET_CENTER_X = 0.16;
+
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#EDF4FA");
+    scene.background = null;
 
     const globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     globeCamera.position.set(0, 0, 2.7);
@@ -17,7 +19,9 @@ export function createGlobeScene(canvas, indices) {
     const renderer = new THREE.WebGLRenderer({
         antialias: true,
         canvas,
+        alpha: true,
     });
+    renderer.setClearAlpha(0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -45,6 +49,7 @@ export function createGlobeScene(canvas, indices) {
     const material = terrainMaterial.material;
 
     const sphere = new THREE.Mesh(geometry, material);
+    sphere.position.setX(PLANET_CENTER_X);
     scene.add(sphere);
 
     const wireframe = new THREE.Mesh(
@@ -56,6 +61,7 @@ export function createGlobeScene(canvas, indices) {
             opacity: 0.08,
         }),
     );
+    wireframe.position.setX(PLANET_CENTER_X);
     scene.add(wireframe);
 
     const keyLight = new THREE.DirectionalLight("#f1f6ff", 1.05);
@@ -76,6 +82,7 @@ export function createGlobeScene(canvas, indices) {
         opacity: 0.08,
     });
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+    halo.position.setX(PLANET_CENTER_X);
     scene.add(halo);
 
     return {

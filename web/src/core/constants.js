@@ -55,17 +55,21 @@ export const ERA_SCALE_PRESETS = Object.freeze({
     },
 });
 
+function formatCompactDecimal(value, digits) {
+    return value.toFixed(digits).replace(/\.0+$/, "");
+}
+
 export function formatRealYearsPerTick(years) {
     if (!Number.isFinite(years) || years <= 0) {
         return "-";
     }
     if (years >= 100000000) {
-        return `${(years / 100000000).toFixed(years >= 1000000000 ? 0 : 1)}億年`;
+        return `${formatCompactDecimal(years / 100000000, years >= 1000000000 ? 0 : 1)}億年`;
     }
     if (years >= 10000) {
-        return `${(years / 10000).toFixed(years >= 100000 ? 0 : 1)}万年`;
+        return `${formatCompactDecimal(years / 10000, years >= 100000 ? 0 : 1)}万年`;
     }
-    return `${years.toFixed(years >= 10 ? 0 : 1)}年`;
+    return `${formatCompactDecimal(years, years >= 10 ? 0 : 1)}年`;
 }
 
 export const SUBSYSTEM_ACTIVITY_SIGNAL_GAIN = Object.freeze({

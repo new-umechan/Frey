@@ -1,5 +1,22 @@
 import { createApp } from "./app/app.js";
 
+function showInitializationError(error) {
+    const statusMessage = document.getElementById("status-message");
+    const statusEra = document.getElementById("status-era");
+    const statusTick = document.getElementById("era-scale-tick-label");
+
+    if (statusMessage instanceof HTMLElement) {
+        statusMessage.hidden = false;
+        statusMessage.textContent = `Initialization failed: ${String(error)}`;
+    }
+    if (statusEra instanceof HTMLElement) {
+        statusEra.hidden = true;
+    }
+    if (statusTick instanceof HTMLElement) {
+        statusTick.hidden = true;
+    }
+}
+
 async function main() {
     const app = await createApp();
 
@@ -12,9 +29,6 @@ async function main() {
 }
 
 main().catch((error) => {
-    const statusMessage = document.getElementById("status-message");
-    if (statusMessage instanceof HTMLElement) {
-        statusMessage.textContent = `Initialization failed: ${String(error)}`;
-    }
+    showInitializationError(error);
     console.error(error);
 });
