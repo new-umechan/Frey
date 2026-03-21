@@ -2,8 +2,8 @@
 
 ## 目的
 
-この文書は、時代、tick、予算、時代遷移を定義する。
-ここで扱うのは時間制御であり、各モジュールの責務詳細ではない。
+この文書は、時代、tick、予算、時代遷移、更新順序を定義する。
+ここで扱うのは時間制御と実行制御であり、各モジュールの責務詳細ではない。
 データ構造の定義は `docs/architecture/data_model.md`、各Systemの読み書き境界は `docs/architecture/module_boundaries.md` を参照する。
 
 ## Tick
@@ -29,7 +29,7 @@ struct Tick {
 - `scale`
   - 現在の時代
 - `budgets`
-  - 各モジュールの更新回数近似
+  - 各Moduleの更新回数近似
 
 ## 時代一覧
 
@@ -41,8 +41,8 @@ struct Tick {
 | 文明成立期 | `Population` / `Settlement` / `Polity` | 100年 | 定住、都市化、初期国家形成 |
 | 歴史展開期 | `Conflict`（+Tier 2） | 1年 | 国家競合、戦争、交易、技術変化 |
 
-時代は、モジュールを開始停止する排他的な段階ではない。
-どのモジュールをどれだけ強く更新するかを決める時間スケールである。
+時代は、Moduleを開始停止する排他的な段階ではない。
+どのModuleをどれだけ強く更新するかを決める時間スケールである。
 
 ## 状態の有効化タイミング
 
@@ -66,7 +66,7 @@ struct Tick {
 
 ## 予算配分
 
-`SubsystemBudgets` は、各モジュールに与える内部更新回数の近似である。
+`SubsystemBudgets` は、各Moduleに与える内部更新回数の近似である。
 初版では整数回数として扱う。
 
 | 時代 | `Geology` | `Climate` | `Hydrology` | `Ecology` | `Domesticates` | `Subsistence` | `Population` | `Settlement` | `Polity` | `Conflict` |
@@ -77,8 +77,16 @@ struct Tick {
 | 文明成立期 | 低 | 低 | 中 | 中 | 中 | 高 | 高 | 高 | 高 | 低 |
 | 歴史展開期 | 低 | 低 | 低 | 低 | 低 | 中 | 高 | 高 | 高 | 高 |
 
-歴史展開期のように活動量が低いモジュールはスキップ可能とする。
+歴史展開期のように活動量が低いModuleはスキップ可能とする。
 スキップ条件の閾値は後続バージョンで定義する。
+
+実際の更新は `System` 単位で行う。
+`ExecSystem` は時代・状態・予算を参照して、各Module内で実行する `System` を選択する。
+
+```rust
+// 擬似型: Moduleごとの実行対象System列
+type SystemPlan = HashMap<ModuleId, Vec<SystemId>>;
+```
 
 ## 時代遷移
 
@@ -134,6 +142,6 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 
 WASMではシングルスレッドで動作するため、現時点では並列化を行わない。
 
-将来的に並列化を導入する場合は、処理順序が結果に影響しないモジュールのみを対象にする。
+将来的に並列化を導入する場合は、処理順序が結果に影響しないModuleのみを対象にする。
 セル間で値を読み合う計算（拡散・流路計算など）はシングルスレッド実行を維持し、
 同一seed・同一パラメータでの再現性を保証する。

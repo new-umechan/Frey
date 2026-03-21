@@ -6,6 +6,9 @@
 ここで扱う共有面は `CellStore` と `hecs::World`、進行管理入力は `Clock` と `FeedbackQueue` である。
 擬似コードをpythonで記述しているが、これはrustで書くと長くなってしまい、要件定義書として不適だったためだ。
 
+この文書が定義するのは `Module` 境界であり、`System` 境界ではない。
+`Module` は同一、または非常に近い内容を読み書きする `System` の束ね単位で、ECS実装都合とは独立した設計上の区分である。
+
 各モジュールは他モジュールへ直接依存しない。
 モジュール間の共有面は `CellStore` および `hecs::World` である。
 進行管理入力は `Clock` と `FeedbackQueue` である。

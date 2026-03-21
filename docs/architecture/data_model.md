@@ -231,6 +231,9 @@ struct Clock {
 同一tick内で循環依存を作らないための遅延反映キュー。
 tick開始時に `ExecSystem` が一括で `CellStore` と `hecs::World` に適用する。
 
+`ModuleId` は実行単位の `System` ID ではない。
+予算配分、責務境界、フィードバック帰属を表す `Module` 識別子として扱う。
+
 ```rust
 struct FeedbackQueue {
     entries: Vec<FeedbackEntry>,
@@ -266,6 +269,11 @@ enum FeedbackPayload {
     TriggerEpochTransition { to: Epoch },
 }
 ```
+
+`FeedbackEntry.source` と `FeedbackEntry.target_module` は、どの `Module` 境界から出た影響か、
+どの `Module` 境界へ渡す影響かを示す。
+同一 `Module` 内でどの `System` を実行したかは `ExecSystem` の実行計画で管理し、
+`FeedbackQueue` の型には直接持たせない。
 
 複数エントリが同一フィールド・同一セルに `DeltaF32` を積んだ場合、単純加算で解決する。
 適用タイミングと更新順序は `docs/architecture/phase_control.md` を参照。
