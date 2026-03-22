@@ -1,5 +1,6 @@
 import { setupUiControls } from "../ui/controls.js";
 import { renderEraScaleControls } from "./era-presets.js";
+import { createCanvasInputHandlers } from "./canvas-input-handlers.js";
 
 function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
     return () => {
@@ -50,6 +51,7 @@ export function bindAppUiControls(options = {}) {
         onResize,
         setSidebarOpen,
         plateHover,
+        globePinchFocusController,
         setDebugModeEnabled,
         setEraScale,
         setViewMode,
@@ -69,6 +71,10 @@ export function bindAppUiControls(options = {}) {
     const handleSidebarToggle = createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize);
     const handleEraScaleChange = createEraScaleChangeHandler(setEraScale);
     const handleSubmitSeedError = createSubmitSeedErrorHandler(setStatus, seedInput, seedForm);
+    const canvasInputHandlers = createCanvasInputHandlers({
+        plateHover,
+        globePinchFocusController,
+    });
 
     setupUiControls({
         canvas,
@@ -87,8 +93,7 @@ export function bindAppUiControls(options = {}) {
         seedInput,
         onResize,
         onSidebarToggle: handleSidebarToggle,
-        onPointerMove: plateHover.updateFromPointer,
-        onPointerLeave: plateHover.hidePopup,
+        canvasInputHandlers,
         onDebugToggle: setDebugModeEnabled,
         onEraScaleChange: handleEraScaleChange,
         onViewModeChange: setViewMode,

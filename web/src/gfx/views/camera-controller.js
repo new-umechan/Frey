@@ -11,6 +11,7 @@ export function createCameraController({
     renderer,
     isDebugEnabled,
 }) {
+    const GLOBE_CAMERA_DISTANCE = 3.2;
     const centerX = sphere.position.x;
     let currentSurfaceMode = "globe";
     let camera = globeCamera;
@@ -35,7 +36,7 @@ export function createCameraController({
         }
 
         camera = globeCamera;
-        globeCamera.position.set(centerX, 0, 2.7);
+        globeCamera.position.set(centerX, 0, GLOBE_CAMERA_DISTANCE);
         globeCamera.up.set(0, 1, 0);
         globeControls.target.set(centerX, 0, 0);
         activeControls = globeControls;

@@ -4,13 +4,14 @@ import { TrackballControls } from "three/examples/jsm/controls/TrackballControls
 import { createTerrainMaterial } from "./materials/terrain.js";
 
 const PLANET_CENTER_X = 0.16;
+const INITIAL_GLOBE_CAMERA_DISTANCE = 3.2;
 
 export function createGlobeScene(canvas, indices) {
     const scene = new THREE.Scene();
     scene.background = null;
 
     const globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    globeCamera.position.set(0, 0, 2.7);
+    globeCamera.position.set(PLANET_CENTER_X, 0, INITIAL_GLOBE_CAMERA_DISTANCE);
     const mapCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
     mapCamera.position.set(0, 0, 5);
     mapCamera.lookAt(0, 0, 0);
@@ -27,10 +28,14 @@ export function createGlobeScene(canvas, indices) {
 
     const globeControls = new TrackballControls(globeCamera, renderer.domElement);
     globeControls.noPan = true;
+    globeControls.noZoom = true;
+    globeControls.rotateSpeed = 2.4;
     globeControls.dynamicDampingFactor = 0.08;
     globeControls.staticMoving = false;
+    globeControls.target.set(PLANET_CENTER_X, 0, 0);
     globeControls.minDistance = 1.2;
     globeControls.maxDistance = 6.0;
+    globeControls.update();
 
     const mapControls = new OrbitControls(mapCamera, renderer.domElement);
     mapControls.enableRotate = false;

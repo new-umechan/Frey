@@ -15,6 +15,7 @@ import { setupTerrainGeometryAttributes } from "./bootstrap/terrain-geometry-set
 import { runInitialWorldAndUiSync } from "./bootstrap/post-init-sync.js";
 import { createGlobeScene, resizeViewport } from "../gfx/scene.js";
 import { createCameraController } from "../gfx/views/camera-controller.js";
+import { createGlobePinchFocusController } from "../gfx/views/globe-pinch-focus-controller.js";
 import { GEOLOGY_PARAMS } from "../interface/params/geology.js";
 import { buildRenderPositions } from "../gfx/views/terrain-visuals.js";
 import { buildRiverMaskTexture } from "../gfx/materials/river-mask.js";
@@ -210,6 +211,13 @@ export async function createApp() {
         }),
         onClimateHover: updateClimateHoverReadout,
     });
+    const globePinchFocusController = createGlobePinchFocusController({
+        canvas,
+        sphere,
+        globeCamera,
+        globeControls,
+        getCurrentSurfaceMode: () => currentSurfaceMode,
+    });
 
     let playbackController = null;
     const getMutableState = () => {
@@ -262,6 +270,10 @@ export async function createApp() {
         },
     });
     const { setSurfaceMode, setDebugModeEnabled, setEraScale } = worldUiController;
+    const setSurfaceModeWithPinchReset = (nextMode) => {
+        globePinchFocusController.reset();
+        setSurfaceMode(nextMode);
+    };
 
     const worldSessionController = createWorldSessionController({
         worldSimController,
@@ -430,11 +442,12 @@ export async function createApp() {
         onResize,
         setSidebarOpen,
         plateHover,
+        globePinchFocusController,
         setDebugModeEnabled,
         setEraScale,
         setViewMode,
         setClimateMetric,
-        setSurfaceMode,
+        setSurfaceMode: setSurfaceModeWithPinchReset,
         playbackController,
         runPerfBenchmark: perfBenchmarkController.runBenchmark,
         copyPerfBenchmarkResult: perfBenchmarkController.copyResult,
@@ -470,6 +483,7 @@ export async function createApp() {
                 () => playbackState.isPlaying && Boolean(currentTerrainData) && Boolean(activeWorldId),
                 stepWorldTick,
             );
+            globePinchFocusController.update();
             cameraController.getActiveControls().update();
             renderer.render(scene, cameraController.getCamera());
         },

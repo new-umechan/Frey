@@ -26,8 +26,7 @@ export function setupUiControls({
     seedInput,
     onResize,
     onSidebarToggle,
-    onPointerMove,
-    onPointerLeave,
+    canvasInputHandlers = {},
     onDebugToggle,
     onEraScaleChange,
     onViewModeChange,
@@ -58,9 +57,36 @@ export function setupUiControls({
         sidebarToggle.addEventListener("click", onSidebarToggle);
     }
 
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerleave", onPointerLeave);
-    canvas.addEventListener("pointercancel", onPointerLeave);
+    const {
+        onPointerDown = () => {},
+        onPointerMove = () => {},
+        onPointerUp = () => {},
+        onPointerCancel = () => {},
+        onWheel = () => false,
+        onLeave = () => {},
+    } = canvasInputHandlers;
+
+    canvas.addEventListener("pointerdown", (event) => {
+        onPointerDown(event);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+        onPointerMove(event);
+    });
+    canvas.addEventListener("pointerup", (event) => {
+        onPointerUp(event);
+    });
+    canvas.addEventListener("pointerleave", onLeave);
+    canvas.addEventListener("pointercancel", (event) => {
+        onPointerCancel(event);
+        onLeave(event);
+    });
+    canvas.addEventListener("wheel", (event) => {
+        const shouldPreventDefault = onWheel(event);
+        if (shouldPreventDefault) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, { capture: true, passive: false });
 
     debugToggleInput.addEventListener("change", () => {
         onDebugToggle(debugToggleInput.checked);
