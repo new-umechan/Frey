@@ -60,12 +60,12 @@ struct CellStore {
     ocean_temperature:    Vec<f32>,
 
     // --- Hydrology ---
-    river_upstream:       Vec<Option<CellId>>,
-    river_downstream:     Vec<Option<CellId>>,
+    river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,  // (流下先, 分配率) のペア。MFD採用のため複数流下先を持つ
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,
     erosion_rate:         Vec<f32>,
     deposition_rate:      Vec<f32>,
+    is_lake:              Vec<bool>,  // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
 
     // --- Ecology（公開）---
     biome:                Vec<Biome>,

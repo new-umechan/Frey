@@ -158,30 +158,46 @@ FEEDBACK_EDGES = {
 
 ## `Hydrology`
 
+Systemは2つに分かれる。
+
+| System | 実行条件 |
+| --- | --- |
+| `HydrologyMFDSystem` | 地殻形成期・環境形成期は毎tick実行。先史期以降はExecSystemが地形変化フラグを検知したtickのみ実行 |
+| `HydrologyFlowSystem` | 先史期以降、毎tick実行 |
+
+地形変化フラグの判定はExecSystemが担う。GeologyはCellStoreに標高を書くだけであり、フラグ管理はしない。
+
 ### 読むもの
 
-- 標高（`geology.height` / `h`）← `Geology` が書く
+- 標高（`geology.height`）← `Geology` が書く
 - 流出量（`climate.runoff`）← `Climate` が書く
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
 
 ### 書くもの
 
-- 流下先（`river_downstream`）
-- 主要な流入元（`river_upstream`）
+- 流路・分配率（`river_downstream`）
 - 流量（`river_flow`）
 - 侵食量（`erosion_rate`）
 - 堆積量（`deposition_rate`）
 - 河川輸送コスト（`river_transport_cost`）
+- 湖フラグ（`is_lake`）
 
 ### 書かないもの
 
 - 降水・流出量
 - 植生
+- 標高（侵食・堆積率を書くのみ。標高への反映は `Geology` が行う）
 
 ### 補足
 
-流路計算は、標高を読んで流路グラフを返す純粋関数として切り出す。
-侵食・堆積率は `Hydrology` が計算して `CellStore` に書き、標高の最終反映は `Geology` が行う。
+MFD（Multiple Flow Direction）を採用する。
+流下先と分配率はペアで保持する（`SmallVec<[(CellId, f32); 3]>`）。
+`river_upstream` は保持しない。流域の塗り分けが必要になった時点で再検討する。
+
+窪地は湖（`is_lake=true`）として扱い、流量をそこで吸収する。
+湖セルは隣接セルの中で最も低い鞍部を唯一の流下先として設定し、溢れた水を流下させる。
+
+侵食・堆積率は `Hydrology` が計算して `CellStore` に書き、標高への最終反映は `Geology` が行う。
 河川輸送コストは `Settlement` と `Trade` が読む。
 
 ---
