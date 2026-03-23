@@ -304,20 +304,26 @@ MFD（Multiple Flow Direction）を採用する。
 
 - 食料生産量（`food_production`）← `Subsistence` が書く
 - 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
-- 前tickまでの人口
-- FeedbackQueue（`Conflict` による人口減）
+- 前tickまでの人口（`population`）
+- FeedbackQueue（`Conflict` による死亡率上昇・直接人口減）
 
 ### 書くもの
 
-- 人口
-- 人口密度
-- 人口移動圧
+- 人口（`population`）
+- 出生率（`birth_rate`）
+- 死亡率（`death_rate`）
 
 ### 書かないもの
 
+- `population_density`（`population` から導出可能なため列として持たない）
+- `migration_pressure`（`Settlement` が内部計算で使用。CellStoreの列として持たない）
 - 国家・領域
 
 ### 補足
+
+`Conflict` からの干渉は2種類を使い分ける。
+通常の戦闘による死者増は死亡率を上げる（`DeltaF32 { field: DeathRate, delta }`）。
+大虐殺など単発の大量死は人口を直接削る（`DeltaF32 { field: Population, delta }`）。
 
 `Disease`（Tier 2）が有効化された場合、死亡率への影響をFeedbackQueue経由で受け取る。
 
@@ -327,27 +333,36 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 読むもの
 
-- 人口・人口移動圧 ← `Population` が書く
+- 人口（`population`）← `Population` が書く
+- 出生率・死亡率（`birth_rate`、`death_rate`）← `Population` が書く
 - 食料生産量・生業構成（`food_production`、`subsistence_mix`）← `Subsistence` が書く
 - 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
-- 河川輸送コスト ← `Hydrology` が書く
-- 標高・地形
+- 河川輸送コスト（`river_transport_cost`）← `Hydrology` が書く
+- 標高・固定地理量（`geology.height`、`geo.is_coastal`）
 - FeedbackQueue（`Polity` による遷都・強制移住、`Conflict` による都市破壊）
 
 ### 書くもの
 
-- 集落位置・規模
-- 都市化度
-- 中心地階層
-- 居住地分布
+- 人口（`population`）— 移動による社会増減を直接反映
+- 都市化度（`urbanization`）
 
 ### 書かないもの
 
+- `settlement_size`（列として持たない。Tier2の `Infrastructure` 有効化時に拡張ポイントとする）
+- `migration_pressure`（Settlement内部で計算し、外部には公開しない）
+- `centrality`（列として持たない。首都・拠点都市の選定は `Polity` が `urbanization` を読んで行う）
+- `population_density`（`population` から導出）
 - 国家・領域（`Polity` が書く）
 
 ### 補足
 
-港市・河港・峠都市などの立地は、地形と河川輸送コストから自然に決まる。
+移動量の計算はSettlement内部で完結させる。
+送り出し側（`food_production` が低い、`population` が高い等）と
+受け入れ側（山地・砂漠は `food_production`・`freshwater_access` が低い）の両方を
+既存の変数から判断するため、`migration_pressure` を中間値として保持する必要はない。
+
+港市・河港・峠都市などの立地は、地形と河川輸送コストから `urbanization` の計算を通じて自然に決まる。
+首都選定（`PolityComponent.capital_cell` の更新）は `Polity` の責務とする。
 
 ---
 

@@ -92,13 +92,11 @@ struct CellStore {
 
     // --- Population ---
     population:           Vec<f32>, // f32でも、数百万人のうち下位1桁しか変わらないため許容
-    population_density:   Vec<f32>,
-    migration_pressure:   Vec<f32>,
+    birth_rate:           Vec<f32>, // Subsistenceからの飢餓圧力を受ける
+    death_rate:           Vec<f32>, // ConflictがFeedbackQueue経由で干渉する
 
     // --- Settlement ---
-    settlement_size:      Vec<f32>,
     urbanization:         Vec<f32>,
-    centrality:           Vec<f32>,
 
     // --- Polity ---
     polity_id:            Vec<Option<PolityId>>,
@@ -140,8 +138,6 @@ struct LanguageGroupComponent {
 struct SettlementComponent {
     settlement_id: SettlementId,
     cell:          CellId,
-    size:          f32,
-    urbanization:  f32,
 }
 
 // Region Entity（流域・文化圏・前線帯など）
@@ -152,7 +148,7 @@ struct RegionComponent {
 ```
 
 `SettlementComponent.cell` を集落位置の正本とする。
-居住地分布は `CellStore` の `settlement_size`・`urbanization`・`centrality` などの公開列から導出して扱う。
+居住地分布は `CellStore` の `urbanization` などの公開列から導出して扱う。
 
 ---
 
