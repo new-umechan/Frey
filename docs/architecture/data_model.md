@@ -79,24 +79,19 @@ struct CellStore {
     ecology_internal:     Vec<EcologyInternal>,
 
     // --- Domesticates（公開）---
+    // crop_available / livestock_available は Domesticates 内部専用。Subsistence は読まない。
     crop_available:       Vec<CropBitmap>,
-    crop_adopted:         Vec<CropBitmap>,
+    crop_adoption:        Vec<[f32; N_CROPS]>,       // 0.0〜1.0の普及度。Subsistenceが読む
     livestock_available:  Vec<LivestockBitmap>,
-    livestock_adopted:    Vec<LivestockBitmap>,
-
-    // --- Domesticates（内部状態）---
-    // DomesticatesSystem以外は読まない
-    domesticates_internal: Vec<DomesticatesInternal>,
+    livestock_adoption:   Vec<[f32; N_LIVESTOCK]>,   // 0.0〜1.0の普及度。Subsistenceが読む
 
     // --- Subsistence ---
     subsistence_mix:      Vec<SubsistenceMix>,
-    productivity:         Vec<f32>,
     food_production:      Vec<f32>,
-    habitability:         Vec<f32>,
-    land_use:             Vec<LandUse>,
+    freshwater_access:    Vec<f32>,  // river_flow・is_lakeから導出。Population・Settlementが読む
 
     // --- Population ---
-    population:           Vec<f32>,
+    population:           Vec<f32>, // f32でも、数百万人のうち下位1桁しか変わらないため許容
     population_density:   Vec<f32>,
     migration_pressure:   Vec<f32>,
 
@@ -256,8 +251,35 @@ enum TargetRef {
     Global,
 }
 
+// u8で7種の作物をビット管理
+// bit0: Wheat, bit1: Rice, bit2: Maize, bit3: Millet
+// bit4: Tuber, bit5: Legume, bit6: Barley
+type CropBitmap = u8;
+
+// u8で5種の家畜をビット管理
+// bit0: Cattle, bit1: Horse, bit2: Sheep, bit3: Pig, bit4: Camel
+type LivestockBitmap = u8;
+
+// 生業構成。各フィールドの合計が1.0になるよう正規化して使う
+struct SubsistenceMix {
+    gathering:   f32,  // 採集
+    hunting:     f32,  // 狩猟
+    fishing:     f32,  // 漁撈
+    farming:     f32,  // 農耕
+    pastoralism: f32,  // 牧畜
+}
+
+enum CellFieldId {
+    // 基本フィールド
+    // ...
+    // Domesticates
+    CropAdoption(CropId),
+    LivestockAdoption(LivestockId),
+}
+
 enum FeedbackPayload {
     // セルのf32フィールドに加算する（競合時は単純加算）
+    // 例: DeltaF32 { field: CellFieldId::CropAdoption(CropId(0)), cell, delta }
     DeltaF32     { field: CellFieldId, cell: CellId, delta: f32 },
     // セルのフィールドを直接上書きする
     SetValue     { field: CellFieldId, cell: CellId, value: FieldValue },

@@ -244,8 +244,10 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 書くもの
 
-- 作物分布（栽培可能種・栽培実績）
-- 家畜分布（利用可能種・利用実績）
+- 作物栽培可能種（`crop_available`）— Domesticates内部専用。Subsistenceは読まない
+- 作物普及度（`crop_adoption`）— 0.0〜1.0。Subsistenceが読む
+- 家畜利用可能種（`livestock_available`）— Domesticates内部専用。Subsistenceは読まない
+- 家畜普及度（`livestock_adoption`）— 0.0〜1.0。Subsistenceが読む
 
 ### 書かないもの
 
@@ -268,16 +270,14 @@ MFD（Multiple Flow Direction）を採用する。
 - 標高
 - 流量
 - 植生 ← `Ecology` が書く
-- 作物・家畜分布 ← `Domesticates` が書く
+- 作物・家畜普及度（`crop_adoption`、`livestock_adoption`）← `Domesticates` が書く
 - 前tickまでの生業構成
 
 ### 書くもの
 
-- 生業構成（採集・狩猟・漁撈・農耕・牧畜・混合の比率）
-- 生産性
-- 食料生産量
-- 土地利用
-- 居住性
+- 生業構成（`subsistence_mix`）
+- 食料生産量（`food_production`）
+- 淡水アクセス（`freshwater_access`）
 
 ### 書かないもの
 
@@ -285,11 +285,16 @@ MFD（Multiple Flow Direction）を採用する。
 - 標高
 - 気候属性
 - 国家
+- 生産性（`food_production` で代替。独立列としては持たない）
+- 土地利用（`SubsistenceMix` から導出可。独立列としては持たない）
 
 ### 補足
 
 生産量と生業様式は別物として扱う。
-生業構成の変化は環境条件と前tickの状態から決まる。
+生業構成（`SubsistenceMix`）の変化は環境条件と前tickの状態から決まり、転換には慣性がある。
+`crop_adoption` が高い → 農耕転換の圧力が上がる → `farming` 比率が遅延して上昇 → `food_production` が跳ね上がる、という遅延と非線形性が「なぜここで文明が生まれたか」の表現に直結する。
+`freshwater_access` は `river_flow`・`is_lake` から導出し、Population・Settlementが読む。
+計算式の粒度（距離減衰の有無など）はドメイン仕様に委ねる。
 
 ---
 
@@ -297,7 +302,8 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 読むもの
 
-- 食料生産量 ← `Subsistence` が書く
+- 食料生産量（`food_production`）← `Subsistence` が書く
+- 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
 - 前tickまでの人口
 - FeedbackQueue（`Conflict` による人口減）
 
@@ -322,7 +328,8 @@ MFD（Multiple Flow Direction）を採用する。
 ### 読むもの
 
 - 人口・人口移動圧 ← `Population` が書く
-- 食料生産量・生業構成 ← `Subsistence` が書く
+- 食料生産量・生業構成（`food_production`、`subsistence_mix`）← `Subsistence` が書く
+- 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
 - 河川輸送コスト ← `Hydrology` が書く
 - 標高・地形
 - FeedbackQueue（`Polity` による遷都・強制移住、`Conflict` による都市破壊）

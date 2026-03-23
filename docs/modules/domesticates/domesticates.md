@@ -15,11 +15,3 @@ type CropBitmap = u8;
 type LivestockBitmap = u8;
 ```
 
-### 内部状態
-
-```rust
-struct DomesticatesInternal {
-    crop_pressure:      [f32; 7],  // 0..1（採用圧力の連続値）
-    livestock_pressure: [f32; 5],  // 0..1
-```
-
