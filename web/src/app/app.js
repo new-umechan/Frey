@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import initWasm, {
     WorldSimController,
     generate_mesh,
@@ -71,6 +72,7 @@ export async function createApp() {
     const {
         appShell,
         canvas,
+        loadingOverlayCanvas,
         viewportPanel,
         seedForm,
         seedInput,
@@ -95,6 +97,10 @@ export async function createApp() {
     } = collectAppElements({ perfEnabled: isPerfEnabled });
     const statusRows = [statusEraLabel, eraScaleTickLabel];
     const { setStatus } = createStatusController(statusMessage, statusRows);
+    const loadingOverlayContext = loadingOverlayCanvas.getContext("2d");
+    if (!loadingOverlayContext) {
+        throw new Error("loading overlay canvas context is unavailable");
+    }
 
     function setSidebarOpen(isOpen) {
         if (!sidebarToggle) {
@@ -218,6 +224,83 @@ export async function createApp() {
         globeControls,
         getCurrentSurfaceMode: () => currentSurfaceMode,
     });
+    const loadingPlanetCenterWorld = new THREE.Vector3();
+    const loadingPlanetEdgeWorld = new THREE.Vector3();
+    const loadingPlanetCenterNdc = new THREE.Vector3();
+    const loadingPlanetEdgeNdc = new THREE.Vector3();
+    const loadingPlanetEdgeLocal = new THREE.Vector3(1, 0, 0);
+    const LOADING_CIRCLE_COLOR = "#E5EAEE";
+    let isWorldInitializing = false;
+
+    function syncLoadingOverlayCanvasSize() {
+        const panelRect = viewportPanel.getBoundingClientRect();
+        const panelWidth = Math.max(1, Math.floor(panelRect.width));
+        const panelHeight = Math.max(1, Math.floor(panelRect.height));
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const bufferWidth = Math.max(1, Math.floor(panelWidth * dpr));
+        const bufferHeight = Math.max(1, Math.floor(panelHeight * dpr));
+        if (
+            loadingOverlayCanvas.width !== bufferWidth ||
+            loadingOverlayCanvas.height !== bufferHeight
+        ) {
+            loadingOverlayCanvas.width = bufferWidth;
+            loadingOverlayCanvas.height = bufferHeight;
+        }
+        loadingOverlayContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return {
+            panelWidth,
+            panelHeight,
+        };
+    }
+
+    function clearLoadingOverlay() {
+        const { panelWidth, panelHeight } = syncLoadingOverlayCanvasSize();
+        loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
+    }
+
+    function measurePlanetScreenRadius(camera, panelWidth, panelHeight) {
+        sphere.getWorldPosition(loadingPlanetCenterWorld);
+        loadingPlanetEdgeWorld.copy(loadingPlanetEdgeLocal);
+        sphere.localToWorld(loadingPlanetEdgeWorld);
+
+        loadingPlanetCenterNdc.copy(loadingPlanetCenterWorld).project(camera);
+        loadingPlanetEdgeNdc.copy(loadingPlanetEdgeWorld).project(camera);
+
+        const centerX = (loadingPlanetCenterNdc.x * 0.5 + 0.5) * panelWidth;
+        const centerY = (1 - (loadingPlanetCenterNdc.y * 0.5 + 0.5)) * panelHeight;
+        const edgeX = (loadingPlanetEdgeNdc.x * 0.5 + 0.5) * panelWidth;
+        const edgeY = (1 - (loadingPlanetEdgeNdc.y * 0.5 + 0.5)) * panelHeight;
+
+        return Math.hypot(edgeX - centerX, edgeY - centerY);
+    }
+
+    function renderLoadingOverlay() {
+        if (!isWorldInitializing) {
+            clearLoadingOverlay();
+            return;
+        }
+
+        const { panelWidth, panelHeight } = syncLoadingOverlayCanvasSize();
+        loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
+
+        const camera = cameraController.getCamera();
+        const radius = measurePlanetScreenRadius(camera, panelWidth, panelHeight);
+        if (!Number.isFinite(radius) || radius <= 0) {
+            return;
+        }
+
+        loadingOverlayContext.fillStyle = LOADING_CIRCLE_COLOR;
+        loadingOverlayContext.beginPath();
+        loadingOverlayContext.arc(panelWidth * 0.5, panelHeight * 0.5, radius, 0, Math.PI * 2);
+        loadingOverlayContext.fill();
+    }
+
+    function renderFrame() {
+        globePinchFocusController.update();
+        cameraController.getActiveControls().update();
+        renderer.render(scene, cameraController.getCamera());
+        renderLoadingOverlay();
+    }
 
     let playbackController = null;
     const getMutableState = () => {
@@ -380,6 +463,7 @@ export async function createApp() {
 
     function onResize() {
         cameraController.onResize();
+        renderLoadingOverlay();
     }
 
     const terrainGenerationController = createTerrainGenerationController({
@@ -406,6 +490,26 @@ export async function createApp() {
         },
         appendPlaybackEvent: (...args) => {
             playbackController.appendPlaybackEvent(...args);
+        },
+        onInitWorldStart: async () => {
+            isWorldInitializing = true;
+            renderLoadingOverlay();
+            await new Promise((resolve) => {
+                window.requestAnimationFrame(() => {
+                    renderFrame();
+                    resolve();
+                });
+            });
+            await new Promise((resolve) => {
+                window.requestAnimationFrame(() => {
+                    renderFrame();
+                    resolve();
+                });
+            });
+        },
+        onInitWorldEnd: () => {
+            isWorldInitializing = false;
+            clearLoadingOverlay();
         },
     });
     const { updateTerrain } = terrainGenerationController;
@@ -483,9 +587,7 @@ export async function createApp() {
                 () => playbackState.isPlaying && Boolean(currentTerrainData) && Boolean(activeWorldId),
                 stepWorldTick,
             );
-            globePinchFocusController.update();
-            cameraController.getActiveControls().update();
-            renderer.render(scene, cameraController.getCamera());
+            renderFrame();
         },
         getLastPerfBenchmarkResult,
     };

@@ -72,6 +72,7 @@ function collectPerfElements(perfEnabled) {
 export function collectAppElements(options = {}) {
     const perfEnabled = options.perfEnabled === true;
     const canvas = requireElement("mesh-canvas", HTMLCanvasElement);
+    const loadingOverlayCanvas = requireElement("loading-overlay-canvas", HTMLCanvasElement);
     const appShell = canvas.closest(".app-shell");
     if (!(appShell instanceof HTMLElement)) {
         throw new Error("required app shell is missing");
@@ -116,6 +117,7 @@ export function collectAppElements(options = {}) {
     return {
         appShell,
         canvas,
+        loadingOverlayCanvas,
         viewportPanel,
         seedForm,
         seedInput,

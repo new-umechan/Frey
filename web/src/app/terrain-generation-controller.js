@@ -20,10 +20,11 @@ export function createTerrainGenerationController(options = {}) {
         setCurrentState,
         setPlaybackRunning,
         appendPlaybackEvent,
+        onInitWorldStart = () => {},
+        onInitWorldEnd = () => {},
     } = options;
 
     let generationToken = 0;
-
     const updateTerrain = async (seed) => {
         const token = ++generationToken;
         const nextSeed = seed.trim() || getCurrentSeed();
@@ -33,6 +34,7 @@ export function createTerrainGenerationController(options = {}) {
         seedInput.setAttribute("disabled", "disabled");
 
         try {
+            await onInitWorldStart();
             const initResult = worldSimController.init_world(nextSeed, level, {
                 geology_params: terrainParams,
             });
@@ -66,6 +68,7 @@ export function createTerrainGenerationController(options = {}) {
                 activeElement.blur();
             }
         } finally {
+            onInitWorldEnd();
             seedInput.removeAttribute("disabled");
             seedForm.querySelector("button")?.removeAttribute("disabled");
         }
