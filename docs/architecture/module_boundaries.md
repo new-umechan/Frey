@@ -411,8 +411,8 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 書くもの
 
-- 戦争状態
-- 戦線位置（`frontline_pressure`）
+- 戦闘強度（`conflict_intensity`）— 戦線からの距離減衰込み。毎tick全セル上書き（`SetValue`）
+- 実効支配国（`occupier_id`）— 占領時に書き込み、戦争終結時にクリア（Noneへの書き戻しもConflictが担う）
 
 ### 書かないもの（FeedbackQueueに回すもの）
 

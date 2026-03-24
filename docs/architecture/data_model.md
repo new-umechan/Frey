@@ -117,9 +117,8 @@ struct CellStore {
     polity_id:            Vec<Option<PolityId>>,
 
     // --- Conflict ---
-    war_state:            Vec<bool>,
-    frontline_pressure:   Vec<f32>,   // 0..1, 戦線強度
-    occupier_id:          Vec<Option<PolityId>>,
+    conflict_intensity:   Vec<f32>,            // 0..1、戦線からの距離減衰込みの戦闘強度。毎tick上書き
+    occupier_id:          Vec<Option<PolityId>>,  // 実効支配国。主権(polity_id)とは独立して保持
 }
 ```
 
