@@ -28,6 +28,21 @@ struct Simulation {
 
 ---
 
+## ID型定義
+
+すべてのIDはnewtypeパターンで定義する。異なるID型の混在はコンパイルエラーとなる。
+セル数は現在約4万だがu32を採用する（将来的な解像度向上に備える）。
+
+```rust
+struct CellId(u32);
+struct PolityId(u32);
+struct SettlementId(u32);
+struct RegionId(u32);
+struct PlateId(u32);
+```
+
+---
+
 ## CellStore
 
 全セルのComponentをSoA（Structure of Arrays）で保持する。
@@ -100,9 +115,6 @@ struct CellStore {
 
     // --- Polity ---
     polity_id:            Vec<Option<PolityId>>,
-    territory_status:     Vec<TerritoryStatus>,
-    language_group:       Vec<Option<LanguageGroupId>>,
-    polity_stability:     Vec<f32>,
 
     // --- Conflict ---
     war_state:            Vec<bool>,
@@ -125,13 +137,13 @@ Polity・Settlement・Regionなど、数が少なく動的に生滅する疎なE
 ```rust
 // Polity Entity
 struct PolityComponent {
-    polity_id:    PolityId,
-    capital_cell: CellId,
-    stability:    f32,
-}
-
-struct LanguageGroupComponent {
-    group_id: LanguageGroupId,
+    polity_id:      PolityId,
+    capital_cell:   CellId,
+    legitimacy:     f32,   // 正統性。低いと辺境から離反・分裂が起きる
+    centralization: f32,   // 集権度。高いと遠隔地まで支配コストを払える
+    military_tech:  f32,   // 軍事技術水準。Conflictが戦闘力補正に使う
+    // 正本は CellStore.polity_id。polity_id変化時に差分更新するキャッシュ
+    cells_cache:    Vec<CellId>,
 }
 
 // Settlement Entity
@@ -242,7 +254,6 @@ enum TargetRef {
     Cell(CellId),
     Polity(PolityId),
     Settlement(SettlementId),
-    Edge(GraphEdgeId),
     Region(RegionId),
     Global,
 }
@@ -316,6 +327,8 @@ struct Archive {
 Tier2モジュールが有効化された際にCellStoreへ追加されるComponent列。
 
 ```rust
+// Language（Tier1では削除。住民の言語・民族帰属を表現する）
+language_group:       Vec<Option<LanguageGroupId>>,
 // Disease
 infection_rate:       Vec<f32>,
 mortality_modifier:   Vec<f32>,

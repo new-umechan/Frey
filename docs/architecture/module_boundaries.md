@@ -379,21 +379,23 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 書くもの
 
-- 国家ID
-- 領域
-- 言語・文化圏
-- 国家安定度
+- 国家ID（`polity_id`）
+- 領域（`CellStore.polity_id` が正本。`PolityComponent.cells_cache` は差分更新キャッシュ）
+- 国家安定度（`legitimacy`・`centralization`・`military_tech`）
+- 首都（`capital_cell`）
 - polity_groups への加入・脱退・解散（FeedbackQueue経由で次tickに適用）
 
 ### 書かないもの
 
 - 人口の直接更新
 - 集落の直接更新
+- 言語・文化圏（`language_group` はTier2へ移管）
 
 ### 補足
 
-言語・文化圏は国家の安定度に影響する変数として保持する。
-多民族構成（言語圏と国家境界の不一致）は国家安定度を下げる。
+`legitimacy` と `centralization` の組み合わせで国家の拡大・崩壊・分裂のダイナミクスを表現する。
+多民族構成（言語圏と国家境界の不一致）はTier2の `Language` モジュールが担う。
+`cells_cache` の更新は `ExecSystem` が `changed_polity_cells` バッファ経由で差分管理する。
 
 ---
 
