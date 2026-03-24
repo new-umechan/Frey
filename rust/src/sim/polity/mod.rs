@@ -21,18 +21,6 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
             None
         };
         world.state.polity.polity_id[i] = polity_id;
-        world.state.polity.territory_status[i] = if polity_id.is_none() {
-            0
-        } else {
-            1
-        };
-        world.state.polity.language_group[i] = if polity_id.is_none() {
-            0
-        } else {
-            (i % 8) as u16 + 1
-        };
-        world.state.polity.polity_stability[i] =
-            (1.0 - world.state.population.migration_pressure[i]).clamp(0.0, 1.0);
         if let Some(id) = polity_id {
             polity_cells.entry(id).or_default().push(i);
         }
@@ -49,7 +37,9 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
                 max_population = pop;
                 capital_cell = cell as u32;
             }
-            stability_sum += world.state.polity.polity_stability[cell];
+            let birth = world.state.population.birth_rate[cell].clamp(0.0, 1.0);
+            let death = world.state.population.death_rate[cell].clamp(0.0, 1.0);
+            stability_sum += (1.0 - (death - birth).max(0.0)).clamp(0.0, 1.0);
         }
         let stability = if cells.is_empty() {
             0.0
@@ -62,6 +52,7 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
             legitimacy: stability,
             centralization: (0.35 + stability * 0.50).clamp(0.0, 1.0),
             military_tech: (0.20 + max_population / 120.0).clamp(0.0, 1.0),
+            cells_cache: cells.iter().map(|&idx| idx as u32).collect(),
         });
     }
     polity_components.sort_by_key(|component| component.polity_id);

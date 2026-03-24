@@ -70,12 +70,20 @@ fn apply_feedback_f32_delta(
     if cell >= cell_count {
         return;
     }
-    let target = match field {
-        CellFieldId::WaterWithdrawal => &mut world.state.subsistence.water_withdrawal,
-        CellFieldId::DamPressure => &mut world.state.subsistence.dam_pressure,
-        CellFieldId::Pollution => &mut world.state.subsistence.pollution,
-    };
-    target[cell] += value;
+    match field {
+        CellFieldId::CropAdoption(crop_id) => {
+            let idx = crop_id as usize;
+            if idx < world.state.domesticates.crop_adoption[cell].len() {
+                world.state.domesticates.crop_adoption[cell][idx] += value;
+            }
+        }
+        CellFieldId::LivestockAdoption(livestock_id) => {
+            let idx = livestock_id as usize;
+            if idx < world.state.domesticates.livestock_adoption[cell].len() {
+                world.state.domesticates.livestock_adoption[cell][idx] += value;
+            }
+        }
+    }
 }
 
 fn apply_feedback_f32_set(
@@ -89,12 +97,20 @@ fn apply_feedback_f32_set(
     if cell >= cell_count {
         return;
     }
-    let target = match field {
-        CellFieldId::WaterWithdrawal => &mut world.state.subsistence.water_withdrawal,
-        CellFieldId::DamPressure => &mut world.state.subsistence.dam_pressure,
-        CellFieldId::Pollution => &mut world.state.subsistence.pollution,
-    };
-    target[cell] = value;
+    match field {
+        CellFieldId::CropAdoption(crop_id) => {
+            let idx = crop_id as usize;
+            if idx < world.state.domesticates.crop_adoption[cell].len() {
+                world.state.domesticates.crop_adoption[cell][idx] = value;
+            }
+        }
+        CellFieldId::LivestockAdoption(livestock_id) => {
+            let idx = livestock_id as usize;
+            if idx < world.state.domesticates.livestock_adoption[cell].len() {
+                world.state.domesticates.livestock_adoption[cell][idx] = value;
+            }
+        }
+    }
 }
 
 fn apply_spawn_entity(world: &mut World, bundle: EntityBundle) {
@@ -152,14 +168,7 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
                 }
             }
         }
-        (
-            TargetRef::Settlement(_),
-            ComponentPatch::Settlement {
-                cell,
-                size,
-                urbanization,
-            },
-        ) => {
+        (TargetRef::Settlement(_), ComponentPatch::Settlement { cell }) => {
             if let Some(component) = world
                 .entities
                 .settlement_components
@@ -168,12 +177,6 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
             {
                 if let Some(value) = cell {
                     component.cell = value;
-                }
-                if let Some(value) = size {
-                    component.size = value;
-                }
-                if let Some(value) = urbanization {
-                    component.urbanization = value;
                 }
             }
         }

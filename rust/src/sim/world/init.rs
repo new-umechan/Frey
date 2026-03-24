@@ -1,20 +1,21 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::erosion::ErosionAutomatonState;
-use smallvec::SmallVec;
 use crate::sim::geo::{
     add3, dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, sub3,
     EARTH_RADIUS_KM,
 };
+use crate::sim::hydrology::rebuild_mfd_from_primary;
+use smallvec::SmallVec;
 
 use super::era::EraKind;
 use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
     EcologyInternal, EcologyState, EntitiesState, GeoState, GeologyState, HydrologyState,
-    PolityState, PopulationState, SettlementState, SubsistenceState, World, WorldMesh, WorldState,
+    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState, World,
+    WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
@@ -58,40 +59,30 @@ impl World {
                 },
                 domesticates: DomesticatesState {
                     crop_available: vec![0; cell_count],
-                    crop_adoption: vec![0.0; cell_count],
+                    crop_adoption: vec![[0.0; N_CROPS]; cell_count],
                     livestock_available: vec![0; cell_count],
-                    livestock_adoption: vec![0.0; cell_count],
+                    livestock_adoption: vec![[0.0; N_LIVESTOCK]; cell_count],
                     domesticates_internal: vec![DomesticatesInternal::default(); cell_count],
                 },
                 subsistence: SubsistenceState {
-                    subsistence_mix: vec![0.0; cell_count],
+                    subsistence_mix: vec![SubsistenceMix::default(); cell_count],
                     food_production: vec![0.0; cell_count],
                     freshwater_access: vec![0.0; cell_count],
-                    land_use: vec![0.0; cell_count],
-                    water_withdrawal: vec![0.0; cell_count],
-                    dam_pressure: vec![0.0; cell_count],
-                    pollution: vec![0.0; cell_count],
                 },
                 population: PopulationState {
                     population: vec![0.0; cell_count],
-                    population_density: vec![0.0; cell_count],
-                    migration_pressure: vec![0.0; cell_count],
+                    birth_rate: vec![0.0; cell_count],
+                    death_rate: vec![0.0; cell_count],
                 },
                 settlement: SettlementState {
-                    settlement_population: vec![0.0; cell_count],
                     urbanization: vec![0.0; cell_count],
-                    centrality: vec![0.0; cell_count],
                 },
                 polity: PolityState {
                     polity_id: vec![None; cell_count],
-                    territory_status: vec![0; cell_count],
-                    language_group: vec![0; cell_count],
-                    polity_stability: vec![0.0; cell_count],
                 },
                 conflict: ConflictState {
-                    war_state: vec![0; cell_count],
+                    conflict_intensity: vec![0.0; cell_count],
                     occupier_id: vec![None; cell_count],
-                    frontline: vec![0.0; cell_count],
                 },
             },
             entities: EntitiesState::default(),

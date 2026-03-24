@@ -56,9 +56,8 @@ pub enum ModuleId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CellFieldId {
-    WaterWithdrawal,
-    DamPressure,
-    Pollution,
+    CropAdoption(u8),
+    LivestockAdoption(u8),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -83,8 +82,6 @@ pub enum ComponentPatch {
     },
     Settlement {
         cell: Option<u32>,
-        size: Option<f32>,
-        urbanization: Option<f32>,
     },
     Region {
         cells: Option<Vec<u32>>,

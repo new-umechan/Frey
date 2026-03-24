@@ -65,14 +65,13 @@ pub struct PolityComponent {
     pub legitimacy: f32,
     pub centralization: f32,
     pub military_tech: f32,
+    pub cells_cache: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettlementComponent {
     pub settlement_id: u32,
     pub cell: u32,
-    pub size: f32,
-    pub urbanization: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -328,10 +327,10 @@ pub enum Biome {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DomesticatesState {
-    pub crop_available: Vec<u32>,
-    pub crop_adoption: Vec<f32>,
-    pub livestock_available: Vec<u32>,
-    pub livestock_adoption: Vec<f32>,
+    pub crop_available: Vec<CropBitmap>,
+    pub crop_adoption: Vec<[f32; N_CROPS]>,
+    pub livestock_available: Vec<LivestockBitmap>,
+    pub livestock_adoption: Vec<[f32; N_LIVESTOCK]>,
     #[serde(default)]
     pub domesticates_internal: Vec<DomesticatesInternal>,
 }
@@ -341,44 +340,48 @@ pub struct DomesticatesInternal {
     pub diffusion_memory: f32,
 }
 
+pub type CropBitmap = u8;
+pub type LivestockBitmap = u8;
+pub const N_CROPS: usize = 7;
+pub const N_LIVESTOCK: usize = 5;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct SubsistenceMix {
+    pub gathering: f32,
+    pub hunting: f32,
+    pub fishing: f32,
+    pub farming: f32,
+    pub pastoralism: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubsistenceState {
-    pub subsistence_mix: Vec<f32>,
+    pub subsistence_mix: Vec<SubsistenceMix>,
     pub food_production: Vec<f32>,
     pub freshwater_access: Vec<f32>,
-    pub land_use: Vec<f32>,
-    pub water_withdrawal: Vec<f32>,
-    pub dam_pressure: Vec<f32>,
-    pub pollution: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PopulationState {
     pub population: Vec<f32>,
-    pub population_density: Vec<f32>,
-    pub migration_pressure: Vec<f32>,
+    pub birth_rate: Vec<f32>,
+    pub death_rate: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettlementState {
-    pub settlement_population: Vec<f32>,
     pub urbanization: Vec<f32>,
-    pub centrality: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolityState {
     pub polity_id: Vec<Option<u32>>,
-    pub territory_status: Vec<u8>,
-    pub language_group: Vec<u16>,
-    pub polity_stability: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConflictState {
-    pub war_state: Vec<u8>,
+    pub conflict_intensity: Vec<f32>,
     pub occupier_id: Vec<Option<u32>>,
-    pub frontline: Vec<f32>,
 }
 
 pub struct CellStore<'a> {

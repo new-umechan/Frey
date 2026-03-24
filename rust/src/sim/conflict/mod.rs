@@ -13,8 +13,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     }
 
     let n = world.state.geology.height.len();
-    world.state.conflict.war_state.fill(0);
-    world.state.conflict.frontline.fill(0.0);
+    world.state.conflict.conflict_intensity.fill(0.0);
     world.state.conflict.occupier_id.fill(None);
 
     let mut polity_cells: HashMap<u32, Vec<u32>> = HashMap::new();
@@ -53,8 +52,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
             if other_polity == polity_id {
                 continue;
             }
-            world.state.conflict.war_state[i] = 1;
-            world.state.conflict.frontline[i] = 1.0;
+            world.state.conflict.conflict_intensity[i] = 1.0;
             frontline_cells.push(i as u32);
             let pair = if polity_id < other_polity {
                 (polity_id, other_polity)

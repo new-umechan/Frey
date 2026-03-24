@@ -25,6 +25,8 @@ const LOGGING_FEEDBACK_KEY: &str = "logging";
 const GRAZING_FEEDBACK_KEY: &str = "grazing";
 const SLASH_BURN_FEEDBACK_KEY: &str = "slash_burn";
 const SOIL_SLASH_BURN_DELTA_FEEDBACK_KEY: &str = "soil_slash_burn_delta";
+const FARMING_CONSUMPTION_FEEDBACK_KEY: &str = "farming_consumption";
+const POLLUTION_FEEDBACK_KEY: &str = "pollution";
 
 pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -54,11 +56,11 @@ pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
 
         let temp = world.state.climate.temperature[i];
         let precipitation = world.state.climate.precipitation[i];
-        let pollution = world.state.subsistence.pollution[i].clamp(0.0, 1.0);
+        let pollution = feedback_value(world, POLLUTION_FEEDBACK_KEY, i).clamp(0.0, 1.0);
         let logging = feedback_value(world, LOGGING_FEEDBACK_KEY, i);
         let grazing = feedback_value(world, GRAZING_FEEDBACK_KEY, i);
         let slash_burn = feedback_value(world, SLASH_BURN_FEEDBACK_KEY, i);
-        let farming_consumption = world.state.subsistence.land_use[i].clamp(0.0, 1.0);
+        let farming_consumption = feedback_value(world, FARMING_CONSUMPTION_FEEDBACK_KEY, i);
         let erosion_loss = feedback_value(world, EROSION_FEEDBACK_KEY, i)
             .max(world.state.geology.erosion_rate[i].max(0.0) * 0.10);
         let flood_deposition = feedback_value(world, FLOOD_DEPOSITION_FEEDBACK_KEY, i);

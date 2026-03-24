@@ -21,25 +21,12 @@ pub(crate) fn update_settlement(world: &mut World, budget: u32) {
             0.0
         };
         let urban = (next_size / 60.0).clamp(0.0, 1.0);
-        world.state.settlement.settlement_population[i] =
-            lerp(world.state.settlement.settlement_population[i], next_size, alpha);
         world.state.settlement.urbanization[i] =
             lerp(world.state.settlement.urbanization[i], urban, alpha);
-        world.state.settlement.centrality[i] = lerp(
-            world.state.settlement.centrality[i],
-            (urban
-                + world.state.hydrology.river_transport_cost[i]
-                    .recip()
-                    .clamp(0.0, 1.0))
-                * 0.5,
-            alpha,
-        );
-        if world.state.settlement.settlement_population[i] > 0.5 {
+        if next_size > 0.5 {
             settlements.push(SettlementComponent {
                 settlement_id: i as u32 + 1,
                 cell: i as u32,
-                size: world.state.settlement.settlement_population[i],
-                urbanization: world.state.settlement.urbanization[i],
             });
         }
     }
