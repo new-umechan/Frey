@@ -87,7 +87,7 @@ fn run_river_step_with_erosion_state(
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
     let expected_flux = hydrology.river_flow.len();
-    let expected_next = hydrology.river_path.len();
+    let expected_next = hydrology.river_downstream.len();
 
     let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
         return false;
@@ -169,10 +169,9 @@ fn run_river_step_with_erosion_state(
     let phase_start = profile_now();
     geology.height.clone_from(&state.height);
     hydrology.river_flow.clone_from(&state.river_flux);
-    hydrology.river_path.clone_from(&state.river_next);
     hydrology.river_downstream.clone_from(&state.river_next);
     hydrology.river_upstream.fill(-1);
-    for (cell, &next) in hydrology.river_path.iter().enumerate() {
+    for (cell, &next) in hydrology.river_downstream.iter().enumerate() {
         if next >= 0 {
             let next_i = next as usize;
             if next_i < hydrology.river_upstream.len() {

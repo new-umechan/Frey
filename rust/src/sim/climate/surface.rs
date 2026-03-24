@@ -34,27 +34,27 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut precip_factor = vec![1.0; cell_count];
 
     for i in 0..cell_count {
-        let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
-        let latitude_abs = latitude_deg.abs();
+        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+        let latitude_abs = latitude.abs();
         let elevation_m = world.state.geology.height[i].max(0.0) * HEIGHT_TO_METERS;
         let temperature =
-            base_land_temperature(latitude_deg) - LAPSE_RATE_C_PER_KM * elevation_m / 1_000.0;
+            base_land_temperature(latitude) - LAPSE_RATE_C_PER_KM * elevation_m / 1_000.0;
         let mut precipitation = latitude_band_precipitation(latitude_abs);
-        let wind_sign = prevailing_wind_sign(latitude_deg);
+        let wind_sign = prevailing_wind_sign(latitude);
         let (windward_factor, leeward_factor) = orographic_factors(world, i, wind_sign);
         precipitation *= windward_factor * leeward_factor;
         precipitation *= continentality_factor(
             world
                 .state
                 .geo
-                .distance_from_ocean_km
+                .distance_from_ocean
                 .get(i)
                 .copied()
                 .unwrap_or(0.0),
         );
         precipitation = precipitation.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
 
-        let mut ocean_temperature = base_ocean_temperature(latitude_deg);
+        let mut ocean_temperature = base_ocean_temperature(latitude);
         if world.state.geo.is_coastal.get(i).copied().unwrap_or(false) {
             let coast_side = world
                 .state
@@ -74,11 +74,11 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     apply_cold_coast_precipitation(world, &target_ocean_temperature, &mut precip_factor);
 
     for i in 0..cell_count {
-        let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
+        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
         let mut precipitation = target_precipitation[i] * precip_factor[i];
         precipitation = precipitation.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
         let vegetation_density = vegetation_density_proxy(world, i);
-        let pet = annual_pet_mm(target_temperature[i], latitude_deg);
+        let pet = annual_pet_mm(target_temperature[i], latitude);
         let evapotranspiration =
             actual_evapotranspiration_mm(precipitation, pet, vegetation_density);
         let runoff = (precipitation - evapotranspiration).max(0.0);
@@ -106,12 +106,12 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     }
 }
 
-fn base_land_temperature(latitude_deg: f32) -> f32 {
-    30.0 * latitude_deg.to_radians().cos() - 5.0
+fn base_land_temperature(latitude: f32) -> f32 {
+    30.0 * latitude.to_radians().cos() - 5.0
 }
 
-fn base_ocean_temperature(latitude_deg: f32) -> f32 {
-    28.0 * latitude_deg.to_radians().cos() - 2.0
+fn base_ocean_temperature(latitude: f32) -> f32 {
+    28.0 * latitude.to_radians().cos() - 2.0
 }
 
 fn latitude_band_precipitation(latitude_abs: f32) -> f32 {
@@ -123,13 +123,13 @@ fn latitude_band_precipitation(latitude_abs: f32) -> f32 {
     }
 }
 
-fn prevailing_wind_sign(latitude_deg: f32) -> f32 {
-    let mut sign = match latitude_deg.abs() {
+fn prevailing_wind_sign(latitude: f32) -> f32 {
+    let mut sign = match latitude.abs() {
         x if x < 30.0 => -1.0,
         x if x < 60.0 => 1.0,
         _ => -1.0,
     };
-    if latitude_deg < 0.0 {
+    if latitude < 0.0 {
         sign *= -1.0;
     }
     sign
@@ -193,8 +193,8 @@ fn orographic_factors(world: &World, index: usize, wind_sign: f32) -> (f32, f32)
     (windward_factor.max(0.4), leeward_factor.clamp(0.15, 1.0))
 }
 
-fn continentality_factor(distance_from_ocean_km: f32) -> f32 {
-    let continentality = 1.0 - (-distance_from_ocean_km.max(0.0) / DISTANCE_SCALE_KM).exp();
+fn continentality_factor(distance_from_ocean: f32) -> f32 {
+    let continentality = 1.0 - (-distance_from_ocean.max(0.0) / DISTANCE_SCALE_KM).exp();
     (1.0 - continentality * CONTINENTALITY_GAIN).clamp(0.35, 1.0)
 }
 
@@ -221,8 +221,8 @@ fn apply_cold_coast_precipitation(
         if !world.state.geo.is_coastal.get(i).copied().unwrap_or(false) {
             continue;
         }
-        let latitude_deg = world.state.geo.latitude_deg.get(i).copied().unwrap_or(0.0);
-        let mean_ocean_temperature = base_ocean_temperature(latitude_deg);
+        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+        let mean_ocean_temperature = base_ocean_temperature(latitude);
         let cold_anomaly = (mean_ocean_temperature
             - ocean_temperature
                 .get(i)
@@ -234,7 +234,7 @@ fn apply_cold_coast_precipitation(
         }
         let cold_factor =
             1.0 - COLD_COAST_GAIN * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
-        let wind_sign = prevailing_wind_sign(latitude_deg);
+        let wind_sign = prevailing_wind_sign(latitude);
         let mut current = i;
         for step in 0..4 {
             let attenuation = 1.0 - (step as f32) * 0.2;
@@ -318,8 +318,8 @@ fn vegetation_density_proxy(world: &World, index: usize) -> f32 {
     (tree_cover + 0.6 * ground_cover * (1.0 - tree_cover)).clamp(0.0, 1.0)
 }
 
-fn annual_pet_mm(annual_temperature_c: f32, latitude_deg: f32) -> f32 {
-    let monthly = monthly_temperatures(annual_temperature_c, latitude_deg);
+fn annual_pet_mm(annual_temperature_c: f32, latitude: f32) -> f32 {
+    let monthly = monthly_temperatures(annual_temperature_c, latitude);
     let heat_index = monthly
         .iter()
         .copied()
@@ -340,9 +340,9 @@ fn annual_pet_mm(annual_temperature_c: f32, latitude_deg: f32) -> f32 {
         .sum::<f32>()
 }
 
-fn monthly_temperatures(annual_temperature_c: f32, latitude_deg: f32) -> [f32; 12] {
-    let amplitude = 3.0 + 17.0 * (latitude_deg.abs() / 90.0);
-    let hemisphere_phase = if latitude_deg >= 0.0 { 0.0 } else { PI };
+fn monthly_temperatures(annual_temperature_c: f32, latitude: f32) -> [f32; 12] {
+    let amplitude = 3.0 + 17.0 * (latitude.abs() / 90.0);
+    let hemisphere_phase = if latitude >= 0.0 { 0.0 } else { PI };
     let mut monthly = [0.0_f32; 12];
     for (month, slot) in monthly.iter_mut().enumerate() {
         let phase = TAU * (month as f32 / 12.0) - PI;

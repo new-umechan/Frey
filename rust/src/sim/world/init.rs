@@ -21,9 +21,9 @@ impl World {
         let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
         let geo = build_geo_state(&mesh, &geology.height);
         let ocean_temperature = geo
-            .latitude_deg
+            .latitude
             .iter()
-            .map(|&latitude_deg| base_ocean_temperature(latitude_deg))
+            .map(|&latitude| base_ocean_temperature(latitude))
             .collect::<Vec<_>>();
         let era = EraKind::Crust;
         Self {
@@ -40,11 +40,10 @@ impl World {
                     ocean_temperature,
                 },
                 hydrology: HydrologyState {
-                    river_path: vec![-1; cell_count],
+                    river_downstream: vec![-1; cell_count],
                     river_flow: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
                     river_upstream: vec![-1; cell_count],
-                    river_downstream: vec![-1; cell_count],
                 },
                 ecology: EcologyState {
                     biome: vec![Biome::TemperateForest; cell_count],
@@ -143,10 +142,10 @@ impl World {
             .clone_from(&state.river_flux);
         self.state
             .hydrology
-            .river_path
+            .river_downstream
             .clone_from(&state.river_next);
         self.state.hydrology.river_flow = state.river_flux.clone();
-        self.state.hydrology.river_path = state.river_next.clone();
+        self.state.hydrology.river_downstream = state.river_next.clone();
         self.runtime.hydrology_dynamics = Some(state);
         Ok(())
     }
@@ -169,12 +168,12 @@ pub fn default_target_sea_ratio() -> f32 {
 
 fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
     let cell_count = height.len();
-    let mut latitude_deg = vec![0.0; cell_count];
+    let mut latitude = vec![0.0; cell_count];
     let mut is_coastal = vec![false; cell_count];
 
     for i in 0..cell_count {
         let pos = mesh.positions.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
-        latitude_deg[i] = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
+        latitude[i] = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
         let is_land = height[i] > 0.0;
         let start = mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
         let end = mesh.nbr_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
@@ -190,7 +189,7 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
         }
     }
 
-    let distance_from_ocean_km = build_distance_from_ocean_km(mesh, height);
+    let distance_from_ocean = build_distance_from_ocean(mesh, height);
     let mut coast_side = vec![CoastSide::None; cell_count];
     for i in 0..cell_count {
         if !is_coastal[i] {
@@ -200,8 +199,8 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
     }
 
     GeoState {
-        latitude_deg,
-        distance_from_ocean_km,
+        latitude,
+        distance_from_ocean,
         coast_side,
         is_coastal,
         neighbors_offsets: mesh.nbr_offsets.clone(),
@@ -209,7 +208,7 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
     }
 }
 
-fn build_distance_from_ocean_km(mesh: &WorldMesh, height: &[f32]) -> Vec<f32> {
+fn build_distance_from_ocean(mesh: &WorldMesh, height: &[f32]) -> Vec<f32> {
     let cell_count = height.len();
     let mut distance = vec![f32::INFINITY; cell_count];
     let mut heap = BinaryHeap::new();
@@ -318,8 +317,8 @@ fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastS
     }
 }
 
-fn base_ocean_temperature(latitude_deg: f32) -> f32 {
-    28.0 * latitude_deg.to_radians().cos() - 2.0
+fn base_ocean_temperature(latitude: f32) -> f32 {
+    28.0 * latitude.to_radians().cos() - 2.0
 }
 
 const EARTH_HALF_CIRCUMFERENCE_KM: f32 = std::f32::consts::PI * EARTH_RADIUS_KM;

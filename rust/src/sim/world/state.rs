@@ -223,8 +223,10 @@ pub struct WorldState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct GeoState {
-    pub latitude_deg: Vec<f32>,
-    pub distance_from_ocean_km: Vec<f32>,
+    #[serde(alias = "latitude_deg")]
+    pub latitude: Vec<f32>,
+    #[serde(alias = "distance_from_ocean_km")]
+    pub distance_from_ocean: Vec<f32>,
     pub coast_side: Vec<CoastSide>,
     pub is_coastal: Vec<bool>,
     #[serde(default)]
@@ -262,13 +264,12 @@ pub struct ClimateState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HydrologyState {
-    pub river_path: Vec<i32>,
+    #[serde(alias = "river_path")]
+    pub river_downstream: Vec<i32>,
     pub river_flow: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]
     pub river_upstream: Vec<i32>,
-    #[serde(default)]
-    pub river_downstream: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -106,7 +106,7 @@ fn metrics_collects_height_and_flux_stats() {
         },
     );
     world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
-    world.state.hydrology.river_path = vec![1, 2, -1, 0];
+    world.state.hydrology.river_downstream = vec![1, 2, -1, 0];
 
     let metrics = world.metrics();
     assert_eq!(metrics.cell_count, 4);
@@ -243,7 +243,7 @@ fn river_network_persists_without_early_collapse() {
         last_sink_full_rebuild_tick: 0,
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
-        prev_river_next: world.state.hydrology.river_path.clone(),
+        prev_river_next: world.state.hydrology.river_downstream.clone(),
         flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
         groundwater_storage: vec![0.0; world.cell_count()],
         scratch_effective_runoff: vec![0.0; world.cell_count()],

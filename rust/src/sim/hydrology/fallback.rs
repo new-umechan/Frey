@@ -41,15 +41,10 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         params.river_accumulation_threshold,
     );
 
-    world.state.hydrology.river_path = river_next;
+    world.state.hydrology.river_downstream = river_next;
     world.state.hydrology.river_flow = flux;
-    world
-        .state
-        .hydrology
-        .river_downstream
-        .clone_from(&world.state.hydrology.river_path);
     world.state.hydrology.river_upstream.fill(-1);
-    for (cell, &next) in world.state.hydrology.river_path.iter().enumerate() {
+    for (cell, &next) in world.state.hydrology.river_downstream.iter().enumerate() {
         if next >= 0 {
             let next_i = next as usize;
             if next_i < world.state.hydrology.river_upstream.len() {
@@ -66,7 +61,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
                 .clone_from(&world.state.hydrology.river_flow);
             state
                 .river_next
-                .clone_from(&world.state.hydrology.river_path);
+                .clone_from(&world.state.hydrology.river_downstream);
             state.height.clone_from(&world.state.geology.height);
             state.last_rebuild_tick = world.clock.tick;
             state.flux_scale_ema = 1.0;

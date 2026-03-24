@@ -20,6 +20,8 @@ JSから利用する現行WASM公開APIを定義する。
 
 - `init_world(seed: string, mesh_level: number, config?: InitWorldConfig) -> { world_id, tick, era, cell_count }`
 - `exec_world(world_id: string, tick_count: number) -> void`
+- `exec_world_profiled(world_id: string, tick_count: number) -> StepWorldProfiledResponse`
+- `exec_world_profiled_detail(world_id: string, tick_count: number) -> StepWorldProfiledDetailResponse`
 - `set_simulation_rate(world_id: string, rate: number) -> void`
 
 `InitWorldConfig`:
@@ -35,8 +37,15 @@ JSから利用する現行WASM公開APIを定義する。
 
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
   - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature`
+- `get_world_delta(world_id: string, options?: { include_fields?: string[] }) -> WorldDeltaResponse`
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
+- `list_history_ticks(world_id: string) -> { world_id, interval, ticks }`
+- `list_checkpoints() -> { checkpoints: { snapshot_id, tick }[] }`
+
+補足:
+- `river_next` は内部の `river_downstream`（単一流下先インデックス）を返す。
+- `get_world_delta` は差分のみを返す。`include_fields` 未指定時は全対象フィールドを返す。
 
 `MetricsResponse`:
 - `world_id: string`
@@ -68,6 +77,7 @@ JSから利用する現行WASM公開APIを定義する。
 
 - `apply_intervention(world_id: string, op_batch: InterventionOp[]) -> { applied, rejected }`
 - `fork_world(world_id: string, tick: number) -> { source_world_id, world_id, tick }`
+- `restore_world_to_tick(world_id: string, tick: number) -> { world_id, tick }`
 
 `InterventionOp`:
 - `cell_id: number`
@@ -84,6 +94,8 @@ JSから利用する現行WASM公開APIを定義する。
 - `world_id`や`snapshot_id`が不正な場合は`JsValue`エラーを返す。
 - `mesh_level > 8`はエラー。
 - `exec_world(world_id, 0)`はno-opで成功する。
+- `set_simulation_rate` の `rate` が非有限値（NaN/Inf）の場合はエラー。
+- `fork_world` / `restore_world_to_tick` の `tick` が不正（負値・非整数・未保存tick）の場合はエラー。
 
 ## 4. 互換性方針
 
@@ -91,3 +103,4 @@ JSから利用する現行WASM公開APIを定義する。
 - `MetricsResponse` の既存フィールドは後方互換のため削除しない。
 - 新規フィールド追加は後方互換な拡張として扱い、既存クライアントの読み取りを破壊しない。
 - 内部実装（`WorldState` 分割、実行パイプライン、Feedback構造）の再編は非公開詳細とし、互換レイヤで既存挙動を維持する。
+- `get_world_delta` は公開APIとして維持する。

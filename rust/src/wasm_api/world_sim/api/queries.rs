@@ -101,11 +101,11 @@ impl WorldSimController {
             "river_next" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.state.hydrology.river_path.len() as u32,
-                sampled_count: sampled_len(world_ref.state.hydrology.river_path.len(), stride),
+                cell_count: world_ref.state.hydrology.river_downstream.len() as u32,
+                sampled_count: sampled_len(world_ref.state.hydrology.river_downstream.len(), stride),
                 f32_data: None,
                 u32_data: None,
-                i32_data: Some(sample_i32(&world_ref.state.hydrology.river_path, stride)),
+                i32_data: Some(sample_i32(&world_ref.state.hydrology.river_downstream, stride)),
             },
             "sink_id" => {
                 let values = sink_id_values_by_cell(world_ref);

@@ -26,7 +26,7 @@ pub(super) fn build_erosion_state(
             .map(|value| (value.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0))
             .collect(),
         river_flux: world.state.hydrology.river_flow.clone(),
-        river_next: world.state.hydrology.river_path.clone(),
+        river_next: world.state.hydrology.river_downstream.clone(),
         active_queue: (0..cell_count as u32).collect(),
         active_head: 0,
         in_queue: vec![1; cell_count],
@@ -36,7 +36,7 @@ pub(super) fn build_erosion_state(
         last_sink_full_rebuild_tick: world.clock.tick.saturating_sub(8),
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
-        prev_river_next: world.state.hydrology.river_path.clone(),
+        prev_river_next: world.state.hydrology.river_downstream.clone(),
         flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
         groundwater_storage: vec![0.0; cell_count],
         scratch_effective_runoff: vec![0.0; cell_count],
@@ -79,10 +79,10 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Geology
         .clone_from(&world.state.hydrology.river_flow);
     state
         .prev_river_next
-        .clone_from(&world.state.hydrology.river_path);
+        .clone_from(&world.state.hydrology.river_downstream);
     state
         .river_next
-        .clone_from(&world.state.hydrology.river_path);
+        .clone_from(&world.state.hydrology.river_downstream);
     for (rain, runoff) in state
         .rain
         .iter_mut()
