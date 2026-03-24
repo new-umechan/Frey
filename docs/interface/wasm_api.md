@@ -36,7 +36,7 @@ JSから利用する現行WASM公開APIを定義する。
 ### 2.2 観測
 
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
-  - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature`
+  - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature`
 - `get_world_delta(world_id: string, options?: { include_fields?: string[] }) -> WorldDeltaResponse`
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
@@ -44,7 +44,9 @@ JSから利用する現行WASM公開APIを定義する。
 - `list_checkpoints() -> { checkpoints: { snapshot_id, tick }[] }`
 
 補足:
-- `river_next` は内部の `river_downstream`（単一流下先インデックス）を返す。
+- 内部河川表現はMFD（複数流下先+重み）を使用する。
+- `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` はCSR形式で1セルあたり最大3流下先を表す。
+- `river_next` は互換用のprimary流下先（最大重みの流下先）を返す。
 - `get_world_delta` は差分のみを返す。`include_fields` 未指定時は全対象フィールドを返す。
 
 `MetricsResponse`:

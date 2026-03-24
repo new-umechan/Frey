@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use wasm_bindgen::prelude::*;
 
+use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world::SnapshotMeta;
 
@@ -35,6 +36,7 @@ impl WorldSimController {
 
         let mut applied = 0u32;
         let mut rejected = 0u32;
+        let mut river_next_updated = false;
 
         for op in ops {
             let idx = op.cell_id as usize;
@@ -68,10 +70,17 @@ impl WorldSimController {
                 _ => false,
             };
             if ok {
+                if op.field == "river_next" {
+                    river_next_updated = true;
+                }
                 applied = applied.saturating_add(1);
             } else {
                 rejected = rejected.saturating_add(1);
             }
+        }
+
+        if river_next_updated {
+            rebuild_mfd_from_primary(&mut managed.world.state.hydrology);
         }
 
         sync_erosion_state(&mut managed.world, &managed.geology_params);

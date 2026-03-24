@@ -107,6 +107,60 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: Some(sample_i32(&world_ref.state.hydrology.river_downstream, stride)),
             },
+            "river_downstream_offset" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.hydrology.river_downstream_offsets.len() as u32,
+                sampled_count: sampled_len(
+                    world_ref.state.hydrology.river_downstream_offsets.len(),
+                    stride,
+                ),
+                f32_data: None,
+                u32_data: Some(
+                    world_ref
+                        .state
+                        .hydrology
+                        .river_downstream_offsets
+                        .iter()
+                        .step_by(stride.max(1) as usize)
+                        .copied()
+                        .collect(),
+                ),
+                i32_data: None,
+            },
+            "river_downstream_cell" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.hydrology.river_downstream_cells.len() as u32,
+                sampled_count: sampled_len(world_ref.state.hydrology.river_downstream_cells.len(), stride),
+                f32_data: None,
+                u32_data: Some(
+                    world_ref
+                        .state
+                        .hydrology
+                        .river_downstream_cells
+                        .iter()
+                        .step_by(stride.max(1) as usize)
+                        .copied()
+                        .collect(),
+                ),
+                i32_data: None,
+            },
+            "river_downstream_weight" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.hydrology.river_downstream_weights.len() as u32,
+                sampled_count: sampled_len(
+                    world_ref.state.hydrology.river_downstream_weights.len(),
+                    stride,
+                ),
+                f32_data: Some(sample_f32(
+                    &world_ref.state.hydrology.river_downstream_weights,
+                    stride,
+                )),
+                u32_data: None,
+                i32_data: None,
+            },
             "sink_id" => {
                 let values = sink_id_values_by_cell(world_ref);
                 FieldResponse {

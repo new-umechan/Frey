@@ -15,7 +15,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         .map(|state| &state.params)
         .unwrap_or(&default_params);
 
-    let (mut flux, mut river_next, _) = build_river_network(
+    let mut rebuilt = build_river_network(
         &world.mesh.positions,
         &world.mesh.nbr_offsets,
         &world.mesh.nbrs,
@@ -26,23 +26,29 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     );
 
     let mut flux_scale_ema = 1.0;
-    let mut scratch_flux_samples = Vec::with_capacity(flux.len() / 2);
+    let mut scratch_flux_samples = Vec::with_capacity(rebuilt.flux.len() / 2);
     smooth_and_normalize_flux(
-        &mut flux,
+        &mut rebuilt.flux,
         &previous_flux,
         &mut flux_scale_ema,
         &mut scratch_flux_samples,
     );
     apply_river_network_constraints(
         &world.state.geology.height,
-        &mut flux,
-        &mut river_next,
+        &mut rebuilt.flux,
+        &mut rebuilt.primary_next,
+        &mut rebuilt.downstream_offsets,
+        &mut rebuilt.downstream_cells,
+        &mut rebuilt.downstream_weights,
         &previous_flux,
         params.river_accumulation_threshold,
     );
 
-    world.state.hydrology.river_downstream = river_next;
-    world.state.hydrology.river_flow = flux;
+    world.state.hydrology.river_downstream = rebuilt.primary_next;
+    world.state.hydrology.river_flow = rebuilt.flux;
+    world.state.hydrology.river_downstream_offsets = rebuilt.downstream_offsets;
+    world.state.hydrology.river_downstream_cells = rebuilt.downstream_cells;
+    world.state.hydrology.river_downstream_weights = rebuilt.downstream_weights;
     world.state.hydrology.river_upstream.fill(-1);
     for (cell, &next) in world.state.hydrology.river_downstream.iter().enumerate() {
         if next >= 0 {

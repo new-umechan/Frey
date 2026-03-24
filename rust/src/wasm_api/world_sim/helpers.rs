@@ -1,5 +1,6 @@
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
+use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
@@ -94,6 +95,7 @@ pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &Geology
     state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();
+    ensure_hydrology_mfd(&mut world.state.hydrology);
     ensure_sink_buffers(state, expected);
 }
 
@@ -113,7 +115,23 @@ pub(super) fn post_step_sync_light(world: &mut world::World, params: &GeologyPar
     state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();
+    ensure_hydrology_mfd(&mut world.state.hydrology);
     ensure_sink_buffers(state, expected);
+}
+
+fn ensure_hydrology_mfd(hydrology: &mut world::HydrologyState) {
+    let expected = hydrology.river_downstream.len();
+    let offsets_ok = hydrology.river_downstream_offsets.len() == expected + 1;
+    let cells_ok = hydrology.river_downstream_cells.len() == hydrology.river_downstream_weights.len();
+    let end_ok = hydrology
+        .river_downstream_offsets
+        .last()
+        .copied()
+        .unwrap_or(0) as usize
+        == hydrology.river_downstream_cells.len();
+    if !(offsets_ok && cells_ok && end_ok) {
+        rebuild_mfd_from_primary(hydrology);
+    }
 }
 
 fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -> bool {

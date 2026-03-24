@@ -266,6 +266,12 @@ pub struct ClimateState {
 pub struct HydrologyState {
     #[serde(alias = "river_path")]
     pub river_downstream: Vec<i32>,
+    #[serde(default)]
+    pub river_downstream_offsets: Vec<u32>,
+    #[serde(default)]
+    pub river_downstream_cells: Vec<u32>,
+    #[serde(default)]
+    pub river_downstream_weights: Vec<f32>,
     pub river_flow: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]

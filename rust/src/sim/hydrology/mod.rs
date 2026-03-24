@@ -133,7 +133,7 @@ fn run_river_step_with_erosion_state(
     state.last_river_driver = river_driver;
     if should_rebuild_network(tick, state, river_driver) {
         let phase_start = profile_now();
-        let (mut rebuilt_flux, mut rebuilt_next, mut rebuilt_heading) = build_river_network(
+        let mut rebuilt = build_river_network(
             mesh_positions,
             mesh_nbr_offsets,
             mesh_nbrs,
@@ -143,26 +143,39 @@ fn run_river_step_with_erosion_state(
             Some(&*state),
         );
         smooth_and_normalize_flux(
-            &mut rebuilt_flux,
+            &mut rebuilt.flux,
             &state.river_flux,
             &mut state.flux_scale_ema,
             &mut state.scratch_flux_samples,
         );
         apply_river_network_constraints(
             &state.height,
-            &mut rebuilt_flux,
-            &mut rebuilt_next,
+            &mut rebuilt.flux,
+            &mut rebuilt.primary_next,
+            &mut rebuilt.downstream_offsets,
+            &mut rebuilt.downstream_cells,
+            &mut rebuilt.downstream_weights,
             &state.river_flux,
             state.params.river_accumulation_threshold,
         );
-        align_flow_heading(mesh_positions, &mut rebuilt_heading, &rebuilt_next);
+        align_flow_heading(mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
         state.prev_river_next.clone_from(&state.river_next);
-        state.river_flux = rebuilt_flux;
-        state.river_next = rebuilt_next;
-        state.flow_heading = rebuilt_heading;
+        state.river_flux = rebuilt.flux;
+        state.river_next = rebuilt.primary_next;
+        state.flow_heading = rebuilt.heading;
         state.last_rebuild_tick = tick;
         detail.river_network_ms += profile_elapsed_ms(phase_start);
         detail.network_rebuild_count = detail.network_rebuild_count.saturating_add(1);
+
+        hydrology
+            .river_downstream_offsets
+            .clone_from(&rebuilt.downstream_offsets);
+        hydrology
+            .river_downstream_cells
+            .clone_from(&rebuilt.downstream_cells);
+        hydrology
+            .river_downstream_weights
+            .clone_from(&rebuilt.downstream_weights);
     }
     state.scratch_effective_runoff = effective_runoff;
 
@@ -186,6 +199,24 @@ fn run_river_step_with_erosion_state(
     }
     detail.river_sync_ms += profile_elapsed_ms(phase_start);
     true
+}
+
+pub(crate) fn rebuild_mfd_from_primary(hydrology: &mut crate::sim::world::HydrologyState) {
+    let cell_count = hydrology.river_downstream.len();
+    hydrology.river_downstream_offsets = Vec::with_capacity(cell_count + 1);
+    hydrology.river_downstream_cells.clear();
+    hydrology.river_downstream_weights.clear();
+    hydrology.river_downstream_offsets.push(0);
+
+    for &next in &hydrology.river_downstream {
+        if next >= 0 {
+            hydrology.river_downstream_cells.push(next as u32);
+            hydrology.river_downstream_weights.push(1.0);
+        }
+        hydrology
+            .river_downstream_offsets
+            .push(hydrology.river_downstream_cells.len() as u32);
+    }
 }
 
 #[cfg(test)]

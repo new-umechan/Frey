@@ -39,6 +39,15 @@ impl PartialEq for FlowRouteState {
 
 impl Eq for FlowRouteState {}
 
+pub(super) struct RiverNetworkBuildOutput {
+    pub flux: Vec<f32>,
+    pub primary_next: Vec<i32>,
+    pub heading: Vec<[f32; 3]>,
+    pub downstream_offsets: Vec<u32>,
+    pub downstream_cells: Vec<u32>,
+    pub downstream_weights: Vec<f32>,
+}
+
 #[cfg(test)]
 pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
     let cell_count = height.len();
@@ -86,14 +95,17 @@ pub(super) fn build_river_network(
     runoff: &[f32],
     params: &GeologyParams,
     state: Option<&crate::ErosionAutomatonState>,
-) -> (Vec<f32>, Vec<i32>, Vec<[f32; 3]>) {
+) -> RiverNetworkBuildOutput {
     let v_count = height.len();
     if positions.len() != v_count || nbr_offsets.len() != v_count + 1 {
-        return (
-            vec![0.0; v_count],
-            vec![-1; v_count],
-            vec![[0.0, 0.0, 0.0]; v_count],
-        );
+        return RiverNetworkBuildOutput {
+            flux: vec![0.0; v_count],
+            primary_next: vec![-1; v_count],
+            heading: vec![[0.0, 0.0, 0.0]; v_count],
+            downstream_offsets: vec![0; v_count + 1],
+            downstream_cells: Vec::new(),
+            downstream_weights: Vec::new(),
+        };
     }
 
     let (spill_level, spill_steps, overflow_parent) =
@@ -102,7 +114,7 @@ pub(super) fn build_river_network(
     let prev_next = state.map(|s| s.prev_river_next.as_slice());
     let prev_heading = state.map(|s| s.flow_heading.as_slice());
 
-    let mut river_next = vec![-1; v_count];
+    let mut routes = vec![Vec::<(u32, f32)>::new(); v_count];
     for i in 0..v_count {
         if height[i] <= 0.0 {
             continue;
@@ -110,8 +122,7 @@ pub(super) fn build_river_network(
 
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
-        let mut best = -1_i32;
-        let mut best_score = f32::NEG_INFINITY;
+        let mut candidates = Vec::<(usize, f32)>::new();
 
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
@@ -145,21 +156,45 @@ pub(super) fn build_river_network(
                 }
             }
 
-            if score > best_score {
-                best_score = score;
-                best = n as i32;
+            candidates.push((n, score));
+        }
+
+        candidates.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        let mut selected = candidates
+            .iter()
+            .take(3)
+            .filter(|(_, score)| score.is_finite() && *score > 0.0)
+            .map(|(n, score)| (*n as u32, *score))
+            .collect::<Vec<_>>();
+
+        if selected.is_empty() {
+            let fallback = overflow_parent[i];
+            if fallback >= 0 {
+                selected.push((fallback as u32, 1.0));
+            }
+        } else {
+            let sum = selected.iter().map(|(_, score)| *score).sum::<f32>().max(1e-6);
+            for (_, weight) in &mut selected {
+                *weight /= sum;
             }
         }
 
-        river_next[i] = if best >= 0 { best } else { overflow_parent[i] };
+        routes[i] = selected;
     }
 
     if let Some(state) = state {
-        enforce_sink_overflow_routes(state, &mut river_next);
+        enforce_sink_overflow_routes(state, &mut routes);
+    }
+
+    let mut primary_next = vec![-1; v_count];
+    for i in 0..v_count {
+        if let Some((target, _)) = routes[i].first().copied() {
+            primary_next[i] = target as i32;
+        }
     }
 
     let mut heading = vec![[0.0, 0.0, 0.0]; v_count];
-    align_flow_heading(positions, &mut heading, &river_next);
+    align_flow_heading(positions, &mut heading, &primary_next);
 
     let mut order = (0..v_count).collect::<Vec<_>>();
     order.sort_unstable_by(|a, b| {
@@ -176,24 +211,43 @@ pub(super) fn build_river_network(
 
     let mut flux = vec![0.0; v_count];
     for &i in &order {
-        flux[i] += runoff.get(i).copied().unwrap_or(0.0).max(0.0);
-        let next = river_next[i];
-        if next >= 0 {
-            let n = next as usize;
-            if n < v_count {
-                flux[n] += flux[i];
+        let local = runoff.get(i).copied().unwrap_or(0.0).max(0.0);
+        flux[i] += local;
+        for &(target, weight) in &routes[i] {
+            let n = target as usize;
+            if n < v_count && weight > 0.0 {
+                flux[n] += flux[i] * weight;
             }
         }
     }
 
-    (flux, river_next, heading)
+    let mut downstream_offsets = Vec::with_capacity(v_count + 1);
+    let mut downstream_cells = Vec::<u32>::new();
+    let mut downstream_weights = Vec::<f32>::new();
+    downstream_offsets.push(0);
+    for route in &routes {
+        for &(target, weight) in route {
+            downstream_cells.push(target);
+            downstream_weights.push(weight);
+        }
+        downstream_offsets.push(downstream_cells.len() as u32);
+    }
+
+    RiverNetworkBuildOutput {
+        flux,
+        primary_next,
+        heading,
+        downstream_offsets,
+        downstream_cells,
+        downstream_weights,
+    }
 }
 
 pub(super) fn enforce_sink_overflow_routes(
     state: &crate::ErosionAutomatonState,
-    river_next: &mut [i32],
+    routes: &mut [Vec<(u32, f32)>],
 ) {
-    let v_count = river_next.len();
+    let v_count = routes.len();
     if state.sink_id.len() != v_count || state.sink_overflow_active.is_empty() {
         return;
     }
@@ -211,13 +265,15 @@ pub(super) fn enforce_sink_overflow_routes(
         let spill_from = state.sink_spill_cell.get(sid).copied().unwrap_or(-1);
         let spill_to = state.sink_spill_to.get(sid).copied().unwrap_or(-1);
         if spill_from == i as i32 && spill_to >= 0 {
-            river_next[i] = spill_to;
+            routes[i].clear();
+            routes[i].push((spill_to as u32, 1.0));
             continue;
         }
 
         let route = state.sink_route_next.get(i).copied().unwrap_or(-1);
         if route >= 0 {
-            river_next[i] = route;
+            routes[i].clear();
+            routes[i].push((route as u32, 1.0));
         }
     }
 }
@@ -225,7 +281,10 @@ pub(super) fn enforce_sink_overflow_routes(
 pub(super) fn apply_river_network_constraints(
     height: &[f32],
     flux: &mut [f32],
-    river_next: &mut [i32],
+    primary_next: &mut [i32],
+    downstream_offsets: &mut [u32],
+    downstream_cells: &mut Vec<u32>,
+    downstream_weights: &mut Vec<f32>,
     previous_flux: &[f32],
     accumulation_threshold: f32,
 ) {
@@ -242,13 +301,51 @@ pub(super) fn apply_river_network_constraints(
 
         if flux[i] < required {
             flux[i] = 0.0;
-            river_next[i] = -1;
+            primary_next[i] = -1;
         }
         if height[i] <= 0.0 {
-            river_next[i] = -1;
+            primary_next[i] = -1;
             flux[i] = 0.0;
         }
     }
+
+    let mut next_cells = Vec::<u32>::new();
+    let mut next_weights = Vec::<f32>::new();
+    let mut next_offsets = Vec::<u32>::with_capacity(height.len() + 1);
+    next_offsets.push(0);
+    for i in 0..height.len() {
+        let start = downstream_offsets.get(i).copied().unwrap_or(0) as usize;
+        let end = downstream_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
+        let cell_start = next_cells.len();
+        if flux[i] > 0.0 && primary_next[i] >= 0 {
+            for idx in start..end {
+                let target = downstream_cells.get(idx).copied().unwrap_or(u32::MAX);
+                let weight = downstream_weights.get(idx).copied().unwrap_or(0.0);
+                if weight > 0.0 && (target as usize) < height.len() {
+                    next_cells.push(target);
+                    next_weights.push(weight);
+                }
+            }
+        }
+        let cell_end = next_cells.len();
+        if cell_end > cell_start {
+            let mut best_idx = cell_start;
+            for idx in (cell_start + 1)..cell_end {
+                if next_weights[idx] > next_weights[best_idx] {
+                    best_idx = idx;
+                }
+            }
+            primary_next[i] = next_cells[best_idx] as i32;
+        } else {
+            primary_next[i] = -1;
+        }
+        next_offsets.push(next_cells.len() as u32);
+    }
+    downstream_cells.clear();
+    downstream_cells.extend_from_slice(&next_cells);
+    downstream_weights.clear();
+    downstream_weights.extend_from_slice(&next_weights);
+    downstream_offsets.clone_from_slice(&next_offsets);
 }
 
 pub(super) fn align_flow_heading(

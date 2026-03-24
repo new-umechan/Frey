@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geo::{
     add3, dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, sub3,
@@ -41,6 +42,9 @@ impl World {
                 },
                 hydrology: HydrologyState {
                     river_downstream: vec![-1; cell_count],
+                    river_downstream_offsets: vec![0; cell_count + 1],
+                    river_downstream_cells: Vec::new(),
+                    river_downstream_weights: Vec::new(),
                     river_flow: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
                     river_upstream: vec![-1; cell_count],
@@ -146,6 +150,7 @@ impl World {
             .clone_from(&state.river_next);
         self.state.hydrology.river_flow = state.river_flux.clone();
         self.state.hydrology.river_downstream = state.river_next.clone();
+        rebuild_mfd_from_primary(&mut self.state.hydrology);
         self.runtime.hydrology_dynamics = Some(state);
         Ok(())
     }
