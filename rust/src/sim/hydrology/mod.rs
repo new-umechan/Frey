@@ -226,8 +226,3 @@ pub(crate) fn downstream_from_csr(
     }
     result
 }
-
-#[cfg(test)]
-pub(crate) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
-    network::route_river_flux(height, river_next, runoff)
-}

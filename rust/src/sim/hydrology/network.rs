@@ -1,10 +1,5 @@
 use super::*;
 
-#[cfg(test)]
-use crate::sim::exec::{
-    CHANNEL_TRANSFER_BASE, CHANNEL_TRANSFER_MAX, CHANNEL_TRANSFER_SLOPE_GAIN, FLUX_LOCAL_DECAY,
-};
-
 #[derive(Clone, Copy)]
 pub(super) struct FlowRouteState {
     vertex: usize,
@@ -46,45 +41,6 @@ pub(super) struct RiverNetworkBuildOutput {
     pub downstream_offsets: Vec<u32>,
     pub downstream_cells: Vec<u32>,
     pub downstream_weights: Vec<f32>,
-}
-
-#[cfg(test)]
-pub(super) fn route_river_flux(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
-    let cell_count = height.len();
-    let mut flux = vec![0.0; cell_count];
-    let mut local_runoff = vec![0.0; cell_count];
-    for i in 0..cell_count {
-        local_runoff[i] = runoff.get(i).copied().unwrap_or(0.0).max(0.0);
-        flux[i] = local_runoff[i];
-    }
-
-    let mut order = (0..cell_count).collect::<Vec<_>>();
-    order.sort_unstable_by(|&a, &b| height[b].partial_cmp(&height[a]).unwrap_or(Ordering::Equal));
-    for i in order {
-        let next = river_next.get(i).copied().unwrap_or(-1);
-        if next < 0 {
-            continue;
-        }
-        let n = next as usize;
-        if n < cell_count {
-            let drop_raw = height[i] - height[n];
-            if drop_raw <= 1e-5 {
-                continue;
-            }
-            let drop = drop_raw.max(0.0);
-            let transfer = (CHANNEL_TRANSFER_BASE + drop * CHANNEL_TRANSFER_SLOPE_GAIN)
-                .clamp(CHANNEL_TRANSFER_BASE, CHANNEL_TRANSFER_MAX);
-            let carried =
-                (flux[i] - local_runoff[i] * (1.0 - FLUX_LOCAL_DECAY)).max(0.0) * transfer;
-            flux[n] += carried;
-        }
-    }
-
-    for i in 0..cell_count {
-        flux[i] = (flux[i] - local_runoff[i]).max(0.0);
-    }
-
-    flux
 }
 
 pub(super) fn build_river_network(

@@ -23,14 +23,6 @@ pub(crate) const DIVERGENT_THRESHOLD: f32 = 0.010;
 pub(crate) const TRANSFORM_THRESHOLD: f32 = 0.014;
 pub(crate) const CRUST_RAIN_LAND: f32 = 0.12;
 pub(crate) const CRUST_RAIN_SEA: f32 = 0.04;
-#[cfg(test)]
-pub(super) const CHANNEL_TRANSFER_BASE: f32 = 0.18;
-#[cfg(test)]
-pub(super) const CHANNEL_TRANSFER_SLOPE_GAIN: f32 = 6.0;
-#[cfg(test)]
-pub(super) const CHANNEL_TRANSFER_MAX: f32 = 0.72;
-#[cfg(test)]
-pub(super) const FLUX_LOCAL_DECAY: f32 = 0.82;
 
 pub(crate) fn geology_river_budget(era: EraKind, geology_budget: u32) -> u32 {
     let scale = match era {
