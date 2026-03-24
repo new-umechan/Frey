@@ -87,7 +87,7 @@ baseline誤用防止:
 
 自動化:
 
-- 重ゲートは `.github/workflows/seed-regression-heavy-gate.yml` で次の契機で自動実行する
+- 重ゲートは `.github/workflows/seed-regression-heavy-gate.yaml` で次の契機で自動実行する
   - `pull_request`
   - `push` to `main`
   - `workflow_dispatch`（手動実行）
@@ -104,7 +104,7 @@ npm run perf:gate
 
 自動化:
 
-- `.github/workflows/perf-gate.yml` で次の契機で自動実行する
+- `.github/workflows/perf-gate.yaml` で次の契機で自動実行する
   - `pull_request`
   - `push` to `main`
   - `workflow_dispatch`（手動実行）
@@ -120,7 +120,7 @@ cd rust && wasm-pack test --node
 
 自動化:
 
-- `.github/workflows/wasm-api-tests.yml` で次の契機で自動実行する
+- `.github/workflows/wasm-api-tests.yaml` で次の契機で自動実行する
   - `pull_request`
   - `push` to `main`
   - `workflow_dispatch`（手動実行）
