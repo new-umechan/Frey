@@ -49,6 +49,14 @@ JSから利用する現行WASM公開APIを定義する。
 - `river_next` は互換用のprimary流下先（最大重みの流下先）を返す。
 - `get_world_delta` は差分のみを返す。`include_fields` 未指定時は全対象フィールドを返す。
 
+`get_world_delta` の内部同期（`WorldSyncState`）:
+- `WorldSimController` は各 `world_id` ごとに `World` 本体とは別に `WorldSyncState` を保持し、差分返却専用のシャドウ状態として利用する。
+- 追跡対象フィールドは `height` / `river_flux` / `river_next` / `mantle_heat` / `temperature` / `precipitation`。
+- 差分は、`exec_world*` 実行後および `apply_intervention` 後の観測で更新される。`fork_world` / `restore_world_to_tick` / `load_checkpoint` では対象Worldの現在値から再初期化される。
+- `get_world_delta` は pending 差分を返す one-shot API で、同じ差分は次回以降に再返却されない。
+- `include_fields` 指定時、対象外フィールドの pending 差分は保持せず破棄される。
+- 変更セル率が閾値以上（現行実装では40%以上）の場合、当該フィールドは範囲差分ではなく `mode: "full"` で返す。
+
 `MetricsResponse`:
 - `world_id: string`
 - `tick: number`
