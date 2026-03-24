@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use wasm_bindgen::prelude::*;
 
-use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_u16, sampled_len};
+use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_plate_id, sampled_len};
 use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
     BudgetSummary, CheckpointListEntry, CheckpointListResponse, FieldResponse,
@@ -92,7 +92,7 @@ impl WorldSimController {
                 cell_count: world_ref.state.geology.plate_id.len() as u32,
                 sampled_count: sampled_len(world_ref.state.geology.plate_id.len(), stride),
                 f32_data: None,
-                u32_data: Some(sample_u32_from_u16(
+                u32_data: Some(sample_u32_from_plate_id(
                     &world_ref.state.geology.plate_id,
                     stride,
                 )),
@@ -328,7 +328,7 @@ impl WorldSimController {
             .iter()
             .copied()
             .max()
-            .map(|v| v as usize + 1)
+            .map(|v| v.as_usize() + 1)
             .unwrap_or(0);
 
         let mut counts = vec![0u32; plate_count];
@@ -337,7 +337,7 @@ impl WorldSimController {
         let mut flux_sums = vec![0.0f32; plate_count];
 
         for i in 0..w.state.geology.plate_id.len() {
-            let pid = w.state.geology.plate_id[i] as usize;
+            let pid = w.state.geology.plate_id[i].as_usize();
             if pid >= plate_count {
                 continue;
             }

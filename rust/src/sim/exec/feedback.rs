@@ -20,7 +20,7 @@ fn apply_payload_entries(world: &mut World) {
                 apply_feedback_f32_delta(
                     world,
                     field,
-                    cell as usize,
+                    cell.as_usize(),
                     delta,
                     cell_count,
                     &entry.target_ref,
@@ -34,7 +34,7 @@ fn apply_payload_entries(world: &mut World) {
                 apply_feedback_f32_set(
                     world,
                     field,
-                    cell as usize,
+                    cell.as_usize(),
                     value,
                     cell_count,
                     &entry.target_ref,
@@ -125,19 +125,19 @@ fn apply_destroy_entity(world: &mut World, target_ref: &TargetRef, id: u32) {
             world
                 .entities
                 .polity_components
-                .retain(|component| component.polity_id != id);
+                .retain(|component| component.polity_id.as_u32() != id);
         }
         TargetRef::Settlement(_) => {
             world
                 .entities
                 .settlement_components
-                .retain(|component| component.settlement_id != id);
+                .retain(|component| component.settlement_id.as_u32() != id);
         }
         TargetRef::Region(_) => {
             world
                 .entities
                 .region_components
-                .retain(|component| component.region_id != id);
+                .retain(|component| component.region_id.as_u32() != id);
         }
         _ => {}
     }
@@ -156,7 +156,7 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
                 .entities
                 .polity_components
                 .iter_mut()
-                .find(|component| component.polity_id == id)
+                .find(|component| component.polity_id.as_u32() == id)
             {
                 if let Some(value) = capital_cell {
                     component.capital_cell = value;
@@ -171,7 +171,7 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
                 .entities
                 .settlement_components
                 .iter_mut()
-                .find(|component| component.settlement_id == id)
+                .find(|component| component.settlement_id.as_u32() == id)
             {
                 if let Some(value) = cell {
                     component.cell = value;
@@ -183,7 +183,7 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
                 .entities
                 .region_components
                 .iter_mut()
-                .find(|component| component.region_id == id)
+                .find(|component| component.region_id.as_u32() == id)
             {
                 if let Some(value) = cells {
                     component.cells = value;

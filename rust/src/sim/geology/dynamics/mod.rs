@@ -5,7 +5,7 @@ mod surface_dynamics;
 
 use crate::sim::world::{
     BoundaryDynamicsState, BoundaryType, CrustType, GeologyDynamicsState, GeologyStepMetrics,
-    PlateKinematicsState, StressTensor, VertexCrustState, World,
+    PlateId, PlateKinematicsState, StressTensor, VertexCrustState, World,
 };
 
 use crate::sim::exec::math::{hash01, seeded_axis};
@@ -133,7 +133,7 @@ fn ensure_geology_dynamics(world: &mut World) {
         .iter()
         .copied()
         .max()
-        .map(|v| v as usize + 1)
+        .map(|v| v.as_usize() + 1)
         .unwrap_or(0);
     let needs_rebuild = match world.runtime.geology_dynamics.as_ref() {
         Some(state) => {
@@ -206,12 +206,12 @@ fn ensure_geology_dynamics(world: &mut World) {
     });
 }
 
-fn build_plate_states(plate_ids: &[u16]) -> Vec<PlateKinematicsState> {
+fn build_plate_states(plate_ids: &[PlateId]) -> Vec<PlateKinematicsState> {
     let plate_count = plate_ids
         .iter()
         .copied()
         .max()
-        .map(|v| v as usize + 1)
+        .map(|v| v.as_usize() + 1)
         .unwrap_or(0);
     let mut plate_states = Vec::with_capacity(plate_count);
     for plate in 0..plate_count {

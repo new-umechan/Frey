@@ -1,4 +1,4 @@
-use super::{CellId, EraKind, FeedbackQueue, GeologyState, PlateId, World, WorldMesh};
+use super::{CellId, EraKind, FeedbackQueue, GeologyState, PlateId, PolityId, World, WorldMesh};
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
@@ -13,7 +13,7 @@ fn build_world() -> World {
         },
         GeologyState {
             height: vec![0.2, -0.1, 0.1, -0.2],
-            plate_id: vec![0, 0, 1, 1],
+            plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
             boundary_condition: vec![0.0; 4],
@@ -45,7 +45,7 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
         },
         GeologyState {
             height: vec![0.3, 0.1, 0.2, -0.4],
-            plate_id: vec![0, 0, 1, 1],
+            plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
             boundary_condition: vec![0.0; 4],
@@ -81,7 +81,7 @@ fn feedback_queue_pushes_entries() {
 fn civilization_indicators_aggregate_population_and_polity() {
     let mut world = build_world();
     world.state.population.population = vec![12.0, 5.0, 11.0, 0.0];
-    world.state.polity.polity_id = vec![Some(1), None, Some(2), None];
+    world.state.polity.polity_id = vec![Some(PolityId(1)), None, Some(PolityId(2)), None];
 
     let indicators = world.state.civilization_state().indicators();
     assert_eq!(indicators.settled_cells, 2);
@@ -122,7 +122,7 @@ fn id_newtypes_round_trip_scalar_values() {
     let plate = PlateId(9);
 
     assert_eq!(cell.as_usize(), 17usize);
-    assert_eq!(plate.as_u16(), 9u16);
+    assert_eq!(plate.as_u32(), 9u32);
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn metrics_collects_height_and_flux_stats() {
         },
         GeologyState {
             height: vec![1.0, -1.0, 2.0, -2.0],
-            plate_id: vec![0, 0, 1, 1],
+            plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
             boundary_condition: vec![0.0; 4],
@@ -170,12 +170,12 @@ fn metrics_are_deterministic_for_fixed_seed() {
     let plate_id_a = terrain_a
         .plate_id
         .iter()
-        .map(|&v| v as u16)
+        .map(|&v| PlateId(v))
         .collect::<Vec<_>>();
     let plate_id_b = terrain_b
         .plate_id
         .iter()
-        .map(|&v| v as u16)
+        .map(|&v| PlateId(v))
         .collect::<Vec<_>>();
 
     let mut world_a = World::new(
@@ -241,7 +241,7 @@ fn river_network_persists_without_early_collapse() {
     let plate_id = terrain
         .plate_id
         .iter()
-        .map(|&v| v as u16)
+        .map(|&v| PlateId(v))
         .collect::<Vec<_>>();
 
     let mut world = World::new(

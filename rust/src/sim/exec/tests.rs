@@ -1,8 +1,8 @@
 use super::*;
 use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
-    CellFieldId, FeedbackEntry, FeedbackPayload, FieldValue, GeologyState, ModuleId, TargetRef,
-    World, WorldMesh,
+    CellFieldId, CellId, FeedbackEntry, FeedbackPayload, FieldValue, GeologyState, ModuleId,
+    PlateId, PolityId, TargetRef, World, WorldMesh,
 };
 
 fn build_test_world() -> World {
@@ -18,7 +18,7 @@ fn build_test_world() -> World {
     };
     let geology = GeologyState {
         height: vec![0.45, 0.15, -0.25, 0.05],
-        plate_id: vec![0, 0, 1, 1],
+        plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
         erosion_rate: vec![0.0; 4],
         deposition_rate: vec![0.0; 4],
         boundary_condition: vec![0.0; 4],
@@ -48,33 +48,33 @@ fn feedback_queue_applies_entries_on_next_tick() {
     world.feedback.push(FeedbackEntry {
         source: ModuleId::Subsistence,
         target_module: ModuleId::Hydrology,
-        target_ref: TargetRef::Cell(0),
+        target_ref: TargetRef::Cell(CellId(0)),
         enqueued_tick: 0,
         payload: FeedbackPayload::SetValue {
             field: CellFieldId::CropAdoption(0),
-            cell: 0,
+            cell: CellId(0),
             value: FieldValue::F32(0.42),
         },
     });
     world.feedback.push(FeedbackEntry {
         source: ModuleId::Subsistence,
         target_module: ModuleId::Hydrology,
-        target_ref: TargetRef::Cell(0),
+        target_ref: TargetRef::Cell(CellId(0)),
         enqueued_tick: 0,
         payload: FeedbackPayload::SetValue {
             field: CellFieldId::LivestockAdoption(0),
-            cell: 0,
+            cell: CellId(0),
             value: FieldValue::F32(0.31),
         },
     });
     world.feedback.push(FeedbackEntry {
         source: ModuleId::Population,
         target_module: ModuleId::Ecology,
-        target_ref: TargetRef::Cell(2),
+        target_ref: TargetRef::Cell(CellId(2)),
         enqueued_tick: 0,
         payload: FeedbackPayload::DeltaF32 {
             field: CellFieldId::CropAdoption(1),
-            cell: 2,
+            cell: CellId(2),
             delta: 0.77,
         },
     });
@@ -177,7 +177,7 @@ fn conflict_generates_region_components_and_updates_relations() {
     assert_eq!(
         world
             .polity_relations
-            .get(&(1, 2))
+            .get(&(PolityId(1), PolityId(2)))
             .map(|relation| relation.at_war),
         Some(true)
     );
@@ -189,27 +189,37 @@ fn polity_update_overwrites_stale_ids_with_none_for_low_population_cells() {
     world.state.population.population = vec![12.0, 4.0, 11.0, 3.0];
     world.state.population.birth_rate = vec![0.02; 4];
     world.state.population.death_rate = vec![0.01; 4];
-    world.state.polity.polity_id = vec![Some(10), Some(20), Some(30), Some(40)];
+    world.state.polity.polity_id = vec![
+        Some(PolityId(10)),
+        Some(PolityId(20)),
+        Some(PolityId(30)),
+        Some(PolityId(40)),
+    ];
 
     crate::sim::polity::update_polity(&mut world, 1);
 
     assert_eq!(
         world.state.polity.polity_id,
-        vec![Some(1), None, Some(3), None]
+        vec![Some(PolityId(1)), None, Some(PolityId(3)), None]
     );
 }
 
 #[test]
 fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
     let mut world = build_test_world();
-    world.state.polity.polity_id = vec![Some(1), None, Some(2), None];
-    world.state.conflict.occupier_id = vec![Some(9), Some(9), Some(9), Some(9)];
+    world.state.polity.polity_id = vec![Some(PolityId(1)), None, Some(PolityId(2)), None];
+    world.state.conflict.occupier_id = vec![
+        Some(PolityId(9)),
+        Some(PolityId(9)),
+        Some(PolityId(9)),
+        Some(PolityId(9)),
+    ];
     world
         .polity_relations
-        .insert((1, 2), PolityRelation::default());
+        .insert((PolityId(1), PolityId(2)), PolityRelation::default());
     world
         .polity_relations
-        .insert((2, 1), PolityRelation::default());
+        .insert((PolityId(2), PolityId(1)), PolityRelation::default());
 
     crate::sim::conflict::update_conflict(&mut world, 1);
 
@@ -225,14 +235,14 @@ fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
     assert_eq!(
         world
             .polity_relations
-            .get(&(1, 2))
+            .get(&(PolityId(1), PolityId(2)))
             .map(|relation| relation.at_war),
         Some(true)
     );
     assert_eq!(
         world
             .polity_relations
-            .get(&(2, 1))
+            .get(&(PolityId(2), PolityId(1)))
             .map(|relation| relation.at_war),
         Some(true)
     );

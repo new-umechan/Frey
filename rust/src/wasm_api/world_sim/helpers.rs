@@ -185,11 +185,11 @@ pub(super) fn sample_f32(values: &[f32], stride: u32) -> Vec<f32> {
         .collect()
 }
 
-pub(super) fn sample_u32_from_u16(values: &[u16], stride: u32) -> Vec<u32> {
+pub(super) fn sample_u32_from_plate_id(values: &[world::PlateId], stride: u32) -> Vec<u32> {
     values
         .iter()
         .step_by(stride.max(1) as usize)
-        .map(|&v| v as u32)
+        .map(|&v| v.as_u32())
         .collect()
 }
 
@@ -217,7 +217,7 @@ pub(super) fn apply_i32(values: &mut [i32], index: usize, value: i32) -> bool {
     true
 }
 
-pub(super) fn apply_u16(values: &mut [u16], index: usize, value: u16) -> bool {
+pub(super) fn apply_plate_id(values: &mut [world::PlateId], index: usize, value: world::PlateId) -> bool {
     if index >= values.len() {
         return false;
     }

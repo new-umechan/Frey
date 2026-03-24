@@ -18,10 +18,19 @@ pub(super) struct WorldDeltaQuery {
     pub include_fields: Option<Vec<String>>,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum InterventionField {
+    Height,
+    RiverFlux,
+    RiverNext,
+    PlateId,
+}
+
 #[derive(Deserialize)]
 pub(super) struct InterventionOp {
     pub cell_id: u32,
-    pub field: String,
+    pub field: InterventionField,
     pub value: f64,
 }
 

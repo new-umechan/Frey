@@ -82,8 +82,9 @@ impl WorldSimController {
         let plate_id = terrain
             .plate_id
             .iter()
-            .map(|&v| u16::try_from(v).map_err(|_| JsValue::from_str("plate id exceeds u16 range")))
-            .collect::<Result<Vec<_>, _>>()?;
+            .copied()
+            .map(world::PlateId)
+            .collect::<Vec<_>>();
 
         let river_flow = terrain.river_flux;
         let river_next = terrain.river_next;

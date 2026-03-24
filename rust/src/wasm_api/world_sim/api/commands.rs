@@ -6,11 +6,11 @@ use crate::sim::geology_types::GeologyParams;
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world::SnapshotMeta;
 
-use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
+use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
 use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
 use super::super::types::{
-    CheckpointResult, ForkWorldResult, InterventionOp, InterventionResult, LoadCheckpointResult,
-    RestoreWorldResult,
+    CheckpointResult, ForkWorldResult, InterventionField, InterventionOp, InterventionResult,
+    LoadCheckpointResult, RestoreWorldResult,
 };
 use super::super::WorldSimController;
 use super::common::{
@@ -40,37 +40,36 @@ impl WorldSimController {
 
         for op in ops {
             let idx = op.cell_id as usize;
-            let ok = match op.field.as_str() {
-                "height" => apply_f32(
+            let ok = match op.field {
+                InterventionField::Height => apply_f32(
                     &mut managed.world.state.geology.height,
                     idx,
                     op.value as f32,
                 ),
-                "river_flux" => apply_f32(
+                InterventionField::RiverFlux => apply_f32(
                     &mut managed.world.state.hydrology.river_flow,
                     idx,
                     (op.value as f32).max(0.0),
                 ),
-                "river_next" => apply_i32(
+                InterventionField::RiverNext => apply_i32(
                     &mut managed.world.state.hydrology.river_next,
                     idx,
                     op.value as i32,
                 ),
-                "plate_id" => {
-                    if op.value < 0.0 || op.value > u16::MAX as f64 {
+                InterventionField::PlateId => {
+                    if op.value < 0.0 || op.value > u32::MAX as f64 {
                         false
                     } else {
-                        apply_u16(
+                        apply_plate_id(
                             &mut managed.world.state.geology.plate_id,
                             idx,
-                            op.value as u16,
+                            crate::sim::world::PlateId(op.value as u32),
                         )
                     }
                 }
-                _ => false,
             };
             if ok {
-                if op.field == "river_next" {
+                if matches!(op.field, InterventionField::RiverNext) {
                     river_next_updated = true;
                 }
                 applied = applied.saturating_add(1);

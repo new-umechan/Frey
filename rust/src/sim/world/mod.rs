@@ -20,8 +20,8 @@ pub use state::{
     CivilizationIndicators, CivilizationState, CivilizationStateMut, ClimateState, CoastSide,
     ConflictState, CropBitmap, CrustType, DomesticatesInternal, DomesticatesState, EcologyInternal,
     EcologyState, EntitiesState, GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics,
-    HydrologyState, LivestockBitmap, PlateId, PlateKinematicsState, PolityComponent, PolityState,
-    PopulationState, RegionComponent, SettlementComponent, SettlementState, SnapshotMeta,
-    StressTensor, SubsistenceMix, SubsistenceState, VertexCrustState, World, WorldMesh, WorldState,
-    N_CROPS, N_LIVESTOCK,
+    HydrologyState, LivestockBitmap, PlateId, PlateKinematicsState, PolityComponent, PolityGroupId,
+    PolityId, PolityState, PopulationState, RegionComponent, RegionId, SettlementComponent,
+    SettlementId, SettlementState, SnapshotMeta, StressTensor, SubsistenceMix, SubsistenceState,
+    VertexCrustState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };

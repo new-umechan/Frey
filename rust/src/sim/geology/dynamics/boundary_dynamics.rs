@@ -1,5 +1,6 @@
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, PlateKinematicsState, VertexCrustState,
+    BoundaryDynamicsState, BoundaryType, CrustType, PlateId, PlateKinematicsState,
+    VertexCrustState,
 };
 use crate::GeologyParams;
 
@@ -10,7 +11,7 @@ pub(super) fn reclassify_boundaries(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u16],
+    plate_id: &[PlateId],
     plate_states: &[PlateKinematicsState],
     vertex_states: &[VertexCrustState],
     boundary_state: &mut BoundaryDynamicsState,
@@ -27,7 +28,7 @@ pub(super) fn reclassify_boundaries(
     for i in 0..cell_count {
         let pos_i = positions[i];
         let vel_i =
-            plate_velocity_from_state(plate_states.get(plate_id[i] as usize), plate_id[i], pos_i);
+            plate_velocity_from_state(plate_states.get(plate_id[i].as_usize()), plate_id[i], pos_i);
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
 
@@ -53,7 +54,7 @@ pub(super) fn reclassify_boundaries(
                 edge_vec[2] / edge_len,
             ];
             let vel_n = plate_velocity_from_state(
-                plate_states.get(plate_id[n] as usize),
+                plate_states.get(plate_id[n].as_usize()),
                 plate_id[n],
                 pos_n,
             );
@@ -80,7 +81,7 @@ pub(super) fn reclassify_boundaries(
 }
 
 pub(super) fn update_plate_kinematics(
-    plate_id: &[u16],
+    plate_id: &[PlateId],
     plate_states: &mut [PlateKinematicsState],
     boundary_state: &BoundaryDynamicsState,
     params: &GeologyParams,
@@ -93,7 +94,7 @@ pub(super) fn update_plate_kinematics(
     let mut plate_count = vec![0_u32; plate_states.len()];
 
     for i in 0..plate_id.len() {
-        let pid = plate_id[i] as usize;
+        let pid = plate_id[i].as_usize();
         if pid >= plate_states.len() {
             continue;
         }
@@ -105,14 +106,16 @@ pub(super) fn update_plate_kinematics(
     for pid in 0..plate_states.len() {
         let denom = plate_count[pid].max(1) as f32;
         let activity = (plate_activity[pid] / denom).clamp(0.0, 1.0);
-        let damping =
-            match dominant_plate_boundary_type(pid as u16, plate_id, &boundary_state.dominant_type)
-            {
-                BoundaryType::PassiveMargin => 0.985,
-                BoundaryType::Collision => 0.980,
-                BoundaryType::Subduction => 0.995,
-                _ => 0.990,
-            };
+        let damping = match dominant_plate_boundary_type(
+            PlateId(pid as u32),
+            plate_id,
+            &boundary_state.dominant_type,
+        ) {
+            BoundaryType::PassiveMargin => 0.985,
+            BoundaryType::Collision => 0.980,
+            BoundaryType::Subduction => 0.995,
+            _ => 0.990,
+        };
         plate_states[pid].angular_speed =
             (plate_states[pid].angular_speed * damping + gain * activity * 0.015).clamp(0.01, 0.30);
         plate_states[pid].activity =
@@ -171,8 +174,8 @@ fn classify_boundary_pair(
 }
 
 fn dominant_plate_boundary_type(
-    plate: u16,
-    plate_id: &[u16],
+    plate: PlateId,
+    plate_id: &[PlateId],
     boundary_types: &[BoundaryType],
 ) -> BoundaryType {
     let mut counts = [0_u32; 6];
@@ -218,10 +221,10 @@ fn boundary_type_index(boundary_type: BoundaryType) -> usize {
 
 fn plate_velocity_from_state(
     state: Option<&PlateKinematicsState>,
-    plate_id: u16,
+    plate_id: PlateId,
     pos: [f32; 3],
 ) -> [f32; 3] {
-    let seed = plate_id as u32;
+    let seed = plate_id.as_u32();
     let fallback_axis = seeded_axis(seed ^ 0x27d4_eb2f);
     let angular_axis = state.map(|s| s.angular_axis).unwrap_or(fallback_axis);
     let angular_speed = state

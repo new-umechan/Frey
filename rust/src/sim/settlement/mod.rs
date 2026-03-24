@@ -4,7 +4,7 @@ pub mod types;
 pub use crate::sim::settlement::types::*;
 
 use crate::sim::exec::lerp;
-use crate::sim::world::{SettlementComponent, World};
+use crate::sim::world::{CellId, SettlementComponent, SettlementId, World};
 
 pub(crate) fn update_settlement(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -25,8 +25,8 @@ pub(crate) fn update_settlement(world: &mut World, budget: u32) {
             lerp(world.state.settlement.urbanization[i], urban, alpha);
         if next_size > 0.5 {
             settlements.push(SettlementComponent {
-                settlement_id: i as u32 + 1,
-                cell: i as u32,
+                settlement_id: SettlementId(i as u32 + 1),
+                cell: CellId(i as u32),
             });
         }
     }

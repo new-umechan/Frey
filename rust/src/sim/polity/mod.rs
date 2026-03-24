@@ -5,18 +5,18 @@ pub mod types;
 #[allow(unused_imports)]
 pub use crate::sim::polity::types::*;
 
-use crate::sim::world::{PolityComponent, World};
+use crate::sim::world::{CellId, PolityComponent, PolityId, World};
 
 pub(crate) fn update_polity(world: &mut World, budget: u32) {
     if budget == 0 {
         return;
     }
     let n = world.state.geology.height.len();
-    let mut polity_cells: HashMap<u32, Vec<usize>> = HashMap::new();
+    let mut polity_cells: HashMap<PolityId, Vec<usize>> = HashMap::new();
     for i in 0..n {
         let pop = world.state.population.population[i];
         let polity_id = if pop >= 10.0 {
-            Some((i + 1) as u32)
+            Some(PolityId((i + 1) as u32))
         } else {
             None
         };
@@ -28,14 +28,14 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
 
     let mut polity_components = Vec::new();
     for (polity_id, cells) in &polity_cells {
-        let mut capital_cell = cells[0] as u32;
+        let mut capital_cell = CellId(cells[0] as u32);
         let mut max_population = -1.0_f32;
         let mut stability_sum = 0.0_f32;
         for &cell in cells {
             let pop = world.state.population.population[cell];
             if pop > max_population {
                 max_population = pop;
-                capital_cell = cell as u32;
+                capital_cell = CellId(cell as u32);
             }
             let birth = world.state.population.birth_rate[cell].clamp(0.0, 1.0);
             let death = world.state.population.death_rate[cell].clamp(0.0, 1.0);
@@ -52,7 +52,7 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
             legitimacy: stability,
             centralization: (0.35 + stability * 0.50).clamp(0.0, 1.0),
             military_tech: (0.20 + max_population / 120.0).clamp(0.0, 1.0),
-            cells_cache: cells.iter().map(|&idx| idx as u32).collect(),
+            cells_cache: cells.iter().map(|&idx| CellId(idx as u32)).collect(),
         });
     }
     polity_components.sort_by_key(|component| component.polity_id);

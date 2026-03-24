@@ -4,7 +4,10 @@ use crate::sim::erosion::ErosionAutomatonState;
 
 use super::era::EraKind;
 use super::init::default_target_sea_ratio;
-use super::state::{GeologyDynamicsState, PolityComponent, RegionComponent, SettlementComponent};
+use super::state::{
+    CellId, GeologyDynamicsState, PolityComponent, PolityId, RegionComponent, RegionId,
+    SettlementComponent, SettlementId,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClockState {
@@ -77,24 +80,23 @@ pub enum EntityBundle {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ComponentPatch {
     Polity {
-        capital_cell: Option<u32>,
+        capital_cell: Option<CellId>,
         stability: Option<f32>,
     },
     Settlement {
-        cell: Option<u32>,
+        cell: Option<CellId>,
     },
     Region {
-        cells: Option<Vec<u32>>,
+        cells: Option<Vec<CellId>>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TargetRef {
-    Cell(u32),
-    Polity(u32),
-    Settlement(u32),
-    Edge(u32),
-    Region(u32),
+    Cell(CellId),
+    Polity(PolityId),
+    Settlement(SettlementId),
+    Region(RegionId),
     Global,
 }
 
@@ -102,12 +104,12 @@ pub enum TargetRef {
 pub enum FeedbackPayload {
     DeltaF32 {
         field: CellFieldId,
-        cell: u32,
+        cell: CellId,
         delta: f32,
     },
     SetValue {
         field: CellFieldId,
-        cell: u32,
+        cell: CellId,
         value: FieldValue,
     },
     SpawnEntity {

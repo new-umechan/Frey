@@ -16,7 +16,7 @@ pub struct World {
     pub feedback: FeedbackQueue,
     pub runtime: RuntimeState,
     #[serde(default)]
-    pub polity_relations: HashMap<(u32, u32), PolityRelation>,
+    pub polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     #[serde(default)]
     pub polity_groups: Vec<PolityGroup>,
     #[serde(default)]
@@ -38,7 +38,9 @@ pub struct SnapshotMeta {
     pub source_world_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
 pub struct CellId(pub u32);
 
@@ -48,36 +50,82 @@ impl CellId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
-pub struct PlateId(pub u16);
+pub struct PlateId(pub u32);
 
 impl PlateId {
-    pub fn as_u16(self) -> u16 {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[serde(transparent)]
+pub struct PolityId(pub u32);
+
+impl PolityId {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[serde(transparent)]
+pub struct SettlementId(pub u32);
+
+impl SettlementId {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[serde(transparent)]
+pub struct RegionId(pub u32);
+
+impl RegionId {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[serde(transparent)]
+pub struct PolityGroupId(pub u32);
+
+impl PolityGroupId {
+    pub fn as_u32(self) -> u32 {
         self.0
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolityComponent {
-    pub polity_id: u32,
-    pub capital_cell: u32,
+    pub polity_id: PolityId,
+    pub capital_cell: CellId,
     pub legitimacy: f32,
     pub centralization: f32,
     pub military_tech: f32,
-    pub cells_cache: Vec<u32>,
+    pub cells_cache: Vec<CellId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettlementComponent {
-    pub settlement_id: u32,
-    pub cell: u32,
+    pub settlement_id: SettlementId,
+    pub cell: CellId,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RegionComponent {
-    pub region_id: u32,
-    pub cells: Vec<u32>,
+    pub region_id: RegionId,
+    pub cells: Vec<CellId>,
 }
 
 pub struct EntitiesState {
@@ -268,7 +316,7 @@ pub enum CoastSide {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeologyState {
     pub height: Vec<f32>,
-    pub plate_id: Vec<u16>,
+    pub plate_id: Vec<PlateId>,
     pub erosion_rate: Vec<f32>,
     pub deposition_rate: Vec<f32>,
     pub boundary_condition: Vec<f32>,
@@ -375,13 +423,13 @@ pub struct SettlementState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolityState {
-    pub polity_id: Vec<Option<u32>>,
+    pub polity_id: Vec<Option<PolityId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConflictState {
     pub conflict_intensity: Vec<f32>,
-    pub occupier_id: Vec<Option<u32>>,
+    pub occupier_id: Vec<Option<PolityId>>,
 }
 
 pub struct CellStore<'a> {
@@ -392,7 +440,7 @@ pub struct CellStore<'a> {
     pub neighbors_offsets: &'a [u32],
     pub neighbors: &'a [u32],
     pub height: &'a [f32],
-    pub plate_id: &'a [u16],
+    pub plate_id: &'a [PlateId],
     pub erosion_rate: &'a [f32],
     pub deposition_rate: &'a [f32],
     pub temperature: &'a [f32],
@@ -416,7 +464,7 @@ pub struct CellStoreMut<'a> {
     pub neighbors_offsets: &'a mut Vec<u32>,
     pub neighbors: &'a mut Vec<u32>,
     pub height: &'a mut Vec<f32>,
-    pub plate_id: &'a mut Vec<u16>,
+    pub plate_id: &'a mut Vec<PlateId>,
     pub erosion_rate: &'a mut Vec<f32>,
     pub deposition_rate: &'a mut Vec<f32>,
     pub temperature: &'a mut Vec<f32>,

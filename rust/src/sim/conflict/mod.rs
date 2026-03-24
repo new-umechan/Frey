@@ -5,7 +5,7 @@ pub use crate::sim::conflict::types::*;
 
 use std::collections::{HashMap, HashSet};
 
-use crate::sim::world::{RegionComponent, World};
+use crate::sim::world::{CellId, PolityId, RegionComponent, RegionId, World};
 
 pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -16,7 +16,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     world.state.conflict.conflict_intensity.fill(0.0);
     world.state.conflict.occupier_id.fill(None);
 
-    let mut polity_cells: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut polity_cells: HashMap<PolityId, Vec<CellId>> = HashMap::new();
     let mut frontline_cells = Vec::new();
     let mut hostile_pairs = HashSet::new();
     let mut relation_pairs = world.polity_relations.keys().copied().collect::<Vec<_>>();
@@ -31,8 +31,8 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
         let Some(polity_id) = world.state.polity.polity_id[i] else {
             continue;
         };
-        if polity_id > 0 {
-            polity_cells.entry(polity_id).or_default().push(i as u32);
+        if polity_id.as_u32() > 0 {
+            polity_cells.entry(polity_id).or_default().push(CellId(i as u32));
         }
         let start = world.mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
         let end = world
@@ -53,7 +53,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
                 continue;
             }
             world.state.conflict.conflict_intensity[i] = 1.0;
-            frontline_cells.push(i as u32);
+            frontline_cells.push(CellId(i as u32));
             let pair = if polity_id < other_polity {
                 (polity_id, other_polity)
             } else {
@@ -78,7 +78,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     let mut region_id = 1_u32;
     for cells in polity_cells.values() {
         regions.push(RegionComponent {
-            region_id,
+            region_id: RegionId(region_id),
             cells: cells.clone(),
         });
         region_id = region_id.saturating_add(1);
@@ -87,7 +87,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     frontline_cells.dedup();
     if !frontline_cells.is_empty() {
         regions.push(RegionComponent {
-            region_id,
+            region_id: RegionId(region_id),
             cells: frontline_cells,
         });
     }

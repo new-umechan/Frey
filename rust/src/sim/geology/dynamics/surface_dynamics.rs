@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::sim::world::{
     BoundaryDynamicsState, BoundaryType, CrustType, GeologyStepMetrics, StressTensor,
-    VertexCrustState,
+    VertexCrustState, PlateId,
 };
 use crate::GeologyParams;
 
@@ -13,7 +13,7 @@ pub(super) fn apply_stress_and_surface_update(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     heights: &[f32],
-    plate_id: &[u16],
+    plate_id: &[PlateId],
     boundary_state: &BoundaryDynamicsState,
     mantle_heat: &[f32],
     plume_force: &[f32],
