@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use wasm_bindgen::prelude::*;
 
-use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::geology_types::GeologyParams;
+use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world::SnapshotMeta;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_u16, sync_erosion_state};
@@ -100,6 +100,7 @@ impl WorldSimController {
     #[wasm_bindgen(js_name = fork_world)]
     pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
         let tick_u64 = validate_non_negative_tick(tick)?;
+        validate_integer_tick(tick, tick_u64)?;
         let (snapshot, source_rate, source_params) = {
             let source = self
                 .worlds

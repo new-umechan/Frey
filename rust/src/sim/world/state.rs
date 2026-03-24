@@ -38,6 +38,26 @@ pub struct SnapshotMeta {
     pub source_world_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(transparent)]
+pub struct CellId(pub u32);
+
+impl CellId {
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(transparent)]
+pub struct PlateId(pub u16);
+
+impl PlateId {
+    pub fn as_u16(self) -> u16 {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolityComponent {
     pub polity_id: u32,
@@ -361,6 +381,54 @@ pub struct ConflictState {
     pub frontline: Vec<f32>,
 }
 
+pub struct CellStore<'a> {
+    pub latitude: &'a [f32],
+    pub distance_from_ocean: &'a [f32],
+    pub coast_side: &'a [CoastSide],
+    pub is_coastal: &'a [bool],
+    pub neighbors_offsets: &'a [u32],
+    pub neighbors: &'a [u32],
+    pub height: &'a [f32],
+    pub plate_id: &'a [u16],
+    pub erosion_rate: &'a [f32],
+    pub deposition_rate: &'a [f32],
+    pub temperature: &'a [f32],
+    pub precipitation: &'a [f32],
+    pub evapotranspiration: &'a [f32],
+    pub runoff: &'a [f32],
+    pub aridity: &'a [f32],
+    pub ocean_temperature: &'a [f32],
+    pub river_downstream: &'a [SmallVec<[(u32, f32); 3]>],
+    pub river_next: &'a [i32],
+    pub river_flow: &'a [f32],
+    pub river_transport_cost: &'a [f32],
+    pub is_lake: &'a [bool],
+}
+
+pub struct CellStoreMut<'a> {
+    pub latitude: &'a mut Vec<f32>,
+    pub distance_from_ocean: &'a mut Vec<f32>,
+    pub coast_side: &'a mut Vec<CoastSide>,
+    pub is_coastal: &'a mut Vec<bool>,
+    pub neighbors_offsets: &'a mut Vec<u32>,
+    pub neighbors: &'a mut Vec<u32>,
+    pub height: &'a mut Vec<f32>,
+    pub plate_id: &'a mut Vec<u16>,
+    pub erosion_rate: &'a mut Vec<f32>,
+    pub deposition_rate: &'a mut Vec<f32>,
+    pub temperature: &'a mut Vec<f32>,
+    pub precipitation: &'a mut Vec<f32>,
+    pub evapotranspiration: &'a mut Vec<f32>,
+    pub runoff: &'a mut Vec<f32>,
+    pub aridity: &'a mut Vec<f32>,
+    pub ocean_temperature: &'a mut Vec<f32>,
+    pub river_downstream: &'a mut Vec<SmallVec<[(u32, f32); 3]>>,
+    pub river_next: &'a mut Vec<i32>,
+    pub river_flow: &'a mut Vec<f32>,
+    pub river_transport_cost: &'a mut Vec<f32>,
+    pub is_lake: &'a mut Vec<bool>,
+}
+
 pub struct CivilizationState<'a> {
     pub population: &'a PopulationState,
     pub settlement: &'a SettlementState,
@@ -383,6 +451,58 @@ pub struct CivilizationIndicators {
 }
 
 impl WorldState {
+    pub fn cell_store(&self) -> CellStore<'_> {
+        CellStore {
+            latitude: &self.geo.latitude,
+            distance_from_ocean: &self.geo.distance_from_ocean,
+            coast_side: &self.geo.coast_side,
+            is_coastal: &self.geo.is_coastal,
+            neighbors_offsets: &self.geo.neighbors_offsets,
+            neighbors: &self.geo.neighbors,
+            height: &self.geology.height,
+            plate_id: &self.geology.plate_id,
+            erosion_rate: &self.geology.erosion_rate,
+            deposition_rate: &self.geology.deposition_rate,
+            temperature: &self.climate.temperature,
+            precipitation: &self.climate.precipitation,
+            evapotranspiration: &self.climate.evapotranspiration,
+            runoff: &self.climate.runoff,
+            aridity: &self.climate.aridity,
+            ocean_temperature: &self.climate.ocean_temperature,
+            river_downstream: &self.hydrology.river_downstream,
+            river_next: &self.hydrology.river_next,
+            river_flow: &self.hydrology.river_flow,
+            river_transport_cost: &self.hydrology.river_transport_cost,
+            is_lake: &self.hydrology.is_lake,
+        }
+    }
+
+    pub fn cell_store_mut(&mut self) -> CellStoreMut<'_> {
+        CellStoreMut {
+            latitude: &mut self.geo.latitude,
+            distance_from_ocean: &mut self.geo.distance_from_ocean,
+            coast_side: &mut self.geo.coast_side,
+            is_coastal: &mut self.geo.is_coastal,
+            neighbors_offsets: &mut self.geo.neighbors_offsets,
+            neighbors: &mut self.geo.neighbors,
+            height: &mut self.geology.height,
+            plate_id: &mut self.geology.plate_id,
+            erosion_rate: &mut self.geology.erosion_rate,
+            deposition_rate: &mut self.geology.deposition_rate,
+            temperature: &mut self.climate.temperature,
+            precipitation: &mut self.climate.precipitation,
+            evapotranspiration: &mut self.climate.evapotranspiration,
+            runoff: &mut self.climate.runoff,
+            aridity: &mut self.climate.aridity,
+            ocean_temperature: &mut self.climate.ocean_temperature,
+            river_downstream: &mut self.hydrology.river_downstream,
+            river_next: &mut self.hydrology.river_next,
+            river_flow: &mut self.hydrology.river_flow,
+            river_transport_cost: &mut self.hydrology.river_transport_cost,
+            is_lake: &mut self.hydrology.is_lake,
+        }
+    }
+
     pub fn civilization_state(&self) -> CivilizationState<'_> {
         CivilizationState {
             population: &self.population,

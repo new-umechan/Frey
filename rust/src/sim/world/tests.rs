@@ -1,4 +1,4 @@
-use super::{EraKind, FeedbackQueue, GeologyState, World, WorldMesh};
+use super::{CellId, EraKind, FeedbackQueue, GeologyState, PlateId, World, WorldMesh};
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
@@ -87,6 +87,42 @@ fn civilization_indicators_aggregate_population_and_polity() {
     assert_eq!(indicators.settled_cells, 2);
     assert!((indicators.total_population - 28.0).abs() < 1e-6);
     assert_eq!(indicators.state_cells, 2);
+}
+
+#[test]
+fn cell_store_view_exposes_geo_geology_climate_hydrology() {
+    let world = build_world();
+    let store = world.state.cell_store();
+
+    assert_eq!(store.height.len(), 4);
+    assert_eq!(store.plate_id.len(), 4);
+    assert_eq!(store.temperature.len(), 4);
+    assert_eq!(store.river_flow.len(), 4);
+    assert_eq!(store.neighbors_offsets.len(), 5);
+}
+
+#[test]
+fn cell_store_mut_updates_underlying_world_state() {
+    let mut world = build_world();
+    {
+        let store = world.state.cell_store_mut();
+        store.height[0] = 2.5;
+        store.temperature[0] = -8.0;
+        store.river_flow[0] = 42.0;
+    }
+
+    assert_eq!(world.state.geology.height[0], 2.5);
+    assert_eq!(world.state.climate.temperature[0], -8.0);
+    assert_eq!(world.state.hydrology.river_flow[0], 42.0);
+}
+
+#[test]
+fn id_newtypes_round_trip_scalar_values() {
+    let cell = CellId(17);
+    let plate = PlateId(9);
+
+    assert_eq!(cell.as_usize(), 17usize);
+    assert_eq!(plate.as_u16(), 9u16);
 }
 
 #[test]

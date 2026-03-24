@@ -16,11 +16,11 @@ pub use exec::{
 pub use init::default_target_sea_ratio;
 pub use metrics::WorldMetrics;
 pub use state::{
-    ArchiveState, Biome, BoundaryDynamicsState, BoundaryType, CivilizationIndicators,
-    CivilizationState, CivilizationStateMut, ClimateState, CoastSide, ConflictState, CrustType,
-    DomesticatesInternal, DomesticatesState, EcologyInternal, EcologyState, EntitiesState,
-    GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics, HydrologyState,
-    PlateKinematicsState, PolityComponent, PolityState, PopulationState, RegionComponent,
-    SettlementComponent, SettlementState, SnapshotMeta, StressTensor, SubsistenceState,
-    VertexCrustState, World, WorldMesh, WorldState,
+    ArchiveState, Biome, BoundaryDynamicsState, BoundaryType, CellId, CellStore, CellStoreMut,
+    CivilizationIndicators, CivilizationState, CivilizationStateMut, ClimateState, CoastSide,
+    ConflictState, CrustType, DomesticatesInternal, DomesticatesState, EcologyInternal,
+    EcologyState, EntitiesState, GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics,
+    HydrologyState, PlateId, PlateKinematicsState, PolityComponent, PolityState, PopulationState,
+    RegionComponent, SettlementComponent, SettlementState, SnapshotMeta, StressTensor,
+    SubsistenceState, VertexCrustState, World, WorldMesh, WorldState,
 };

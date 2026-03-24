@@ -34,3 +34,14 @@ pub(super) fn validate_checkpoint_tick(tick: u64) -> Result<(), JsValue> {
 pub(super) fn history_tick_not_available_error(tick: u64) -> JsValue {
     JsValue::from_str(&format!("tick {tick} is not available in history"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_integer_tick, validate_non_negative_tick};
+
+    #[test]
+    fn validate_integer_tick_accepts_exact_integer() {
+        let rounded = validate_non_negative_tick(32.0).expect("tick should be valid");
+        validate_integer_tick(32.0, rounded).expect("integer tick should pass");
+    }
+}
