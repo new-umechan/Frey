@@ -17,8 +17,8 @@
         "perf:gate": "npm run bench:dev -- --ticks 16 --seed alpha --no-geometry --sample-interval 4 --baseline test/perf/bench-baseline.json --threshold 0.1",
         "seed:regression": "node tools/bench/seed-regression.mjs",
         "seed:regression:dev": "npm run wasm:build:dev:no-sync && node tools/bench/seed-regression.mjs",
-        "seed:gate:quick": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta --ticks 16 --baseline test/seed-regression/seed-regression-quick-baseline.json --check --threshold 0.005",
-        "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline test/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005",
+        "seed:gate:quick": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta --ticks 16 --baseline test/seed-regression/seed-regression-quick-baseline.json --check --threshold 0.005 --threshold-top10-river-flux-sum 0.01",
+        "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline test/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005 --threshold-top10-river-flux-sum 0.01",
         "wasm:build": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
         "wasm:build:dev": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"

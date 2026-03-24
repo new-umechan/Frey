@@ -62,6 +62,11 @@
 - 全5指標で差分の `min=max=p95=0`
 - よって最終閾値は全指標 `0.005`
 
+仕様更新（2026-03-24, MFD導入後）:
+
+- `top10_river_flux_sum` は流路分配モデル変更（SFD -> MFD）に対して感度が高いため、ゲート閾値を個別に `0.01` へ緩和する
+- その他指標は `0.005` を維持する
+
 推奨コマンド例:
 
 ```sh
@@ -71,6 +76,11 @@ npm run seed:gate:quick
 ```sh
 npm run seed:gate:heavy
 ```
+
+実行オプション（現行）:
+
+- 共通閾値: `--threshold 0.005`
+- 指標別上書き: `--threshold-top10-river-flux-sum 0.01`
 
 ゲート条件:
 
