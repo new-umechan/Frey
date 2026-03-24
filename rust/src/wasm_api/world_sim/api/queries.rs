@@ -101,66 +101,51 @@ impl WorldSimController {
             "river_next" => FieldResponse {
                 field_kind,
                 stride,
-                cell_count: world_ref.state.hydrology.river_downstream.len() as u32,
-                sampled_count: sampled_len(world_ref.state.hydrology.river_downstream.len(), stride),
+                cell_count: world_ref.state.hydrology.river_next.len() as u32,
+                sampled_count: sampled_len(world_ref.state.hydrology.river_next.len(), stride),
                 f32_data: None,
                 u32_data: None,
-                i32_data: Some(sample_i32(&world_ref.state.hydrology.river_downstream, stride)),
+                i32_data: Some(sample_i32(&world_ref.state.hydrology.river_next, stride)),
             },
-            "river_downstream_offset" => FieldResponse {
-                field_kind,
-                stride,
-                cell_count: world_ref.state.hydrology.river_downstream_offsets.len() as u32,
-                sampled_count: sampled_len(
-                    world_ref.state.hydrology.river_downstream_offsets.len(),
+            "river_downstream_offset" => {
+                let (offsets, _, _) =
+                    hydrology_downstream_to_csr(&world_ref.state.hydrology.river_downstream);
+                FieldResponse {
+                    field_kind,
                     stride,
-                ),
-                f32_data: None,
-                u32_data: Some(
-                    world_ref
-                        .state
-                        .hydrology
-                        .river_downstream_offsets
-                        .iter()
-                        .step_by(stride.max(1) as usize)
-                        .copied()
-                        .collect(),
-                ),
-                i32_data: None,
-            },
-            "river_downstream_cell" => FieldResponse {
-                field_kind,
-                stride,
-                cell_count: world_ref.state.hydrology.river_downstream_cells.len() as u32,
-                sampled_count: sampled_len(world_ref.state.hydrology.river_downstream_cells.len(), stride),
-                f32_data: None,
-                u32_data: Some(
-                    world_ref
-                        .state
-                        .hydrology
-                        .river_downstream_cells
-                        .iter()
-                        .step_by(stride.max(1) as usize)
-                        .copied()
-                        .collect(),
-                ),
-                i32_data: None,
-            },
-            "river_downstream_weight" => FieldResponse {
-                field_kind,
-                stride,
-                cell_count: world_ref.state.hydrology.river_downstream_weights.len() as u32,
-                sampled_count: sampled_len(
-                    world_ref.state.hydrology.river_downstream_weights.len(),
+                    cell_count: offsets.len() as u32,
+                    sampled_count: sampled_len(offsets.len(), stride),
+                    f32_data: None,
+                    u32_data: Some(offsets.into_iter().step_by(stride.max(1) as usize).collect()),
+                    i32_data: None,
+                }
+            }
+            "river_downstream_cell" => {
+                let (_, cells, _) =
+                    hydrology_downstream_to_csr(&world_ref.state.hydrology.river_downstream);
+                FieldResponse {
+                    field_kind,
                     stride,
-                ),
-                f32_data: Some(sample_f32(
-                    &world_ref.state.hydrology.river_downstream_weights,
+                    cell_count: cells.len() as u32,
+                    sampled_count: sampled_len(cells.len(), stride),
+                    f32_data: None,
+                    u32_data: Some(cells.into_iter().step_by(stride.max(1) as usize).collect()),
+                    i32_data: None,
+                }
+            }
+            "river_downstream_weight" => {
+                let (_, _, weights) =
+                    hydrology_downstream_to_csr(&world_ref.state.hydrology.river_downstream);
+                FieldResponse {
+                    field_kind,
                     stride,
-                )),
-                u32_data: None,
-                i32_data: None,
-            },
+                    cell_count: weights.len() as u32,
+                    sampled_count: sampled_len(weights.len(), stride),
+                    f32_data: Some(sample_f32(&weights, stride)),
+                    u32_data: None,
+                    i32_data: None,
+                }
+            }
             "sink_id" => {
                 let values = sink_id_values_by_cell(world_ref);
                 FieldResponse {
@@ -534,4 +519,21 @@ fn sink_fill_ratio_values_by_cell(world: &crate::sim::world::World) -> Vec<f32> 
             0.0
         }
     })
+}
+
+fn hydrology_downstream_to_csr(
+    routes: &[smallvec::SmallVec<[(u32, f32); 3]>],
+) -> (Vec<u32>, Vec<u32>, Vec<f32>) {
+    let mut offsets = Vec::with_capacity(routes.len() + 1);
+    let mut cells = Vec::new();
+    let mut weights = Vec::new();
+    offsets.push(0);
+    for route in routes {
+        for &(cell, weight) in route {
+            cells.push(cell);
+            weights.push(weight);
+        }
+        offsets.push(cells.len() as u32);
+    }
+    (offsets, cells, weights)
 }

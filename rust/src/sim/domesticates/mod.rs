@@ -14,8 +14,8 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
         if world.state.geology.height[i] <= 0.0 {
             world.state.domesticates.crop_available[i] = 0;
             world.state.domesticates.livestock_available[i] = 0;
-            world.state.domesticates.crop_adopted[i] = 0;
-            world.state.domesticates.livestock_adopted[i] = 0;
+            world.state.domesticates.crop_adoption[i] = 0.0;
+            world.state.domesticates.livestock_adoption[i] = 0.0;
             continue;
         }
         let tree_cover = world.state.ecology.tree_cover[i].clamp(0.0, 1.0);
@@ -27,5 +27,17 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
         world.state.domesticates.crop_available[i] = if eco_suitability > 0.35 { 1 } else { 0 };
         world.state.domesticates.livestock_available[i] =
             if eco_suitability > 0.25 { 1 } else { 0 };
+        world.state.domesticates.crop_adoption[i] =
+            if world.state.domesticates.crop_available[i] > 0 {
+                eco_suitability
+            } else {
+                0.0
+            };
+        world.state.domesticates.livestock_adoption[i] =
+            if world.state.domesticates.livestock_available[i] > 0 {
+                (eco_suitability * 0.9).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
     }
 }

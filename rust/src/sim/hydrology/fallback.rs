@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::hydrology::downstream_from_csr;
 
 pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
     let cell_count = world.state.geology.height.len();
@@ -44,20 +45,15 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         params.river_accumulation_threshold,
     );
 
-    world.state.hydrology.river_downstream = rebuilt.primary_next;
+    world.state.hydrology.river_next = rebuilt.primary_next;
     world.state.hydrology.river_flow = rebuilt.flux;
-    world.state.hydrology.river_downstream_offsets = rebuilt.downstream_offsets;
-    world.state.hydrology.river_downstream_cells = rebuilt.downstream_cells;
-    world.state.hydrology.river_downstream_weights = rebuilt.downstream_weights;
-    world.state.hydrology.river_upstream.fill(-1);
-    for (cell, &next) in world.state.hydrology.river_downstream.iter().enumerate() {
-        if next >= 0 {
-            let next_i = next as usize;
-            if next_i < world.state.hydrology.river_upstream.len() {
-                world.state.hydrology.river_upstream[next_i] = cell as i32;
-            }
-        }
-    }
+    world.state.hydrology.river_downstream = downstream_from_csr(
+        world.state.hydrology.river_next.len(),
+        &rebuilt.downstream_offsets,
+        &rebuilt.downstream_cells,
+        &rebuilt.downstream_weights,
+    );
+    world.state.hydrology.is_lake.fill(false);
     if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
         if state.river_flux.len() == world.state.hydrology.river_flow.len() {
             sync_erosion_rain(state, runoff);
@@ -67,7 +63,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
                 .clone_from(&world.state.hydrology.river_flow);
             state
                 .river_next
-                .clone_from(&world.state.hydrology.river_downstream);
+                .clone_from(&world.state.hydrology.river_next);
             state.height.clone_from(&world.state.geology.height);
             state.last_rebuild_tick = world.clock.tick;
             state.flux_scale_ema = 1.0;

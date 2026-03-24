@@ -86,7 +86,7 @@ impl WorldSimController {
             .collect::<Result<Vec<_>, _>>()?;
 
         let river_flow = terrain.river_flux;
-        let river_downstream = terrain.river_next;
+        let river_next = terrain.river_next;
         let geology = world::GeologyState {
             height: terrain.height,
             plate_id,
@@ -103,7 +103,8 @@ impl WorldSimController {
 
         let mut sim_world = world::World::new(mesh, geology);
         sim_world.state.hydrology.river_flow = river_flow;
-        sim_world.state.hydrology.river_downstream = river_downstream;
+        sim_world.state.hydrology.river_next = river_next;
+        crate::sim::hydrology::rebuild_mfd_from_primary(&mut sim_world.state.hydrology);
         if let Some(target) = config.target_sea_ratio {
             sim_world.runtime.target_sea_ratio = target.clamp(0.02, 0.98);
         }

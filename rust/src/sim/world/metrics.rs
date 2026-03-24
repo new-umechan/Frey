@@ -75,7 +75,7 @@ impl World {
         ) = river_network_metrics(
             &self.state.geology.height,
             &self.state.hydrology.river_flow,
-            &self.state.hydrology.river_downstream,
+            &self.state.hydrology.river_next,
             top10_river_flux_sum,
             sum_flux,
             max_flux,

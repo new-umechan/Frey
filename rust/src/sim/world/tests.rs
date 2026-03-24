@@ -81,7 +81,7 @@ fn feedback_queue_pushes_entries() {
 fn civilization_indicators_aggregate_population_and_polity() {
     let mut world = build_world();
     world.state.population.population = vec![12.0, 5.0, 11.0, 0.0];
-    world.state.polity.polity_id = vec![1, 0, 2, 0];
+    world.state.polity.polity_id = vec![Some(1), None, Some(2), None];
 
     let indicators = world.state.civilization_state().indicators();
     assert_eq!(indicators.settled_cells, 2);
@@ -106,7 +106,7 @@ fn metrics_collects_height_and_flux_stats() {
         },
     );
     world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
-    world.state.hydrology.river_downstream = vec![1, 2, -1, 0];
+    world.state.hydrology.river_next = vec![1, 2, -1, 0];
 
     let metrics = world.metrics();
     assert_eq!(metrics.cell_count, 4);
@@ -243,7 +243,7 @@ fn river_network_persists_without_early_collapse() {
         last_sink_full_rebuild_tick: 0,
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
-        prev_river_next: world.state.hydrology.river_downstream.clone(),
+        prev_river_next: world.state.hydrology.river_next.clone(),
         flow_heading: vec![[0.0, 0.0, 0.0]; world.cell_count()],
         groundwater_storage: vec![0.0; world.cell_count()],
         scratch_effective_runoff: vec![0.0; world.cell_count()],

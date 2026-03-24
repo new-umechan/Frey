@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use smallvec::SmallVec;
 
 use crate::sim;
 use crate::sim::world::{EraKind, World};
@@ -87,7 +88,7 @@ fn run_river_step_with_erosion_state(
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
     let expected_flux = hydrology.river_flow.len();
-    let expected_next = hydrology.river_downstream.len();
+    let expected_next = hydrology.river_next.len();
 
     let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
         return false;
@@ -168,30 +169,22 @@ fn run_river_step_with_erosion_state(
         detail.network_rebuild_count = detail.network_rebuild_count.saturating_add(1);
 
         hydrology
-            .river_downstream_offsets
-            .clone_from(&rebuilt.downstream_offsets);
-        hydrology
-            .river_downstream_cells
-            .clone_from(&rebuilt.downstream_cells);
-        hydrology
-            .river_downstream_weights
-            .clone_from(&rebuilt.downstream_weights);
+            .river_downstream
+            .clone_from(&downstream_from_csr(
+                hydrology.river_next.len(),
+                &rebuilt.downstream_offsets,
+                &rebuilt.downstream_cells,
+                &rebuilt.downstream_weights,
+            ));
     }
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
     geology.height.clone_from(&state.height);
     hydrology.river_flow.clone_from(&state.river_flux);
-    hydrology.river_downstream.clone_from(&state.river_next);
-    hydrology.river_upstream.fill(-1);
-    for (cell, &next) in hydrology.river_downstream.iter().enumerate() {
-        if next >= 0 {
-            let next_i = next as usize;
-            if next_i < hydrology.river_upstream.len() {
-                hydrology.river_upstream[next_i] = cell as i32;
-            }
-        }
-    }
+    hydrology.river_next.clone_from(&state.river_next);
+    rebuild_mfd_from_primary(hydrology);
+    hydrology.is_lake.fill(false);
     world.state.geology.erosion_rate.fill(0.0);
     world.state.geology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {
@@ -202,21 +195,36 @@ fn run_river_step_with_erosion_state(
 }
 
 pub(crate) fn rebuild_mfd_from_primary(hydrology: &mut crate::sim::world::HydrologyState) {
-    let cell_count = hydrology.river_downstream.len();
-    hydrology.river_downstream_offsets = Vec::with_capacity(cell_count + 1);
-    hydrology.river_downstream_cells.clear();
-    hydrology.river_downstream_weights.clear();
-    hydrology.river_downstream_offsets.push(0);
-
-    for &next in &hydrology.river_downstream {
+    let cell_count = hydrology.river_next.len();
+    hydrology.river_downstream = vec![SmallVec::new(); cell_count];
+    for (cell, &next) in hydrology.river_next.iter().enumerate() {
         if next >= 0 {
-            hydrology.river_downstream_cells.push(next as u32);
-            hydrology.river_downstream_weights.push(1.0);
+            hydrology.river_downstream[cell].push((next as u32, 1.0));
         }
-        hydrology
-            .river_downstream_offsets
-            .push(hydrology.river_downstream_cells.len() as u32);
     }
+}
+
+pub(crate) fn downstream_from_csr(
+    cell_count: usize,
+    offsets: &[u32],
+    cells: &[u32],
+    weights: &[f32],
+) -> Vec<SmallVec<[(u32, f32); 3]>> {
+    let mut result = vec![SmallVec::new(); cell_count];
+    if offsets.len() != cell_count + 1 || cells.len() != weights.len() {
+        return result;
+    }
+    for i in 0..cell_count {
+        let start = offsets[i] as usize;
+        let end = offsets[i + 1] as usize;
+        if start >= end || end > cells.len() {
+            continue;
+        }
+        for idx in start..end {
+            result[i].push((cells[idx], weights[idx]));
+        }
+    }
+    result
 }
 
 #[cfg(test)]

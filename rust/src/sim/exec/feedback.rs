@@ -148,7 +148,7 @@ fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch
                     component.capital_cell = value;
                 }
                 if let Some(value) = stability {
-                    component.stability = value;
+                    component.legitimacy = value;
                 }
             }
         }

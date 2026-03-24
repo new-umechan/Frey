@@ -21,8 +21,8 @@ pub(crate) fn update_settlement(world: &mut World, budget: u32) {
             0.0
         };
         let urban = (next_size / 60.0).clamp(0.0, 1.0);
-        world.state.settlement.settlement_size[i] =
-            lerp(world.state.settlement.settlement_size[i], next_size, alpha);
+        world.state.settlement.settlement_population[i] =
+            lerp(world.state.settlement.settlement_population[i], next_size, alpha);
         world.state.settlement.urbanization[i] =
             lerp(world.state.settlement.urbanization[i], urban, alpha);
         world.state.settlement.centrality[i] = lerp(
@@ -34,12 +34,11 @@ pub(crate) fn update_settlement(world: &mut World, budget: u32) {
                 * 0.5,
             alpha,
         );
-        world.state.settlement.residence[i] = world.state.settlement.settlement_size[i];
-        if world.state.settlement.settlement_size[i] > 0.5 {
+        if world.state.settlement.settlement_population[i] > 0.5 {
             settlements.push(SettlementComponent {
                 settlement_id: i as u32 + 1,
                 cell: i as u32,
-                size: world.state.settlement.settlement_size[i],
+                size: world.state.settlement.settlement_population[i],
                 urbanization: world.state.settlement.urbanization[i],
             });
         }

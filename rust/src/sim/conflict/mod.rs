@@ -15,7 +15,7 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     let n = world.state.geology.height.len();
     world.state.conflict.war_state.fill(0);
     world.state.conflict.frontline.fill(0.0);
-    world.state.conflict.occupier_id.fill(0);
+    world.state.conflict.occupier_id.fill(None);
 
     let mut polity_cells: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut frontline_cells = Vec::new();
@@ -29,12 +29,11 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     }
 
     for i in 0..n {
-        let polity_id = world.state.polity.polity_id[i];
+        let Some(polity_id) = world.state.polity.polity_id[i] else {
+            continue;
+        };
         if polity_id > 0 {
             polity_cells.entry(polity_id).or_default().push(i as u32);
-        }
-        if polity_id == 0 {
-            continue;
         }
         let start = world.mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
         let end = world
@@ -48,8 +47,10 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
             if j >= n {
                 continue;
             }
-            let other_polity = world.state.polity.polity_id[j];
-            if other_polity == 0 || other_polity == polity_id {
+            let Some(other_polity) = world.state.polity.polity_id[j] else {
+                continue;
+            };
+            if other_polity == polity_id {
                 continue;
             }
             world.state.conflict.war_state[i] = 1;

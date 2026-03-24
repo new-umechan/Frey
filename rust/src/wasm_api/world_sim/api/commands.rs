@@ -52,7 +52,7 @@ impl WorldSimController {
                     (op.value as f32).max(0.0),
                 ),
                 "river_next" => apply_i32(
-                    &mut managed.world.state.hydrology.river_downstream,
+                    &mut managed.world.state.hydrology.river_next,
                     idx,
                     op.value as i32,
                 ),

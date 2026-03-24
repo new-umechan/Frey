@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use smallvec::SmallVec;
 
 use super::exec::{ClockState, FeedbackQueue, RuntimeState};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
@@ -41,7 +42,9 @@ pub struct SnapshotMeta {
 pub struct PolityComponent {
     pub polity_id: u32,
     pub capital_cell: u32,
-    pub stability: f32,
+    pub legitimacy: f32,
+    pub centralization: f32,
+    pub military_tech: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -264,18 +267,13 @@ pub struct ClimateState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HydrologyState {
-    #[serde(alias = "river_path")]
-    pub river_downstream: Vec<i32>,
+    pub river_downstream: Vec<SmallVec<[(u32, f32); 3]>>,
     #[serde(default)]
-    pub river_downstream_offsets: Vec<u32>,
-    #[serde(default)]
-    pub river_downstream_cells: Vec<u32>,
-    #[serde(default)]
-    pub river_downstream_weights: Vec<f32>,
+    pub river_next: Vec<i32>,
     pub river_flow: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]
-    pub river_upstream: Vec<i32>,
+    pub is_lake: Vec<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -311,9 +309,9 @@ pub enum Biome {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DomesticatesState {
     pub crop_available: Vec<u32>,
-    pub crop_adopted: Vec<u32>,
+    pub crop_adoption: Vec<f32>,
     pub livestock_available: Vec<u32>,
-    pub livestock_adopted: Vec<u32>,
+    pub livestock_adoption: Vec<f32>,
     #[serde(default)]
     pub domesticates_internal: Vec<DomesticatesInternal>,
 }
@@ -327,6 +325,7 @@ pub struct DomesticatesInternal {
 pub struct SubsistenceState {
     pub subsistence_mix: Vec<f32>,
     pub food_production: Vec<f32>,
+    pub freshwater_access: Vec<f32>,
     pub land_use: Vec<f32>,
     pub water_withdrawal: Vec<f32>,
     pub dam_pressure: Vec<f32>,
@@ -342,15 +341,14 @@ pub struct PopulationState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettlementState {
-    pub settlement_size: Vec<f32>,
+    pub settlement_population: Vec<f32>,
     pub urbanization: Vec<f32>,
     pub centrality: Vec<f32>,
-    pub residence: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolityState {
-    pub polity_id: Vec<u32>,
+    pub polity_id: Vec<Option<u32>>,
     pub territory_status: Vec<u8>,
     pub language_group: Vec<u16>,
     pub polity_stability: Vec<f32>,
@@ -359,7 +357,7 @@ pub struct PolityState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConflictState {
     pub war_state: Vec<u8>,
-    pub occupier_id: Vec<u32>,
+    pub occupier_id: Vec<Option<u32>>,
     pub frontline: Vec<f32>,
 }
 
@@ -414,7 +412,12 @@ impl CivilizationState<'_> {
                 .filter(|&&value| value >= 10.0)
                 .count(),
             total_population: self.population.population.iter().copied().sum::<f32>(),
-            state_cells: self.polity.polity_id.iter().filter(|&&id| id > 0).count(),
+            state_cells: self
+                .polity
+                .polity_id
+                .iter()
+                .filter(|id| id.is_some())
+                .count(),
         }
     }
 }

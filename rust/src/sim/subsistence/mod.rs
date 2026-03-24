@@ -38,7 +38,10 @@ pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
             (tree_cover + 0.6 * ground_cover * (1.0 - tree_cover)).clamp(0.0, 1.0);
         let eco = (vegetation_proxy * 0.55 + soil_fertility * 0.45).clamp(0.0, 1.0);
         let river = (world.state.hydrology.river_flow[i] / max_flow).clamp(0.0, 1.0);
-        let crop = world.state.domesticates.crop_available[i] as f32;
+        let lake_bonus = if world.state.hydrology.is_lake[i] { 0.2 } else { 0.0 };
+        let freshwater = (river + lake_bonus).clamp(0.0, 1.0);
+        world.state.subsistence.freshwater_access[i] = freshwater;
+        let crop = world.state.domesticates.crop_adoption[i].clamp(0.0, 1.0);
         let food = (eco * 0.65 + river * 0.25 + crop * 0.10).clamp(0.0, 1.0);
         let land_use = (food * 0.8).clamp(0.0, 1.0);
         world.state.subsistence.food_production[i] = lerp(

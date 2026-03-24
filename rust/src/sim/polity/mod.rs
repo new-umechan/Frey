@@ -15,24 +15,26 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
     let mut polity_cells: HashMap<u32, Vec<usize>> = HashMap::new();
     for i in 0..n {
         let pop = world.state.population.population[i];
-        world.state.polity.polity_id[i] = if pop >= 10.0 { (i + 1) as u32 } else { 0 };
-        world.state.polity.territory_status[i] = if world.state.polity.polity_id[i] == 0 {
+        let polity_id = if pop >= 10.0 {
+            Some((i + 1) as u32)
+        } else {
+            None
+        };
+        world.state.polity.polity_id[i] = polity_id;
+        world.state.polity.territory_status[i] = if polity_id.is_none() {
             0
         } else {
             1
         };
-        world.state.polity.language_group[i] = if world.state.polity.polity_id[i] == 0 {
+        world.state.polity.language_group[i] = if polity_id.is_none() {
             0
         } else {
             (i % 8) as u16 + 1
         };
         world.state.polity.polity_stability[i] =
             (1.0 - world.state.population.migration_pressure[i]).clamp(0.0, 1.0);
-        if world.state.polity.polity_id[i] > 0 {
-            polity_cells
-                .entry(world.state.polity.polity_id[i])
-                .or_default()
-                .push(i);
+        if let Some(id) = polity_id {
+            polity_cells.entry(id).or_default().push(i);
         }
     }
 
@@ -57,7 +59,9 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
         polity_components.push(PolityComponent {
             polity_id: *polity_id,
             capital_cell,
-            stability,
+            legitimacy: stability,
+            centralization: (0.35 + stability * 0.50).clamp(0.0, 1.0),
+            military_tech: (0.20 + max_population / 120.0).clamp(0.0, 1.0),
         });
     }
     polity_components.sort_by_key(|component| component.polity_id);

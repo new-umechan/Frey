@@ -3,6 +3,7 @@ use std::collections::BinaryHeap;
 
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::erosion::ErosionAutomatonState;
+use smallvec::SmallVec;
 use crate::sim::geo::{
     add3, dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, sub3,
     EARTH_RADIUS_KM,
@@ -41,13 +42,11 @@ impl World {
                     ocean_temperature,
                 },
                 hydrology: HydrologyState {
-                    river_downstream: vec![-1; cell_count],
-                    river_downstream_offsets: vec![0; cell_count + 1],
-                    river_downstream_cells: Vec::new(),
-                    river_downstream_weights: Vec::new(),
+                    river_downstream: vec![SmallVec::new(); cell_count],
+                    river_next: vec![-1; cell_count],
                     river_flow: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
-                    river_upstream: vec![-1; cell_count],
+                    is_lake: vec![false; cell_count],
                 },
                 ecology: EcologyState {
                     biome: vec![Biome::TemperateForest; cell_count],
@@ -59,14 +58,15 @@ impl World {
                 },
                 domesticates: DomesticatesState {
                     crop_available: vec![0; cell_count],
-                    crop_adopted: vec![0; cell_count],
+                    crop_adoption: vec![0.0; cell_count],
                     livestock_available: vec![0; cell_count],
-                    livestock_adopted: vec![0; cell_count],
+                    livestock_adoption: vec![0.0; cell_count],
                     domesticates_internal: vec![DomesticatesInternal::default(); cell_count],
                 },
                 subsistence: SubsistenceState {
                     subsistence_mix: vec![0.0; cell_count],
                     food_production: vec![0.0; cell_count],
+                    freshwater_access: vec![0.0; cell_count],
                     land_use: vec![0.0; cell_count],
                     water_withdrawal: vec![0.0; cell_count],
                     dam_pressure: vec![0.0; cell_count],
@@ -78,20 +78,19 @@ impl World {
                     migration_pressure: vec![0.0; cell_count],
                 },
                 settlement: SettlementState {
-                    settlement_size: vec![0.0; cell_count],
+                    settlement_population: vec![0.0; cell_count],
                     urbanization: vec![0.0; cell_count],
                     centrality: vec![0.0; cell_count],
-                    residence: vec![0.0; cell_count],
                 },
                 polity: PolityState {
-                    polity_id: vec![0; cell_count],
+                    polity_id: vec![None; cell_count],
                     territory_status: vec![0; cell_count],
                     language_group: vec![0; cell_count],
                     polity_stability: vec![0.0; cell_count],
                 },
                 conflict: ConflictState {
                     war_state: vec![0; cell_count],
-                    occupier_id: vec![0; cell_count],
+                    occupier_id: vec![None; cell_count],
                     frontline: vec![0.0; cell_count],
                 },
             },
@@ -146,10 +145,8 @@ impl World {
             .clone_from(&state.river_flux);
         self.state
             .hydrology
-            .river_downstream
+            .river_next
             .clone_from(&state.river_next);
-        self.state.hydrology.river_flow = state.river_flux.clone();
-        self.state.hydrology.river_downstream = state.river_next.clone();
         rebuild_mfd_from_primary(&mut self.state.hydrology);
         self.runtime.hydrology_dynamics = Some(state);
         Ok(())
