@@ -12,34 +12,29 @@ tickは単なるカウンタではなく、そのtickが表す実時間の密度
 
 ```rust
 struct Clock {
-    tick:    Tick,
-    epoch:   Epoch,
-    budgets: SubsystemBudgets,
-}
-
-struct Tick {
-    real_years: f32,
-    scale: EpochScale,
-    budgets: SubsystemBudgets,
+    tick:           u32,   // 累計tick数（0始まり）
+    epoch:          Epoch,
+    budgets:        SubsystemBudgets,
+    real_target_ms: u32,   // 1tickのリアルタイム実行目標（ms）。初期値: 100
 }
 ```
 
-- `real_years`
-  - 1tickが表す実世界年数
-- `scale`
-  - 現在の時代
-- `budgets`
-  - 各Moduleの更新回数近似
+`tick` の現在値から `Epoch` は一意に決まり、`Epoch` から `real_years`（1tickが表す実世界年数）も一意に決まる。
+`real_years` は `Clock` のフィールドとして持たず、必要な箇所で `epoch.real_years_per_tick()` として導出する。
+
+`real_target_ms` はExecSystemがtick実行時間を監視してスキップ判定に使う目安値であり、シミュレーション結果には影響しない。
 
 ## 時代一覧
 
-| 時代 | 主対象 | 1tickの意味 | 重点 |
-| --- | --- | --- | --- |
-| 地殻形成期 | `Geology` | 500万年 | プレート運動、境界活動、海陸骨格 |
-| 環境形成期 | `Climate` / `Hydrology` | 1万年 | 降水、流出、流路、流量、侵食、堆積 |
-| 先史期 | `Ecology` / `Domesticates` / `Subsistence` | 1000年 | 可住性、生産性、作物・家畜分布、生業成立 |
-| 文明成立期 | `Population` / `Settlement` / `Polity` | 100年 | 定住、都市化、初期国家形成 |
-| 歴史展開期 | `Conflict`（+Tier 2） | 1年 | 国家競合、戦争、交易、技術変化 |
+| 時代 | 主対象 | 開始年 | 終了年 | 1tick | tick数 | 累計tick | 重点 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 地殻形成期 | `Geology` | -45億年 | -5億年 | 500万年 | 800 | 800 | プレート運動、境界活動、海陸骨格 |
+| 環境形成期 | `Climate` / `Hydrology` | -5億年 | -10万年 | 100万年 | 500 | 1,300 | 降水、流出、流路、流量、侵食、堆積 |
+| 先史期 | `Ecology` / `Domesticates` / `Subsistence` | -10万年 | -5,500年 | 1,000年 | 95 | 1,395 | 可住性、生産性、作物・家畜分布、生業成立 |
+| 文明成立期 | `Population` / `Settlement` / `Polity` | -5,500年 | -500年 | 100年 | 50 | 1,445 | 定住、都市化、初期国家形成 |
+| 歴史展開期 | `Conflict`（+Tier 2） | -500年 | — | 1年 | 上限なし | 1,445〜 | 国家競合、戦争、交易、技術変化 |
+
+歴史展開期の終了年は定義しない。何年まで回すかは実行時に決める。
 
 時代は、Moduleを開始停止する排他的な段階ではない。
 どのModuleをどれだけ強く更新するかを決める時間スケールである。
@@ -90,28 +85,26 @@ type SystemPlan = HashMap<ModuleId, Vec<SystemId>>;
 
 ## 時代遷移
 
-時代遷移は状態条件で決めるが、デバッグと安定化のために `min_ticks`・`max_ticks` のガードを加える。
+時代遷移は固定tick数で行う。状態条件による遷移判定は持たない。
+テストのしやすさを担保するため。 人類が生まれるタイミングとかは管理できないが、
+地形から人類の活動が制約されるという目的は十分表現できると判断した。
 
 ```rust
-// WorldContext は CellStore / hecs::World / Clock への参照束を表す擬似型
-type EpochGuard = fn(&WorldContext) -> bool;
-
 struct EpochTransition {
-    condition: EpochGuard,
-    min_ticks: u32,           // 条件達成後も最短この tick 数は保持する（安定化）
-    max_ticks: Option<u32>,   // 条件未達でも強制遷移するtick数上限（デバッグ・異常系）
+    at_tick: u32,   // このtickの開始時に次のEpochへ遷移する
 }
 
 const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
-    (Epoch::Geological, EpochTransition { condition: sea_land_ratio_stable,    min_ticks: 3, max_ticks: Some(200) }),
-    (Epoch::Climate,    EpochTransition { condition: river_network_formed,     min_ticks: 3, max_ticks: Some(200) }),
-    (Epoch::Ecology,    EpochTransition { condition: habitable_area_above_threshold, min_ticks: 3, max_ticks: Some(500) }),
-    (Epoch::Society,    EpochTransition { condition: has_settlement,           min_ticks: 3, max_ticks: None       }),
+    (Epoch::Geological,  EpochTransition { at_tick:     0 }),  // tick   0: 地殻形成期 開始
+    (Epoch::Climate,     EpochTransition { at_tick:   800 }),  // tick 800: 環境形成期 開始（-5億年相当）
+    (Epoch::Ecology,     EpochTransition { at_tick: 1_300 }),  // tick 1300: 先史期 開始（-10万年相当）
+    (Epoch::Society,     EpochTransition { at_tick: 1_395 }),  // tick 1395: 文明成立期 開始（-5500年相当）
+    (Epoch::History,     EpochTransition { at_tick: 1_445 }),  // tick 1445: 歴史展開期 開始（-500年相当）
 ];
 ```
 
-具体的な閾値・判定式・数値は未確定であり、実装時に調整する。
-`max_ticks: None` は強制遷移なし（歴史展開期への移行は状態条件のみで決める）を意味する。
+`ExecSystem` は各tick開始時に `clock.tick` を参照し、対応するEpochへ遷移する。
+遷移は即時であり、min_ticks・max_ticks・状態条件によるガードは持たない。
 
 ## 更新ループ
 
@@ -129,7 +122,7 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 10. `Polity`
 11. `Conflict`
 12. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
-13. 時代遷移判定
+13. 時代遷移判定（次tickの `clock.tick` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
 
 補足:
 
