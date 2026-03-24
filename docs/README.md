@@ -12,6 +12,7 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
 5. `docs/interface/wasm_api.md`
 6. `docs/interface/ui_spec.md`
 7. `docs/manage/test.md`
+8. `docs/manage/benchmark.md`
 
 ## 調査メモ
 

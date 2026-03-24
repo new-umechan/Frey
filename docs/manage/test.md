@@ -2,6 +2,7 @@
 
 本書はテスト運用メモである。
 設計の正本は `docs/architecture/overview.md` と `docs/architecture/data_model.md` を参照する。
+ベンチマーク設計は `docs/manage/benchmark.md` を参照する。
 
 ## 目的
 
