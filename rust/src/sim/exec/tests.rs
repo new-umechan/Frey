@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
     CellFieldId, FeedbackEntry, FeedbackPayload, FieldValue, GeologyState, ModuleId, TargetRef,
     World, WorldMesh,
@@ -128,6 +129,53 @@ fn conflict_generates_region_components_and_updates_relations() {
         world
             .polity_relations
             .get(&(1, 2))
+            .map(|relation| relation.at_war),
+        Some(true)
+    );
+}
+
+#[test]
+fn polity_update_overwrites_stale_ids_with_none_for_low_population_cells() {
+    let mut world = build_test_world();
+    world.state.population.population = vec![12.0, 4.0, 11.0, 3.0];
+    world.state.population.migration_pressure = vec![0.0; 4];
+    world.state.polity.polity_id = vec![Some(10), Some(20), Some(30), Some(40)];
+
+    crate::sim::polity::update_polity(&mut world, 1);
+
+    assert_eq!(
+        world.state.polity.polity_id,
+        vec![Some(1), None, Some(3), None]
+    );
+    assert_eq!(world.state.polity.territory_status, vec![1, 0, 1, 0]);
+    assert_eq!(world.state.polity.language_group, vec![1, 0, 3, 0]);
+}
+
+#[test]
+fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
+    let mut world = build_test_world();
+    world.state.polity.polity_id = vec![Some(1), None, Some(2), None];
+    world.state.conflict.occupier_id = vec![Some(9), Some(9), Some(9), Some(9)];
+    world.polity_relations.insert((1, 2), PolityRelation::default());
+    world.polity_relations.insert((2, 1), PolityRelation::default());
+
+    crate::sim::conflict::update_conflict(&mut world, 1);
+
+    assert_eq!(world.state.conflict.occupier_id, vec![None, None, None, None]);
+    assert_eq!(world.state.conflict.war_state, vec![1, 0, 1, 0]);
+    assert_eq!(world.state.conflict.frontline, vec![1.0, 0.0, 1.0, 0.0]);
+    assert_eq!(world.entities.region_components.len(), 3);
+    assert_eq!(
+        world
+            .polity_relations
+            .get(&(1, 2))
+            .map(|relation| relation.at_war),
+        Some(true)
+    );
+    assert_eq!(
+        world
+            .polity_relations
+            .get(&(2, 1))
             .map(|relation| relation.at_war),
         Some(true)
     );
