@@ -31,7 +31,7 @@ export const ERA_SCALE_PRESETS = Object.freeze({
     },
     environment: {
         label: "環境形成期",
-        tickLabel: "1万年",
+        tickLabel: "100万年",
         runtimeTickMs: 150,
         weights: { geology: 3.0, climate: 3.0, ecology: 1.0, civilization: 0.0 },
     },

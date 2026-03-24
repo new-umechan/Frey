@@ -49,9 +49,7 @@ fn apply_payload_entries(world: &mut World) {
             FeedbackPayload::MutateEntity { id, patch } => {
                 apply_mutate_entity(world, &entry.target_ref, id, patch);
             }
-            FeedbackPayload::TriggerEpochTransition { to } => {
-                world.clock.epoch = to;
-            }
+            FeedbackPayload::TriggerEpochTransition { .. } => {}
             _ => {}
         }
     }

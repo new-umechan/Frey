@@ -293,7 +293,7 @@ enum FeedbackPayload {
     SpawnEntity  { bundle: EntityBundle },
     DestroyEntity{ id: EntityId },
     MutateEntity { id: EntityId, patch: ComponentPatch },
-    // 将来の拡張用
+    // 型互換のため保持するが、固定tick遷移モードではExecSystemで無効化する
     TriggerEpochTransition { to: Epoch },
 }
 ```

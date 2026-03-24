@@ -60,7 +60,7 @@ impl EraKind {
     pub fn real_years_per_tick(self) -> f32 {
         match self {
             EraKind::Crust => 5_000_000.0,
-            EraKind::Environment => 10_000.0,
+            EraKind::Environment => 1_000_000.0,
             EraKind::Life => 1_000.0,
             EraKind::Civilization => 100.0,
             EraKind::History => 1.0,

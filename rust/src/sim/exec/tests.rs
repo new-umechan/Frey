@@ -30,8 +30,9 @@ fn build_test_world() -> World {
 fn exec_world_advances_tick_and_sets_budget_to_one() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::History;
+    world.clock.tick = 1_445;
     exec_world(&mut world);
-    assert_eq!(world.clock.tick, 1);
+    assert_eq!(world.clock.tick, 1_446);
     assert_eq!(world.clock.budgets.geology, 1);
     assert_eq!(world.clock.budgets.climate, 1);
     assert_eq!(world.clock.budgets.ecology, 1);
@@ -86,7 +87,7 @@ fn feedback_queue_applies_entries_on_next_tick() {
 }
 
 #[test]
-fn feedback_payload_can_trigger_epoch_transition() {
+fn feedback_payload_trigger_epoch_transition_is_ignored() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 1;
@@ -101,6 +102,53 @@ fn feedback_payload_can_trigger_epoch_transition() {
     });
 
     exec_world(&mut world);
+    assert_eq!(world.clock.epoch, EraKind::Crust);
+}
+
+#[test]
+fn fixed_tick_transition_changes_era_at_end_of_tick() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::Crust;
+    world.clock.tick = 799;
+
+    exec_world(&mut world);
+
+    assert_eq!(world.clock.tick, 800);
+    assert_eq!(world.clock.epoch, EraKind::Environment);
+}
+
+#[test]
+fn fixed_tick_transition_keeps_era_before_boundary() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::Environment;
+    world.clock.tick = 1_298;
+
+    exec_world(&mut world);
+
+    assert_eq!(world.clock.tick, 1_299);
+    assert_eq!(world.clock.epoch, EraKind::Environment);
+}
+
+#[test]
+fn fixed_tick_transition_matches_all_remaining_boundaries() {
+    let mut world = build_test_world();
+
+    world.clock.epoch = EraKind::Environment;
+    world.clock.tick = 1_299;
+    exec_world(&mut world);
+    assert_eq!(world.clock.tick, 1_300);
+    assert_eq!(world.clock.epoch, EraKind::Life);
+
+    world.clock.epoch = EraKind::Life;
+    world.clock.tick = 1_394;
+    exec_world(&mut world);
+    assert_eq!(world.clock.tick, 1_395);
+    assert_eq!(world.clock.epoch, EraKind::Civilization);
+
+    world.clock.epoch = EraKind::Civilization;
+    world.clock.tick = 1_444;
+    exec_world(&mut world);
+    assert_eq!(world.clock.tick, 1_445);
     assert_eq!(world.clock.epoch, EraKind::History);
 }
 

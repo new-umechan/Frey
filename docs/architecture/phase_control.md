@@ -103,8 +103,8 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 ];
 ```
 
-`ExecSystem` は各tick開始時に `clock.tick` を参照し、対応するEpochへ遷移する。
-遷移は即時であり、min_ticks・max_ticks・状態条件によるガードは持たない。
+`ExecSystem` は各tick終了時に `clock.tick + 1` を参照し、次tick開始時点で有効になるEpochを決める。
+遷移は固定tick一致のみで発生し、min_ticks・max_ticks・状態条件によるガードは持たない。
 
 ## 更新ループ
 
@@ -122,7 +122,7 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 10. `Polity`
 11. `Conflict`
 12. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
-13. 時代遷移判定（次tickの `clock.tick` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
+13. 時代遷移判定（tick終了時に、次tickの `clock.tick + 1` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
 
 補足:
 
