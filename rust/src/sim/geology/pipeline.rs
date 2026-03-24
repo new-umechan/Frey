@@ -1,12 +1,20 @@
 use super::*;
 
-pub(super) fn generate(seed: &str, mut params: GeologyParams) -> GeologyOutput {
+pub(super) fn generate(seed: &str, params: GeologyParams) -> GeologyOutput {
+    generate_with_mesh(seed, params).0
+}
+
+pub(super) fn generate_with_mesh(
+    seed: &str,
+    mut params: GeologyParams,
+) -> (GeologyOutput, Vec<[f32; 3]>, Vec<u32>, Vec<u32>) {
     sanitize_params(&mut params);
 
     if seed == "earth" {
         let (positions, indices) = generate_icosphere(params.level);
         let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-        return earth_preset(&positions, &nbr_offsets, &nbrs, params.river_rain_base);
+        let geology = earth_preset(&positions, &nbr_offsets, &nbrs, params.river_rain_base);
+        return (geology, positions, nbr_offsets, nbrs);
     }
 
     let mut state = init_crust_update_state(seed, params);
@@ -272,13 +280,19 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
     }
 }
 
-pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) -> GeologyOutput {
+pub(super) fn finalize_crust_update_state(
+    mut state: CrustTerrainUpdateState,
+) -> (GeologyOutput, Vec<[f32; 3]>, Vec<u32>, Vec<u32>) {
+    let positions = std::mem::take(&mut state.positions);
+    let nbr_offsets = std::mem::take(&mut state.nbr_offsets);
+    let nbrs = std::mem::take(&mut state.nbrs);
+    let cell_count = positions.len();
     let boundary_fields = state.boundary_fields.take().unwrap_or(BoundaryFields {
-        preserve_strength: vec![0.0; state.positions.len()],
-        debug_trench_strength: vec![0.0; state.positions.len()],
-        debug_arc_strength: vec![0.0; state.positions.len()],
-        debug_backarc_strength: vec![0.0; state.positions.len()],
-        debug_ocean_ocean_arc_strength: vec![0.0; state.positions.len()],
+        preserve_strength: vec![0.0; cell_count],
+        debug_trench_strength: vec![0.0; cell_count],
+        debug_arc_strength: vec![0.0; cell_count],
+        debug_backarc_strength: vec![0.0; cell_count],
+        debug_ocean_ocean_arc_strength: vec![0.0; cell_count],
     });
     let vertex_weight = state
         .vertex_lithosphere
@@ -320,7 +334,7 @@ pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) ->
     let land_count = state.height.iter().filter(|&&h| h > 0.0).count();
     let land_ratio = land_count as f32 / (state.height.len().max(1) as f32);
 
-    GeologyOutput {
+    let geology = GeologyOutput {
         height: state.height,
         plate_id: state.plate_id,
         plate_count,
@@ -338,7 +352,8 @@ pub(super) fn finalize_crust_update_state(mut state: CrustTerrainUpdateState) ->
         debug_arc_strength: boundary_fields.debug_arc_strength,
         debug_backarc_strength: boundary_fields.debug_backarc_strength,
         debug_ocean_ocean_arc_strength: boundary_fields.debug_ocean_ocean_arc_strength,
-    }
+    };
+    (geology, positions, nbr_offsets, nbrs)
 }
 
 pub(super) fn sanitize_params(params: &mut GeologyParams) {

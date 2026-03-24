@@ -55,6 +55,13 @@ pub(crate) fn build_geology(seed: &str, geology_params: GeologyParams) -> Geolog
     geology::generate(seed, geology_params)
 }
 
+pub(crate) fn build_geology_with_mesh(
+    seed: &str,
+    geology_params: GeologyParams,
+) -> (GeologyOutput, Vec<[f32; 3]>, Vec<u32>, Vec<u32>) {
+    geology::generate_with_mesh(seed, geology_params)
+}
+
 pub(crate) fn step_erosion_automaton(
     state: &mut erosion::ErosionAutomatonState,
     budget_cells: u32,

@@ -30,6 +30,13 @@ pub(super) fn generate(seed: &str, params: GeologyParams) -> GeologyOutput {
     pipeline::generate(seed, params)
 }
 
+pub(super) fn generate_with_mesh(
+    seed: &str,
+    params: GeologyParams,
+) -> (GeologyOutput, Vec<[f32; 3]>, Vec<u32>, Vec<u32>) {
+    pipeline::generate_with_mesh(seed, params)
+}
+
 pub(crate) fn update_geology(world: &mut crate::sim::world::World, budget: u32) {
     if budget == 0 {
         return;

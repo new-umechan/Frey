@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use wasm_bindgen::prelude::*;
 
-use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim;
 use crate::sim::{
     exec_world, exec_world_profiled, exec_world_profiled_detailed, world, ExecWorldBreakdown,
@@ -71,9 +70,8 @@ impl WorldSimController {
         let mut geology_params = config.geology_params.unwrap_or_default();
         geology_params.level = mesh_level;
 
-        let terrain = sim::build_geology(&seed, geology_params.clone());
-        let (positions, indices) = generate_icosphere(mesh_level);
-        let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+        let (terrain, positions, nbr_offsets, nbrs) =
+            sim::build_geology_with_mesh(&seed, geology_params.clone());
 
         if terrain.height.len() != positions.len() || terrain.plate_id.len() != positions.len() {
             return Err(JsValue::from_str(
