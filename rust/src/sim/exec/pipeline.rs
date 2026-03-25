@@ -1,5 +1,8 @@
 use super::feedback::apply_feedback_queue;
-use super::geology::{run_geology_step, run_hydrology_step_unprofiled};
+use super::geology::{
+    apply_hydrology_erosion_to_geology, run_geology_step, run_hydrology_step_unprofiled,
+    should_run_hydrology_mfd,
+};
 use super::transition::update_era_transition;
 
 use crate::sim::world::World;
@@ -23,7 +26,9 @@ pub(super) fn run_climate_stage(world: &mut World) {
 }
 
 pub(super) fn run_hydrology_stage(world: &mut World) {
-    run_hydrology_step_unprofiled(world, world.clock.budgets.geology);
+    let run_mfd = should_run_hydrology_mfd(world);
+    run_hydrology_step_unprofiled(world, world.clock.budgets.geology, run_mfd);
+    apply_hydrology_erosion_to_geology(world);
 }
 
 pub(super) fn run_ecology_stage(world: &mut World) {

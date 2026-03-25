@@ -1,4 +1,7 @@
-use super::geology::{run_geology_step, run_hydrology_step_profiled};
+use super::geology::{
+    apply_hydrology_erosion_to_geology, run_geology_step, run_hydrology_step_profiled,
+    should_run_hydrology_mfd,
+};
 use super::pipeline::{
     finalize_tick, prepare_step, run_climate_stage, run_ecology_stage, run_feedback_stage,
     run_society_stage, run_transition_stage,
@@ -143,7 +146,9 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     breakdown.exec_climate_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
-    let river_profile = run_hydrology_step_profiled(world, world.clock.budgets.geology);
+    let run_mfd = should_run_hydrology_mfd(world);
+    let river_profile = run_hydrology_step_profiled(world, world.clock.budgets.geology, run_mfd);
+    apply_hydrology_erosion_to_geology(world);
     breakdown.exec_hydrology_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
     river_breakdown.step_geology_river_prepare_ms = river_profile.river_prepare_ms;
     river_breakdown.step_geology_river_automaton_ms = river_profile.river_automaton_ms;

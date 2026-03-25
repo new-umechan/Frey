@@ -67,6 +67,32 @@ pub(crate) fn run_hydrology_step(
     if !run_river_step_with_erosion_state(world, budget, &runoff, river_driver, &mut detail) {
         let phase_start = profile_now();
         run_river_fallback(world, &runoff);
+        world.state.geology.erosion_rate.fill(0.0);
+        world.state.geology.deposition_rate.fill(0.0);
+        detail.river_fallback_ms += profile_elapsed_ms(phase_start);
+        detail.fallback_count = detail.fallback_count.saturating_add(1);
+    }
+    detail
+}
+
+pub(crate) fn run_hydrology_flow_step(
+    world: &mut World,
+    geology_budget: u32,
+) -> HydrologyStepDetailBreakdown {
+    let mut detail = HydrologyStepDetailBreakdown::default();
+    let budget = geology_river_budget(world.clock.epoch, geology_budget);
+    if budget == 0 {
+        return detail;
+    }
+
+    let phase_start = profile_now();
+    let runoff = build_runoff_for_routing(world);
+    detail.river_prepare_ms += profile_elapsed_ms(phase_start);
+    if !run_river_flow_only_with_state(world, &runoff, &mut detail) {
+        let phase_start = profile_now();
+        run_river_fallback(world, &runoff);
+        world.state.geology.erosion_rate.fill(0.0);
+        world.state.geology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
         detail.fallback_count = detail.fallback_count.saturating_add(1);
     }
@@ -96,6 +122,7 @@ fn run_river_step_with_erosion_state(
     if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
         return false;
     }
+    state.height.clone_from(&geology.height);
 
     let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
     let phase_start = profile_now();
@@ -178,18 +205,135 @@ fn run_river_step_with_erosion_state(
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
-    geology.height.clone_from(&state.height);
+    update_erosion_and_deposition_rates(geology, &state.height);
     hydrology.river_flow.clone_from(&state.river_flux);
     hydrology.river_next.clone_from(&state.river_next);
     rebuild_mfd_from_primary(hydrology);
     hydrology.is_lake.fill(false);
-    world.state.geology.erosion_rate.fill(0.0);
-    world.state.geology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
     detail.river_sync_ms += profile_elapsed_ms(phase_start);
     true
+}
+
+fn run_river_flow_only_with_state(
+    world: &mut World,
+    runoff: &[f32],
+    detail: &mut HydrologyStepDetailBreakdown,
+) -> bool {
+    let mesh_nbr_offsets = &world.mesh.nbr_offsets;
+    let mesh_nbrs = &world.mesh.nbrs;
+    let geology = &mut world.state.geology;
+    let hydrology = &mut world.state.hydrology;
+    let expected_height = geology.height.len();
+    let expected_flux = hydrology.river_flow.len();
+    let expected_next = hydrology.river_next.len();
+
+    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
+        return false;
+    };
+    if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
+        return false;
+    }
+    state.height.clone_from(&geology.height);
+
+    let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
+    let phase_start = profile_now();
+    apply_baseflow_storage(
+        &mut state.groundwater_storage,
+        &state.params,
+        &geology.height,
+        mesh_nbr_offsets,
+        mesh_nbrs,
+        runoff,
+        &mut effective_runoff,
+    );
+    sync_erosion_rain(state, effective_runoff.as_slice());
+    detail.river_prepare_ms += profile_elapsed_ms(phase_start);
+
+    let phase_start = profile_now();
+    let mut flux =
+        flow_flux_on_primary_network(&geology.height, &state.river_next, &effective_runoff);
+    smooth_and_normalize_flux(
+        &mut flux,
+        &state.river_flux,
+        &mut state.flux_scale_ema,
+        &mut state.scratch_flux_samples,
+    );
+    detail.river_network_ms += profile_elapsed_ms(phase_start);
+
+    state.prev_river_next.clone_from(&state.river_next);
+    state.river_flux = flux;
+    state.scratch_effective_runoff = effective_runoff;
+    state.last_river_driver = 0.0;
+
+    let phase_start = profile_now();
+    hydrology.river_flow.clone_from(&state.river_flux);
+    hydrology.river_next.clone_from(&state.river_next);
+    rebuild_mfd_from_primary(hydrology);
+    hydrology.is_lake.fill(false);
+    geology.erosion_rate.fill(0.0);
+    geology.deposition_rate.fill(0.0);
+    for i in 0..hydrology.river_transport_cost.len() {
+        hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
+    }
+    detail.river_sync_ms += profile_elapsed_ms(phase_start);
+    true
+}
+
+fn flow_flux_on_primary_network(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
+    let count = height.len().min(river_next.len()).min(runoff.len());
+    let mut order = (0..count).collect::<Vec<_>>();
+    order.sort_unstable_by(|a, b| {
+        height[*b]
+            .partial_cmp(&height[*a])
+            .unwrap_or(Ordering::Equal)
+    });
+
+    let mut flux = vec![0.0; count];
+    for i in 0..count {
+        if height[i] > 0.0 {
+            flux[i] = runoff[i].max(0.0);
+        }
+    }
+    for &i in &order {
+        if height[i] <= 0.0 {
+            flux[i] = 0.0;
+            continue;
+        }
+        let next = river_next[i];
+        if next < 0 {
+            continue;
+        }
+        let n = next as usize;
+        if n < count {
+            flux[n] += flux[i];
+        }
+    }
+    flux
+}
+
+fn update_erosion_and_deposition_rates(
+    geology: &mut crate::sim::world::GeologyState,
+    next_height: &[f32],
+) {
+    let count = geology
+        .height
+        .len()
+        .min(geology.erosion_rate.len())
+        .min(geology.deposition_rate.len())
+        .min(next_height.len());
+    geology.erosion_rate.fill(0.0);
+    geology.deposition_rate.fill(0.0);
+    for i in 0..count {
+        let delta = next_height[i] - geology.height[i];
+        if delta >= 0.0 {
+            geology.deposition_rate[i] = delta;
+        } else {
+            geology.erosion_rate[i] = -delta;
+        }
+    }
 }
 
 pub(crate) fn rebuild_mfd_from_primary(hydrology: &mut crate::sim::world::HydrologyState) {
