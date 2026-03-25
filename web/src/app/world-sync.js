@@ -53,6 +53,33 @@ const CORE_KEY_BY_FIELD_KIND = Object.freeze({
     river_transport_cost: "riverTransportCost",
 });
 
+const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
+    height: "height",
+    river_flux: "river",
+    river_next: "river",
+    mantle_heat: "mantleHeat",
+    erosion_rate: "metric",
+    deposition_rate: "metric",
+    temperature: "metric",
+    precipitation: "metric",
+    evapotranspiration: "metric",
+    aridity: "metric",
+    runoff: "metric",
+    ocean_temperature: "metric",
+    river_transport_cost: "metric",
+});
+
+function createWorldChangeset() {
+    return { ...WORLD_CHANGESET };
+}
+
+function markFieldChange(changes, fieldKind) {
+    const changeKey = CHANGE_KIND_BY_FIELD_KIND[fieldKind];
+    if (changeKey) {
+        changes[changeKey] = true;
+    }
+}
+
 function createFallbackFieldData(fieldKind, fallbackCellCount) {
     const count = Math.max(0, Math.floor(fallbackCellCount || 0));
     if (FLOAT32_FIELDS.has(fieldKind)) {
@@ -251,6 +278,16 @@ function fetchWorldStats(worldSimController, worldId) {
     };
 }
 
+function updateUiStatsFromWorldStats({ stats, currentSeed, statFields, level }) {
+    updateStatFields({
+        statFields,
+        level,
+        currentSeed,
+        plateStats: stats.plateStats,
+        metrics: stats.metrics,
+    });
+}
+
 export function refreshWorldStatsFromController({
     worldSimController,
     worldId,
@@ -264,13 +301,7 @@ export function refreshWorldStatsFromController({
     }
     const stats = fetchWorldStats(worldSimController, worldId);
     refreshCoreStatsFromMetrics(world.core, stats.metrics, stats.plateStats);
-    updateStatFields({
-        statFields,
-        level,
-        currentSeed,
-        plateStats: stats.plateStats,
-        metrics: stats.metrics,
-    });
+    updateUiStatsFromWorldStats({ stats, currentSeed, statFields, level });
     return stats;
 }
 
@@ -313,50 +344,16 @@ function applyNumericDelta(target, fieldDelta) {
 }
 
 function applyWorldDeltaToCore(core, worldDelta) {
-    const changes = { ...WORLD_CHANGESET };
+    const changes = createWorldChangeset();
     for (const delta of worldDelta?.deltas ?? []) {
-        switch (delta?.field_kind) {
-        case "height":
-            changes.height = applyNumericDelta(core.heightData, delta);
-            break;
-        case "river_flux":
-            changes.river = applyNumericDelta(core.riverFlux, delta) || changes.river;
-            break;
-        case "river_next":
-            changes.river = applyNumericDelta(core.riverNext, delta) || changes.river;
-            break;
-        case "mantle_heat":
-            changes.mantleHeat = applyNumericDelta(core.mantleHeat, delta);
-            break;
-        case "erosion_rate":
-            changes.metric = applyNumericDelta(core.erosionRate, delta) || changes.metric;
-            break;
-        case "deposition_rate":
-            changes.metric = applyNumericDelta(core.depositionRate, delta) || changes.metric;
-            break;
-        case "temperature":
-            changes.metric = applyNumericDelta(core.temperature, delta) || changes.metric;
-            break;
-        case "precipitation":
-            changes.metric = applyNumericDelta(core.precipitation, delta) || changes.metric;
-            break;
-        case "evapotranspiration":
-            changes.metric = applyNumericDelta(core.evapotranspiration, delta) || changes.metric;
-            break;
-        case "aridity":
-            changes.metric = applyNumericDelta(core.aridity, delta) || changes.metric;
-            break;
-        case "runoff":
-            changes.metric = applyNumericDelta(core.runoff, delta) || changes.metric;
-            break;
-        case "ocean_temperature":
-            changes.metric = applyNumericDelta(core.oceanTemperature, delta) || changes.metric;
-            break;
-        case "river_transport_cost":
-            changes.metric = applyNumericDelta(core.riverTransportCost, delta) || changes.metric;
-            break;
-        default:
-            break;
+        const fieldKind = delta?.field_kind;
+        const coreKey = CORE_KEY_BY_FIELD_KIND[fieldKind];
+        if (!coreKey || !(coreKey in core)) {
+            continue;
+        }
+        const didChange = applyNumericDelta(core[coreKey], delta);
+        if (didChange) {
+            markFieldChange(changes, fieldKind);
         }
     }
     return changes;
@@ -368,19 +365,7 @@ function applyFieldSnapshotToCore(core, fieldKind, values, changes) {
         return;
     }
     core[coreKey] = values;
-    if (fieldKind === "height") {
-        changes.height = true;
-        return;
-    }
-    if (fieldKind === "river_flux" || fieldKind === "river_next") {
-        changes.river = true;
-        return;
-    }
-    if (fieldKind === "mantle_heat") {
-        changes.mantleHeat = true;
-        return;
-    }
-    changes.metric = true;
+    markFieldChange(changes, fieldKind);
 }
 
 export function syncVisibleCoreFieldsFromController({
@@ -389,7 +374,7 @@ export function syncVisibleCoreFieldsFromController({
     core,
     fieldKinds,
 }) {
-    const changes = { ...WORLD_CHANGESET };
+    const changes = createWorldChangeset();
     const uniqueFieldKinds = Array.from(new Set(fieldKinds ?? []));
     for (const fieldKind of uniqueFieldKinds) {
         const values = getFieldData(
@@ -483,13 +468,7 @@ export function syncWorldFromController({
         setEraScale,
         initializeTerrain: true,
     });
-    updateStatFields({
-        statFields,
-        level,
-        currentSeed,
-        plateStats: stats.plateStats,
-        metrics: stats.metrics,
-    });
+    updateUiStatsFromWorldStats({ stats, currentSeed, statFields, level });
     return {
         ...result,
         statsRefreshed: true,
