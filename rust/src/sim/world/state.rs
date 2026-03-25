@@ -66,7 +66,9 @@ impl PlateId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
 pub struct PolityId(pub u32);
 
@@ -76,7 +78,9 @@ impl PolityId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
 pub struct SettlementId(pub u32);
 
@@ -86,7 +90,9 @@ impl SettlementId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
 pub struct RegionId(pub u32);
 
@@ -96,7 +102,9 @@ impl RegionId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
+)]
 #[serde(transparent)]
 pub struct PolityGroupId(pub u32);
 

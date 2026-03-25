@@ -217,7 +217,11 @@ pub(super) fn apply_i32(values: &mut [i32], index: usize, value: i32) -> bool {
     true
 }
 
-pub(super) fn apply_plate_id(values: &mut [world::PlateId], index: usize, value: world::PlateId) -> bool {
+pub(super) fn apply_plate_id(
+    values: &mut [world::PlateId],
+    index: usize,
+    value: world::PlateId,
+) -> bool {
     if index >= values.len() {
         return false;
     }

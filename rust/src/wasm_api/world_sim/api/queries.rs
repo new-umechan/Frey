@@ -116,7 +116,12 @@ impl WorldSimController {
                     cell_count: offsets.len() as u32,
                     sampled_count: sampled_len(offsets.len(), stride),
                     f32_data: None,
-                    u32_data: Some(offsets.into_iter().step_by(stride.max(1) as usize).collect()),
+                    u32_data: Some(
+                        offsets
+                            .into_iter()
+                            .step_by(stride.max(1) as usize)
+                            .collect(),
+                    ),
                     i32_data: None,
                 }
             }

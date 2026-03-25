@@ -19,6 +19,12 @@
         "seed:regression:dev": "npm run wasm:build:dev:no-sync && node tools/bench/seed-regression.mjs",
         "seed:gate:quick": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta --ticks 16 --baseline test/seed-regression/seed-regression-quick-baseline.json --check --threshold 0.005 --threshold-top10-river-flux-sum 0.01",
         "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline test/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005 --threshold-top10-river-flux-sum 0.01",
+        "bench:dump-centroids": "node tools/bench/dump-cell-centroids.mjs --level 6 --out bench/data/cell_centroids.csv",
+        "bench:fetch:era5": "CDSAPI_RC=.cdsapirc python3 tools/bench/fetch-era5-land-monthly.py --start-year 1970 --end-year 2000 --out data/raw/climate/era5_land_monthly_1970_2000.zip",
+        "bench:prepare:era5": "python3 tools/bench/prepare-era5-land-climate.py --input data/raw/climate/era5_land_monthly_1970_2000.zip --start-year 1970 --end-year 2000 --out data/raw/climate/era5_land_annual_1970_2000.nc",
+        "bench:prepare:worldclim": "python3 tools/bench/prepare-worldclim-climate.py --input-dir data/raw/climate --out-temperature data/raw/climate/worldclim_tavg_annual_c.tif --out-precipitation data/raw/climate/worldclim_prec_annual_mm.tif",
+        "bench:resample:climate": "python3 tools/bench/resample.py --module climate --centroids bench/data/cell_centroids.csv --output bench/data/climate_ref.bin",
+        "bench:resample:terrain": "python3 tools/bench/resample.py --module terrain --centroids bench/data/cell_centroids.csv --output bench/data/terrain_ref.bin",
         "wasm:build": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
         "wasm:build:dev": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"

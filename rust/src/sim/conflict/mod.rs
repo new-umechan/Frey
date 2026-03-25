@@ -32,7 +32,10 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
             continue;
         };
         if polity_id.as_u32() > 0 {
-            polity_cells.entry(polity_id).or_default().push(CellId(i as u32));
+            polity_cells
+                .entry(polity_id)
+                .or_default()
+                .push(CellId(i as u32));
         }
         let start = world.mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
         let end = world

@@ -1,6 +1,6 @@
+use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use smallvec::SmallVec;
 
 use crate::sim;
 use crate::sim::world::{EraKind, World};
@@ -168,14 +168,12 @@ fn run_river_step_with_erosion_state(
         detail.river_network_ms += profile_elapsed_ms(phase_start);
         detail.network_rebuild_count = detail.network_rebuild_count.saturating_add(1);
 
-        hydrology
-            .river_downstream
-            .clone_from(&downstream_from_csr(
-                hydrology.river_next.len(),
-                &rebuilt.downstream_offsets,
-                &rebuilt.downstream_cells,
-                &rebuilt.downstream_weights,
-            ));
+        hydrology.river_downstream.clone_from(&downstream_from_csr(
+            hydrology.river_next.len(),
+            &rebuilt.downstream_offsets,
+            &rebuilt.downstream_cells,
+            &rebuilt.downstream_weights,
+        ));
     }
     state.scratch_effective_runoff = effective_runoff;
 

@@ -55,11 +55,15 @@ pub(crate) fn build_geology(seed: &str, geology_params: GeologyParams) -> Geolog
     geology::generate(seed, geology_params)
 }
 
-pub(crate) fn build_geology_with_mesh(
+pub fn build_geology_with_mesh(
     seed: &str,
     geology_params: GeologyParams,
 ) -> (GeologyOutput, Vec<[f32; 3]>, Vec<u32>, Vec<u32>) {
     geology::generate_with_mesh(seed, geology_params)
+}
+
+pub fn run_climate_step_for_bench(world: &mut world::World, climate_budget: u32) {
+    climate::surface::run_climate_step(world, climate_budget);
 }
 
 pub(crate) fn step_erosion_automaton(

@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, GeologyStepMetrics, StressTensor,
-    VertexCrustState, PlateId,
+    BoundaryDynamicsState, BoundaryType, CrustType, GeologyStepMetrics, PlateId, StressTensor,
+    VertexCrustState,
 };
 use crate::GeologyParams;
 

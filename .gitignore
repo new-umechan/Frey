@@ -6,3 +6,9 @@ rust/target/
 debug/snapshots/
 
 docs/manage/todo.md
+.cdsapirc
+
+# Benchmark data artifacts
+data/raw/
+bench/data/
+bench/results/

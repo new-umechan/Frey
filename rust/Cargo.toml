@@ -16,3 +16,7 @@ smallvec = { version = "1.13", features = ["serde"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[[bench]]
+name = "climate_solo"
+harness = false

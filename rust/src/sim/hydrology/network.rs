@@ -129,7 +129,11 @@ pub(super) fn build_river_network(
                 selected.push((fallback as u32, 1.0));
             }
         } else {
-            let sum = selected.iter().map(|(_, score)| *score).sum::<f32>().max(1e-6);
+            let sum = selected
+                .iter()
+                .map(|(_, score)| *score)
+                .sum::<f32>()
+                .max(1e-6);
             for (_, weight) in &mut selected {
                 *weight /= sum;
             }
@@ -271,7 +275,10 @@ pub(super) fn apply_river_network_constraints(
     next_offsets.push(0);
     for i in 0..height.len() {
         let start = downstream_offsets.get(i).copied().unwrap_or(0) as usize;
-        let end = downstream_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
+        let end = downstream_offsets
+            .get(i + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
         let cell_start = next_cells.len();
         if flux[i] > 0.0 && primary_next[i] >= 0 {
             for idx in start..end {
