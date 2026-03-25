@@ -27,7 +27,6 @@ import {
     renderEraScaleControls,
 } from "./era-presets.js";
 import {
-    DEBUG_SNAPSHOT_TICKS,
     DEFAULT_CLIMATE_METRIC,
     DEFAULT_ERA_SCALE,
     DEFAULT_SURFACE_MODE,
@@ -41,7 +40,6 @@ import {
     createInitialBudgets,
     createInitialRuntimeState,
 } from "./runtime/state.js";
-import { saveDebugSnapshotIfNeeded } from "./debug/snapshot.js";
 import {
     getDeltaFieldKindsForView,
     refreshWorldStatsFromController,
@@ -175,8 +173,6 @@ export async function createApp() {
     let currentTerrainData = world.core;
     const worldState = world.runtime;
     const playbackState = worldState.playback;
-    const debugSnapshotTickSet = new Set(DEBUG_SNAPSHOT_TICKS);
-    const debugSnapshotSavedTicks = new Set();
 
     setupTerrainGeometryAttributes({
         geometry,
@@ -397,10 +393,6 @@ export async function createApp() {
         syncVisibleCoreFieldsFromController,
         getDeltaFieldKindsForView,
         refreshWorldStats: refreshActiveWorldStats,
-        saveDebugSnapshotIfNeeded,
-        isDev: import.meta.env.DEV,
-        debugSnapshotTickSet,
-        debugSnapshotSavedTicks,
         syncClimateUi,
         syncAfterWorldStep: () => {
             playbackController.syncAfterWorldStep();
@@ -474,7 +466,6 @@ export async function createApp() {
         terrainParams: GEOLOGY_PARAMS,
         world,
         worldState,
-        debugSnapshotSavedTicks,
         createEmptyLayers,
         createInitialBudgets,
         createEraMetrics,

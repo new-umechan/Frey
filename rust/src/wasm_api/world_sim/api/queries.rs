@@ -5,9 +5,8 @@ use wasm_bindgen::prelude::*;
 use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_plate_id, sampled_len};
 use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
-    BudgetSummary, CheckpointListEntry, CheckpointListResponse, FieldResponse,
-    HistoryTicksResponse, MetricsResponse, PlateStat, PlateStatsResponse, WorldDeltaQuery,
-    WorldDeltaResponse,
+    BudgetSummary, FieldResponse, HistoryTicksResponse, MetricsResponse, PlateStat,
+    PlateStatsResponse, WorldDeltaQuery, WorldDeltaResponse,
 };
 use super::super::WorldSimController;
 use super::common::world_not_found_error;
@@ -400,36 +399,6 @@ impl WorldSimController {
             JsValue::from_str(&format!(
                 "failed to serialize history ticks response: {err}"
             ))
-        })
-    }
-
-    #[wasm_bindgen(js_name = list_checkpoints)]
-    pub fn list_checkpoints_js(&self) -> Result<JsValue, JsValue> {
-        let mut checkpoints = self
-            .worlds
-            .values()
-            .flat_map(|managed| {
-                managed
-                    .world
-                    .archive
-                    .snapshots
-                    .iter()
-                    .map(|(snapshot_id, snapshot)| CheckpointListEntry {
-                        snapshot_id: snapshot_id.clone(),
-                        tick: snapshot.tick as f64,
-                    })
-            })
-            .collect::<Vec<_>>();
-        checkpoints.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
-        checkpoints.dedup_by(|a, b| a.snapshot_id == b.snapshot_id);
-        checkpoints.sort_by(|a, b| {
-            a.tick
-                .total_cmp(&b.tick)
-                .then_with(|| a.snapshot_id.cmp(&b.snapshot_id))
-        });
-        let response = CheckpointListResponse { checkpoints };
-        serde_wasm_bindgen::to_value(&response).map_err(|err| {
-            JsValue::from_str(&format!("failed to serialize checkpoint list: {err}"))
         })
     }
 }

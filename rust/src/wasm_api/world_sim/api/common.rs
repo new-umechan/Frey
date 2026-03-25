@@ -22,10 +22,10 @@ pub(super) fn validate_integer_tick(tick: f64, rounded: u64) -> Result<(), JsVal
     Ok(())
 }
 
-pub(super) fn validate_checkpoint_tick(tick: u64) -> Result<(), JsValue> {
+pub(super) fn validate_history_tick(tick: u64) -> Result<(), JsValue> {
     if tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
         return Err(JsValue::from_str(&format!(
-            "tick {tick} is not checkpointed; available ticks are saved every {HISTORY_SNAPSHOT_INTERVAL} ticks"
+            "tick {tick} is not aligned with history interval {HISTORY_SNAPSHOT_INTERVAL}"
         )));
     }
     Ok(())

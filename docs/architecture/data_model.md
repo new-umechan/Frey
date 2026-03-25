@@ -314,8 +314,7 @@ enum FeedbackPayload {
 
 ```rust
 struct Archive {
-    history:   History,
-    snapshots: SnapshotStore,
+    history: History,
 }
 ```
 

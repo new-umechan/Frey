@@ -1,11 +1,10 @@
 import { DEFAULT_ERA_SCALE } from "../core/constants.js";
 
-export function resetWorldProgress(world, worldState, debugSnapshotSavedTicks, createEmptyLayers, createInitialBudgets, createEraMetrics) {
+export function resetWorldProgress(world, worldState, createEmptyLayers, createInitialBudgets, createEraMetrics) {
     world.tick = 0;
     world.era = DEFAULT_ERA_SCALE;
     world.layers = createEmptyLayers();
     world.budgets = createInitialBudgets();
-    debugSnapshotSavedTicks.clear();
     worldState.accumulatorMs = 0;
     worldState.lastFrameTimeMs = null;
     worldState.pendingRiverSteps = 0;
@@ -26,8 +25,6 @@ export function resetWorldProgress(world, worldState, debugSnapshotSavedTicks, c
         worldState.playback.historyInterval = 32;
         worldState.playback.selectedTick = null;
         worldState.playback.availableTicks = [];
-        worldState.playback.checkpoints = [];
-        worldState.playback.activeCheckpointId = "";
         worldState.playback.eventLog = [];
         worldState.playback.nextLogId = 1;
     }

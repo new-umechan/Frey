@@ -2,7 +2,6 @@ export function createWorldStepper(options = {}) {
     const {
         worldSimController,
         world,
-        worldState,
         terrainRenderer,
         createEraMetrics,
         buildEraMetricsFromRuntime,
@@ -11,10 +10,6 @@ export function createWorldStepper(options = {}) {
         syncVisibleCoreFieldsFromController,
         getDeltaFieldKindsForView,
         refreshWorldStats,
-        saveDebugSnapshotIfNeeded,
-        isDev,
-        debugSnapshotTickSet,
-        debugSnapshotSavedTicks,
         syncClimateUi,
         syncAfterWorldStep,
         setStatus,
@@ -60,9 +55,6 @@ export function createWorldStepper(options = {}) {
             const benchmarkMode = tickOptions?.benchmarkMode === true;
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
             const nextTick = world.tick + 1;
-            const prevHeightForSnapshot = debugSnapshotTickSet.has(nextTick) && liveState.currentTerrainData?.heightData
-                ? liveState.currentTerrainData.heightData.slice()
-                : null;
 
             if (perfRecorder) {
                 perfRecorder.measure("exec_world", () => {
@@ -94,22 +86,6 @@ export function createWorldStepper(options = {}) {
             });
             if (!benchmarkMode && (changes?.climate || statsRefreshed)) {
                 syncClimateUi();
-            }
-
-            if (!benchmarkMode) {
-                void saveDebugSnapshotIfNeeded({
-                    isDev,
-                    tick: world.tick,
-                    debugSnapshotTickSet,
-                    debugSnapshotSavedTicks,
-                    currentTerrainData: liveState.currentTerrainData,
-                    currentSeed: liveState.currentSeed,
-                    currentEraScale: liveState.currentEraScale,
-                    world,
-                    worldState,
-                    prevHeightForSnapshot,
-                    setStatus,
-                });
             }
 
             if (!benchmarkMode && world.tick > 0 && shouldRefreshStats) {

@@ -128,7 +128,7 @@ npm run perf:gate
 
 #### wasm APIテスト（2026-03-17）
 
-- `tick/restore/checkpoint` を含むwasm APIテストは `wasm-pack test --node` で実行する
+- `tick/restore/fork` を含むwasm APIテストは `wasm-pack test --node` で実行する
 - コマンド:
 
 ```sh
@@ -211,13 +211,13 @@ let metrics = world.metrics();
 - サブシステム接続（河川 -> 気候 -> 生態 -> 文明）の節目
 - 時代スケール制御の変更後
 
-## API受け入れ観点（Checkpoint / Layer / Tick）
+## API受け入れ観点（History / Layer / Tick）
 
 実装時の受け入れ確認として、次を最低ラインにする。
 
-1. `save_checkpoint` 実行後、`list_checkpoints` に新規idが追加される
-2. `load_checkpoint` 実行後、tickとeraが保存時点へ戻る
-3. 不正idで `load_checkpoint` を呼んだ場合、例外になる
+1. `list_history_ticks` が `interval=32` と保存済みtick一覧を返す
+2. `restore_world_to_tick` 実行後、tickとeraが復元時点へ戻る
+3. 不正tickで `restore_world_to_tick` を呼んだ場合、例外になる
 4. `get_field` は既知kindに対してFloat32Arrayを返す
 5. 未生成レイヤーkindと不正kindは例外になる
 6. `tick()` は `step(1)` ごとに単調増加する

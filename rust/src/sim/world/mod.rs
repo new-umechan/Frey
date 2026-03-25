@@ -22,6 +22,6 @@ pub use state::{
     EcologyState, EntitiesState, GeoState, GeologyDynamicsState, GeologyState, GeologyStepMetrics,
     HydrologyState, LivestockBitmap, PlateId, PlateKinematicsState, PolityComponent, PolityGroupId,
     PolityId, PolityState, PopulationState, RegionComponent, RegionId, SettlementComponent,
-    SettlementId, SettlementState, SnapshotMeta, StressTensor, SubsistenceMix, SubsistenceState,
+    SettlementId, SettlementState, StressTensor, SubsistenceMix, SubsistenceState,
     VertexCrustState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };

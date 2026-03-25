@@ -13,7 +13,7 @@ function resolveEventTone(entry) {
     if (type === "era-changed" || type === "error" || type === "fatal" || hasFailureKeyword(entry)) {
         return "important";
     }
-    if (type === "world-generated" || type === "info" || type === "debug" || type === "checkpoint") {
+    if (type === "world-generated" || type === "info" || type === "debug") {
         return "muted";
     }
     return "normal";

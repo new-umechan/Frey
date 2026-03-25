@@ -2,19 +2,16 @@ use std::collections::BTreeMap;
 
 use wasm_bindgen::prelude::*;
 
-use crate::sim::geology_types::GeologyParams;
 use crate::sim::hydrology::rebuild_mfd_from_primary;
-use crate::sim::world::SnapshotMeta;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
-use super::super::state::{ManagedWorld, SnapshotEntry, WorldSyncState};
+use super::super::state::{ManagedWorld, WorldSyncState};
 use super::super::types::{
-    CheckpointResult, ForkWorldResult, InterventionField, InterventionOp, InterventionResult,
-    LoadCheckpointResult, RestoreWorldResult,
+    ForkWorldResult, InterventionField, InterventionOp, InterventionResult, RestoreWorldResult,
 };
 use super::super::WorldSimController;
 use super::common::{
-    history_tick_not_available_error, validate_checkpoint_tick, validate_integer_tick,
+    history_tick_not_available_error, validate_history_tick, validate_integer_tick,
     validate_non_negative_tick, world_not_found_error,
 };
 
@@ -105,7 +102,7 @@ impl WorldSimController {
                 .worlds
                 .get(&world_id)
                 .ok_or_else(|| world_not_found_error(&world_id))?;
-            validate_checkpoint_tick(tick_u64)?;
+            validate_history_tick(tick_u64)?;
             let snapshot = if let Some(found) = source.history.get(&tick_u64) {
                 found.clone()
             } else {
@@ -153,7 +150,7 @@ impl WorldSimController {
     ) -> Result<JsValue, JsValue> {
         let tick_u64 = validate_non_negative_tick(tick)?;
         validate_integer_tick(tick, tick_u64)?;
-        validate_checkpoint_tick(tick_u64)?;
+        validate_history_tick(tick_u64)?;
 
         let managed = self
             .worlds
@@ -184,73 +181,5 @@ impl WorldSimController {
         serde_wasm_bindgen::to_value(&result).map_err(|err| {
             JsValue::from_str(&format!("failed to serialize restore world result: {err}"))
         })
-    }
-
-    #[wasm_bindgen(js_name = save_checkpoint)]
-    pub fn save_checkpoint_js(&mut self, world_id: String) -> Result<JsValue, JsValue> {
-        let (world_clone, tick) = {
-            let managed = self
-                .worlds
-                .get(&world_id)
-                .ok_or_else(|| world_not_found_error(&world_id))?;
-            (managed.world.clone(), managed.world.clock.tick)
-        };
-        let snapshot_id = self.next_snapshot_id();
-        let entry = SnapshotEntry {
-            tick,
-            world: world_clone,
-        };
-        self.snapshots.insert(snapshot_id.clone(), entry);
-        if let Some(managed) = self.worlds.get_mut(&world_id) {
-            managed.world.archive.snapshots.insert(
-                snapshot_id.clone(),
-                SnapshotMeta {
-                    tick,
-                    source_world_id: Some(world_id.clone()),
-                },
-            );
-        }
-
-        let result = CheckpointResult {
-            snapshot_id,
-            world_id,
-            tick: tick as f64,
-        };
-        serde_wasm_bindgen::to_value(&result).map_err(|err| {
-            JsValue::from_str(&format!("failed to serialize checkpoint result: {err}"))
-        })
-    }
-
-    #[wasm_bindgen(js_name = load_checkpoint)]
-    pub fn load_checkpoint_js(&mut self, snapshot_id: String) -> Result<JsValue, JsValue> {
-        let snapshot =
-            self.snapshots.get(&snapshot_id).cloned().ok_or_else(|| {
-                JsValue::from_str(&format!("checkpoint not found: {snapshot_id}"))
-            })?;
-
-        let world_id = self.next_world_id();
-        let mut history = BTreeMap::new();
-        history.insert(snapshot.tick, snapshot.world.clone());
-        let mut restored = ManagedWorld {
-            sync_state: WorldSyncState::from_world(&snapshot.world),
-            world: snapshot.world,
-            simulation_rate: 1.0,
-            geology_params: GeologyParams::default(),
-            history,
-        };
-        restored
-            .world
-            .archive
-            .history_ticks
-            .insert(restored.world.clock.tick, "load-checkpoint".to_string());
-        self.worlds.insert(world_id.clone(), restored);
-
-        let result = LoadCheckpointResult {
-            source_snapshot_id: snapshot_id,
-            world_id,
-            tick: snapshot.tick as f64,
-        };
-        serde_wasm_bindgen::to_value(&result)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize load result: {err}")))
     }
 }

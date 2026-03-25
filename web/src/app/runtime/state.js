@@ -6,8 +6,6 @@ function createInitialPlaybackState() {
         historyInterval: 32,
         selectedTick: null,
         availableTicks: [],
-        checkpoints: [],
-        activeCheckpointId: "",
         eventLog: [],
         nextLogId: 1,
     };

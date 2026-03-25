@@ -140,8 +140,6 @@ export const TERRAIN_DYNAMICS_BY_ERA = Object.freeze({
     history: { diffusion: 0.0065, uplift: 0.0028, subsidence: 0.0018, fluvial: 0.0024, coastline: 0.0056 },
 });
 
-export const DEBUG_SNAPSHOT_TICKS = Object.freeze([300]);
-export const DEBUG_SNAPSHOT_TOPK_LIMIT = 128;
 export const TERRAIN_HEIGHT_CLAMP = 1.2;
 export const TERRAIN_UPLIFT_SATURATION_SOFT = 0.42;
 export const TERRAIN_UPLIFT_SATURATION_HARD = 0.74;

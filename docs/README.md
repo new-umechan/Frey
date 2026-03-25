@@ -55,7 +55,7 @@ Freyの設計文書と、現在の実装境界を対応づけるための索引�
   - `mod.rs`: コントローラ本体
   - `api/worlds.rs`: world生成と進行
   - `api/queries.rs`: 観測API
-  - `api/commands.rs`: 介入、fork、checkpoint
+  - `api/commands.rs`: 介入、fork、restore
   - `types.rs`: JSとの送受信型
   - `state.rs`: 管理中ワールドと履歴
   - `helpers.rs`: サンプリング、履歴管理、侵食状態同期

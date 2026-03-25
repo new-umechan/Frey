@@ -56,22 +56,6 @@ mod tests {
         tick: f64,
     }
 
-    #[derive(Deserialize)]
-    struct CheckpointResult {
-        snapshot_id: String,
-    }
-
-    #[derive(Deserialize)]
-    struct CheckpointListEntry {
-        snapshot_id: String,
-        tick: f64,
-    }
-
-    #[derive(Deserialize)]
-    struct CheckpointListResponse {
-        checkpoints: Vec<CheckpointListEntry>,
-    }
-
     #[wasm_bindgen_test]
     fn init_step_and_metrics_work() {
         let mut controller = WorldSimController::new();
@@ -182,33 +166,6 @@ mod tests {
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert_eq!(metrics_data.tick, 32.0);
-    }
-
-    #[wasm_bindgen_test]
-    fn list_checkpoints_returns_saved_entries() {
-        let mut controller = WorldSimController::new();
-        let init = controller
-            .init_world_js("seed-d".to_string(), 1, JsValue::NULL)
-            .expect("init world");
-        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
-
-        controller
-            .exec_world_js(init_data.world_id.clone(), 8)
-            .expect("step world");
-        let saved = controller
-            .save_checkpoint_js(init_data.world_id)
-            .expect("save checkpoint");
-        let saved_data: CheckpointResult =
-            serde_wasm_bindgen::from_value(saved).expect("parse checkpoint result");
-
-        let listed = controller.list_checkpoints_js().expect("list checkpoints");
-        let listed_data: CheckpointListResponse =
-            serde_wasm_bindgen::from_value(listed).expect("parse checkpoint list");
-
-        assert!(listed_data
-            .checkpoints
-            .iter()
-            .any(|entry| entry.snapshot_id == saved_data.snapshot_id && entry.tick >= 0.0));
     }
 
     #[wasm_bindgen_test]

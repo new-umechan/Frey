@@ -27,15 +27,6 @@ pub struct World {
 pub struct ArchiveState {
     #[serde(default)]
     pub history_ticks: BTreeMap<u64, String>,
-    #[serde(default)]
-    pub snapshots: BTreeMap<String, SnapshotMeta>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SnapshotMeta {
-    pub tick: u64,
-    #[serde(default)]
-    pub source_world_id: Option<String>,
 }
 
 #[derive(

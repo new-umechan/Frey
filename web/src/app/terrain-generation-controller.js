@@ -7,7 +7,6 @@ export function createTerrainGenerationController(options = {}) {
         terrainParams,
         world,
         worldState,
-        debugSnapshotSavedTicks,
         createEmptyLayers,
         createInitialBudgets,
         createEraMetrics,
@@ -45,7 +44,6 @@ export function createTerrainGenerationController(options = {}) {
             const currentEraMetrics = resetWorldProgress(
                 world,
                 worldState,
-                debugSnapshotSavedTicks,
                 createEmptyLayers,
                 createInitialBudgets,
                 createEraMetrics,

@@ -48,12 +48,6 @@ pub(super) struct ManagedWorld {
     pub history: BTreeMap<u64, world::World>,
 }
 
-#[derive(Clone)]
-pub(super) struct SnapshotEntry {
-    pub tick: u64,
-    pub world: world::World,
-}
-
 impl F32FieldTracker {
     pub fn new(values: &[f32]) -> Self {
         Self {
