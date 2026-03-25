@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-03-17T03:17:55.188Z",
+    "generated_at": "2026-03-25T12:10:24.479Z",
     "ticks": 16,
     "level": 6,
     "seeds": [
@@ -14,50 +14,68 @@
       "height_mean": 0.005,
       "height_std": 0.005,
       "max_river_flux": 0.005,
-      "top10_river_flux_sum": 0.005
+      "top10_river_flux_sum": 0.01
+    },
+    "transition_mode": "fixed_tick",
+    "era_boundaries": [
+      0,
+      800,
+      1300,
+      1395,
+      1445
+    ],
+    "eras_at_measurement": {
+      "alpha": "crust",
+      "beta": "crust",
+      "gamma": "crust",
+      "delta": "crust"
     }
   },
   "results": [
     {
       "seed": "alpha",
       "tick": 16,
+      "era": "crust",
       "metrics": {
         "land_cells": 12683,
-        "height_mean": -0.11890695244073868,
+        "height_mean": -0.11890697479248047,
         "height_std": 0.21537381410598755,
         "max_river_flux": 0.993441104888916,
-        "top10_river_flux_sum": 9.387545585632324
+        "top10_river_flux_sum": 9.41978645324707
       }
     },
     {
       "seed": "beta",
       "tick": 16,
+      "era": "crust",
       "metrics": {
         "land_cells": 12679,
-        "height_mean": -0.1464594155550003,
-        "height_std": 0.24103042483329773,
+        "height_mean": -0.14645935595035553,
+        "height_std": 0.24103045463562012,
         "max_river_flux": 0.9967999458312988,
-        "top10_river_flux_sum": 9.551956176757812
+        "top10_river_flux_sum": 9.551957130432129
       }
     },
     {
       "seed": "gamma",
       "tick": 16,
+      "era": "crust",
       "metrics": {
         "land_cells": 12733,
-        "height_mean": -0.12181609869003296,
-        "height_std": 0.20661517977714539,
+        "height_mean": -0.12181606143712997,
+        "height_std": 0.20661519467830658,
         "max_river_flux": 0.9988851547241211,
-        "top10_river_flux_sum": 9.28113079071045
+        "top10_river_flux_sum": 9.281128883361816
       }
     },
     {
       "seed": "delta",
       "tick": 16,
+      "era": "crust",
       "metrics": {
         "land_cells": 12725,
-        "height_mean": -0.1625545173883438,
-        "height_std": 0.2510698437690735,
+        "height_mean": -0.16255447268486023,
+        "height_std": 0.2510698735713959,
         "max_river_flux": 0.9941027164459229,
         "top10_river_flux_sum": 9.668092727661133
       }

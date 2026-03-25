@@ -67,6 +67,11 @@
 - `top10_river_flux_sum` は流路分配モデル変更（SFD -> MFD）に対して感度が高いため、ゲート閾値を個別に `0.01` へ緩和する
 - その他指標は `0.005` を維持する
 
+仕様更新（2026-03-24, 時代遷移の固定tick化）:
+
+- 時代遷移は動的条件ではなく固定境界で決定する（`0, 800, 1300, 1395, 1445`）
+- 遷移仕様を変更した場合は、quick/heavy両baselineを同時更新する
+
 推奨コマンド例:
 
 ```sh
@@ -95,6 +100,7 @@ baselineファイル:
 baseline誤用防止:
 
 - `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は即FAILにする
+- あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` も一致しない場合は即FAILにする
 
 自動化:
 

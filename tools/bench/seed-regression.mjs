@@ -7,6 +7,8 @@ import { GEOLOGY_LEVEL, GEOLOGY_PARAMS } from "../../web/src/interface/params/ge
 const DEFAULT_TICKS = 32;
 const DEFAULT_THRESHOLD = 0.005;
 const DEFAULT_SEEDS = ["alpha"];
+const TRANSITION_MODE = "fixed_tick";
+const ERA_BOUNDARIES = [0, 800, 1300, 1395, 1445];
 const METRIC_SPECS = [
     { key: "land_cells", sourceKey: "land_cells", flagSuffix: "land-cells" },
     { key: "height_mean", sourceKey: "mean_height", flagSuffix: "height-mean" },
@@ -223,6 +225,51 @@ function validateBaselineMeta(current, baseline) {
         });
     }
 
+    const baselineTransitionMode = String(baselineMeta.transition_mode ?? "");
+    if (baselineTransitionMode !== current.meta.transition_mode) {
+        failures.push({
+            seed: "*",
+            metric: "meta.transition_mode",
+            reason: "baseline_meta_mismatch",
+            expected: current.meta.transition_mode,
+            actual: baselineMeta.transition_mode,
+        });
+    }
+
+    const currentBoundaries = Array.isArray(current.meta.era_boundaries)
+        ? current.meta.era_boundaries.map((v) => Number(v))
+        : [];
+    const baselineBoundaries = Array.isArray(baselineMeta.era_boundaries)
+        ? baselineMeta.era_boundaries.map((v) => Number(v))
+        : [];
+    const sameBoundaries = currentBoundaries.length === baselineBoundaries.length
+        && currentBoundaries.every((value, index) => value === baselineBoundaries[index]);
+    if (!sameBoundaries) {
+        failures.push({
+            seed: "*",
+            metric: "meta.era_boundaries",
+            reason: "baseline_meta_mismatch",
+            expected: currentBoundaries.join(","),
+            actual: baselineBoundaries.join(","),
+        });
+    }
+
+    const currentEras = current.meta.eras_at_measurement ?? {};
+    const baselineEras = baselineMeta.eras_at_measurement ?? {};
+    for (const seed of currentSeeds) {
+        const currentEra = typeof currentEras[seed] === "string" ? currentEras[seed] : "";
+        const baselineEra = typeof baselineEras[seed] === "string" ? baselineEras[seed] : "";
+        if (currentEra !== baselineEra) {
+            failures.push({
+                seed,
+                metric: "meta.eras_at_measurement",
+                reason: "baseline_meta_mismatch",
+                expected: currentEra,
+                actual: baselineEras[seed],
+            });
+        }
+    }
+
     return failures;
 }
 
@@ -306,10 +353,18 @@ async function runSeedSimulation(seed, ticks, level) {
     }
 
     const metricsResponse = controller.get_metrics(worldId);
-    return collectMetricsFromResponse(metricsResponse);
+    return {
+        metrics: collectMetricsFromResponse(metricsResponse),
+        era: String(metricsResponse?.era ?? ""),
+    };
 }
 
 function buildOutput(args, thresholds, results) {
+    const erasAtMeasurement = {};
+    for (const result of results) {
+        erasAtMeasurement[result.seed] = result.era;
+    }
+
     return {
         meta: {
             generated_at: new Date().toISOString(),
@@ -317,6 +372,9 @@ function buildOutput(args, thresholds, results) {
             level: args.level,
             seeds: args.seeds,
             thresholds,
+            transition_mode: TRANSITION_MODE,
+            era_boundaries: [...ERA_BOUNDARIES],
+            eras_at_measurement: erasAtMeasurement,
         },
         results,
     };
@@ -329,11 +387,12 @@ async function main() {
 
     const results = [];
     for (const seed of args.seeds) {
-        const metrics = await runSeedSimulation(seed, args.ticks, args.level);
+        const simulation = await runSeedSimulation(seed, args.ticks, args.level);
         results.push({
             seed,
             tick: args.ticks,
-            metrics,
+            era: simulation.era,
+            metrics: simulation.metrics,
         });
     }
 
