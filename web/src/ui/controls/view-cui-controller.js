@@ -1,15 +1,18 @@
+import { getMetricCategories } from "../../app/cell-metric.js";
+
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
 export function createViewCuiController({
     viewModeInputs,
-    getCurrentClimateMetric,
+    getCurrentCellMetric,
     onViewModeChange,
-    onClimateMetricChange,
+    onCellMetricChange,
 }) {
     const viewCuiContext = document.getElementById("view-cui-context");
     const viewCuiOptions = document.getElementById("view-cui-options");
+    const categories = getMetricCategories();
 
     let viewMenuKey = "root";
     let viewCursorIndex = 0;
@@ -19,92 +22,68 @@ export function createViewCuiController({
         return checked?.value ?? "normal";
     }
 
-    function getCheckedClimateMetric() {
-        const current = getCurrentClimateMetric?.();
-        return current === "precipitation" ? "precipitation" : "temperature";
+    function getCheckedMetric() {
+        return getCurrentCellMetric?.() ?? "height";
     }
 
     function appendCurrentSuffix(label, isCurrent) {
         return isCurrent ? `${label}（現在）` : label;
     }
 
+    function getCategoryByMenuKey(menuKey) {
+        return categories.find((category) => category.key === menuKey) ?? null;
+    }
+
     function getViewMenuEntries(menuKey) {
         const checkedMode = getCheckedViewMode();
-        const checkedMetric = getCheckedClimateMetric();
-
-        if (menuKey === "mode") {
+        const checkedMetric = getCheckedMetric();
+        if (menuKey === "root") {
             return [
                 {
-                    label: appendCurrentSuffix("1: プレート", checkedMode === "plates"),
-                    value: "plates",
+                    label: appendCurrentSuffix("1: 通常", checkedMode === "normal"),
+                    value: "normal",
                     type: "mode",
                 },
-                {
-                    label: appendCurrentSuffix("2: マントル", checkedMode === "mantle"),
-                    value: "mantle",
-                    type: "mode",
-                },
+                ...categories.map((category, index) => ({
+                    label: appendCurrentSuffix(
+                        `${index + 2}: ${category.label}`,
+                        checkedMode === "metric"
+                            && category.metrics.some((metric) => metric.key === checkedMetric),
+                    ),
+                    next: category.key,
+                    type: "next",
+                })),
             ];
         }
 
-        if (menuKey === "climate") {
-            return [
-                {
-                    label: appendCurrentSuffix(
-                        "1: 気温",
-                        checkedMode === "climate" && checkedMetric === "temperature",
-                    ),
-                    value: "temperature",
-                    type: "climate",
-                },
-                {
-                    label: appendCurrentSuffix(
-                        "2: 降水量",
-                        checkedMode === "climate" && checkedMetric === "precipitation",
-                    ),
-                    value: "precipitation",
-                    type: "climate",
-                },
-            ];
+        const category = getCategoryByMenuKey(menuKey);
+        if (!category) {
+            return [];
         }
-
-        return [
-            {
-                label: appendCurrentSuffix("1: 通常", checkedMode === "normal"),
-                value: "normal",
-                type: "mode",
-            },
-            {
-                label: appendCurrentSuffix("2: 地形", checkedMode === "plates" || checkedMode === "mantle"),
-                next: "mode",
-                type: "next",
-            },
-            {
-                label: appendCurrentSuffix("3: 気候", checkedMode === "climate"),
-                next: "climate",
-                type: "next",
-            },
-        ];
+        return category.metrics.map((metric, index) => ({
+            label: appendCurrentSuffix(`${index + 1}: ${metric.label}`, checkedMode === "metric" && checkedMetric === metric.key),
+            value: metric.key,
+            type: "metric",
+        }));
     }
 
     function getViewMenuContext(menuKey) {
-        if (menuKey === "mode") {
-            return " / 地形";
+        if (menuKey === "root") {
+            return "";
         }
-        if (menuKey === "climate") {
-            return " / 気候";
+        const category = getCategoryByMenuKey(menuKey);
+        if (!category) {
+            return "";
         }
-        return "";
+        return ` / ${category.label}`;
     }
 
     function getParentMenuIndex(menuKey) {
-        if (menuKey === "mode") {
-            return 1;
+        if (menuKey === "root") {
+            return 0;
         }
-        if (menuKey === "climate") {
-            return 2;
-        }
-        return 0;
+        const categoryIndex = categories.findIndex((category) => category.key === menuKey);
+        return categoryIndex >= 0 ? categoryIndex + 1 : 0;
     }
 
     function syncViewCursorToSelection() {
@@ -113,22 +92,22 @@ export function createViewCuiController({
             viewCursorIndex = 0;
             return;
         }
-
-        if (viewMenuKey === "mode") {
+        if (viewMenuKey === "root") {
             const checkedMode = getCheckedViewMode();
-            const modeIndex = entries.findIndex((entry) => entry.value === checkedMode);
-            viewCursorIndex = modeIndex >= 0 ? modeIndex : 0;
+            if (checkedMode === "normal") {
+                viewCursorIndex = 0;
+                return;
+            }
+            const checkedMetric = getCheckedMetric();
+            const selectedCategoryIndex = categories.findIndex((category) => {
+                return category.metrics.some((metric) => metric.key === checkedMetric);
+            });
+            viewCursorIndex = selectedCategoryIndex >= 0 ? selectedCategoryIndex + 1 : 0;
             return;
         }
-
-        if (viewMenuKey === "climate") {
-            const checkedMetric = getCheckedClimateMetric();
-            const metricIndex = entries.findIndex((entry) => entry.value === checkedMetric);
-            viewCursorIndex = metricIndex >= 0 ? metricIndex : 0;
-            return;
-        }
-
-        viewCursorIndex = clamp(viewCursorIndex, 0, entries.length - 1);
+        const checkedMetric = getCheckedMetric();
+        const metricIndex = entries.findIndex((entry) => entry.value === checkedMetric);
+        viewCursorIndex = metricIndex >= 0 ? metricIndex : 0;
     }
 
     function renderViewCui(syncCursor = false) {
@@ -138,7 +117,6 @@ export function createViewCuiController({
         if (!(viewCuiOptions instanceof HTMLElement)) {
             return;
         }
-
         if (syncCursor) {
             syncViewCursorToSelection();
         }
@@ -150,7 +128,6 @@ export function createViewCuiController({
             return;
         }
         viewCursorIndex = clamp(viewCursorIndex, 0, entries.length - 1);
-
         viewCuiOptions.replaceChildren();
         for (let i = 0; i < entries.length; i += 1) {
             const entry = entries[i];
@@ -189,31 +166,29 @@ export function createViewCuiController({
         if (index < 0 || index >= entries.length) {
             return;
         }
-
         const entry = entries[index];
         if (entry.type === "next" && entry.next) {
-            if (entry.next === "climate") {
-                onViewModeChange("climate");
-            }
             viewMenuKey = entry.next;
             syncViewCursorToSelection();
             renderViewCui(false);
             return;
         }
-
         if (entry.type === "mode") {
             onViewModeChange(entry.value);
-        } else if (entry.type === "climate") {
-            onClimateMetricChange(entry.value);
+            renderViewCui(true);
+            return;
         }
-        renderViewCui(true);
+        if (entry.type === "metric") {
+            onCellMetricChange(entry.value);
+            onViewModeChange("metric");
+            renderViewCui(true);
+        }
     }
 
     function backViewMenu() {
         if (viewMenuKey === "root") {
             return false;
         }
-
         const previousMenuKey = viewMenuKey;
         viewMenuKey = "root";
         viewCursorIndex = getParentMenuIndex(previousMenuKey);

@@ -45,7 +45,7 @@ export function createWorldUiController(options = {}) {
         terrainRenderer.applyTerrainMaterialState(
             state.currentViewMode,
             debugEnabled,
-            state.currentClimateMetric,
+            state.currentCellMetric,
         );
         plateHover.syncDebugMode();
     };

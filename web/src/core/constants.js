@@ -4,6 +4,7 @@ import { RUNTIME_PARAMS } from "../interface/params/runtime.js";
 export const LEVEL = GEOLOGY_LEVEL;
 export const DEFAULT_TERRAIN_SEED = "alpha";
 export const DEFAULT_VIEW_MODE = "normal";
+export const DEFAULT_CELL_METRIC = "height";
 export const DEFAULT_CLIMATE_METRIC = "temperature";
 export const DEFAULT_SURFACE_MODE = "globe";
 export const DEFAULT_ERA_SCALE = "crust";

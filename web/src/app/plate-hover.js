@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../core/constants.js";
-import { getClimateMetricMeta } from "./climate-metric.js";
+import { getCellMetricMeta } from "./cell-metric.js";
 
 export function createPlateHover({
     canvas,
@@ -42,66 +42,32 @@ export function createPlateHover({
         const {
             currentTerrainData,
             currentViewMode,
-            currentClimateMetric,
+            currentCellMetric,
             debugEnabled,
         } = getState();
-        if (!currentTerrainData || (currentViewMode !== "plates" && currentViewMode !== "climate")) {
+        if (!currentTerrainData || currentViewMode !== "metric") {
             hidePopup();
             return;
         }
 
-        if (currentViewMode === "climate") {
-            const climateHover = readClimateHoverValue(
-                currentTerrainData,
-                currentClimateMetric,
-                plateIdValue,
-            );
-            if (!climateHover) {
-                hidePopup();
-                return;
-            }
-            plateHoverPopup.textContent = [
-                climateHover.meta.label,
-                `cell: ${climateHover.vertexIndex}`,
-                `value: ${climateHover.formattedValue}`,
-            ].join("\n");
-            plateHoverPopup.hidden = false;
-            positionPopup(clientX, clientY);
-            visiblePlateHoverId = climateHover.vertexIndex;
-            onClimateHover?.({
-                label: climateHover.meta.label,
-                value: climateHover.formattedValue,
-            });
-            return;
-        }
-
-        const plateIndex = Number(plateIdValue);
-        const { plateInfo } = currentTerrainData;
-        if (
-            !Number.isInteger(plateIndex) ||
-            plateIndex < 0 ||
-            plateIndex >= plateInfo.isOcean.length
-        ) {
+        const metricHover = readMetricHoverValue(currentTerrainData, currentCellMetric, plateIdValue);
+        if (!metricHover) {
             hidePopup();
             return;
         }
-
-        const plateKind = plateInfo.isOcean[plateIndex] ? "海洋プレート" : "大陸プレート";
-        const weight = Number.isFinite(hoverDiagnostics?.weight)
-            ? hoverDiagnostics.weight
-            : plateInfo.baseWeight[plateIndex];
-        const height = plateInfo.baseHeight[plateIndex];
-        const debugLines = debugEnabled ? (hoverDiagnostics?.debugLines ?? []) : [];
         plateHoverPopup.textContent = [
-            `Plate #${plateIndex}`,
-            plateKind,
-            `weight: ${weight.toFixed(3)}`,
-            `height: ${height.toFixed(3)}`,
-            ...debugLines,
+            metricHover.meta.label,
+            `cell: ${metricHover.vertexIndex}`,
+            `value: ${metricHover.formattedValue}`,
+            ...(debugEnabled ? (hoverDiagnostics?.debugLines ?? []) : []),
         ].join("\n");
         plateHoverPopup.hidden = false;
         positionPopup(clientX, clientY);
-        visiblePlateHoverId = plateIndex;
+        visiblePlateHoverId = metricHover.vertexIndex;
+        onClimateHover?.({
+            label: metricHover.meta.label,
+            value: metricHover.formattedValue,
+        });
     }
 
     function positionPopup(clientX, clientY) {
@@ -333,9 +299,9 @@ export function createPlateHover({
             currentTerrainData,
             currentViewMode,
             camera,
-            currentClimateMetric,
+            currentCellMetric,
         } = getState();
-        if (!currentTerrainData || (currentViewMode !== "plates" && currentViewMode !== "climate")) {
+        if (!currentTerrainData || currentViewMode !== "metric") {
             hidePopup();
             return;
         }
@@ -358,34 +324,12 @@ export function createPlateHover({
         }
 
         const hoveredVertexIndex = face.a;
-        if (currentViewMode === "climate") {
-            if (!readClimateHoverValue(currentTerrainData, currentClimateMetric, hoveredVertexIndex)) {
-                hidePopup();
-                return;
-            }
-            pendingPlateHover = {
-                clientX: event.clientX,
-                clientY: event.clientY,
-                plateId: hoveredVertexIndex,
-                hoverDiagnostics: null,
-            };
-            schedulePlateHoverPopup(
-                event.clientX,
-                event.clientY,
-                hoveredVertexIndex,
-                null,
-            );
-            return;
-        }
-
-        const hoveredPlateId = currentTerrainData.plateId[hoveredVertexIndex];
-        const hoveredPlateIndex = Number(hoveredPlateId);
-        if (!Number.isInteger(hoveredPlateIndex)) {
+        if (!readMetricHoverValue(currentTerrainData, currentCellMetric, hoveredVertexIndex)) {
             hidePopup();
             return;
         }
 
-        if (pendingPlateHover && pendingPlateHover.plateId !== hoveredPlateIndex) {
+        if (pendingPlateHover && pendingPlateHover.plateId !== hoveredVertexIndex) {
             clearPlateHoverTimer();
             pendingPlateHover = null;
             plateHoverPopup.hidden = true;
@@ -393,7 +337,7 @@ export function createPlateHover({
             visiblePlateHoverId = null;
         }
 
-        const sampledWeightResult = sampleHoverWeight(hit, hoveredPlateIndex);
+        const sampledWeightResult = sampleHoverWeight(hit, hoveredVertexIndex);
         const sampledWeight = Number.isFinite(sampledWeightResult?.weight)
             ? sampledWeightResult.weight
             : currentTerrainData.vertexWeight[hoveredVertexIndex];
@@ -408,21 +352,21 @@ export function createPlateHover({
         pendingPlateHover = {
             clientX: event.clientX,
             clientY: event.clientY,
-            plateId: hoveredPlateIndex,
+            plateId: hoveredVertexIndex,
             hoverDiagnostics,
         };
         schedulePlateHoverPopup(
             event.clientX,
             event.clientY,
-            hoveredPlateIndex,
+            hoveredVertexIndex,
             hoverDiagnostics,
         );
     }
 
-    function readClimateHoverValue(currentTerrainData, currentClimateMetric, vertexIndexValue) {
-        const meta = getClimateMetricMeta(currentClimateMetric);
+    function readMetricHoverValue(currentTerrainData, currentCellMetric, vertexIndexValue) {
+        const meta = getCellMetricMeta(currentCellMetric);
         const vertexIndex = Number(vertexIndexValue);
-        const values = currentTerrainData[meta.key];
+        const values = currentTerrainData[meta.dataKey];
         const value = values?.[vertexIndex];
         if (!Number.isInteger(vertexIndex) || !Number.isFinite(value)) {
             return null;

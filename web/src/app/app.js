@@ -5,7 +5,7 @@ import initWasm, {
 } from "../interface/wasm.js";
 import { collectAppElements } from "../ui/dom.js";
 import { createPlateHover } from "./plate-hover.js";
-import { normalizeClimateMetric } from "./climate-metric.js";
+import { normalizeCellMetric } from "./cell-metric.js";
 import { createTerrainRenderer } from "./terrain-renderer.js";
 import {
     createStatusController,
@@ -27,7 +27,7 @@ import {
     renderEraScaleControls,
 } from "./era-presets.js";
 import {
-    DEFAULT_CLIMATE_METRIC,
+    DEFAULT_CELL_METRIC,
     DEFAULT_ERA_SCALE,
     DEFAULT_SURFACE_MODE,
     DEFAULT_TERRAIN_SEED,
@@ -150,7 +150,7 @@ export async function createApp() {
 
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentViewMode = DEFAULT_VIEW_MODE;
-    let currentClimateMetric = DEFAULT_CLIMATE_METRIC;
+    let currentCellMetric = DEFAULT_CELL_METRIC;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentEraScale = DEFAULT_ERA_SCALE;
     let currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
@@ -179,7 +179,7 @@ export async function createApp() {
         terrainMaterial,
         basePositions,
         currentViewMode,
-        currentClimateMetric,
+        currentCellMetric,
         debugEnabled,
     });
 
@@ -193,7 +193,7 @@ export async function createApp() {
     const climateUiController = createClimateUiController({
         climateLegend,
         getCurrentViewMode: () => currentViewMode,
-        getCurrentClimateMetric: () => currentClimateMetric,
+        getCurrentCellMetric: () => currentCellMetric,
         getCurrentTerrainData: () => currentTerrainData,
     });
     const { syncClimateUi, updateClimateHoverReadout } = climateUiController;
@@ -206,7 +206,7 @@ export async function createApp() {
         getState: () => ({
             currentTerrainData,
             currentViewMode,
-            currentClimateMetric,
+            currentCellMetric,
             currentSurfaceMode,
             camera: cameraController.getCamera(),
             debugEnabled,
@@ -306,7 +306,7 @@ export async function createApp() {
             currentTerrainData,
             currentSurfaceMode,
             currentViewMode,
-            currentClimateMetric,
+            currentCellMetric,
             currentEraScale,
             currentEraMetrics,
             debugEnabled,
@@ -436,22 +436,22 @@ export async function createApp() {
 
     const viewModeController = createViewModeController({
         viewModeInputs,
-        normalizeClimateMetric,
+        normalizeCellMetric,
         terrainRenderer,
         plateHover,
         syncClimateUi,
         syncVisibleFieldsForCurrentView,
         getCurrentViewMode: () => currentViewMode,
-        getCurrentClimateMetric: () => currentClimateMetric,
+        getCurrentCellMetric: () => currentCellMetric,
         getDebugEnabled: () => debugEnabled,
         setCurrentViewMode: (nextMode) => {
             currentViewMode = nextMode;
         },
-        setCurrentClimateMetric: (nextMetric) => {
-            currentClimateMetric = nextMetric;
+        setCurrentCellMetric: (nextMetric) => {
+            currentCellMetric = nextMetric;
         },
     });
-    const { setViewMode, setClimateMetric } = viewModeController;
+    const { setViewMode, setCellMetric } = viewModeController;
 
     function onResize() {
         cameraController.onResize();
@@ -541,7 +541,7 @@ export async function createApp() {
         setDebugModeEnabled,
         setEraScale,
         setViewMode,
-        setClimateMetric,
+        setCellMetric,
         setSurfaceMode: setSurfaceModeWithPinchReset,
         playbackController,
         runPerfBenchmark: perfBenchmarkController.runBenchmark,
@@ -549,7 +549,7 @@ export async function createApp() {
         getDebugEnabled: () => debugEnabled,
         getCurrentSurfaceMode: () => currentSurfaceMode,
         getCurrentViewMode: () => currentViewMode,
-        getCurrentClimateMetric: () => currentClimateMetric,
+        getCurrentCellMetric: () => currentCellMetric,
         updateTerrain,
         setStatus,
     });

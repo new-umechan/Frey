@@ -30,7 +30,7 @@ export function setupUiControls({
     onDebugToggle,
     onEraScaleChange,
     onViewModeChange,
-    onClimateMetricChange,
+    onCellMetricChange,
     onToggleSurface,
     onToggleDebug,
     onTogglePlay,
@@ -43,7 +43,7 @@ export function setupUiControls({
     onCopyPerfBenchmark,
     getDebugEnabled,
     getCurrentSurfaceMode,
-    getCurrentClimateMetric,
+    getCurrentCellMetric,
     onSubmitSeed,
     onSubmitSeedError,
 }) {
@@ -99,9 +99,9 @@ export function setupUiControls({
     const controlHelp = createControlHelpController(controlHelpModal, controlHelpCloseButton);
     const viewCui = createViewCuiController({
         viewModeInputs,
-        getCurrentClimateMetric,
+        getCurrentCellMetric,
         onViewModeChange,
-        onClimateMetricChange,
+        onCellMetricChange,
     });
 
     bindPlaybackUiEvents({

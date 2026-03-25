@@ -1,39 +1,40 @@
+import { getCellMetricMeta } from "./cell-metric.js";
+
 const FLOAT32_FIELDS = new Set([
     "height",
     "river_flux",
     "mantle_heat",
+    "erosion_rate",
+    "deposition_rate",
     "temperature",
     "precipitation",
+    "evapotranspiration",
+    "aridity",
+    "runoff",
+    "ocean_temperature",
+    "river_transport_cost",
+]);
+
+const OPTIONAL_FIELD_KINDS = new Set([
+    "erosion_rate",
+    "deposition_rate",
+    "evapotranspiration",
+    "aridity",
+    "river_transport_cost",
     "runoff",
     "ocean_temperature",
 ]);
-
-const CORE_FIELD_LOADERS = {
-    heightData: "height",
-    plateId: "plate_id",
-    riverFlux: "river_flux",
-    riverNext: "river_next",
-    mantleHeat: "mantle_heat",
-    temperature: "temperature",
-    precipitation: "precipitation",
-};
 
 const WORLD_CHANGESET = Object.freeze({
     height: false,
     river: false,
     mantleHeat: false,
-    climate: false,
+    metric: false,
 });
 
 const DELTA_FIELD_KIND_BY_VIEW = Object.freeze({
     normal: ["height", "river_flux", "river_next"],
-    plates: ["height", "river_flux", "river_next"],
-    mantle: ["height", "river_flux", "river_next", "mantle_heat"],
-});
-
-const CLIMATE_FIELD_KIND_BY_METRIC = Object.freeze({
-    temperature: "temperature",
-    precipitation: "precipitation",
+    metric: ["height", "river_flux", "river_next"],
 });
 
 const CORE_KEY_BY_FIELD_KIND = Object.freeze({
@@ -41,12 +42,39 @@ const CORE_KEY_BY_FIELD_KIND = Object.freeze({
     river_flux: "riverFlux",
     river_next: "riverNext",
     mantle_heat: "mantleHeat",
+    erosion_rate: "erosionRate",
+    deposition_rate: "depositionRate",
     temperature: "temperature",
     precipitation: "precipitation",
+    evapotranspiration: "evapotranspiration",
+    aridity: "aridity",
+    runoff: "runoff",
+    ocean_temperature: "oceanTemperature",
+    river_transport_cost: "riverTransportCost",
 });
 
-function getFieldData(controller, worldId, fieldKind) {
-    const response = controller.get_field(worldId, fieldKind, 1);
+function createFallbackFieldData(fieldKind, fallbackCellCount) {
+    const count = Math.max(0, Math.floor(fallbackCellCount || 0));
+    if (FLOAT32_FIELDS.has(fieldKind)) {
+        return new Float32Array(count);
+    }
+    if (fieldKind === "plate_id") {
+        return new Uint32Array(count);
+    }
+    return new Int32Array(count);
+}
+
+function getFieldData(controller, worldId, fieldKind, fallbackCellCount = 0) {
+    let response = null;
+    try {
+        response = controller.get_field(worldId, fieldKind, 1);
+    } catch (error) {
+        if (OPTIONAL_FIELD_KINDS.has(fieldKind)) {
+            console.warn(`[world-sync] optional field fallback: ${fieldKind}`, error);
+            return createFallbackFieldData(fieldKind, fallbackCellCount);
+        }
+        throw error;
+    }
     if (FLOAT32_FIELDS.has(fieldKind)) {
         return new Float32Array(response?.f32_data ?? []);
     }
@@ -57,18 +85,30 @@ function getFieldData(controller, worldId, fieldKind) {
 }
 
 function fetchCoreFields(worldSimController, worldId) {
-    return Object.fromEntries(
-        Object.entries(CORE_FIELD_LOADERS).map(([targetKey, fieldKind]) => [
-            targetKey,
-            getFieldData(worldSimController, worldId, fieldKind),
-        ]),
-    );
+    const heightData = getFieldData(worldSimController, worldId, "height");
+    const cellCount = heightData.length;
+    return {
+        heightData,
+        plateId: getFieldData(worldSimController, worldId, "plate_id", cellCount),
+        riverFlux: getFieldData(worldSimController, worldId, "river_flux", cellCount),
+        riverNext: getFieldData(worldSimController, worldId, "river_next", cellCount),
+        mantleHeat: getFieldData(worldSimController, worldId, "mantle_heat", cellCount),
+        erosionRate: getFieldData(worldSimController, worldId, "erosion_rate", cellCount),
+        depositionRate: getFieldData(worldSimController, worldId, "deposition_rate", cellCount),
+        temperature: getFieldData(worldSimController, worldId, "temperature", cellCount),
+        precipitation: getFieldData(worldSimController, worldId, "precipitation", cellCount),
+        evapotranspiration: getFieldData(worldSimController, worldId, "evapotranspiration", cellCount),
+        aridity: getFieldData(worldSimController, worldId, "aridity", cellCount),
+        runoff: getFieldData(worldSimController, worldId, "runoff", cellCount),
+        oceanTemperature: getFieldData(worldSimController, worldId, "ocean_temperature", cellCount),
+        riverTransportCost: getFieldData(worldSimController, worldId, "river_transport_cost", cellCount),
+    };
 }
 
-export function getDeltaFieldKindsForView({ viewMode, climateMetric }) {
-    if (viewMode === "climate") {
-        const climateField = CLIMATE_FIELD_KIND_BY_METRIC[climateMetric] ?? "temperature";
-        return ["height", "river_flux", "river_next", climateField];
+export function getDeltaFieldKindsForView({ viewMode, cellMetric }) {
+    if (viewMode === "metric") {
+        const meta = getCellMetricMeta(cellMetric);
+        return ["height", "river_flux", "river_next", meta.fieldKind];
     }
     return DELTA_FIELD_KIND_BY_VIEW[viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }
@@ -141,8 +181,15 @@ export function buildCoreFromController({
     riverFlux,
     riverNext,
     mantleHeat,
+    erosionRate,
+    depositionRate,
     temperature,
     precipitation,
+    evapotranspiration,
+    aridity,
+    runoff,
+    oceanTemperature,
+    riverTransportCost,
     plateInfo,
     targetLandRatio,
 }) {
@@ -153,8 +200,15 @@ export function buildCoreFromController({
         riverFlux,
         riverNext,
         mantleHeat,
+        erosionRate,
+        depositionRate,
         temperature,
         precipitation,
+        evapotranspiration,
+        aridity,
+        runoff,
+        oceanTemperature,
+        riverTransportCost,
         plateInfo,
         targetLandRatio: Number.isFinite(targetLandRatio) ? targetLandRatio : 0,
         ...createEmptyCoreBuffers(cellCount),
@@ -274,11 +328,32 @@ function applyWorldDeltaToCore(core, worldDelta) {
         case "mantle_heat":
             changes.mantleHeat = applyNumericDelta(core.mantleHeat, delta);
             break;
+        case "erosion_rate":
+            changes.metric = applyNumericDelta(core.erosionRate, delta) || changes.metric;
+            break;
+        case "deposition_rate":
+            changes.metric = applyNumericDelta(core.depositionRate, delta) || changes.metric;
+            break;
         case "temperature":
-            changes.climate = applyNumericDelta(core.temperature, delta) || changes.climate;
+            changes.metric = applyNumericDelta(core.temperature, delta) || changes.metric;
             break;
         case "precipitation":
-            changes.climate = applyNumericDelta(core.precipitation, delta) || changes.climate;
+            changes.metric = applyNumericDelta(core.precipitation, delta) || changes.metric;
+            break;
+        case "evapotranspiration":
+            changes.metric = applyNumericDelta(core.evapotranspiration, delta) || changes.metric;
+            break;
+        case "aridity":
+            changes.metric = applyNumericDelta(core.aridity, delta) || changes.metric;
+            break;
+        case "runoff":
+            changes.metric = applyNumericDelta(core.runoff, delta) || changes.metric;
+            break;
+        case "ocean_temperature":
+            changes.metric = applyNumericDelta(core.oceanTemperature, delta) || changes.metric;
+            break;
+        case "river_transport_cost":
+            changes.metric = applyNumericDelta(core.riverTransportCost, delta) || changes.metric;
             break;
         default:
             break;
@@ -305,9 +380,7 @@ function applyFieldSnapshotToCore(core, fieldKind, values, changes) {
         changes.mantleHeat = true;
         return;
     }
-    if (fieldKind === "temperature" || fieldKind === "precipitation") {
-        changes.climate = true;
-    }
+    changes.metric = true;
 }
 
 export function syncVisibleCoreFieldsFromController({
@@ -319,7 +392,12 @@ export function syncVisibleCoreFieldsFromController({
     const changes = { ...WORLD_CHANGESET };
     const uniqueFieldKinds = Array.from(new Set(fieldKinds ?? []));
     for (const fieldKind of uniqueFieldKinds) {
-        const values = getFieldData(worldSimController, worldId, fieldKind);
+        const values = getFieldData(
+            worldSimController,
+            worldId,
+            fieldKind,
+            core?.heightData?.length ?? 0,
+        );
         applyFieldSnapshotToCore(core, fieldKind, values, changes);
     }
     return changes;

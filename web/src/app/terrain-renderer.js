@@ -11,17 +11,56 @@ export function createTerrainRenderer({
     const BOUNDING_SPHERE_REFRESH_INTERVAL_TICKS = 8;
 
     let currentRiverMaskTexture = null;
-    let plateIdBuffer = null;
     let positionBuffer = null;
+    let metricBuffer = null;
+    let currentMetricKey = "height";
     let lastSurfaceMode = null;
     let lastNormalRefreshTick = -1;
 
     const CORE_ATTRIBUTE_MAP = {
         height: ["terrainHeight"],
-        river: ["terrainRiverFlux"],
-        mantleHeat: ["terrainMantleHeat"],
-        climate: ["terrainTemperature", "terrainPrecipitation"],
+        metric: ["terrainMetric"],
     };
+
+    function resolveMetricArray(currentTerrainData, metricKey) {
+        switch (metricKey) {
+        case "mantle_heat":
+            return currentTerrainData.mantleHeat;
+        case "erosion_rate":
+            return currentTerrainData.erosionRate;
+        case "deposition_rate":
+            return currentTerrainData.depositionRate;
+        case "temperature":
+            return currentTerrainData.temperature;
+        case "precipitation":
+            return currentTerrainData.precipitation;
+        case "evapotranspiration":
+            return currentTerrainData.evapotranspiration;
+        case "aridity":
+            return currentTerrainData.aridity;
+        case "ocean_temperature":
+            return currentTerrainData.oceanTemperature;
+        case "river_flux":
+            return currentTerrainData.riverFlux;
+        case "runoff":
+            return currentTerrainData.runoff;
+        case "river_transport_cost":
+            return currentTerrainData.riverTransportCost;
+        case "height":
+        default:
+            return currentTerrainData.heightData;
+        }
+    }
+
+    function updateMetricAttribute(currentTerrainData) {
+        const source = resolveMetricArray(currentTerrainData, currentMetricKey);
+        if (!metricBuffer || metricBuffer.length !== source.length) {
+            metricBuffer = new Float32Array(source.length);
+        }
+        metricBuffer.set(source);
+        const metricAttr = ensureAttribute("terrainMetric", metricBuffer, 1);
+        metricAttr.needsUpdate = true;
+    }
 
     function ensureAttribute(name, array, itemSize) {
         const current = geometry.getAttribute(name);
@@ -35,14 +74,7 @@ export function createTerrainRenderer({
 
     function ensureTerrainAttributes(currentTerrainData) {
         ensureAttribute("terrainHeight", currentTerrainData.heightData, 1);
-        ensureAttribute("terrainRiverFlux", currentTerrainData.riverFlux, 1);
-        ensureAttribute("terrainMantleHeat", currentTerrainData.mantleHeat, 1);
-        ensureAttribute("terrainTemperature", currentTerrainData.temperature, 1);
-        ensureAttribute("terrainPrecipitation", currentTerrainData.precipitation, 1);
-        if (!plateIdBuffer || plateIdBuffer.length !== currentTerrainData.plateId.length) {
-            plateIdBuffer = Float32Array.from(currentTerrainData.plateId);
-        }
-        ensureAttribute("terrainPlateId", plateIdBuffer, 1);
+        updateMetricAttribute(currentTerrainData);
         ensureAttribute("terrainLakeDepth", currentTerrainData.lakeDepth, 1);
         ensureAttribute("terrainDebugTrench", currentTerrainData.tectonicDebug.trench, 1);
         ensureAttribute("terrainDebugArc", currentTerrainData.tectonicDebug.arc, 1);
@@ -172,10 +204,15 @@ export function createTerrainRenderer({
         });
     }
 
-    function applyTerrainMaterialState(currentViewMode, debugEnabled, currentClimateMetric) {
+    function applyTerrainMaterialState(currentViewMode, debugEnabled, currentCellMetric) {
+        currentMetricKey = currentCellMetric;
         terrainMaterial.setViewMode(currentViewMode);
         terrainMaterial.setDebugEnabled(debugEnabled);
-        terrainMaterial.setClimateMetric(currentClimateMetric);
+        terrainMaterial.setCellMetric(currentCellMetric);
+        const currentMetricAttribute = geometry.getAttribute("terrainMetric");
+        if (currentMetricAttribute) {
+            currentMetricAttribute.needsUpdate = true;
+        }
     }
 
     return {

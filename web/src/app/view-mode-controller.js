@@ -1,26 +1,20 @@
 export function createViewModeController(options = {}) {
     const {
         viewModeInputs,
-        normalizeClimateMetric,
+        normalizeCellMetric,
         terrainRenderer,
         plateHover,
         syncClimateUi,
         syncVisibleFieldsForCurrentView,
         getCurrentViewMode,
-        getCurrentClimateMetric,
+        getCurrentCellMetric,
         getDebugEnabled,
         setCurrentViewMode,
-        setCurrentClimateMetric,
+        setCurrentCellMetric,
     } = options;
 
     const setViewMode = (nextMode) => {
-        const normalizedMode = (
-            nextMode === "plates"
-            || nextMode === "mantle"
-            || nextMode === "climate"
-        )
-            ? nextMode
-            : "normal";
+        const normalizedMode = nextMode === "metric" ? "metric" : "normal";
         setCurrentViewMode(normalizedMode);
         for (const input of viewModeInputs) {
             input.checked = input.value === normalizedMode;
@@ -29,31 +23,33 @@ export function createViewModeController(options = {}) {
         terrainRenderer.applyTerrainMaterialState(
             normalizedMode,
             getDebugEnabled(),
-            getCurrentClimateMetric(),
+            getCurrentCellMetric(),
         );
         syncClimateUi();
-        if (normalizedMode !== "plates") {
+        if (normalizedMode !== "metric") {
             plateHover.hidePopup();
         }
     };
 
-    const setClimateMetric = (nextMetric) => {
-        const normalizedMetric = normalizeClimateMetric(nextMetric);
-        setCurrentClimateMetric(normalizedMetric);
-        if (getCurrentViewMode() === "climate") {
-            syncVisibleFieldsForCurrentView();
+    const setCellMetric = (nextMetric) => {
+        const normalizedMetric = normalizeCellMetric(nextMetric);
+        setCurrentCellMetric(normalizedMetric);
+        if (getCurrentViewMode() !== "metric") {
+            setViewMode("metric");
+            return;
         }
         terrainRenderer.applyTerrainMaterialState(
             getCurrentViewMode(),
             getDebugEnabled(),
             normalizedMetric,
         );
+        syncVisibleFieldsForCurrentView();
         syncClimateUi();
         plateHover.hidePopup();
     };
 
     return {
         setViewMode,
-        setClimateMetric,
+        setCellMetric,
     };
 }

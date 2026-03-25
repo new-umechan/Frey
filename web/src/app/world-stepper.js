@@ -26,7 +26,7 @@ export function createWorldStepper(options = {}) {
         const state = getCurrentState();
         return getDeltaFieldKindsForView({
             viewMode: state.currentViewMode,
-            climateMetric: state.currentClimateMetric,
+            cellMetric: state.currentCellMetric,
         });
     };
 
@@ -84,7 +84,7 @@ export function createWorldStepper(options = {}) {
                 deltaFieldKinds: getCurrentDeltaFieldKinds(),
                 perfRecorder,
             });
-            if (!benchmarkMode && (changes?.climate || statsRefreshed)) {
+            if (!benchmarkMode && (changes?.metric || statsRefreshed)) {
                 syncClimateUi();
             }
 

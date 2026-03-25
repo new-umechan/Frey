@@ -1,6 +1,6 @@
 import {
-    CLIMATE_FIELD_KIND_BY_METRIC,
     DELTA_FIELD_KIND_BY_VIEW,
+    FIELD_KIND_BY_CELL_METRIC,
     RIVER_BREAKDOWN_METRIC_NAMES,
     STEP_BREAKDOWN_METRIC_NAMES,
 } from "./constants.js";
@@ -34,9 +34,9 @@ export function formatError(error) {
 }
 
 export function getDeltaFieldKindsForProfile(profile) {
-    if (profile?.viewMode === "climate") {
-        const climateField = CLIMATE_FIELD_KIND_BY_METRIC[profile?.climateMetric] ?? "temperature";
-        return ["height", "river_flux", "river_next", climateField];
+    if (profile?.viewMode === "metric") {
+        const metricField = FIELD_KIND_BY_CELL_METRIC[profile?.cellMetric] ?? "height";
+        return ["height", "river_flux", "river_next", metricField];
     }
     return DELTA_FIELD_KIND_BY_VIEW[profile?.viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }

@@ -35,8 +35,15 @@ pub(super) struct WorldSyncState {
     pub river_flux: F32FieldTracker,
     pub river_next: I32FieldTracker,
     pub mantle_heat: F32FieldTracker,
+    pub erosion_rate: F32FieldTracker,
+    pub deposition_rate: F32FieldTracker,
     pub temperature: F32FieldTracker,
     pub precipitation: F32FieldTracker,
+    pub evapotranspiration: F32FieldTracker,
+    pub aridity: F32FieldTracker,
+    pub runoff: F32FieldTracker,
+    pub ocean_temperature: F32FieldTracker,
+    pub river_transport_cost: F32FieldTracker,
 }
 
 #[derive(Clone)]
@@ -270,8 +277,15 @@ impl WorldSyncState {
             river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
             river_next: I32FieldTracker::new(&world.state.hydrology.river_next),
             mantle_heat: F32FieldTracker::new(&mantle_heat),
+            erosion_rate: F32FieldTracker::new(&world.state.geology.erosion_rate),
+            deposition_rate: F32FieldTracker::new(&world.state.geology.deposition_rate),
             temperature: F32FieldTracker::new(&world.state.climate.temperature),
             precipitation: F32FieldTracker::new(&world.state.climate.precipitation),
+            evapotranspiration: F32FieldTracker::new(&world.state.climate.evapotranspiration),
+            aridity: F32FieldTracker::new(&world.state.climate.aridity),
+            runoff: F32FieldTracker::new(&world.state.climate.runoff),
+            ocean_temperature: F32FieldTracker::new(&world.state.climate.ocean_temperature),
+            river_transport_cost: F32FieldTracker::new(&world.state.hydrology.river_transport_cost),
         }
     }
 
@@ -296,6 +310,17 @@ impl WorldSyncState {
         self.temperature.observe(&world.state.climate.temperature);
         self.precipitation
             .observe(&world.state.climate.precipitation);
+        self.erosion_rate.observe(&world.state.geology.erosion_rate);
+        self.deposition_rate
+            .observe(&world.state.geology.deposition_rate);
+        self.evapotranspiration
+            .observe(&world.state.climate.evapotranspiration);
+        self.aridity.observe(&world.state.climate.aridity);
+        self.runoff.observe(&world.state.climate.runoff);
+        self.ocean_temperature
+            .observe(&world.state.climate.ocean_temperature);
+        self.river_transport_cost
+            .observe(&world.state.hydrology.river_transport_cost);
     }
 
     pub fn take_world_field_deltas<F>(&mut self, mut include_field: F) -> Vec<FieldDeltaResponse>
@@ -331,6 +356,20 @@ impl WorldSyncState {
         } else {
             self.mantle_heat.discard_pending();
         }
+        if include_field("erosion_rate") {
+            if let Some(delta) = self.erosion_rate.take_delta("erosion_rate") {
+                deltas.push(delta);
+            }
+        } else {
+            self.erosion_rate.discard_pending();
+        }
+        if include_field("deposition_rate") {
+            if let Some(delta) = self.deposition_rate.take_delta("deposition_rate") {
+                deltas.push(delta);
+            }
+        } else {
+            self.deposition_rate.discard_pending();
+        }
         if include_field("temperature") {
             if let Some(delta) = self.temperature.take_delta("temperature") {
                 deltas.push(delta);
@@ -344,6 +383,41 @@ impl WorldSyncState {
             }
         } else {
             self.precipitation.discard_pending();
+        }
+        if include_field("evapotranspiration") {
+            if let Some(delta) = self.evapotranspiration.take_delta("evapotranspiration") {
+                deltas.push(delta);
+            }
+        } else {
+            self.evapotranspiration.discard_pending();
+        }
+        if include_field("aridity") {
+            if let Some(delta) = self.aridity.take_delta("aridity") {
+                deltas.push(delta);
+            }
+        } else {
+            self.aridity.discard_pending();
+        }
+        if include_field("runoff") {
+            if let Some(delta) = self.runoff.take_delta("runoff") {
+                deltas.push(delta);
+            }
+        } else {
+            self.runoff.discard_pending();
+        }
+        if include_field("ocean_temperature") {
+            if let Some(delta) = self.ocean_temperature.take_delta("ocean_temperature") {
+                deltas.push(delta);
+            }
+        } else {
+            self.ocean_temperature.discard_pending();
+        }
+        if include_field("river_transport_cost") {
+            if let Some(delta) = self.river_transport_cost.take_delta("river_transport_cost") {
+                deltas.push(delta);
+            }
+        } else {
+            self.river_transport_cost.discard_pending();
         }
         deltas
     }
@@ -408,8 +482,15 @@ mod tests {
             river_flux: F32FieldTracker::new(&[0.0, 0.0]),
             river_next: I32FieldTracker::new(&[-1, -1]),
             mantle_heat: F32FieldTracker::new(&[0.5, 0.5]),
+            erosion_rate: F32FieldTracker::new(&[0.0, 0.0]),
+            deposition_rate: F32FieldTracker::new(&[0.0, 0.0]),
             temperature: F32FieldTracker::new(&[10.0, 10.0]),
             precipitation: F32FieldTracker::new(&[100.0, 100.0]),
+            evapotranspiration: F32FieldTracker::new(&[50.0, 50.0]),
+            aridity: F32FieldTracker::new(&[1.0, 1.0]),
+            runoff: F32FieldTracker::new(&[30.0, 30.0]),
+            ocean_temperature: F32FieldTracker::new(&[10.0, 10.0]),
+            river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
         };
 
         state.height.observe(&[2.0, 1.0]);
