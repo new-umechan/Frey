@@ -3,7 +3,6 @@ dist/
 generated/wasm/web/
 
 rust/target/
-debug/snapshots/
 
 docs/manage/todo.md
 .cdsapirc
