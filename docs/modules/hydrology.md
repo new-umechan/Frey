@@ -18,7 +18,6 @@ Systemは2つに分かれる。
 - 湖フラグ
 
 HydrologyはCellStoreとClockだけを読む。
-他モジュールのメソッドは直接呼ばない。
 
 ## System構成と実行条件
 
@@ -115,13 +114,6 @@ x = a * slope + b
 
 河川輸送コストはSettlementとTradeが読む。
 流量と流路の勾配から計算する。
-
-## Climateとの責務分担
-
-Climateは局所的な水収支（`runoff`まで）を担当する。
-流路の決定と流量の集積はHydrologyが担当する。
-
-したがって、HydrologyはClimateが書いた`runoff`を読んで河川流量を集積する。
 
 関連:
 

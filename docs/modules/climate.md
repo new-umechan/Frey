@@ -13,7 +13,6 @@ Climateは、地形と固定地理量から各セルの年平均気候場を近�
 - 海水温
 
 Climateは`World State`と`Exec State`だけを読む。
-他モジュールのメソッドは直接呼ばない。
 
 ## 入力
 
@@ -112,14 +111,6 @@ Climateの補助入力として、各セルに次の固定地理量を持つ。
 
 これらは地形初期化時に前計算して`World State`へ保持する。
 毎tickで再構築しない。
-
-## Hydrologyとの責務分担
-
-Climateは局所的な水収支を担当する。
-河川の流路決定と集積流量はHydrologyが担当する。
-
-したがって、Climateは`runoff`までを書き、`river_flux`は書かない。
-HydrologyはClimateが書いた`runoff`を読んで河川流量を集積する。
 
 関連:
 
