@@ -468,10 +468,22 @@ height_next
 pub struct GeologyOutput {
     pub height: Vec<f32>,
     pub plate_id: Vec<u32>,
+    pub plate_count: u32,
+    pub land_ratio: f32,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
     pub volcanism: Vec<f32>,
     pub vertex_buoyancy: Vec<f32>,
+    pub lake_depth: Vec<f32>,
+    pub vertex_weight: Vec<f32>,
+    pub plate_is_ocean: Vec<u8>,
+    pub plate_base_height: Vec<f32>,
+    pub plate_base_weight: Vec<f32>,
+    pub vertex_age_norm: Vec<f32>,
+    pub debug_trench_strength: Vec<f32>,
+    pub debug_arc_strength: Vec<f32>,
+    pub debug_backarc_strength: Vec<f32>,
+    pub debug_ocean_ocean_arc_strength: Vec<f32>,
 }
 ```
 
@@ -480,94 +492,84 @@ pub struct GeologyOutput {
 時間発展には、地形スナップショットとは別に内部状態が必要である。
 
 ```rust
-pub struct TectonicTerrainState {
-    pub mesh: SharedMeshRef,
-    pub params: GeologyParams,
-
-    pub plate_state: Vec<PlateState>,
-    pub vertex_state: Vec<VertexCrustState>,
-    pub boundary_state: BoundaryState,
-
-    pub height: Vec<f32>,
-    pub plate_id: Vec<u32>,
-    pub river_flux: Vec<f32>,
-    pub river_next: Vec<i32>,
-	pub mantle_heat: Vec<f32>,  // セルごとの熱量 [0, 1]正規化
-
-    pub cached_metrics: TerrainStepMetrics,
+pub struct GeologyDynamicsState {
+    pub update_index: u64,
+    pub plate_states: Vec<PlateKinematicsState>,
+    pub vertex_states: Vec<VertexCrustState>,
+    pub boundary_state: BoundaryDynamicsState,
+    pub mantle_heat: Vec<f32>,
+    pub cached_metrics: GeologyStepMetrics,
 }
 
-struct VertexCrustState {
-    crust_type: CrustType,  // Continental / Oceanic のみ
-    thickness: f32,
-    density: f32,
-    age: f32,
-    stress: f32,           // 引張(+) / 圧縮(-)
-    temperature: f32,      // マントル熱場から受け取る
-    rigidity: f32,         // 地殻の硬さ
-    arc_volcanism: f32,
-    ridge_volcanism: f32,
-    hotspot_volcanism: f32,
-    backarc_volcanism: f32,
+pub struct VertexCrustState {
+    pub crust_type: CrustType,
+    pub thickness: f32,
+    pub density: f32,
+    pub age: f32,
+    pub stress: f32,
+    pub temperature: f32,
+    pub rigidity: f32,
+    pub arc_volcanism: f32,
+    pub ridge_volcanism: f32,
+    pub hotspot_volcanism: f32,
+    pub backarc_volcanism: f32,
+    pub stress_tensor: StressTensor,
 }
 
-struct BoundaryEdgeInternal {
-    convergence_memory: f32,
-}
-
-struct BoundaryDynamicsState {
-    edge_pairs: Vec<[u32; 2]>,
-    edge_internal: Vec<BoundaryEdgeInternal>,
-    slab_convergence_component: Vec<f32>,
-    slab_rollback_component: Vec<f32>,
+pub struct BoundaryDynamicsState {
+    pub reclassify_interval_ticks: u32,
+    pub steps_since_reclassify: u32,
+    pub dominant_type: Vec<BoundaryType>,
+    pub activity: Vec<f32>,
+    pub edge_pairs: Vec<[u32; 2]>,
+    pub edge_internal: Vec<BoundaryEdgeInternal>,
+    pub rollback_fraction: Vec<f32>,
+    pub backarc_tension: Vec<f32>,
+    pub slab_convergence_component: Vec<f32>,
+    pub slab_rollback_component: Vec<f32>,
 }
 ```
 
 `BoundaryEdgeInternal` は各境界edgeの内部履歴（`convergence_memory`）のみを保持する。
 `edge_pairs` と `slab_*_component` は `BoundaryDynamicsState` 側で管理する。
 
-## 5. API構成（仕様）
+## 5. API構成
 
 ### 5.1 初期化API
 
-- `init_tectonic_terrain(seed, params) -> TectonicTerrainState`
+- `generate_geology(seed, params) -> GeologyOutput` (WASM公開用)
+- `build_geology(seed, params) -> GeologyOutput` (Rust内部用)
 
 役割:
-- メッシュ生成
-- プレート分割
-- 初期プレート属性付与
-- 初期標高生成
-- 初期境界地形適用
-- 初回の河川/湖沼計算
+- プレート分割から初期標高生成までの一連の静的生成プロセスを実行する。
+
+- `ensure_geology_dynamics(world)` (内部用)
+
+役割:
+- `World` インスタンスから `GeologyDynamicsState` を初期化する。
 
 ### 5.2 更新API
 
-- `step_tectonic_terrain(state) -> TerrainStepMetrics`
+- `update_geology(world, budget)`
 
 役割:
-- 1回の地形更新を実行する
-- 状態を破壊的更新する（巻き戻し対応は後述のチェックポイント保存で担保する）
-- 活動量などのメトリクスを返す
+- `World` の状態を更新する。内部で `run_geology_dynamics_step` を呼び出し、プレート運動、移流、応力伝播、標高更新を実行する。
 
-### 5.3 スナップショット取得API
+### 5.3 スナップショット取得
 
-- `snapshot_tectonic_terrain(state) -> GeologyOutput`
+- `world.state.geology` (および `GeologyOutput`)
 
 役割:
-- 他サブシステムや描画が参照する安定した出力を返す
+- `World` インスタンスの `state` メンバから最新の地形スナップショットを参照できる。
+- `GeologyOutput` は外部システム向けの共通データ構造である。
 
 注意:
-- `GeologyOutput` は公開スナップショットであり、単独では `TectonicTerrainState` を完全復元できない
+- `GeologyOutput` は公開スナップショットであり、単独では `GeologyDynamicsState` を完全復元できない。
 
 ### 5.4 チェックポイントAPI（巻き戻し用）
 
-- `serialize_tectonic_terrain_state(state) -> Bytes | Json`
-- `deserialize_tectonic_terrain_state(blob) -> TectonicTerrainState`
-
-役割:
-- 巻き戻し、分岐、保存/再開に使う完全状態の入出力
-- `step_tectonic_terrain` の破壊的更新と両立させる
-- チェックポイントの作成タイミングは呼び出し側が管理する
+`World` インスタンス全体のシリアライズ/デシリアライズにより担保する。
+`GeologyDynamicsState` は `world.runtime` 内に含まれるため、`World` 全体の保存・復旧と連動する。
 
 要件:
 - 地形内部状態の完全復元ができること
@@ -761,7 +763,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 
 ### 7.8 活動量メトリクス
 
-時代遷移判定や予算配分のため、毎 `step_tectonic_terrain` 呼び出しで活動量を記録する。
+時代遷移判定や予算配分のため、毎 `update_geology` 呼び出しで活動量を記録する。
 
 例:
 - 標高総変化量
