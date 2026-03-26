@@ -1,4 +1,5 @@
 import { createApp } from "./app/app.js";
+import { formatStatusError } from "./app/status-error.js";
 
 function showInitializationError(error) {
     const statusMessage = document.getElementById("status-message");
@@ -7,7 +8,7 @@ function showInitializationError(error) {
 
     if (statusMessage instanceof HTMLElement) {
         statusMessage.hidden = false;
-        statusMessage.textContent = `Initialization failed: ${String(error)}`;
+        statusMessage.textContent = formatStatusError("Initialization", error);
     }
     if (statusEra instanceof HTMLElement) {
         statusEra.hidden = true;

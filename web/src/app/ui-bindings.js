@@ -1,6 +1,7 @@
 import { setupUiControls } from "../ui/controls.js";
 import { renderEraScaleControls } from "./era-presets.js";
 import { createCanvasInputHandlers } from "./canvas-input-handlers.js";
+import { formatStatusError } from "./status-error.js";
 
 function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
     return () => {
@@ -25,7 +26,7 @@ function createEraScaleChangeHandler(setEraScale) {
 
 function createSubmitSeedErrorHandler(setStatus, seedInput, seedForm) {
     return (error) => {
-        setStatus(`Generation failed: ${String(error)}`);
+        setStatus(formatStatusError("Generation", error));
         seedInput.removeAttribute("disabled");
         seedForm.querySelector("button")?.removeAttribute("disabled");
         console.error(error);
