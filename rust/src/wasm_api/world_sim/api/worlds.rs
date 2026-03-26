@@ -402,7 +402,8 @@ impl WorldSimController {
             if managed.exec_state.pending_post_step {
                 run_post_step(managed);
                 managed.exec_state.pending_post_step = false;
-                managed.exec_state.remaining_steps = managed.exec_state.remaining_steps.saturating_sub(1);
+                managed.exec_state.remaining_steps =
+                    managed.exec_state.remaining_steps.saturating_sub(1);
                 processed_ticks = processed_ticks.saturating_add(1);
                 remaining_budget = remaining_budget.saturating_sub(1);
                 continue;
@@ -435,8 +436,9 @@ impl WorldSimController {
             phase,
             tick: managed.world.clock.tick as f64,
         };
-        serde_wasm_bindgen::to_value(&response)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize exec_world_slice: {err}")))
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize exec_world_slice: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = set_simulation_rate)]

@@ -1,7 +1,7 @@
 mod common;
+pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
-pub mod sim;
 mod wasm_api;
 pub use sim::world;
 

@@ -112,7 +112,8 @@ pub(super) fn apply_stress_and_surface_update(
         tensor.xy += nbr_stress.xy;
 
         let prev = next_vertex_states[i];
-        let mantle_heat_i = finite_or(mantle_heat.get(i).copied().unwrap_or(0.5), 0.5).clamp(0.0, 1.0);
+        let mantle_heat_i =
+            finite_or(mantle_heat.get(i).copied().unwrap_or(0.5), 0.5).clamp(0.0, 1.0);
         let rigidity =
             (prev.rigidity + 0.15 * prev.thickness - 0.20 * mantle_heat_i).clamp(0.20, 1.40);
         let inv_rigidity = 1.0 / rigidity.max(1e-3);
@@ -151,19 +152,19 @@ pub(super) fn apply_stress_and_surface_update(
         let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
         let rollback_fraction = finite_or(
             boundary_state
-            .rollback_fraction
-            .get(i)
-            .copied()
-            .unwrap_or(0.0),
+                .rollback_fraction
+                .get(i)
+                .copied()
+                .unwrap_or(0.0),
             0.0,
         )
         .max(0.0);
         let convergence_memory = finite_or(
             boundary_state
-            .edge_internal
-            .get(i)
-            .map(|s| s.convergence_memory)
-            .unwrap_or(0.0),
+                .edge_internal
+                .get(i)
+                .map(|s| s.convergence_memory)
+                .unwrap_or(0.0),
             0.0,
         )
         .clamp(0.0, 1.0);
@@ -237,8 +238,8 @@ pub(super) fn apply_stress_and_surface_update(
         state.stress_tensor.xy = finite_or(state.stress_tensor.xy, 0.0);
         let density_ratio = (state.density / params.mantle_density.max(1e-3)).clamp(0.1, 1.4);
         let h_eq = state.thickness * (1.0 - density_ratio);
-        next_h = (next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0))
-            .clamp(-1.0, 1.0);
+        next_h =
+            (next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0)).clamp(-1.0, 1.0);
         state.rigidity = rigidity;
 
         terrain_delta_sum += delta.abs();

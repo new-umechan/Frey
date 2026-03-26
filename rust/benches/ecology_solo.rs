@@ -267,7 +267,9 @@ fn main() {
             r
         }
         None => {
-            println!("-- Hydro Input: SKIPPED (bench/data/hydro_ref.bin not found or decode failed) --");
+            println!(
+                "-- Hydro Input: SKIPPED (bench/data/hydro_ref.bin not found or decode failed) --"
+            );
             return;
         }
     };
@@ -426,17 +428,18 @@ fn main() {
         ground_summary.status.as_str()
     );
 
-    let pass_count = [biome_summary.status, tree_summary.status, ground_summary.status]
-        .iter()
-        .filter(|status| **status == EvalStatus::Pass)
-        .count();
+    let pass_count = [
+        biome_summary.status,
+        tree_summary.status,
+        ground_summary.status,
+    ]
+    .iter()
+    .filter(|status| **status == EvalStatus::Pass)
+    .count();
     println!();
     println!("-- Main Evaluation Summary: metrics_reported=3 --");
     println!("-- Reference Evaluation Summary: metrics_reported=1 --");
-    println!(
-        "-- Diagnostic Evaluation Summary: {}/3 PASS --",
-        pass_count
-    );
+    println!("-- Diagnostic Evaluation Summary: {}/3 PASS --", pass_count);
     if run_state.converged {
         println!("-- Main Evaluation State: READY --");
     } else {
@@ -826,9 +829,7 @@ fn run_rank_assertions(
                 .unwrap_or(f32::NAN);
             let passed =
                 left_value.is_finite() && right_value.is_finite() && left_value > right_value;
-            RankOutcome {
-                passed,
-            }
+            RankOutcome { passed }
         })
         .collect()
 }
@@ -842,7 +843,9 @@ fn run_biome_assertions(
         .iter()
         .map(|assertion| {
             let index = lookup_selection(selection, assertion.region);
-            let actual = index.and_then(|idx| values.get(idx).copied()).unwrap_or(255);
+            let actual = index
+                .and_then(|idx| values.get(idx).copied())
+                .unwrap_or(255);
             BiomeOutcome {
                 passed: actual == assertion.expected,
             }
@@ -901,13 +904,12 @@ fn summarize_biome(outcomes: &[BiomeOutcome]) -> MetricSummary {
     }
 }
 
-fn spearman_masked(
-    model: &[f32],
-    reference: &[f32],
-    height: &[f32],
-    mask: &[u8],
-) -> Option<f32> {
-    let len = model.len().min(reference.len()).min(height.len()).min(mask.len());
+fn spearman_masked(model: &[f32], reference: &[f32], height: &[f32], mask: &[u8]) -> Option<f32> {
+    let len = model
+        .len()
+        .min(reference.len())
+        .min(height.len())
+        .min(mask.len());
     let mut left = Vec::with_capacity(len);
     let mut right = Vec::with_capacity(len);
     for i in 0..len {

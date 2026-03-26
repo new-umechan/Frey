@@ -70,10 +70,7 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
             if from == to {
                 continue;
             }
-            let relation = world
-                .polity_relations
-                .entry((*from, *to))
-                .or_default();
+            let relation = world.polity_relations.entry((*from, *to)).or_default();
             relation.trade = relation.trade.clamp(0.0, 1.0).max(0.2);
             relation.alliance = relation.alliance.clamp(-1.0, 1.0);
             relation.at_war = false;

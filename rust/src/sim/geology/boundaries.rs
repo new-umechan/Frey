@@ -638,9 +638,7 @@ pub(super) struct ArcSignalInput<'a> {
     pub params: &'a GeologyParams,
 }
 
-pub(super) fn accumulate_multi_edge_arc_signal(
-    input: ArcSignalInput<'_>,
-) -> (f32, f32) {
+pub(super) fn accumulate_multi_edge_arc_signal(input: ArcSignalInput<'_>) -> (f32, f32) {
     let vertex = input.vertex;
     let pid = input.pid;
     let positions = input.positions;

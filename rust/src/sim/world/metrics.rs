@@ -292,10 +292,7 @@ fn river_network_metrics(
     )
 }
 
-fn trace_active_to_ocean(
-    start: usize,
-    context: &mut RiverTraceContext<'_>,
-) -> bool {
+fn trace_active_to_ocean(start: usize, context: &mut RiverTraceContext<'_>) -> bool {
     if context.memo.get(start).copied().unwrap_or(0) == 2 {
         return true;
     }

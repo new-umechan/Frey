@@ -62,8 +62,14 @@ fn exec_world_slice_matches_full_tick_execution() {
     assert_eq!(phase, ExecWorldPhase::Prepare);
     assert_eq!(sliced_world.clock.tick, full_world.clock.tick);
     assert_eq!(sliced_world.clock.epoch, full_world.clock.epoch);
-    assert_eq!(sliced_world.clock.budgets.geology, full_world.clock.budgets.geology);
-    assert_eq!(sliced_world.state.geology.height, full_world.state.geology.height);
+    assert_eq!(
+        sliced_world.clock.budgets.geology,
+        full_world.clock.budgets.geology
+    );
+    assert_eq!(
+        sliced_world.state.geology.height,
+        full_world.state.geology.height
+    );
     assert_eq!(
         sliced_world.state.hydrology.river_flow,
         full_world.state.hydrology.river_flow

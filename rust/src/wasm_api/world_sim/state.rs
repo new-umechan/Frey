@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::sim::geology_types::GeologyParams;
-use crate::sim::ExecWorldPhase;
 use crate::sim::world;
+use crate::sim::ExecWorldPhase;
 
 use super::types::{DeltaRange, FieldDeltaResponse};
 
@@ -473,7 +473,12 @@ impl ManagedWorld {
     }
 
     pub fn save_history_snapshot_if_needed(&mut self) {
-        if !self.world.clock.tick.is_multiple_of(HISTORY_SNAPSHOT_INTERVAL) {
+        if !self
+            .world
+            .clock
+            .tick
+            .is_multiple_of(HISTORY_SNAPSHOT_INTERVAL)
+        {
             return;
         }
         self.world

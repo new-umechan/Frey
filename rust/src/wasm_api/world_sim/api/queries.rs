@@ -559,10 +559,7 @@ fn sink_fill_ratio_values_by_cell(world: &crate::sim::world::World) -> Vec<f32> 
         if !total.is_finite() || total <= 1e-6 {
             return 0.0;
         }
-        let remain_raw = state
-            .sink_capacity_remaining
-            .get(sid)
-            .copied();
+        let remain_raw = state.sink_capacity_remaining.get(sid).copied();
         let remain = match remain_raw {
             Some(value) if value.is_finite() => value.clamp(0.0, total),
             _ => total,
