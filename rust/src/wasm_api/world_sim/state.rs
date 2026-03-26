@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::sim::geology_types::GeologyParams;
+use crate::sim::ExecWorldPhase;
 use crate::sim::world;
 
 use super::types::{DeltaRange, FieldDeltaResponse};
@@ -55,6 +56,24 @@ pub(super) struct ManagedWorld {
     pub geology_params: GeologyParams,
     pub sync_state: WorldSyncState,
     pub history: BTreeMap<u64, world::World>,
+    pub exec_state: ManagedWorldExecState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ManagedWorldExecState {
+    pub next_phase: ExecWorldPhase,
+    pub remaining_steps: u32,
+    pub pending_post_step: bool,
+}
+
+impl Default for ManagedWorldExecState {
+    fn default() -> Self {
+        Self {
+            next_phase: ExecWorldPhase::Prepare,
+            remaining_steps: 0,
+            pending_post_step: false,
+        }
+    }
 }
 
 impl F32FieldTracker {
@@ -445,6 +464,10 @@ impl WorldSyncState {
 }
 
 impl ManagedWorld {
+    pub fn reset_exec_state(&mut self) {
+        self.exec_state = ManagedWorldExecState::default();
+    }
+
     pub fn observe_after_world_change(&mut self) {
         self.sync_state.observe_world(&self.world);
     }
@@ -466,6 +489,10 @@ impl ManagedWorld {
                 break;
             }
         }
+    }
+
+    pub fn exec_is_busy(&self) -> bool {
+        self.exec_state.pending_post_step || self.exec_state.remaining_steps > 0
     }
 }
 

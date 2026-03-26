@@ -69,7 +69,7 @@ export async function createApp() {
                 nowMs,
                 runtime.worldState,
                 runtime.shouldAdvanceWorld,
-                runtime.stepWorldTick,
+                runtime.stepWorldPlayback,
             );
             runtime.renderFrame();
         },

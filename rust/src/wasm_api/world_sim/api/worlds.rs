@@ -5,12 +5,13 @@ use wasm_bindgen::prelude::*;
 use crate::sim;
 use crate::sim::world::GeologyInternal;
 use crate::sim::{
-    exec_world, exec_world_profiled, exec_world_profiled_detailed, world, ExecWorldBreakdown,
-    ExecWorldBreakdownDetailed,
+    exec_world, exec_world_profiled, exec_world_profiled_detailed, exec_world_slice, world,
+    ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase,
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{ManagedWorld, WorldSyncState};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldSyncState};
+use super::super::types::ExecWorldSliceResponse;
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
 use super::super::types::StepWorldProfiledDetailResponse;
@@ -42,6 +43,28 @@ fn run_post_step(managed: &mut ManagedWorld) {
     post_step_sync_light(&mut managed.world, &managed.geology_params);
     managed.observe_after_world_change();
     managed.save_history_snapshot_if_needed();
+}
+
+fn scaled_step_count(simulation_rate: f32, tick_count: u32) -> u32 {
+    let scaled_ticks = ((tick_count as f32) * simulation_rate).round() as u32;
+    scaled_ticks.max(1)
+}
+
+fn reset_pending_slice(managed: &mut ManagedWorld) {
+    managed.reset_exec_state();
+}
+
+fn exec_phase_label(phase: ExecWorldPhase) -> &'static str {
+    match phase {
+        ExecWorldPhase::Prepare | ExecWorldPhase::Feedback => "feedback",
+        ExecWorldPhase::Geology => "geology",
+        ExecWorldPhase::Climate => "climate",
+        ExecWorldPhase::Hydrology => "hydrology",
+        ExecWorldPhase::Ecology => "ecology",
+        ExecWorldPhase::Society => "society",
+        ExecWorldPhase::Transition => "transition",
+        ExecWorldPhase::Finalize => "post_step",
+    }
 }
 
 #[wasm_bindgen]
@@ -127,6 +150,7 @@ impl WorldSimController {
             geology_params,
             sync_state,
             history: BTreeMap::new(),
+            exec_state: ManagedWorldExecState::default(),
         };
         managed
             .world
@@ -159,9 +183,9 @@ impl WorldSimController {
             .worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
+        reset_pending_slice(managed);
 
-        let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
-        let steps = scaled_ticks.max(1);
+        let steps = scaled_step_count(managed.simulation_rate, tick_count);
 
         for _ in 0..steps {
             exec_world(&mut managed.world);
@@ -200,9 +224,9 @@ impl WorldSimController {
             .worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
+        reset_pending_slice(managed);
 
-        let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
-        let steps = scaled_ticks.max(1);
+        let steps = scaled_step_count(managed.simulation_rate, tick_count);
         let mut sim_breakdown = ExecWorldBreakdown::default();
         let mut step_sync_erosion_ms = 0.0;
         let mut step_observe_world_change_ms = 0.0;
@@ -289,9 +313,9 @@ impl WorldSimController {
             .worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
+        reset_pending_slice(managed);
 
-        let scaled_ticks = ((tick_count as f32) * managed.simulation_rate).round() as u32;
-        let steps = scaled_ticks.max(1);
+        let steps = scaled_step_count(managed.simulation_rate, tick_count);
         let mut sim_breakdown = ExecWorldBreakdownDetailed::default();
         let mut step_sync_erosion_ms = 0.0;
         let mut step_observe_world_change_ms = 0.0;
@@ -353,6 +377,66 @@ impl WorldSimController {
                 "failed to serialize exec_world_profiled_detail: {err}"
             ))
         })
+    }
+
+    #[wasm_bindgen(js_name = exec_world_slice)]
+    pub fn exec_world_slice_js(
+        &mut self,
+        world_id: String,
+        work_budget: u32,
+    ) -> Result<JsValue, JsValue> {
+        let managed = self
+            .worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+
+        let budget = work_budget.max(1);
+        if !managed.exec_is_busy() {
+            managed.exec_state.remaining_steps = scaled_step_count(managed.simulation_rate, 1);
+            managed.exec_state.next_phase = ExecWorldPhase::Prepare;
+        }
+
+        let mut remaining_budget = budget;
+        let mut processed_ticks = 0u32;
+        while remaining_budget > 0 && managed.exec_is_busy() {
+            if managed.exec_state.pending_post_step {
+                run_post_step(managed);
+                managed.exec_state.pending_post_step = false;
+                managed.exec_state.remaining_steps = managed.exec_state.remaining_steps.saturating_sub(1);
+                processed_ticks = processed_ticks.saturating_add(1);
+                remaining_budget = remaining_budget.saturating_sub(1);
+                continue;
+            }
+
+            let slice = exec_world_slice(
+                &mut managed.world,
+                managed.exec_state.next_phase,
+                remaining_budget,
+            );
+            managed.exec_state.next_phase = slice.next_phase;
+            remaining_budget = remaining_budget.saturating_sub(slice.work_units_consumed);
+            if slice.ticks_completed > 0 {
+                managed.exec_state.pending_post_step = true;
+            }
+            if slice.work_units_consumed == 0 {
+                break;
+            }
+        }
+
+        let phase = if managed.exec_state.pending_post_step {
+            "post_step".to_string()
+        } else {
+            exec_phase_label(managed.exec_state.next_phase).to_string()
+        };
+        let response = ExecWorldSliceResponse {
+            world_id,
+            processed_ticks,
+            busy: managed.exec_is_busy(),
+            phase,
+            tick: managed.world.clock.tick as f64,
+        };
+        serde_wasm_bindgen::to_value(&response)
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize exec_world_slice: {err}")))
     }
 
     #[wasm_bindgen(js_name = set_simulation_rate)]

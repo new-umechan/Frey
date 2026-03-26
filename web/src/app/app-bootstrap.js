@@ -123,6 +123,7 @@ export function bootstrapAppRuntime(options = {}) {
         renderFrame: sceneRuntime.renderFrame,
         worldState: runtimeStore.worldState,
         stepWorldTick: controllerRuntime.stepWorldTick,
+        stepWorldPlayback: controllerRuntime.stepWorldPlayback,
         runInitialSync: controllerRuntime.runInitialSync,
         shouldAdvanceWorld: controllerRuntime.shouldAdvanceWorld,
         getLastPerfBenchmarkResult: controllerRuntime.getLastPerfBenchmarkResult,

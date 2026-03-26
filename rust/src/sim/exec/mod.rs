@@ -9,6 +9,7 @@ mod transition;
 mod tests;
 
 pub use pipeline::exec_world;
+pub use pipeline::{exec_world_slice, ExecWorldPhase, ExecWorldSliceResult};
 pub use profiling::{
     exec_world_profiled, exec_world_profiled_detailed, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed,

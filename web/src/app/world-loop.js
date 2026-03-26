@@ -1,8 +1,5 @@
 import { DEFAULT_ERA_SCALE } from "../core/constants.js";
 
-const ADAPTIVE_SYNC_BATCH_MAX_TICKS = 4;
-const ADAPTIVE_SYNC_BATCH_TRIGGER_LAG_TICKS = 2;
-
 export function resetWorldProgress(world, worldState, createEmptyLayers, createInitialBudgets, createEraMetrics) {
     world.tick = 0;
     world.era = DEFAULT_ERA_SCALE;
@@ -10,6 +7,8 @@ export function resetWorldProgress(world, worldState, createEmptyLayers, createI
     world.budgets = createInitialBudgets();
     worldState.accumulatorMs = 0;
     worldState.lastFrameTimeMs = null;
+    worldState.sliceBusy = false;
+    worldState.slicePhase = "feedback";
     worldState.pendingRiverSteps = 0;
     worldState.terrainErosionDirty = false;
     worldState.terrainCoreDirty = false;
@@ -35,7 +34,7 @@ export function resetWorldProgress(world, worldState, createEmptyLayers, createI
     return createEraMetrics(DEFAULT_ERA_SCALE);
 }
 
-export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldTick) {
+export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldPlayback) {
     if (!Number.isFinite(nowMs)) {
         return;
     }
@@ -47,31 +46,27 @@ export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldTick) {
     const frameDeltaMs = Math.min(nowMs - worldState.lastFrameTimeMs, 250);
     worldState.lastFrameTimeMs = nowMs;
 
-    if (!canRunTick()) {
+    const playbackActive = canRunTick();
+    if (!playbackActive && !worldState.sliceBusy) {
         return;
     }
 
-    worldState.accumulatorMs += frameDeltaMs;
-    let ticksProcessed = 0;
-    while (
-        worldState.accumulatorMs >= worldState.runtimeTickMs &&
-        ticksProcessed < worldState.maxTicksPerFrame
-    ) {
-        const remainingBudget = worldState.maxTicksPerFrame - ticksProcessed;
-        const lagTicks = Math.floor(worldState.accumulatorMs / worldState.runtimeTickMs);
-        const shouldBatch = lagTicks >= ADAPTIVE_SYNC_BATCH_TRIGGER_LAG_TICKS;
-        const batchCount = shouldBatch
-            ? Math.max(1, Math.min(ADAPTIVE_SYNC_BATCH_MAX_TICKS, lagTicks, remainingBudget))
-            : 1;
-        stepWorldTick(null, {
-            batchCount,
-            batched: batchCount > 1,
-        });
-        worldState.accumulatorMs -= worldState.runtimeTickMs * batchCount;
-        ticksProcessed += batchCount;
+    if (playbackActive) {
+        worldState.accumulatorMs += frameDeltaMs;
     }
 
-    if (ticksProcessed >= worldState.maxTicksPerFrame) {
+    if (!worldState.sliceBusy && worldState.accumulatorMs < worldState.runtimeTickMs) {
+        return;
+    }
+
+    const result = stepWorldPlayback();
+    if (result?.processedTicks > 0) {
+        worldState.accumulatorMs = Math.max(
+            0,
+            worldState.accumulatorMs - (worldState.runtimeTickMs * result.processedTicks),
+        );
+    }
+    if (playbackActive || worldState.sliceBusy) {
         worldState.accumulatorMs = Math.min(worldState.accumulatorMs, worldState.runtimeTickMs);
     }
 }

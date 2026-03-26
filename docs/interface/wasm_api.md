@@ -20,6 +20,7 @@ JSから利用する現行WASM公開APIを定義する。
 
 - `init_world(seed: string, mesh_level: number, config?: InitWorldConfig) -> { world_id, tick, era, cell_count }`
 - `exec_world(world_id: string, tick_count: number) -> void`
+- `exec_world_slice(world_id: string, work_budget: number) -> { world_id, processed_ticks, busy, phase, tick }`
 - `exec_world_profiled(world_id: string, tick_count: number) -> StepWorldProfiledResponse`
 - `exec_world_profiled_detail(world_id: string, tick_count: number) -> StepWorldProfiledDetailResponse`
 - `set_simulation_rate(world_id: string, rate: number) -> void`
@@ -32,6 +33,9 @@ JSから利用する現行WASM公開APIを定義する。
 実行仕様:
 - `exec_world`は`tick_count`に`simulation_rate`を掛けた回数だけ内部更新する。
 - 地形更新はWorldの1Tickごとに1回実行される。
+- `exec_world_slice` は通常再生向けの再開可能APIで、1回の呼び出しで `work_budget` 個の内部phaseだけ進める。
+- `processed_ticks` はtick完了後の post-step まで終わった回数のみ返し、tick途中の状態は外部観測に出さない。
+- `phase` は次に実行される phase を示し、`busy=true` の間は同一の論理tickが継続中である。
 
 ### 2.2 観測
 

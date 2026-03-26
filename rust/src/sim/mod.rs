@@ -19,8 +19,8 @@ pub(crate) use crate::common::geo;
 pub use state::erosion;
 
 pub use exec::{
-    exec_world, exec_world_profiled, exec_world_profiled_detailed, ExecWorldBreakdown,
-    ExecWorldBreakdownDetailed,
+    exec_world, exec_world_profiled, exec_world_profiled_detailed, exec_world_slice,
+    ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase, ExecWorldSliceResult,
 };
 
 use crate::common::mesh::{flatten_positions, generate_icosphere};

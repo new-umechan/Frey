@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
-use super::super::state::{ManagedWorld, WorldSyncState};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldSyncState};
 use super::super::types::{
     ForkWorldResult, InterventionField, InterventionOp, InterventionResult, RestoreWorldResult,
 };
@@ -80,6 +80,7 @@ impl WorldSimController {
         }
 
         sync_erosion_state(&mut managed.world, &managed.geology_params);
+        managed.reset_exec_state();
         managed.observe_after_world_change();
         managed.save_history_snapshot_if_needed();
 
@@ -124,6 +125,7 @@ impl WorldSimController {
             geology_params: source_params,
             sync_state,
             history,
+            exec_state: ManagedWorldExecState::default(),
         };
         forked
             .world
@@ -165,6 +167,7 @@ impl WorldSimController {
         managed.world = restored_world;
         sync_erosion_state(&mut managed.world, &managed.geology_params);
         managed.sync_state = WorldSyncState::from_world(&managed.world);
+        managed.reset_exec_state();
         managed
             .world
             .archive

@@ -43,6 +43,38 @@ fn exec_world_advances_tick_and_sets_budget_to_one() {
 }
 
 #[test]
+fn exec_world_slice_matches_full_tick_execution() {
+    let mut full_world = build_test_world();
+    let mut sliced_world = build_test_world();
+    full_world.clock.epoch = EraKind::Environment;
+    sliced_world.clock.epoch = EraKind::Environment;
+
+    exec_world(&mut full_world);
+
+    let mut phase = ExecWorldPhase::Prepare;
+    let mut completed = 0;
+    while completed == 0 {
+        let result = exec_world_slice(&mut sliced_world, phase, 1);
+        phase = result.next_phase;
+        completed = result.ticks_completed;
+    }
+
+    assert_eq!(phase, ExecWorldPhase::Prepare);
+    assert_eq!(sliced_world.clock.tick, full_world.clock.tick);
+    assert_eq!(sliced_world.clock.epoch, full_world.clock.epoch);
+    assert_eq!(sliced_world.clock.budgets.geology, full_world.clock.budgets.geology);
+    assert_eq!(sliced_world.state.geology.height, full_world.state.geology.height);
+    assert_eq!(
+        sliced_world.state.hydrology.river_flow,
+        full_world.state.hydrology.river_flow
+    );
+    assert_eq!(
+        sliced_world.state.hydrology.river_next,
+        full_world.state.hydrology.river_next
+    );
+}
+
+#[test]
 fn feedback_queue_applies_entries_on_next_tick() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::Crust;

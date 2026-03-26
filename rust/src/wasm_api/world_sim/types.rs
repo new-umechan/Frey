@@ -204,3 +204,12 @@ pub(super) struct StepWorldProfiledDetailResponse {
     pub sink_rebuild_skipped_count: u32,
     pub sink_rebuild_fallback_full_count: u32,
 }
+
+#[derive(Serialize)]
+pub(super) struct ExecWorldSliceResponse {
+    pub world_id: String,
+    pub processed_ticks: u32,
+    pub busy: bool,
+    pub phase: String,
+    pub tick: f64,
+}

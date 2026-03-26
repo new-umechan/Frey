@@ -2,6 +2,7 @@ export function createWorldStepper(options = {}) {
     const {
         worldSimController,
         world,
+        worldState,
         terrainRenderer,
         createEraMetrics,
         buildEraMetricsFromRuntime,
@@ -49,6 +50,48 @@ export function createWorldStepper(options = {}) {
         terrainRenderer.applyCoreChanges(state.currentTerrainData, changes, state.currentSurfaceMode, world.tick);
     };
 
+    const syncCompletedWorldStep = (tickOptions = {}, perfRecorder = null) => {
+        const liveState = getCurrentState();
+        const benchmarkMode = tickOptions?.benchmarkMode === true;
+        const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
+        const previousTick = Math.max(0, Math.floor(tickOptions?.previousTick ?? world.tick));
+        const nextTick = previousTick + batchCount;
+        const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
+        const { changes, statsRefreshed } = syncWorldDeltaFromController({
+            worldSimController,
+            worldId: liveState.activeWorldId,
+            world,
+            currentSurfaceMode: liveState.currentSurfaceMode,
+            terrainRenderer,
+            createEraMetrics,
+            buildEraMetricsFromRuntime,
+            setEraScale,
+            refreshStats: shouldRefreshStats,
+            refreshWorldStats,
+            deltaFieldKinds: getCurrentDeltaFieldKinds(),
+            perfRecorder,
+        });
+        if (!benchmarkMode && (changes?.metric || statsRefreshed)) {
+            syncClimateUi();
+        }
+
+        if (!benchmarkMode && world.tick > 0 && shouldRefreshStats) {
+            const preset = getEraScalePreset(liveState.currentEraScale);
+            setStatus(
+                `Running (${liveState.currentSeed}) | ${preset.label} / 1Tick=${liveState.currentEraMetrics.tickLabel} | tick=${world.tick}`,
+            );
+        }
+        if (!benchmarkMode) {
+            syncAfterWorldStep({
+                previousTick,
+                nextTick: world.tick,
+                ticksAdvanced: batchCount,
+                batched: tickOptions?.batched === true,
+            });
+        }
+        return true;
+    };
+
     const stepWorldTick = (perfRecorder = null, tickOptions = {}) => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
@@ -61,7 +104,6 @@ export function createWorldStepper(options = {}) {
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
             const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
             const previousTick = world.tick;
-            const nextTick = previousTick + batchCount;
 
             if (perfRecorder) {
                 perfRecorder.measure("exec_world", () => {
@@ -76,40 +118,10 @@ export function createWorldStepper(options = {}) {
                 worldSimController.exec_world(liveState.activeWorldId, batchCount);
             }
 
-            const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
-            const { changes, statsRefreshed } = syncWorldDeltaFromController({
-                worldSimController,
-                worldId: liveState.activeWorldId,
-                world,
-                currentSurfaceMode: liveState.currentSurfaceMode,
-                terrainRenderer,
-                createEraMetrics,
-                buildEraMetricsFromRuntime,
-                setEraScale,
-                refreshStats: shouldRefreshStats,
-                refreshWorldStats,
-                deltaFieldKinds: getCurrentDeltaFieldKinds(),
-                perfRecorder,
-            });
-            if (!benchmarkMode && (changes?.metric || statsRefreshed)) {
-                syncClimateUi();
-            }
-
-            if (!benchmarkMode && world.tick > 0 && shouldRefreshStats) {
-                const preset = getEraScalePreset(liveState.currentEraScale);
-                setStatus(
-                    `Running (${liveState.currentSeed}) | ${preset.label} / 1Tick=${liveState.currentEraMetrics.tickLabel} | tick=${world.tick}`,
-                );
-            }
-            if (!benchmarkMode) {
-                syncAfterWorldStep({
-                    previousTick,
-                    nextTick: world.tick,
-                    ticksAdvanced: batchCount,
-                    batched: tickOptions?.batched === true,
-                });
-            }
-            return true;
+            return syncCompletedWorldStep({
+                ...tickOptions,
+                previousTick,
+            }, perfRecorder);
         };
 
         if (perfRecorder) {
@@ -118,8 +130,42 @@ export function createWorldStepper(options = {}) {
         return runTick();
     };
 
+    const stepWorldPlayback = () => {
+        const state = getCurrentState();
+        if (!state.activeWorldId || !state.currentTerrainData) {
+            worldState.sliceBusy = false;
+            worldState.slicePhase = "feedback";
+            return {
+                processedTicks: 0,
+                busy: false,
+                phase: worldState.slicePhase,
+            };
+        }
+
+        const response = worldSimController.exec_world_slice(
+            state.activeWorldId,
+            Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
+        );
+        worldState.sliceBusy = response?.busy === true;
+        worldState.slicePhase = typeof response?.phase === "string" ? response.phase : "feedback";
+        const processedTicks = Math.max(0, Math.floor(response?.processed_ticks ?? 0));
+        if (processedTicks > 0) {
+            syncCompletedWorldStep({
+                previousTick: Math.max(0, world.tick - processedTicks),
+                batchCount: processedTicks,
+                batched: false,
+            });
+        }
+        return {
+            processedTicks,
+            busy: worldState.sliceBusy,
+            phase: worldState.slicePhase,
+        };
+    };
+
     return {
         syncVisibleFieldsForCurrentView,
         stepWorldTick,
+        stepWorldPlayback,
     };
 }

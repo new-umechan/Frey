@@ -46,6 +46,14 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct ExecWorldSliceResponse {
+        processed_ticks: u32,
+        busy: bool,
+        phase: String,
+        tick: f64,
+    }
+
+    #[derive(Deserialize)]
     struct HistoryTicksResponse {
         interval: u32,
         ticks: Vec<f64>,
@@ -99,6 +107,36 @@ mod tests {
         assert!(profiled_data.step_sync_erosion_ms >= 0.0);
         assert!(profiled_data.step_observe_world_change_ms >= 0.0);
         assert!(profiled_data.step_history_snapshot_ms >= 0.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn exec_world_slice_completes_tick_without_exposing_partial_tick_count() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-slice".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+
+        let first = controller
+            .exec_world_slice_js(init_data.world_id.clone(), 1)
+            .expect("run slice");
+        let first_data: ExecWorldSliceResponse =
+            serde_wasm_bindgen::from_value(first).expect("parse slice response");
+        assert_eq!(first_data.processed_ticks, 0);
+        assert!(first_data.busy);
+        assert!(first_data.tick >= 0.0);
+
+        let mut last = first_data;
+        while last.busy {
+            let next = controller
+                .exec_world_slice_js(init_data.world_id.clone(), 1)
+                .expect("run next slice");
+            last = serde_wasm_bindgen::from_value(next).expect("parse next slice");
+        }
+
+        assert_eq!(last.processed_ticks, 1);
+        assert_eq!(last.tick, 1.0);
+        assert!(!last.phase.is_empty());
     }
 
     #[wasm_bindgen_test]

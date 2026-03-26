@@ -137,11 +137,12 @@ export function createPlaybackController({
 
         const hasWorld = Boolean(getActiveWorldId()) && Boolean(getCurrentTerrainData());
         const hasTicks = getAvailableTicks().length > 0;
+        const sliceBusy = worldState.sliceBusy === true;
 
         playbackControls.playToggleButton.disabled = !hasWorld;
-        playbackControls.historySeekSlider.disabled = !hasWorld || !hasTicks;
-        playbackControls.seekForwardButton.disabled = !hasWorld || getNextHistoryTick(getWorldTick()) === null;
-        playbackControls.seekBackwardButton.disabled = !hasWorld || getPreviousHistoryTick(getWorldTick()) === null;
+        playbackControls.historySeekSlider.disabled = !hasWorld || !hasTicks || sliceBusy;
+        playbackControls.seekForwardButton.disabled = sliceBusy || !hasWorld || getNextHistoryTick(getWorldTick()) === null;
+        playbackControls.seekBackwardButton.disabled = sliceBusy || !hasWorld || getPreviousHistoryTick(getWorldTick()) === null;
 
         if (hasWorld && hasTicks) {
             syncSeekSliderWithWorldTick();
@@ -194,7 +195,7 @@ export function createPlaybackController({
 
     function restoreWorldToTick(targetTick) {
         const activeWorldId = getActiveWorldId();
-        if (!activeWorldId) {
+        if (!activeWorldId || worldState.sliceBusy) {
             return;
         }
 
@@ -253,7 +254,7 @@ export function createPlaybackController({
     }
 
     function handleStepForward() {
-        if (playbackState.isPlaying || !getActiveWorldId()) {
+        if (playbackState.isPlaying || worldState.sliceBusy || !getActiveWorldId()) {
             return;
         }
         stepWorldTick();

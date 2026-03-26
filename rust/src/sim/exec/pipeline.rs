@@ -7,6 +7,27 @@ use super::transition::update_era_transition;
 
 use crate::sim::world::World;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ExecWorldPhase {
+    #[default]
+    Prepare,
+    Feedback,
+    Geology,
+    Climate,
+    Hydrology,
+    Ecology,
+    Society,
+    Transition,
+    Finalize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ExecWorldSliceResult {
+    pub next_phase: ExecWorldPhase,
+    pub ticks_completed: u32,
+    pub work_units_consumed: u32,
+}
+
 pub(super) fn prepare_step(world: &mut World) {
     world.clock.budgets = world.clock.epoch.budgets();
     world.clock.real_years_per_tick = world.clock.epoch.real_years_per_tick();
@@ -50,6 +71,76 @@ pub(super) fn run_transition_stage(world: &mut World) {
 
 pub(super) fn finalize_tick(world: &mut World) {
     world.clock.tick = world.clock.tick.saturating_add(1);
+}
+
+pub fn exec_world_slice(
+    world: &mut World,
+    starting_phase: ExecWorldPhase,
+    work_budget: u32,
+) -> ExecWorldSliceResult {
+    if work_budget == 0 {
+        return ExecWorldSliceResult {
+            next_phase: starting_phase,
+            ticks_completed: 0,
+            work_units_consumed: 0,
+        };
+    }
+
+    let mut next_phase = starting_phase;
+    let mut work_units_consumed: u32 = 0;
+    let mut ticks_completed: u32 = 0;
+
+    while work_units_consumed < work_budget {
+        match next_phase {
+            ExecWorldPhase::Prepare => {
+                prepare_step(world);
+                next_phase = ExecWorldPhase::Feedback;
+            }
+            ExecWorldPhase::Feedback => {
+                run_feedback_stage(world);
+                next_phase = ExecWorldPhase::Geology;
+            }
+            ExecWorldPhase::Geology => {
+                run_geology_stage(world);
+                next_phase = ExecWorldPhase::Climate;
+            }
+            ExecWorldPhase::Climate => {
+                run_climate_stage(world);
+                next_phase = ExecWorldPhase::Hydrology;
+            }
+            ExecWorldPhase::Hydrology => {
+                run_hydrology_stage(world);
+                next_phase = ExecWorldPhase::Ecology;
+            }
+            ExecWorldPhase::Ecology => {
+                run_ecology_stage(world);
+                next_phase = ExecWorldPhase::Society;
+            }
+            ExecWorldPhase::Society => {
+                run_society_stage(world);
+                next_phase = ExecWorldPhase::Transition;
+            }
+            ExecWorldPhase::Transition => {
+                run_transition_stage(world);
+                next_phase = ExecWorldPhase::Finalize;
+            }
+            ExecWorldPhase::Finalize => {
+                finalize_tick(world);
+                next_phase = ExecWorldPhase::Prepare;
+                ticks_completed = ticks_completed.saturating_add(1);
+            }
+        }
+        work_units_consumed = work_units_consumed.saturating_add(1);
+        if ticks_completed > 0 {
+            break;
+        }
+    }
+
+    ExecWorldSliceResult {
+        next_phase,
+        ticks_completed,
+        work_units_consumed,
+    }
 }
 
 pub fn exec_world(world: &mut World) {
