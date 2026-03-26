@@ -1,0 +1,7 @@
+{
+    "ignorePatterns": [
+        "dist/**",
+        "generated/**",
+        "node_modules/**"
+    ]
+}
