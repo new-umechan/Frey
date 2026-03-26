@@ -274,8 +274,10 @@ const ARIDITY_ASSERTIONS: &[Assertion] = &[
 ];
 
 fn main() {
-    let mut geology_params = GeologyParams::default();
-    geology_params.level = 6;
+    let geology_params = GeologyParams {
+        level: 6,
+        ..Default::default()
+    };
     let mesh_level = geology_params.level;
 
     let seed = "earth";

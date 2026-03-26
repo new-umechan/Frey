@@ -1,7 +1,7 @@
 use super::*;
 
 #[cfg(test)]
-mod tests {
+mod cases {
     use super::{
         compute_lake_depth_map, generate_icosphere, generate_rivers, normalize_zscore,
         rng_from_seed,

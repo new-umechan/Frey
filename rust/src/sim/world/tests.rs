@@ -168,8 +168,10 @@ fn metrics_collects_height_and_flux_stats() {
 
 #[test]
 fn metrics_are_deterministic_for_fixed_seed() {
-    let mut params = GeologyParams::default();
-    params.level = 2;
+    let params = GeologyParams {
+        level: 2,
+        ..Default::default()
+    };
     let seed = "metrics-regression-seed";
 
     let terrain_a = crate::sim::build_geology(seed, params.clone());
@@ -246,8 +248,10 @@ fn metrics_are_deterministic_for_fixed_seed() {
 
 #[test]
 fn river_network_persists_without_early_collapse() {
-    let mut params = GeologyParams::default();
-    params.level = 2;
+    let params = GeologyParams {
+        level: 2,
+        ..Default::default()
+    };
     let seed = "river-network-stability-seed";
 
     let terrain = crate::sim::build_geology(seed, params.clone());
