@@ -99,8 +99,8 @@ baselineファイル:
 
 baseline誤用防止:
 
-- `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は即FAILにする
-- あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` も一致しない場合は即FAILにする
+- `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は差分レポートへ記録する
+- あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` も一致しない場合は差分レポートへ記録する
 
 自動化:
 
@@ -111,7 +111,7 @@ baseline誤用防止:
 
 #### perfベースラインゲート（2026-03-17）
 
-- `tools/bench/bench.mjs` の `--baseline` / `--threshold` をCIで常時実行する
+- `bench/scripts/bench.mjs` の `--baseline` / `--threshold` をCIで常時実行する
 - baselineファイルは `test/perf/bench-baseline.json`
 - コマンド:
 

@@ -5,7 +5,7 @@
 入力として実地形（`geology.height`、固定地理量）と固定植生（`tree_cover = 0.5`、`ground_cover = 0.5` で全セル統一）を与え、
 1 tick実行した結果の `temperature`・`precipitation`・`aridity`・`evapotranspiration`・`runoff` を評価する。
 
-`ocean_temperature` は信頼度が低いため、このベンチでは参考出力にとどめ、合否判定に含めない。
+`ocean_temperature` は信頼度が低いため、このベンチでは参考出力にとどめる。
 実行seedは `earth` 固定とし、参照実データと地形前提を一致させる。
 
 ### 実行コマンド（現行）
@@ -32,14 +32,14 @@ cargo bench --bench climate_solo
 現在の実運用では、リポジトリルートで次の順に準備する。
 
 1. `npm run bench:dump-centroids`
-2. `npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
+2. `npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
 3. `npm run bench:prepare:worldclim`
 4. `npm run bench:prepare:era5`
-5. `npm run bench:resample:climate -- --temperature data/raw/climate/worldclim_tavg_annual_c.tif --precipitation data/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration data/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff data/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity data/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
+5. `npm run bench:resample:climate -- --temperature bench/raw/climate/worldclim_tavg_annual_c.tif --precipitation bench/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration bench/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff bench/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity bench/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
 
-`bench:prepare:worldclim` の前提として、`data/raw/climate/` に `wc2.1_30s_tavg_01..12.tif` と `wc2.1_30s_prec_01..12.tif` を置く。
-`bench:prepare:era5` の前提として、`data/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`npm run bench:fetch:era5` で取得可）。
-`aridity` は `data/raw/climate/ai_et0.tif` を参照する。
+`bench:prepare:worldclim` の前提として、`bench/raw/climate/` に `wc2.1_30s_tavg_01..12.tif` と `wc2.1_30s_prec_01..12.tif` を置く。
+`bench:prepare:era5` の前提として、`bench/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`npm run bench:fetch:era5` で取得可）。
+`aridity` は `bench/raw/climate/ai_et0.tif` を参照する。
 `terrain` は海抜mのDEM（ETOPO 2022 **Ice Surface** 推奨）を指定し、内部標高単位（`height * 6000m`）へ変換して保存する。
 
 | フィールド | 型 | 値 |
@@ -120,7 +120,7 @@ CellStore（正二十面体分割の約4万セル）と実データグリッド�
 ```
 
 補間はバイリニアを基本とする（最近傍でも可。差は小さい）。
-この変換を実行するツールは `tools/bench/resample.py` に実装する（後述）。
+この変換を実行するツールは `bench/scripts/resample.py` に実装する（後述）。
 変換結果はバイナリキャッシュ（`bench/data/climate_ref.bin`）に保存し、毎回再計算しない。
 
 ```
@@ -145,7 +145,7 @@ struct ClimateRef {
 
 欠損値（海セル等）は `f32::NAN` で格納し、Spearman計算時にペアごとに除外する。
 
-キャッシュの物理バイナリ形式（`tools/bench/resample.py` / `rust/benches/climate_solo.rs` 実装）：
+キャッシュの物理バイナリ形式（`bench/scripts/resample.py` / `rust/benches/climate_solo.rs` 実装）：
 
 1. magic: `CLIMREF1`（8 bytes）
 2. version: `u32` little-endian（現行 `1`）
@@ -179,13 +179,7 @@ fn spearman(a: &[f32], b: &[f32]) -> f32 {
 ### 補助評価：代表地域診断
 
 主評価のスコアが変動した原因を掘り下げるために使う。
-合否判定は「アサーション一覧の何割が通るか」で表す。
-
-#### 合否基準
-
-- **Pass**：アサーション通過率 ≥ 80%
-- **Warn**：通過率 60〜80%
-- **Fail**：通過率 < 60%
+アサーションは `matched/total` と `coverage_ratio` を記録し、前後差で診断する。
 
 苦手領域（`monsoon_india`・`maritime_europe`）のアサーションは参考扱いとし、通過率の分母から除外してよい。
 
@@ -244,16 +238,16 @@ evapotranspiration: rho=0.541
 runoff:           rho=0.498
 
 -- Diagnostic Evaluation: Ranking Assertions --
-[temperature]  7/7 passed                        PASS
-[precipitation] 5/5 passed  (excl. 2 known-hard) PASS
-[aridity]       5/5 passed                       PASS
+[temperature] matched=7/7  coverage_ratio=1.000
+[precipitation] matched=5/5  coverage_ratio=1.000  (excl. 2 known-hard)
+[aridity] matched=5/5  coverage_ratio=1.000
 
 -- Known-Hard Assertions (reference only, not counted) --
-P-06  maritime_europe > siberia:  FAIL  (624.0 vs 487.0)
-P-07  monsoon_india > arabia:     PASS  (792.0 vs 88.0)
+P-06  maritime_europe > siberia:  mismatch  (624.0 vs 487.0)
+P-07  monsoon_india > arabia:     match  (792.0 vs 88.0)
 
 -- Main Evaluation Summary: metrics_reported=5 --
--- Diagnostic Evaluation Summary: 3/3 PASS (excl. known-hard) --
+-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio=1.000 (excl. known-hard) --
 -- Main Evaluation State: READY --
 -- Score Save: OK --
 ```
@@ -274,7 +268,7 @@ P-07  monsoon_india > arabia:     PASS  (792.0 vs 88.0)
 -- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --
 To generate:
   1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
@@ -291,13 +285,13 @@ To generate:
 
 ---
 
-### リサンプリングツール（`tools/bench/resample.py`）
+### リサンプリングツール（`bench/scripts/resample.py`）
 
 実データをCellStoreのセル単位に変換してキャッシュに保存するスクリプト。
 ベンチ本体（Rust）の外部ツールとして実装する。
 
 ```
-python tools/bench/resample.py --module climate \
+python bench/scripts/resample.py --module climate \
   --centroids bench/data/cell_centroids.csv \
   --temperature path/to/temperature.tif \
   --precipitation path/to/precipitation.tif \
@@ -308,9 +302,9 @@ python tools/bench/resample.py --module climate \
 ```
 
 ```bash
-python tools/bench/resample.py --module terrain \
+python bench/scripts/resample.py --module terrain \
   --centroids bench/data/cell_centroids.csv \
-  --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif \
+  --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif \
   --output bench/data/terrain_ref.bin
 ```
 

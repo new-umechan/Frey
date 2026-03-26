@@ -150,7 +150,7 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 
 ## ベンチマーク基盤（Hydrology・Ecology・統合ベンチ用）
 
-Climate単体ベンチで確立したリサンプリング基盤・出力フォーマット・合否基準の設計を他ベンチでも踏襲する。
+Climate単体ベンチで確立したリサンプリング基盤・出力フォーマット・診断集計（matched/coverage）の設計を他ベンチでも踏襲する。
 詳細仕様は次を参照する。
 
 - `docs/manage/bench/climate_solo_benchmark.md`

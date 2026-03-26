@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input",
-        default="data/raw/climate/era5_land_monthly_1970_2000.zip",
+        default="bench/raw/climate/era5_land_monthly_1970_2000.zip",
         help="Input ZIP or NetCDF from CDS.",
     )
     parser.add_argument(
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out",
-        default="data/raw/climate/era5_land_annual_1970_2000.nc",
+        default="bench/raw/climate/era5_land_annual_1970_2000.nc",
         help="Output NetCDF path (contains runoff_mm_yr and evapotranspiration_mm_yr).",
     )
     parser.add_argument(

@@ -42,7 +42,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-    console.error("Usage: node tools/bench/dump-cell-centroids.mjs [options]");
+    console.error("Usage: node bench/scripts/dump-cell-centroids.mjs [options]");
     console.error("  --level <n>");
     console.error("  --out <path>");
 }

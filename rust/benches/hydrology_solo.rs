@@ -49,27 +49,10 @@ struct HydroRef {
     is_lake: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum DiagnosticStatus {
-    Pass,
-    Warn,
-    Fail,
-}
-
-impl DiagnosticStatus {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => "PASS",
-            Self::Warn => "WARN",
-            Self::Fail => "FAIL",
-        }
-    }
-}
-
 struct DiagnosticSummary {
-    passed: usize,
+    matched: usize,
     total: usize,
-    status: DiagnosticStatus,
+    coverage_ratio: f32,
 }
 
 struct FlowMetricResult {
@@ -198,7 +181,7 @@ fn main() {
             println!("-- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --");
             println!("To generate:");
             println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -327,7 +310,7 @@ fn main() {
         }
     };
 
-    println!("-- Main Evaluation 1-C: Reference Only (no pass/fail) --");
+    println!("-- Main Evaluation 1-C: Reference Only --");
     let erosion_summary = summarize_land_values(
         &sim_world.state.geology.erosion_rate,
         &sim_world.state.geology.height,
@@ -355,13 +338,13 @@ fn main() {
     println!();
     println!("-- Diagnostic Evaluation 2-A: River Flow Ranking Assertions --");
     for outcome in &flow_assertions {
-        let status = if outcome.passed { "PASS" } else { "FAIL" };
+        let relation = if outcome.passed { "match" } else { "mismatch" };
         println!(
             "{}  {} > {}:  {}  ({:.1} vs {:.1})",
             outcome.id,
             outcome.left,
             outcome.right,
-            status,
+            relation,
             outcome.left_value,
             outcome.right_value,
         );
@@ -383,10 +366,10 @@ fn main() {
     let diagnostic_summary = summarize_diagnostics(&flow_assertions);
     println!();
     println!(
-        "-- Diagnostic Evaluation 2-A Summary: {}/{} {} --",
-        diagnostic_summary.passed,
+        "-- Diagnostic Evaluation 2-A Summary: matched={}/{} coverage_ratio={:.3} --",
+        diagnostic_summary.matched,
         diagnostic_summary.total,
-        diagnostic_summary.status.as_str()
+        diagnostic_summary.coverage_ratio
     );
 
     match &main_eval_state {
@@ -402,7 +385,7 @@ fn main() {
         cell_count,
         &diagnostic_summary,
     ) {
-        println!("-- Score Save: FAILED ({}) --", error);
+        println!("-- Score Save: ERROR ({}) --", error);
     } else {
         println!("-- Score Save: OK --");
     }
@@ -825,24 +808,17 @@ fn lookup_index(selection: &[(&'static str, usize)], id: &str) -> usize {
 }
 
 fn summarize_diagnostics(outcomes: &[AssertionOutcome]) -> DiagnosticSummary {
-    let passed = outcomes.iter().filter(|outcome| outcome.passed).count();
+    let matched = outcomes.iter().filter(|outcome| outcome.passed).count();
     let total = outcomes.len();
-    let ratio = if total > 0 {
-        (passed as f32) / (total as f32)
+    let coverage_ratio = if total > 0 {
+        (matched as f32) / (total as f32)
     } else {
         0.0
     };
-    let status = if ratio >= 0.8 {
-        DiagnosticStatus::Pass
-    } else if ratio >= 0.6 {
-        DiagnosticStatus::Warn
-    } else {
-        DiagnosticStatus::Fail
-    };
     DiagnosticSummary {
-        passed,
+        matched,
         total,
-        status,
+        coverage_ratio,
     }
 }
 
@@ -897,7 +873,7 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("system time error: {}", error))?
         .as_millis();
 
-    let (main_status, main_ref_path, main_error, metrics_json) = match main_eval_state {
+    let (main_state_label, main_ref_path, main_error, metrics_json) = match main_eval_state {
         MainEvaluationState::Ready {
             reference_path,
             flow,
@@ -929,12 +905,12 @@ fn append_score_record_jsonl(
     };
 
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"main_evaluation\":{{\"status\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"diagnostic_evaluation\":{{\"river_flow_assertions\":{{\"passed\":{},\"total\":{},\"status\":\"{}\"}}}}}}\n",
+        "{{\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"main_evaluation\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"diagnostic_evaluation\":{{\"river_flow_assertions\":{{\"matched\":{},\"total\":{},\"coverage_ratio\":{}}}}}\n",
         timestamp_unix_ms,
         json_escape(seed),
         mesh_level,
         cell_count,
-        main_status,
+        main_state_label,
         main_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
@@ -942,9 +918,9 @@ fn append_score_record_jsonl(
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
         metrics_json,
-        diagnostic_summary.passed,
+        diagnostic_summary.matched,
         diagnostic_summary.total,
-        diagnostic_summary.status.as_str().to_ascii_lowercase(),
+        format_json_number(diagnostic_summary.coverage_ratio),
     );
 
     let output_path = score_output_path();

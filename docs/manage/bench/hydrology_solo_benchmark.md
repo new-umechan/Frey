@@ -37,21 +37,21 @@ Hydrology単体ベンチ専用の入力キャッシュ `bench/data/hydro_input.b
 現在の実運用では、リポジトリルートで次の順に準備する。
 
 1. `npm run bench:dump-centroids`（未実行の場合のみ）
-2. `npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
+2. `npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
 3. `npm run bench:prepare:era5`（未実行の場合のみ）
-4. `npm run bench:resample:hydro-input -- --runoff data/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
-5. `npm run bench:resample:hydro-ref -- --river-flow data/raw/hydrology/glofas_era5_annual_mean.nc --lakes data/raw/hydrology/HydroLAKES_polys_v10.shp`
+4. `npm run bench:resample:hydro-input -- --runoff bench/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
+5. `npm run bench:resample:hydro-ref -- --river-flow bench/raw/hydrology/glofas_era5_annual_mean.nc --lakes bench/raw/hydrology/HydroLAKES_polys_v10.shp`
 
-`bench:prepare:era5` の前提として、`data/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
+`bench:prepare:era5` の前提として、`bench/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
 （`npm run bench:fetch:era5` で取得可）。
 
-GloFAS-ERA5 は `data/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
+GloFAS-ERA5 は `bench/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
 （Copernicus EWDS から取得: https://ewds.climate.copernicus.eu）。
 このファイルは、日次データをそのまま全件取得した年平均ではなく、
 複数年・複数月に対して7日刻み（既定: `01,08,15,22,29`）で取得した日次サンプルの平均から作る近似年平均でもよい。
 固定ベンチの比較用参照として年ごとの偏りを抑えることを優先する。
 
-HydroLAKES は `data/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
+HydroLAKES は `bench/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
 （https://www.hydrosheds.org/products/hydrolakes）。
 
 | フィールド | 型 | 値 |
@@ -187,18 +187,14 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 ### 1-C：参考値（erosion_rate・deposition_rate）
 
-実データが粗いため合否判定に含めない。シミュレーション出力の絶対値と分布形状を記録するにとどめる。
+実データが粗いため主評価には含めない。シミュレーション出力の絶対値と分布形状を記録するにとどめる。
 
 ---
 
 ## 補助評価：代表地点診断
 
 主評価のスコアが変動した原因を掘り下げるために使う。
-合否基準・通過率の考え方はClimate単体ベンチと同一。
-
-- **Pass**：アサーション通過率 ≥ 80%
-- **Warn**：通過率 60〜80%
-- **Fail**：通過率 < 60%
+アサーションは `matched/total` と `coverage_ratio` を記録し、前後差で診断する。
 
 ### 2-A：主要河川の流量大小関係
 
@@ -229,7 +225,7 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 ## キャッシュのバイナリ形式
 
-`tools/bench/resample.py` / `rust/benches/hydrology_solo.rs` 実装。
+`bench/scripts/resample.py` / `rust/benches/hydrology_solo.rs` 実装。
 
 ### hydro_input.bin
 
@@ -265,16 +261,16 @@ river_flow:  rho=0.741
 -- Main Evaluation 1-B: is_lake F1 (land cells only) --
 precision=0.412  recall=0.638  f1=0.501
 
--- Main Evaluation 1-C: Reference Only (no pass/fail) --
+-- Main Evaluation 1-C: Reference Only --
 erosion_rate:    mean=0.0031  p50=0.0018  p95=0.0089
 deposition_rate: mean=0.0024  p50=0.0014  p95=0.0071
 
 -- Diagnostic Evaluation 2-A: River Flow Ranking Assertions --
-R-01  amazon_mouth > congo_mouth:       PASS  (182340.0 vs 41000.0)
-R-02  congo_mouth > mississippi_mouth:  PASS  (41000.0 vs 16800.0)
-R-03  amazon_mouth > nile_mouth:        PASS  (182340.0 vs 2830.0)
-R-04  himalaya_foothills > sahara_interior: PASS  (4120.0 vs 0.1)
-R-05  ganges_delta > sahara_interior:   PASS  (6800.0 vs 0.1)
+R-01  amazon_mouth > congo_mouth:       match  (182340.0 vs 41000.0)
+R-02  congo_mouth > mississippi_mouth:  match  (41000.0 vs 16800.0)
+R-03  amazon_mouth > nile_mouth:        match  (182340.0 vs 2830.0)
+R-04  himalaya_foothills > sahara_interior: match  (4120.0 vs 0.1)
+R-05  ganges_delta > sahara_interior:   match  (6800.0 vs 0.1)
 
 -- Diagnostic Evaluation 2-B: Representative Cell Values --
 amazon_mouth:      river_flow=182340.0
@@ -288,7 +284,7 @@ ganges_delta:      river_flow=6800.0
 
 -- Main Evaluation 1-A Summary: metrics_reported=1 --
 -- Main Evaluation 1-B Summary: metrics_reported=3 --
--- Diagnostic Evaluation 2-A Summary: 5/5 PASS --
+-- Diagnostic Evaluation 2-A Summary: matched=5/5 coverage_ratio=1.000 --
 -- Main Evaluation State: READY --
 -- Score Save: OK --
 ```
@@ -310,7 +306,7 @@ ganges_delta:      river_flow=6800.0
 -- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --
 To generate:
   1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
@@ -334,7 +330,7 @@ To generate:
 
 ---
 
-## リサンプリングツール（`tools/bench/resample.py` への追加）
+## リサンプリングツール（`bench/scripts/resample.py` への追加）
 
 Climate単体ベンチで実装した `resample.py` に、Hydrology単体ベンチ向けの入力生成と評価データ生成を追加する。
 
@@ -349,18 +345,18 @@ CLI 契約は次の通りとする。
 - 出力既定値は `bench/data/hydro_ref.bin`
 
 ```bash
-python tools/bench/resample.py --module hydro-input \
+python bench/scripts/resample.py --module hydro-input \
   --centroids bench/data/cell_centroids.csv \
-  --runoff data/raw/climate/era5_land_annual_1970_2000.nc \
+  --runoff bench/raw/climate/era5_land_annual_1970_2000.nc \
   --var-name runoff=runoff_mm_yr \
   --output bench/data/hydro_input.bin
 ```
 
 ```bash
-python tools/bench/resample.py --module hydro-ref \
+python bench/scripts/resample.py --module hydro-ref \
   --centroids bench/data/cell_centroids.csv \
-  --river-flow data/raw/hydrology/glofas_era5_annual_mean.nc \
-  --lakes data/raw/hydrology/HydroLAKES_polys_v10.shp \
+  --river-flow bench/raw/hydrology/glofas_era5_annual_mean.nc \
+  --lakes bench/raw/hydrology/HydroLAKES_polys_v10.shp \
   --output bench/data/hydro_ref.bin
 ```
 

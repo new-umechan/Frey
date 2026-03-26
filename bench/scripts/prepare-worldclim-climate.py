@@ -13,17 +13,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input-dir",
-        default="data/raw/climate",
+        default="bench/raw/climate",
         help="Directory containing wc2.1_30s_tavg_01..12.tif and wc2.1_30s_prec_01..12.tif",
     )
     parser.add_argument(
         "--out-temperature",
-        default="data/raw/climate/worldclim_tavg_annual_c.tif",
+        default="bench/raw/climate/worldclim_tavg_annual_c.tif",
         help="Output annual mean temperature (degC).",
     )
     parser.add_argument(
         "--out-precipitation",
-        default="data/raw/climate/worldclim_prec_annual_mm.tif",
+        default="bench/raw/climate/worldclim_prec_annual_mm.tif",
         help="Output annual total precipitation (mm/year).",
     )
     parser.add_argument(

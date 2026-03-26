@@ -49,28 +49,11 @@ struct TerrainRef {
     height: Vec<f32>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PhaseStatus {
-    Pass,
-    Warn,
-    Fail,
-}
-
-impl PhaseStatus {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => "PASS",
-            Self::Warn => "WARN",
-            Self::Fail => "FAIL",
-        }
-    }
-}
-
 struct Phase1MetricSummary {
-    passed: usize,
+    matched: usize,
     total: usize,
     excluded_known_hard: usize,
-    status: PhaseStatus,
+    coverage_ratio: f32,
 }
 
 struct Phase2MetricResult {
@@ -302,7 +285,7 @@ fn main() {
             println!("-- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --");
             println!("To generate:");
             println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -416,13 +399,13 @@ fn main() {
         println!();
         println!("-- Known-Hard Assertions (reference only, not counted) --");
         for outcome in known_hard {
-            let status = if outcome.passed { "PASS" } else { "FAIL" };
+            let relation = if outcome.passed { "match" } else { "mismatch" };
             println!(
                 "{}  {} > {}:  {}  ({:.1} vs {:.1})",
                 outcome.id,
                 outcome.left,
                 outcome.right,
-                status,
+                relation,
                 outcome.left_value,
                 outcome.right_value,
             );
@@ -434,18 +417,14 @@ fn main() {
     let aridity_summary = summarize_phase1_metric(&aridity_results);
 
     println!();
-    let phase1_states = [
-        temperature_summary.status,
-        precipitation_summary.status,
-        aridity_summary.status,
-    ];
-    let phase1_pass = phase1_states
-        .iter()
-        .filter(|state| **state == PhaseStatus::Pass)
-        .count();
+    let mean_coverage_ratio = (
+        temperature_summary.coverage_ratio
+            + precipitation_summary.coverage_ratio
+            + aridity_summary.coverage_ratio
+    ) / 3.0;
     println!(
-        "-- Diagnostic Evaluation Summary: {}/3 PASS (excl. known-hard) --",
-        phase1_pass
+        "-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio={:.3} (excl. known-hard) --",
+        mean_coverage_ratio
     );
 
     match &phase2_state {
@@ -463,7 +442,7 @@ fn main() {
         &precipitation_summary,
         &aridity_summary,
     ) {
-        println!("-- Score Save: FAILED ({}) --", error);
+        println!("-- Score Save: ERROR ({}) --", error);
     } else {
         println!("-- Score Save: OK --");
     }
@@ -794,32 +773,8 @@ fn lookup_index(selection: &[(&'static str, usize)], id: &str) -> usize {
         .unwrap_or(0)
 }
 
-fn evaluate_phase1_status(outcomes: &[AssertionOutcome]) -> PhaseStatus {
-    let total = outcomes
-        .iter()
-        .filter(|outcome| !outcome.known_hard)
-        .count();
-    if total == 0 {
-        return PhaseStatus::Warn;
-    }
-
-    let passed = outcomes
-        .iter()
-        .filter(|outcome| !outcome.known_hard && outcome.passed)
-        .count();
-
-    let ratio = (passed as f32) / (total as f32);
-    if ratio >= 0.8 {
-        PhaseStatus::Pass
-    } else if ratio >= 0.6 {
-        PhaseStatus::Warn
-    } else {
-        PhaseStatus::Fail
-    }
-}
-
 fn summarize_phase1_metric(outcomes: &[AssertionOutcome]) -> Phase1MetricSummary {
-    let passed = outcomes
+    let matched = outcomes
         .iter()
         .filter(|outcome| !outcome.known_hard && outcome.passed)
         .count();
@@ -828,12 +783,16 @@ fn summarize_phase1_metric(outcomes: &[AssertionOutcome]) -> Phase1MetricSummary
         .filter(|outcome| !outcome.known_hard)
         .count();
     let excluded_known_hard = outcomes.iter().filter(|outcome| outcome.known_hard).count();
-    let status = evaluate_phase1_status(outcomes);
+    let coverage_ratio = if total > 0 {
+        (matched as f32) / (total as f32)
+    } else {
+        0.0
+    };
     Phase1MetricSummary {
-        passed,
+        matched,
         total,
         excluded_known_hard,
-        status,
+        coverage_ratio,
     }
 }
 
@@ -841,20 +800,20 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
     let summary = summarize_phase1_metric(outcomes);
     if summary.excluded_known_hard > 0 {
         println!(
-            "[{}] {}/{} passed  (excl. {} known-hard) {}",
+            "[{}] matched={}/{}  coverage_ratio={:.3}  (excl. {} known-hard)",
             name,
-            summary.passed,
+            summary.matched,
             summary.total,
             summary.excluded_known_hard,
-            summary.status.as_str()
+            summary.coverage_ratio
         );
     } else {
         println!(
-            "[{}] {}/{} passed {}",
+            "[{}] matched={}/{}  coverage_ratio={:.3}",
             name,
-            summary.passed,
+            summary.matched,
             summary.total,
-            summary.status.as_str()
+            summary.coverage_ratio
         );
     }
 }
@@ -912,7 +871,7 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("system time error: {}", error))?
         .as_millis();
 
-    let (phase2_status, phase2_ref_path, phase2_error, metrics_json) = match phase2_state {
+    let (phase2_state_label, phase2_ref_path, phase2_error, metrics_json) = match phase2_state {
         Phase2State::Ready {
             reference_path,
             metrics,
@@ -953,12 +912,12 @@ fn append_score_record_jsonl(
     };
 
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"phase2\":{{\"status\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"passed\":{},\"total\":{},\"excluded_known_hard\":{},\"status\":\"{}\"}},\"precipitation\":{{\"passed\":{},\"total\":{},\"excluded_known_hard\":{},\"status\":\"{}\"}},\"aridity\":{{\"passed\":{},\"total\":{},\"excluded_known_hard\":{},\"status\":\"{}\"}}}}}}\n",
+        "{{\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}}}}\n",
         timestamp_unix_ms,
         json_escape(seed),
         mesh_level,
         cell_count,
-        phase2_status,
+        phase2_state_label,
         phase2_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
@@ -966,18 +925,18 @@ fn append_score_record_jsonl(
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
         metrics_json,
-        temperature_summary.passed,
+        temperature_summary.matched,
         temperature_summary.total,
         temperature_summary.excluded_known_hard,
-        temperature_summary.status.as_str().to_ascii_lowercase(),
-        precipitation_summary.passed,
+        format_json_number(temperature_summary.coverage_ratio),
+        precipitation_summary.matched,
         precipitation_summary.total,
         precipitation_summary.excluded_known_hard,
-        precipitation_summary.status.as_str().to_ascii_lowercase(),
-        aridity_summary.passed,
+        format_json_number(precipitation_summary.coverage_ratio),
+        aridity_summary.matched,
         aridity_summary.total,
         aridity_summary.excluded_known_hard,
-        aridity_summary.status.as_str().to_ascii_lowercase(),
+        format_json_number(aridity_summary.coverage_ratio),
     );
 
     let output_path = score_output_path();

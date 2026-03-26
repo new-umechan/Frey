@@ -48,12 +48,12 @@ Ecology単体ベンチ専用の評価キャッシュ `bench/data/ecology_ref.bin
 既存の benchmark 用データを極力使い回し、Ecology 固有の参照データだけを追加する方針とする。
 
 1. `npm run bench:dump-centroids`（未実行の場合のみ）
-2. `npm run bench:resample:terrain -- --height data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
+2. `npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
 3. `npm run bench:prepare:worldclim`（未実行の場合のみ）
 4. `npm run bench:prepare:era5`（未実行の場合のみ）
-5. `npm run bench:resample:climate -- --temperature data/raw/climate/worldclim_tavg_annual_c.tif --precipitation data/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration data/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff data/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity data/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
-6. `npm run bench:resample:hydro-ref -- --river-flow data/raw/hydrology/glofas_era5_annual_mean.nc --lakes data/raw/hydrology/HydroLAKES_polys_v10.shp`
-7. Ecology 参照データを `data/raw/ecology/` に配置する
+5. `npm run bench:resample:climate -- --temperature bench/raw/climate/worldclim_tavg_annual_c.tif --precipitation bench/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration bench/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff bench/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity bench/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
+6. `npm run bench:resample:hydro-ref -- --river-flow bench/raw/hydrology/glofas_era5_annual_mean.nc --lakes bench/raw/hydrology/HydroLAKES_polys_v10.shp`
+7. Ecology 参照データを `bench/raw/ecology/` に配置する
 8. `npm run bench:resample:ecology-ref:with-soil` で `bench/data/ecology_ref.bin` を生成する
 
 ### 既存データの再利用
@@ -62,27 +62,27 @@ Ecology 単体ベンチの入力のうち、次は既存データをそのまま
 
 | 用途 | 既存ファイル | 備考 |
 |---|---|---|
-| 実地形 | `data/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif` | Climate/Hydrology benchmark と共用 |
-| 実気温 | `data/raw/climate/worldclim_tavg_annual_c.tif` | Climate benchmark と共用 |
-| 実降水 | `data/raw/climate/worldclim_prec_annual_mm.tif` | Climate benchmark と共用 |
-| 実河川流量参照 | `data/raw/hydrology/glofas_era5_annual_mean.nc` | Hydrology benchmark と共用 |
-| 湖参照 | `data/raw/hydrology/HydroLAKES_polys_v10.shp` | 必要なら湿地補助判定にも流用可 |
+| 実地形 | `bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif` | Climate/Hydrology benchmark と共用 |
+| 実気温 | `bench/raw/climate/worldclim_tavg_annual_c.tif` | Climate benchmark と共用 |
+| 実降水 | `bench/raw/climate/worldclim_prec_annual_mm.tif` | Climate benchmark と共用 |
+| 実河川流量参照 | `bench/raw/hydrology/glofas_era5_annual_mean.nc` | Hydrology benchmark と共用 |
+| 湖参照 | `bench/raw/hydrology/HydroLAKES_polys_v10.shp` | 必要なら湿地補助判定にも流用可 |
 | 中間キャッシュ | `bench/data/terrain_ref.bin` / `bench/data/climate_ref.bin` / `bench/data/hydro_ref.bin` | そのまま入力に使う |
 
 つまり、Ecology benchmark のために新規取得が必要なのは、Ecology 固有の参照正解データだけである。
 
 ### 新規に追加する Ecology 参照データ
 
-次のファイルは現状の `data/raw` には入っていないため、新規に追加する。
+次のファイルは現状の `bench/raw` には入っていないため、新規に追加する。
 
 | 用途 | 配置先 | 備考 |
 |---|---|---|
-| MODIS VCF tree cover | `data/raw/ecology/mod44b_tree_cover.tif` | `tree_cover` 参照 |
-| MODIS VCF non-tree vegetation | `data/raw/ecology/mod44b_non_tree_cover.tif` | `ground_cover` 参照 |
-| MODIS VCF non-vegetated | `data/raw/ecology/mod44b_non_vegetated.tif` | `biome` 合成参照 |
-| MODIS Land Cover Type 1 | `data/raw/ecology/mcd12q1_lc_type1.tif` | `natural_mask` と `biome` 合成に使う |
-| MODIS Land Use / LCCS layer | `data/raw/ecology/mcd12q1_lc_prop2.tif` | 農地・都市の除外に使う |
-| SoilGrids 0-30cm 入力群 | `data/raw/ecology/soilgrids/` | `soil_fertility` proxy 用 |
+| MODIS VCF tree cover | `bench/raw/ecology/mod44b_tree_cover.tif` | `tree_cover` 参照 |
+| MODIS VCF non-tree vegetation | `bench/raw/ecology/mod44b_non_tree_cover.tif` | `ground_cover` 参照 |
+| MODIS VCF non-vegetated | `bench/raw/ecology/mod44b_non_vegetated.tif` | `biome` 合成参照 |
+| MODIS Land Cover Type 1 | `bench/raw/ecology/mcd12q1_lc_type1.tif` | `natural_mask` と `biome` 合成に使う |
+| MODIS Land Use / LCCS layer | `bench/raw/ecology/mcd12q1_lc_prop2.tif` | 農地・都市の除外に使う |
+| SoilGrids 0-30cm 入力群 | `bench/raw/ecology/soilgrids/` | `soil_fertility` proxy 用 |
 
 初版では、Ecology benchmark 用の raw データ配置規約だけを固定し、取得コマンドの自動化は後段に回す。
 先にファイル名と入力契約を固定しておかないと、resample 実装の引数仕様も固まらないためである。
@@ -316,11 +316,7 @@ soil_fertility_ref =
 ## 補助評価：代表地域診断
 
 主評価のスコアが変動した原因を掘り下げるために使う。
-合否基準・通過率の考え方はClimate単体ベンチと同一。
-
-- **Pass**: アサーション通過率 >= 80%
-- **Warn**: 通過率 60〜80%
-- **Fail**: 通過率 < 60%
+アサーションは `matched/total` と `coverage_ratio` を記録し、前後差で診断する。
 
 ### 2-A：`biome` ラベル診断
 
@@ -378,7 +374,7 @@ struct EcologyRef {
 
 ## `ecology_ref.bin` の物理バイナリ形式
 
-`tools/bench/resample.py` / `rust/benches/ecology_solo.rs` 実装。
+`bench/scripts/resample.py` / `rust/benches/ecology_solo.rs` 実装。
 
 1. magic: `ECOREF01`（8 bytes）
 2. version: `u32` little-endian（現行 `1`）
@@ -412,13 +408,13 @@ biome:            macro_f1=0.572 accuracy=0.691
 soil_fertility:   rho=0.318
 
 -- Diagnostic Evaluation: Assertions --
-[biome]           9/10 passed                      PASS
-[tree_cover]      4/4 passed                       PASS
-[ground_cover]    3/3 passed                       PASS
+[biome]           matched=9/10 coverage_ratio=0.900
+[tree_cover]      matched=4/4 coverage_ratio=1.000
+[ground_cover]    matched=3/3 coverage_ratio=1.000
 
 -- Main Evaluation Summary: metrics_reported=3 --
 -- Reference Evaluation Summary: metrics_reported=1 --
--- Diagnostic Evaluation Summary: 3/3 PASS --
+-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio=0.967 --
 -- Main Evaluation State: READY --
 -- Score Save: OK --
 ```

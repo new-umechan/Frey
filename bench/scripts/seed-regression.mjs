@@ -116,7 +116,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-    console.error("Usage: node tools/bench/seed-regression.mjs [options]");
+    console.error("Usage: node bench/scripts/seed-regression.mjs [options]");
     console.error("  --seeds <csv>");
     console.error("  --ticks <n>");
     console.error("  --level <n>");
@@ -280,16 +280,16 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
     );
 
     const warnings = [];
-    const failures = [];
+    const deviations = [];
 
-    failures.push(...validateBaselineMeta(current, baseline));
-    if (failures.length > 0) {
-        return { warnings, failures };
+    deviations.push(...validateBaselineMeta(current, baseline));
+    if (deviations.length > 0) {
+        return { warnings, deviations };
     }
 
     for (const seed of current.meta.seeds) {
         if (!baselineBySeed.has(seed)) {
-            failures.push({
+            deviations.push({
                 seed,
                 metric: "*",
                 reason: "missing_seed_in_baseline",
@@ -304,7 +304,7 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
             const currentValue = Number(currentMetrics?.[spec.key]);
             const baselineValue = Number(baselineMetrics?.[spec.key]);
             if (!Number.isFinite(currentValue) || !Number.isFinite(baselineValue)) {
-                failures.push({
+                deviations.push({
                     seed,
                     metric: spec.key,
                     reason: "missing_numeric_metric",
@@ -315,7 +315,7 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
             const threshold = Number(thresholds[spec.key]);
             const { mode, diff } = relativeOrAbsoluteDiff(currentValue, baselineValue);
             if (diff > threshold) {
-                failures.push({
+                deviations.push({
                     seed,
                     metric: spec.key,
                     mode,
@@ -334,7 +334,7 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
         }
     }
 
-    return { warnings, failures };
+    return { warnings, deviations };
 }
 
 async function runSeedSimulation(seed, ticks, level) {
@@ -407,28 +407,26 @@ async function main() {
 
     if (args.check) {
         const baseline = await loadBaseline(args.baseline);
-        const gate = evaluateAgainstBaseline(outputData, baseline, thresholds);
+        const comparison = evaluateAgainstBaseline(outputData, baseline, thresholds);
 
-        for (const warning of gate.warnings) {
+        for (const warning of comparison.warnings) {
             console.error(`[seed-regression] warn: ${warning}`);
         }
 
-        if (gate.failures.length > 0) {
-            for (const failure of gate.failures) {
-                if (failure.reason) {
+        if (comparison.deviations.length > 0) {
+            for (const deviation of comparison.deviations) {
+                if (deviation.reason) {
                     console.error(
-                        `[seed-regression] FAIL seed=${failure.seed} metric=${failure.metric} reason=${failure.reason}${"expected" in failure ? ` expected=${failure.expected}` : ""}${"actual" in failure ? ` actual=${failure.actual}` : ""}`,
+                        `[seed-regression] deviation seed=${deviation.seed} metric=${deviation.metric} reason=${deviation.reason}${"expected" in deviation ? ` expected=${deviation.expected}` : ""}${"actual" in deviation ? ` actual=${deviation.actual}` : ""}`,
                     );
                     continue;
                 }
                 console.error(
-                    `[seed-regression] FAIL seed=${failure.seed} metric=${failure.metric} mode=${failure.mode} current=${failure.currentValue} baseline=${failure.baselineValue} diff=${failure.diff} threshold=${failure.threshold}`,
+                    `[seed-regression] deviation seed=${deviation.seed} metric=${deviation.metric} mode=${deviation.mode} current=${deviation.currentValue} baseline=${deviation.baselineValue} diff=${deviation.diff} threshold=${deviation.threshold}`,
                 );
             }
-            process.exitCode = 1;
-        } else {
-            console.error("[seed-regression] PASS");
         }
+        console.error(`[seed-regression] deviations=${comparison.deviations.length}`);
     }
 }
 

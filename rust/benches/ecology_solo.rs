@@ -63,27 +63,10 @@ struct EcologyRef {
     open_canopy_mask: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum EvalStatus {
-    Pass,
-    Warn,
-    Fail,
-}
-
-impl EvalStatus {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => "PASS",
-            Self::Warn => "WARN",
-            Self::Fail => "FAIL",
-        }
-    }
-}
-
 struct MetricSummary {
-    passed: usize,
+    matched: usize,
     total: usize,
-    status: EvalStatus,
+    coverage_ratio: f32,
 }
 
 struct RunState {
@@ -410,36 +393,34 @@ fn main() {
     println!();
     println!("-- Diagnostic Evaluation: Assertions --");
     println!(
-        "[biome]           {}/{} passed                      {}",
-        biome_summary.passed,
+        "[biome]           matched={}/{} coverage_ratio={:.3}",
+        biome_summary.matched,
         biome_summary.total,
-        biome_summary.status.as_str()
+        biome_summary.coverage_ratio
     );
     println!(
-        "[tree_cover]      {}/{} passed                       {}",
-        tree_summary.passed,
+        "[tree_cover]      matched={}/{} coverage_ratio={:.3}",
+        tree_summary.matched,
         tree_summary.total,
-        tree_summary.status.as_str()
+        tree_summary.coverage_ratio
     );
     println!(
-        "[ground_cover]    {}/{} passed                       {}",
-        ground_summary.passed,
+        "[ground_cover]    matched={}/{} coverage_ratio={:.3}",
+        ground_summary.matched,
         ground_summary.total,
-        ground_summary.status.as_str()
+        ground_summary.coverage_ratio
     );
 
-    let pass_count = [
-        biome_summary.status,
-        tree_summary.status,
-        ground_summary.status,
-    ]
-    .iter()
-    .filter(|status| **status == EvalStatus::Pass)
-    .count();
+    let mean_coverage_ratio = (
+        biome_summary.coverage_ratio + tree_summary.coverage_ratio + ground_summary.coverage_ratio
+    ) / 3.0;
     println!();
     println!("-- Main Evaluation Summary: metrics_reported=3 --");
     println!("-- Reference Evaluation Summary: metrics_reported=1 --");
-    println!("-- Diagnostic Evaluation Summary: {}/3 PASS --", pass_count);
+    println!(
+        "-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio={:.3} --",
+        mean_coverage_ratio
+    );
     if run_state.converged {
         println!("-- Main Evaluation State: READY --");
     } else {
@@ -460,7 +441,7 @@ fn main() {
         &tree_summary,
         &ground_summary,
     ) {
-        println!("-- Score Save: FAILED ({}) --", error);
+        println!("-- Score Save: ERROR ({}) --", error);
     } else {
         println!("-- Score Save: OK --");
     }
@@ -606,35 +587,35 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("system time error: {}", error))?
         .as_millis();
 
-    let main_status = if run_state.converged {
+    let main_state_label = if run_state.converged {
         "ready"
     } else {
         "not_converged"
     };
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"ecology_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"run_state\":{{\"converged\":{},\"ticks_to_converge\":{}}},\"main_evaluation\":{{\"status\":\"{}\",\"ref_path\":\"{}\",\"error\":null,\"metrics\":{{\"tree_cover_rho\":{},\"ground_cover_rho\":{},\"biome_macro_f1\":{},\"biome_accuracy\":{}}}}},\"reference_evaluation\":{{\"status\":\"ready\",\"metrics\":{{\"soil_fertility_rho\":{}}}}},\"diagnostic_evaluation\":{{\"biome_assertions\":{{\"passed\":{},\"total\":{},\"status\":\"{}\"}},\"tree_cover_assertions\":{{\"passed\":{},\"total\":{},\"status\":\"{}\"}},\"ground_cover_assertions\":{{\"passed\":{},\"total\":{},\"status\":\"{}\"}}}}}}\n",
+        "{{\"timestamp_unix_ms\":{},\"bench\":\"ecology_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"run_state\":{{\"converged\":{},\"ticks_to_converge\":{}}},\"main_evaluation\":{{\"state\":\"{}\",\"ref_path\":\"{}\",\"error\":null,\"metrics\":{{\"tree_cover_rho\":{},\"ground_cover_rho\":{},\"biome_macro_f1\":{},\"biome_accuracy\":{}}}}},\"reference_evaluation\":{{\"state\":\"ready\",\"metrics\":{{\"soil_fertility_rho\":{}}}}},\"diagnostic_evaluation\":{{\"biome_assertions\":{{\"matched\":{},\"total\":{},\"coverage_ratio\":{}}},\"tree_cover_assertions\":{{\"matched\":{},\"total\":{},\"coverage_ratio\":{}}},\"ground_cover_assertions\":{{\"matched\":{},\"total\":{},\"coverage_ratio\":{}}}}}\n",
         timestamp_unix_ms,
         json_escape(seed),
         mesh_level,
         cell_count,
         run_state.converged,
         run_state.ticks_to_converge,
-        main_status,
+        main_state_label,
         json_escape(&reference_path.display().to_string()),
         format_json_number(tree_rho),
         format_json_number(ground_rho),
         format_json_number(biome_macro_f1),
         format_json_number(biome_accuracy),
         format_json_number(soil_rho),
-        biome_summary.passed,
+        biome_summary.matched,
         biome_summary.total,
-        biome_summary.status.as_str().to_ascii_lowercase(),
-        tree_summary.passed,
+        format_json_number(biome_summary.coverage_ratio),
+        tree_summary.matched,
         tree_summary.total,
-        tree_summary.status.as_str().to_ascii_lowercase(),
-        ground_summary.passed,
+        format_json_number(tree_summary.coverage_ratio),
+        ground_summary.matched,
         ground_summary.total,
-        ground_summary.status.as_str().to_ascii_lowercase(),
+        format_json_number(ground_summary.coverage_ratio),
     );
 
     let output_path = score_output_path();
@@ -862,45 +843,31 @@ fn lookup_selection(selection: &[(&'static str, usize)], id: &str) -> Option<usi
 
 fn summarize_rank(outcomes: &[RankOutcome]) -> MetricSummary {
     let total = outcomes.len();
-    let passed = outcomes.iter().filter(|item| item.passed).count();
-    let ratio = if total > 0 {
-        passed as f32 / total as f32
+    let matched = outcomes.iter().filter(|item| item.passed).count();
+    let coverage_ratio = if total > 0 {
+        matched as f32 / total as f32
     } else {
         0.0
     };
-    let status = if ratio >= 0.8 {
-        EvalStatus::Pass
-    } else if ratio >= 0.6 {
-        EvalStatus::Warn
-    } else {
-        EvalStatus::Fail
-    };
     MetricSummary {
-        passed,
+        matched,
         total,
-        status,
+        coverage_ratio,
     }
 }
 
 fn summarize_biome(outcomes: &[BiomeOutcome]) -> MetricSummary {
     let total = outcomes.len();
-    let passed = outcomes.iter().filter(|item| item.passed).count();
-    let ratio = if total > 0 {
-        passed as f32 / total as f32
+    let matched = outcomes.iter().filter(|item| item.passed).count();
+    let coverage_ratio = if total > 0 {
+        matched as f32 / total as f32
     } else {
         0.0
     };
-    let status = if ratio >= 0.8 {
-        EvalStatus::Pass
-    } else if ratio >= 0.6 {
-        EvalStatus::Warn
-    } else {
-        EvalStatus::Fail
-    };
     MetricSummary {
-        passed,
+        matched,
         total,
-        status,
+        coverage_ratio,
     }
 }
 

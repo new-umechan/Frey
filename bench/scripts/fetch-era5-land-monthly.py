@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out",
-        default="data/raw/climate/era5_land_monthly_1970_2000.zip",
+        default="bench/raw/climate/era5_land_monthly_1970_2000.zip",
         help="Output ZIP path.",
     )
     parser.add_argument(

@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out-dir",
-        default="data/raw/hydrology/glofas_raw",
+        default="bench/raw/hydrology/glofas_raw",
         help="Directory to store extracted monthly NetCDF files.",
     )
     parser.add_argument(
