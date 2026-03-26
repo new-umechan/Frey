@@ -427,6 +427,8 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
     params.erosion_thickness_coupling = clamp(params.erosion_thickness_coupling, 0.0, 2.0);
     params.deposition_thickness_coupling = clamp(params.deposition_thickness_coupling, 0.0, 2.0);
     params.tectonic_uplift_gain = params.tectonic_uplift_gain.max(0.0);
+    params.tectonic_subsidence_gain = params.tectonic_subsidence_gain.max(0.0);
+    params.thermal_subsidence_gain = params.thermal_subsidence_gain.max(0.0);
     params.uplift_saturation_soft = clamp(params.uplift_saturation_soft, 0.0, 1.0);
     params.uplift_saturation_hard = clamp(
         params
@@ -435,7 +437,7 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
         0.0,
         1.0,
     );
-    params.marine_subsidence_gain = params.marine_subsidence_gain.max(0.0);
+    params.isostatic_adjustment_rate = params.isostatic_adjustment_rate.max(0.0);
     params.age_advection_gain = params.age_advection_gain.max(0.0);
     params.nonlinear_diffusion_gain = params.nonlinear_diffusion_gain.max(0.0);
     params.isostatic_relax_gain = params.isostatic_relax_gain.max(0.0);

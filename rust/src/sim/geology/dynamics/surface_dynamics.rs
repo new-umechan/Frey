@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::sim::world::{
     BoundaryDynamicsState, BoundaryType, CrustType, GeologyStepMetrics, PlateId, StressTensor,
     VertexCrustState,
@@ -164,22 +162,24 @@ pub(super) fn apply_stress_and_surface_update(
             + state.hotspot_volcanism
             + state.backarc_volcanism;
 
-        let uplift = params.uplift_rate_gain.max(0.0) * compressive
-            + volcanism * params.volcanic_uplift_gain.max(0.0);
-        let subsidence = params.subsidence_rate_gain.max(0.0)
-            * (tensile
-                + if state.crust_type == CrustType::Oceanic {
-                    (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0) * 0.6
-                } else {
-                    0.0
-                });
+        let tectonic_uplift = params.tectonic_uplift_gain.max(0.0) * compressive;
+        let volcanic_uplift = volcanism * params.volcanic_uplift_gain.max(0.0);
+        let uplift = tectonic_uplift + volcanic_uplift;
+        let tectonic_subsidence = params.tectonic_subsidence_gain.max(0.0) * tensile;
+        let thermal_subsidence = if state.crust_type == CrustType::Oceanic {
+            let age_norm = (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0);
+            params.thermal_subsidence_gain.max(0.0) * age_norm.sqrt()
+        } else {
+            0.0
+        };
+        let total_subsidence = tectonic_subsidence + thermal_subsidence;
 
         let diffusive = if nbr_count == 0 {
             0.0
         } else {
             (nbr_sum / nbr_count as f32 - heights[i]) * DEFAULT_DIFFUSION_WEIGHT
         };
-        let raw_delta = uplift - subsidence + diffusive;
+        let raw_delta = uplift - total_subsidence + diffusive;
         let delta = raw_delta.clamp(-MAX_HEIGHT_DELTA_PER_STEP, MAX_HEIGHT_DELTA_PER_STEP);
         let mut next_h = (heights[i] + delta).clamp(-1.0, 1.0);
 
@@ -193,13 +193,14 @@ pub(super) fn apply_stress_and_surface_update(
             state.age = params.age_ref.max(1e-4);
         }
 
-        state.thickness = (state.thickness + uplift * 0.5 - subsidence * 0.4
+        state.thickness = (state.thickness + uplift * 0.5 - tectonic_subsidence * 0.4
             + volcanism * params.volcanic_thickening_gain.max(0.0)
             + plume * 0.1)
             .clamp(0.18, 1.25);
         let density_ratio = (state.density / params.mantle_density.max(1e-3)).clamp(0.1, 1.4);
         let h_eq = state.thickness * (1.0 - density_ratio);
-        next_h = (next_h + (h_eq - next_h) * params.isostasy_rate.max(0.0)).clamp(-1.0, 1.0);
+        next_h = (next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0))
+            .clamp(-1.0, 1.0);
         state.rigidity = rigidity;
 
         terrain_delta_sum += delta.abs();
@@ -222,23 +223,6 @@ pub(super) fn apply_stress_and_surface_update(
         boundary_activity: (boundary_sum / denom).clamp(0.0, 1.0),
         uplift_rate: uplift_sum / denom,
         subsidence_rate: subsidence_sum / denom,
-    }
-}
-
-pub(super) fn preserve_target_sea_ratio(height: &mut [f32], target_sea_ratio: f32, strength: f32) {
-    if height.is_empty() {
-        return;
-    }
-
-    let mut sorted = height.to_vec();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-    let sea_idx = ((sorted.len() as f32) * target_sea_ratio.clamp(0.02, 0.98)) as usize;
-    let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
-    let sea_level = sorted[sea_idx];
-    let shift = sea_level * strength.clamp(0.0, 1.0);
-
-    for h in height.iter_mut() {
-        *h = (*h - shift).clamp(-1.0, 1.0);
     }
 }
 

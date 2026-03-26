@@ -84,10 +84,10 @@ time_dynamics:
   river_rebuild_interval_max: 8
   river_activity_high_threshold: 0.030
   river_activity_low_threshold: 0.005
-  uplift_rate_gain: 0.030
-  subsidence_rate_gain: 0.022
+  tectonic_subsidence_gain: 0.0
+  thermal_subsidence_gain: 0.0
   stress_relaxation_rate: 0.15
-  isostasy_rate: 0.012
+  isostatic_adjustment_rate: 0.012
   subduction_age_coupling: 0.50
   subduction_initiation_threshold: 0.55
   subduction_density_threshold: 0.62
@@ -99,7 +99,6 @@ time_dynamics:
   plume_heat_release_rate: 0.65
   uplift_saturation_soft: 0.45
   uplift_saturation_hard: 0.75
-  marine_subsidence_gain: 0.018
   age_advection_gain: 0.035
   nonlinear_diffusion_gain: 0.020
   isostatic_relax_gain: 0.012

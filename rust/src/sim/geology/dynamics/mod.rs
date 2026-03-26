@@ -10,7 +10,7 @@ use crate::sim::world::{
 
 use crate::sim::exec::math::{hash01, seeded_axis};
 use boundary_dynamics::{plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics};
-use surface_dynamics::{apply_stress_and_surface_update, preserve_target_sea_ratio};
+use surface_dynamics::apply_stress_and_surface_update;
 
 pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
@@ -147,8 +147,6 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         &mut next_vertex_buoyancy,
         params,
     );
-
-    preserve_target_sea_ratio(&mut next_height, world.runtime.target_sea_ratio, 0.35);
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
