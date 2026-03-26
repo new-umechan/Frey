@@ -13,30 +13,37 @@
 - 地形の状態名（大地溝帯）などは保持せず、ルールから地形が発生するようにする
 
 ### 2.1 採用モデル
+
 連続体力学を元にすると重いため、応力伝播モデルを用いて作る。
 また、長期的なスケールの再現（ウィルソンサイクル、5億年単位）には
 マントル熱ダイナミクスを再現すること
 
 大陸地殻は熱が逃げにくく、海洋地殻は熱が逃げやすいように。
 
-弾性波方程式を解くのではなく弾性薄板モデルを用いる
+弾性波方程式を解くのではなく弾性薄板モデルを用いる。
 
 ### 2.2 マントルとプレートの交互作用
 
 以下は実際の式ではなく、動きの理解の参考のため。
 
 毎tick
-	mantle_heat[cell] += heat_input  # 定数
-	mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
+
+```text
+mantle_heat[cell] += heat_input
+mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
+```
 
 crust_typeによる放熱率
 	大陸地殻: discharge_rate = 0.1  # 熱が逃げにくい
 	海洋地殻: discharge_rate = 1.0  # 熱が逃げやすい
 
 プルーム発生
+
+```text
 if mantle_heat[cell] > plume_threshold:
     uplift_force[cell] = (mantle_heat - plume_threshold) * plume_gain
-    mantle_heat[cell] *= heat_release_rate  # 熱を放出
+    mantle_heat[cell] *= heat_release_rate
+```
 
 注)ここで使われている式の説明
 heat_input: 定数
@@ -46,27 +53,24 @@ plume_gain: プルーム力の強さ
 heat_release_rate: プルーム発生時の放熱率
 
 ### 2.3 処理の流れ
+
 1. マントル熱場の更新
-	- 熱蓄積・放熱
-	- プルーム判定 → uplift_force生成
-        ↓
-2. 境界タイプ判定・再分類
-        ↓
-3. プレート運動方程式でωを更新
-        ↓
-4. 応力伝播（弾性薄板モデル）
+
+   - 熱蓄積・放熱
+   - 熱拡散
+   - プルーム判定 → uplift_force生成
+2. プレート運動方程式でωを更新
+3. 地殻属性の移流と境界通過処理
+4. 境界タイプ判定・再分類
+5. 応力伝播（弾性薄板モデル）
+
    - 境界タイプ別に圧縮・引張・せん断応力を生成
    - uplift_forceも応力として追加
-        ↓
-5. 境界で応力テンソルを生成
-		↓
 6. 火山モデル
-        ↓
 7. 各セルの標高・地殻厚を更新
-        ↓
-8. 侵食・堆積・河川更新（詳細はdocs/modules/hydrology/erosion.md）
-        ↓
-9. 活動量メトリクス更新
+8. 侵食・堆積更新（河川更新はHydrologyステージで実施）
+9. アイソスタシー
+10. 活動量メトリクス更新
 
 ## 3. 具体的な仕様
 
@@ -85,6 +89,108 @@ I * dω/dt = τ_slab + τ_ridge + τ_mantle + τ_collision
 
 PassiveMarginは力を生成しないので、そのプレートはτ_mantleによる減衰だけで動く。つまり慣性で動き続けて、徐々に減速する。
 
+#### 3.0.1 海洋地殻年齢と密度
+
+海洋地殻の密度は年齢依存とする。
+
+```text
+age_norm = clamp(age / age_ref, 0, 1)
+
+density_ocean(age)
+= oceanic_base_density + age_density_gain * sqrt(age_norm)
+```
+
+- 大陸地殻 density は固定値を用いる
+- 海洋地殻 density のみ age 依存で増加する
+- `age_ref` で成熟海洋地殻の基準年齢を表す
+
+#### 3.0.2 スラブプルとロールバック
+
+ロールバックは独立した力源ではなく、`τ_slab` の内訳として扱う。
+
+```text
+slab_pull_mag
+= edge_length
+- max(0, density_ocean(age) - mantle_density)
+- slab_depth_est
+- g_eff
+```
+
+ここで `slab_depth_est` は、沈み込み境界の各edgeに対して年齢と収束履歴から求める無次元深度指数とする。
+
+```text
+slab_depth_est
+= subduction_depth_gain * age_norm * convergence_memory
+```
+
+`convergence_memory` は各Subduction境界edgeごとに持つ履歴状態であり、現在の収束速度ではなく継続的な収束の強さを表す。
+
+```text
+convergence_memory[e] +=
+  (convergence_speed_norm[e] - convergence_memory[e]) * convergence_memory_rate
+```
+
+さらに、海溝沿いの局所差を残しつつ数値ノイズを抑えるため、更新後に隣接edge間で弱い空間平滑化を行う。
+
+```text
+convergence_memory_smooth[e] =
+  lerp(
+    convergence_memory[e],
+    mean(neighbor_edge_memories),
+    convergence_memory_spatial_smooth
+  )
+```
+
+スラブの立ちやすさは密度差から近似する。
+
+```text
+dip_factor
+= clamp(
+    (density_ocean(age) - mantle_density) / dip_density_scale,
+    0,
+    1
+  )
+```
+
+ロールバック配分率は以下とする。
+
+```text
+rollback_fraction
+= clamp(
+    rollback_gain
+    * age_norm
+    * dip_factor
+    * slab_depth_est
+    * (1 - convergence_speed_norm * rollback_suppression),
+    0,
+    rollback_fraction_max
+  )
+```
+
+最終的に `τ_slab` は収束成分とロールバック成分へ分配する。
+
+```text
+τ_slab
+= Σ_boundary_edges [
+    slab_pull_mag
+    * (
+        (1 - rollback_fraction) * n_conv
+        + rollback_fraction * n_roll
+      )
+  ]
+```
+
+- `n_conv`: 収束方向
+- `n_roll`: 海溝ヒンジ後退方向
+
+`rollback_fraction` が `rollback_threshold` を超えたedgeでは、背弧側へ引張応力を加える。
+
+```text
+backarc_tension
+= slab_pull_mag * rollback_fraction * backarc_tension_gain
+```
+
+この応力は大陸側セルへ距離減衰つきで伝播し、既存の Rift 形成条件へ接続する。
 
 ### 3.1 プレート分裂、合体
 
@@ -141,8 +247,9 @@ ridge_cellsの両側plate_idが確定している
 ```rust
 mantle_heat[cell] += heat_input
 mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
-for neighbor in neighbors[cell]:
+for neighbor in neighbors[cell] {
     heat_diff += (mantle_heat[neighbor] - mantle_heat[cell]) * diffusion_rate
+}
 mantle_heat[cell] += heat_diff
 ```
 
@@ -167,6 +274,8 @@ PassiveMargin補足:
 - 大陸棚での堆積は地形側の長期更新で扱う
 - 応力源としては中立に扱う
 
+Subduction境界で `rollback_fraction > rollback_threshold` のedgeでは、背弧側に追加の引張応力を付与する。これによりロールバック駆動の後弧拡張を表現する。
+
 #### 応力の形式
 
 2x2行列として保持
@@ -179,13 +288,86 @@ struct StressTensor {
 ```
 
 #### 伝播
+
+```text
 D * ∇⁴w = q(x,y)
+```
 
 D: 地殻の曲げ剛性（rigidityから導出）
 w: 地殻の撓み（変位）
 q: 外力（境界応力・プルーム力）
 
 ### 3.4 火山モデルの仕様
+
+火山活動は境界タイプとマントル熱場から導出される中間状態量 `volcanism` として扱い、その後に標高・地殻厚へ反映する。
+
+#### 3.4.1 火山タイプ
+
+- 島弧火山: Subduction境界の大陸側。スラブ脱水による融点低下。
+- 海嶺火山: Ridge境界。減圧融解。
+- ホットスポット火山: plume閾値を超えたセル。マントルプルームによる局所加熱。
+- 後弧火山: rollbackに伴う背弧引張域。脱水と減圧融解の複合。
+
+#### 3.4.2 島弧火山
+
+```text
+if boundary_type == Subduction {
+    arc_volcanism = slab_flux * arc_volcanism_gain
+}
+```
+
+- `slab_flux` は沈み込みedgeの密度差・収束速度・深度指数から導く
+- 島弧火山帯はSubduction境界の大陸側一定距離に分布させる
+
+#### 3.4.3 海嶺火山
+
+```text
+if boundary_type == Ridge {
+    ridge_volcanism = spreading_rate * ridge_volcanism_gain
+}
+```
+
+- 発散速度が速いほど活発
+- 新しい海洋地殻生成と連動し、`age = 0` とする
+
+#### 3.4.4 ホットスポット火山
+
+```text
+if mantle_heat[cell] > plume_threshold {
+    hotspot_volcanism = (mantle_heat[cell] - plume_threshold) * hotspot_volcanism_gain
+}
+```
+
+- uplift_forceと同時に局所火山活動を発生させる
+- 大陸上ではリフト形成の誘因になりうる
+
+#### 3.4.5 後弧火山
+
+```text
+if rollback_fraction > rollback_threshold {
+    backarc_volcanism = rollback_fraction * backarc_volcanism_gain
+}
+```
+
+- 背弧引張域で発生
+- 後弧盆地形成初期の火山弧分岐を表現する
+
+#### 3.4.6 地形への反映
+
+各火山活動量は合算して公開用 `volcanism` を構成する。
+
+```text
+volcanism = arc_volcanism + ridge_volcanism + hotspot_volcanism + backarc_volcanism
+```
+
+標高と地殻厚には以下のように反映する。
+
+```text
+height[cell] += volcanism * volcanic_uplift_gain
+thickness[cell] += volcanism * volcanic_thickening_gain
+```
+
+海嶺火山は新規海洋地殻生成と一体で扱うため、`oceanic_initial_thickness` と `oceanic_base_density` を再設定してよい。
 
 ## 4. 入出力と状態
 
@@ -209,6 +391,27 @@ q: 外力（境界応力・プルーム力）
 - `subduction_age_coupling`: 海洋地殻年齢と沈み込み強度の連動係数
 - `subduction_initiation_threshold`: PassiveMarginから沈み込み開始へ移行する最小海洋地殻年齢
 - `subduction_density_threshold`: PassiveMarginから沈み込み開始へ移行する最小密度
+- `age_ref`
+- `oceanic_base_density`
+- `age_density_gain`
+- `mantle_density`
+- `rollback_gain`
+- `rollback_suppression`
+- `rollback_fraction_max`
+- `rollback_threshold`
+- `backarc_tension_gain`
+- `dip_density_scale`
+- `subduction_depth_gain`
+- `convergence_memory_rate`
+- `convergence_memory_spatial_smooth`
+- `volcanic_uplift_gain`
+- `volcanic_thickening_gain`
+- `arc_volcanism_gain`
+- `ridge_volcanism_gain`
+- `hotspot_volcanism_gain`
+- `backarc_volcanism_gain`
+- `erosion_thickness_coupling`
+- `deposition_thickness_coupling`
 
 注意:
 - 既存の境界係数や侵食係数はそのまま使い、時間発展では「1回適用の強さ」ではなく「単位時間あたりの増分率」として解釈する。
@@ -223,15 +426,10 @@ pub struct GeologyOutput {
     pub plate_id: Vec<u32>,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
+    pub volcanism: Vec<f32>,
+    pub vertex_buoyancy: Vec<f32>,
 }
 ```
-
-将来的には、活動度観測や可視化向けに追加フィールドを持てる。
-
-- `terrain_activity`
-- `boundary_activity`
-- `uplift_rate`
-- `subsidence_rate`
 
 ### 4.3 地殻内部状態（非公開/永続）
 
@@ -263,15 +461,16 @@ struct VertexCrustState {
     stress: f32,           // 引張(+) / 圧縮(-)
     temperature: f32,      // マントル熱場から受け取る
     rigidity: f32,         // 地殻の硬さ
+    arc_volcanism: f32,
+    ridge_volcanism: f32,
+    hotspot_volcanism: f32,
+    backarc_volcanism: f32,
+}
+
+struct BoundaryEdgeInternal {
+    convergence_memory: f32,
 }
 ```
-
-概念上の保持項目:
-
-- プレートごとの運動状態（回転軸、角速度、活動度）
-- 頂点ごとの地殻属性（海洋/大陸、年齢、厚さ、応力、浮力、侵食感受性）
-- 動的境界情報（境界辺、境界タイプ、強度、直近の再分類結果）
-- 地形更新の活動指標（時代遷移判定に使う）
 
 ## 5. API構成（仕様）
 
@@ -377,11 +576,8 @@ struct VertexCrustState {
 - 海洋/大陸フラグ
 - 基準標高
 - 基準地殻厚/密度（簡略値）
-- 初期速度ではなく、球面剛体回転としての初期角速度ベクトル
+- 初期角速度ベクトル
 - 境界活動に対する係数（剛性、変形しやすさ）
-
-重要:
-- 速度を頂点ごとに直接保持するのではなく、プレートごとの回転状態から導出できる形を基本とする。
 
 ### 6.5 初期標高と境界地形の適用
 
@@ -395,28 +591,19 @@ struct VertexCrustState {
 
 初回の河川計算と簡易侵食は任意とする。
 
-- 高速起動重視: 初回侵食は弱くする、または省略
-- 見た目重視: 従来相当の初期侵食をかける
-
-どちらでも、時間発展の本体は後続のTick更新で行う。
-
 ## 7. Tick更新フェーズ
-
-地形サブシステムは、`World` の1 Tickごとに1回の地形更新を実行する。
-
-`World` との単位対応:
-- `World.tick` は時代ごとの管理時間単位
-- 地形更新は `World.tick` に同期して1回実行する
 
 ### 7.1 更新順序（1回の地形更新）
 
-1. プレート運動更新
-2. 境界再抽出/再分類（必要間隔で）
-3. 境界由来の隆起・沈降・火山弧・リフトの増分適用
-4. 応力緩和・アイソスタシー補正
-5. 侵食・堆積の増分更新
-6. 河川更新（毎回または間引き）
-7. 活動量メトリクス更新
+1. マントル熱場の更新
+2. プレート運動更新
+3. 地殻属性の移流
+4. 境界通過処理による離散属性更新
+5. 境界再抽出/再分類
+6. 境界由来の隆起・沈降・火山・背弧引張の増分適用
+7. 侵食・堆積の増分更新（thickness含む）
+8. アイソスタシー補正
+9. 活動量メトリクス更新
 
 ### 7.2 プレート運動更新
 
@@ -426,81 +613,52 @@ struct VertexCrustState {
 - 頂点位置そのものは共有メッシュを固定し、まずは「速度場と境界判定」だけを更新してよい
 - 境界移動を本格導入する場合は、後述の `plate_id` 再割当モードを使う
 
-初版の実装指針:
-- まずはメッシュ座標を固定し、相対速度だけで境界タイプと地形増分を更新する
+### 7.3 地殻属性の移流
 
-### 7.3 境界再抽出/再分類
+地殻属性は以下の2系統に分けて扱う。
 
-境界辺ごとに、両プレートの相対運動から毎回または一定間隔で分類する。
+- 離散属性: `plate_id`, `crust_type`
 
-```rust
-enum BoundaryType {
-	// 発散
-	Ridge,           // 海嶺（海洋地殻生成）
-	Rift,            // 大地溝帯（分裂途中）
-	
-	// 収束
-	Subduction,      // 海洋プレートが沈み込む
-	Collision,       // 大陸同士の衝突
-	
-	// 横ずれ
-	Transform,       // トランスフォーム断層
-	
-	// 中立
-	PassiveMargin,   // 受動的大陸縁辺（沈み込みなし）
-}
-```
+  - 境界通過で切り替える
+- 連続属性: `age`, `thickness`, `density`
 
-PassiveMarginの応力への影響
-- 境界応力はほぼゼロ
-- 堆積物が大陸棚に積み重なる（将来の地形に影響）
-- 将来的にSubductionに転換する可能性がある（大西洋がいずれ閉じるように）
+  * MUSCL系の移流で更新する
 
-転換条件（PassiveMargin → Subduction）:
+この分離により、境界ぼけを抑えつつ連続量の移動を表現する。
+
+### 7.4 アイソスタシー
+
+アイソスタシーの平衡高度は地殻厚と密度から求める。
+
 ```text
-oceanic_crust.age > subduction_initiation_threshold
-and
-oceanic_crust.density > subduction_density_threshold
+h_eq = thickness * (1 - density_c / mantle_density)
 ```
-上記を満たした境界は、再分類時にSubductionとして扱ってよい。
 
-補足:
-- 海洋/大陸の組み合わせ判定はプレート属性から求める
-- `subduction_age_coupling` により、海洋地殻年齢を沈み込み強度に反映してよい
+更新は緩和型とする。
 
-### 7.4 境界地形の増分適用
+```text
+height[cell] += (h_eq - height[cell]) * isostasy_rate
+```
 
-従来は1回の地形生成で大きく適用していた境界効果を、時間発展版では増分に分解する。
+公開用 `vertex_buoyancy` は `h_eq - height` として保持する。
 
-収束境界:
-- 海溝の深化（海洋側）
-- 火山弧/島弧の隆起
-- 大陸衝突帯の幅広い造山
+### 7.5 侵食・堆積との連動
 
-発散境界:
-- リフト沈降
-- 新しい海洋地殻の生成（簡略モデル）
+侵食と堆積は `height` だけでなく `thickness` にも反映する。
 
-横ずれ境界:
-- 大規模な平均標高変化は抑え、粗さや線状地形を弱く付与
+```text
+height[cell] -= eroded
+thickness[cell] -= eroded * erosion_thickness_coupling
+```
 
-適用則:
-- 境界距離減衰を使う
-- 1回の地形更新あたりの変化量に上限を設ける
-- 応力や地殻厚の状態に応じて効率を変える
+```text
+height[cell] += deposited
+thickness[cell] += deposited * deposition_thickness_coupling
+```
 
-### 7.5 応力緩和とアイソスタシー
+これにより侵食後のリバウンドと堆積盆の沈降を表現する。
 
-境界地形の増分適用後に、地殻の緩和を入れる。
-
-- 応力は `stress_relaxation_rate` で減衰
-- 標高と地殻厚の不整合は `isostasy_rate` で緩和
-
-目的:
-- 境界近傍の過剰な標高スパイクを抑える
-- 長期的に自然な地形変形へ寄せる
-
-### 7.8 活動量メトリクス
+### 7.6 活動量メトリクス
 
 時代遷移判定や予算配分のため、毎 `step_tectonic_terrain` 呼び出しで活動量を記録する。
 

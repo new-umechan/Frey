@@ -19,6 +19,8 @@ pub(super) fn apply_stress_and_surface_update(
     plume_force: &[f32],
     next_vertex_states: &mut [VertexCrustState],
     next_height: &mut [f32],
+    next_volcanism: &mut [f32],
+    next_vertex_buoyancy: &mut [f32],
     params: &GeologyParams,
 ) -> GeologyStepMetrics {
     let cell_count = heights.len();
@@ -40,6 +42,27 @@ pub(super) fn apply_stress_and_surface_update(
         let plume = plume_force.get(i).copied().unwrap_or(0.0);
         tensor.xx += plume * 0.7;
         tensor.yy += plume * 0.7;
+        let slab_conv = boundary_state
+            .slab_convergence_component
+            .get(i)
+            .copied()
+            .unwrap_or(0.0);
+        let slab_roll = boundary_state
+            .slab_rollback_component
+            .get(i)
+            .copied()
+            .unwrap_or(0.0);
+        tensor.xx -= slab_conv * 0.08;
+        tensor.yy -= slab_conv * 0.08;
+        tensor.xx += slab_roll * 0.05;
+        tensor.yy += slab_roll * 0.03;
+        let backarc_tension = boundary_state
+            .backarc_tension
+            .get(i)
+            .copied()
+            .unwrap_or(0.0);
+        tensor.xx += backarc_tension;
+        tensor.yy += backarc_tension;
 
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
@@ -88,11 +111,14 @@ pub(super) fn apply_stress_and_surface_update(
         state.stress = stress;
 
         if state.crust_type == CrustType::Oceanic {
-            state.age = (state.age + 0.003 + 0.006 * (1.0 - plume).clamp(0.0, 1.0)).clamp(0.0, 1.0);
-            state.density = (0.56 + 0.25 * state.age).clamp(0.45, 0.92);
+            let age_inc = params.age_advection_gain.max(0.0) * (0.6 + 0.4 * (1.0 - plume));
+            state.age = (state.age + age_inc).clamp(0.0, params.age_ref.max(1e-4));
+            let age_norm = (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0);
+            state.density =
+                params.oceanic_base_density + params.age_density_gain.max(0.0) * age_norm.sqrt();
         } else {
-            state.age = 1.0;
-            state.density = (0.40 + 0.08 * state.thickness).clamp(0.32, 0.58);
+            state.age = params.age_ref.max(1e-4);
+            state.density = params.continental_crust_density.max(1e-3);
         }
 
         let compressive = (-stress).max(0.0);
@@ -102,17 +128,48 @@ pub(super) fn apply_stress_and_surface_update(
             .get(i)
             .copied()
             .unwrap_or(BoundaryType::PassiveMargin);
-        let volcanic = match boundary_type {
-            BoundaryType::Subduction => 0.004 + plume * 0.6,
-            BoundaryType::Ridge | BoundaryType::Rift => 0.003 + plume * 0.5,
-            _ => plume * 0.35,
-        };
+        let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
+        let rollback_fraction = boundary_state
+            .rollback_fraction
+            .get(i)
+            .copied()
+            .unwrap_or(0.0);
+        let convergence_memory = boundary_state
+            .edge_internal
+            .get(i)
+            .map(|s| s.convergence_memory)
+            .unwrap_or(0.0);
 
-        let uplift = params.uplift_rate_gain.max(0.0) * (compressive + volcanic);
+        state.arc_volcanism = if boundary_type == BoundaryType::Subduction {
+            boundary_activity
+                * (0.35 + 0.65 * convergence_memory)
+                * params.arc_volcanism_gain.max(0.0)
+        } else {
+            0.0
+        };
+        state.ridge_volcanism = if matches!(boundary_type, BoundaryType::Ridge | BoundaryType::Rift)
+        {
+            boundary_activity * params.ridge_volcanism_gain.max(0.0)
+        } else {
+            0.0
+        };
+        state.hotspot_volcanism = plume * params.hotspot_volcanism_gain.max(0.0);
+        state.backarc_volcanism = if rollback_fraction > params.rollback_threshold.max(0.0) {
+            rollback_fraction * params.backarc_volcanism_gain.max(0.0)
+        } else {
+            0.0
+        };
+        let volcanism = state.arc_volcanism
+            + state.ridge_volcanism
+            + state.hotspot_volcanism
+            + state.backarc_volcanism;
+
+        let uplift = params.uplift_rate_gain.max(0.0) * compressive
+            + volcanism * params.volcanic_uplift_gain.max(0.0);
         let subsidence = params.subsidence_rate_gain.max(0.0)
             * (tensile
                 + if state.crust_type == CrustType::Oceanic {
-                    state.age * 0.6
+                    (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0) * 0.6
                 } else {
                     0.0
                 });
@@ -122,21 +179,27 @@ pub(super) fn apply_stress_and_surface_update(
         } else {
             (nbr_sum / nbr_count as f32 - heights[i]) * DEFAULT_DIFFUSION_WEIGHT
         };
-        let isostasy = params.isostasy_rate.max(0.0) * (state.thickness - 0.55);
-        let raw_delta = uplift - subsidence + diffusive + isostasy;
+        let raw_delta = uplift - subsidence + diffusive;
         let delta = raw_delta.clamp(-MAX_HEIGHT_DELTA_PER_STEP, MAX_HEIGHT_DELTA_PER_STEP);
-        let next_h = (heights[i] + delta).clamp(-1.0, 1.0);
+        let mut next_h = (heights[i] + delta).clamp(-1.0, 1.0);
 
         if matches!(boundary_type, BoundaryType::Ridge | BoundaryType::Rift) && next_h < -0.02 {
             state.crust_type = CrustType::Oceanic;
             state.thickness = (state.thickness - 0.010).clamp(0.20, 1.20);
+            state.age = 0.0;
         } else if boundary_type == BoundaryType::Collision && next_h > 0.20 {
             state.crust_type = CrustType::Continental;
             state.thickness = (state.thickness + 0.008).clamp(0.20, 1.20);
+            state.age = params.age_ref.max(1e-4);
         }
 
-        state.thickness =
-            (state.thickness + uplift * 0.5 - subsidence * 0.4 + plume * 0.2).clamp(0.18, 1.25);
+        state.thickness = (state.thickness + uplift * 0.5 - subsidence * 0.4
+            + volcanism * params.volcanic_thickening_gain.max(0.0)
+            + plume * 0.1)
+            .clamp(0.18, 1.25);
+        let density_ratio = (state.density / params.mantle_density.max(1e-3)).clamp(0.1, 1.4);
+        let h_eq = state.thickness * (1.0 - density_ratio);
+        next_h = (next_h + (h_eq - next_h) * params.isostasy_rate.max(0.0)).clamp(-1.0, 1.0);
         state.rigidity = rigidity;
 
         terrain_delta_sum += delta.abs();
@@ -149,6 +212,8 @@ pub(super) fn apply_stress_and_surface_update(
 
         next_vertex_states[i] = state;
         next_height[i] = next_h;
+        next_volcanism[i] = volcanism;
+        next_vertex_buoyancy[i] = h_eq - next_h;
     }
 
     let denom = cell_count.max(1) as f32;

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-03-25T12:10:24.479Z",
+    "generated_at": "2026-03-26T01:19:48.148Z",
     "ticks": 16,
     "level": 6,
     "seeds": [
@@ -14,7 +14,7 @@
       "height_mean": 0.005,
       "height_std": 0.005,
       "max_river_flux": 0.005,
-      "top10_river_flux_sum": 0.01
+      "top10_river_flux_sum": 0.005
     },
     "transition_mode": "fixed_tick",
     "era_boundaries": [
@@ -37,11 +37,11 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12683,
-        "height_mean": -0.11890697479248047,
-        "height_std": 0.21537381410598755,
-        "max_river_flux": 0.993441104888916,
-        "top10_river_flux_sum": 9.41978645324707
+        "land_cells": 12684,
+        "height_mean": -0.10682301968336105,
+        "height_std": 0.18759644031524658,
+        "max_river_flux": 0.995933473110199,
+        "top10_river_flux_sum": 9.640267372131348
       }
     },
     {
@@ -49,11 +49,11 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12679,
-        "height_mean": -0.14645935595035553,
-        "height_std": 0.24103045463562012,
-        "max_river_flux": 0.9967999458312988,
-        "top10_river_flux_sum": 9.551957130432129
+        "land_cells": 12676,
+        "height_mean": -0.1297367364168167,
+        "height_std": 0.2095063477754593,
+        "max_river_flux": 0.9980159401893616,
+        "top10_river_flux_sum": 9.722212791442871
       }
     },
     {
@@ -61,9 +61,9 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12733,
-        "height_mean": -0.12181606143712997,
-        "height_std": 0.20661519467830658,
+        "land_cells": 12734,
+        "height_mean": -0.10841836780309677,
+        "height_std": 0.18065042793750763,
         "max_river_flux": 0.9988851547241211,
         "top10_river_flux_sum": 9.281128883361816
       }
@@ -73,11 +73,11 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12725,
-        "height_mean": -0.16255447268486023,
-        "height_std": 0.2510698735713959,
-        "max_river_flux": 0.9941027164459229,
-        "top10_river_flux_sum": 9.668092727661133
+        "land_cells": 12720,
+        "height_mean": -0.14421483874320984,
+        "height_std": 0.2189183384180069,
+        "max_river_flux": 0.9963436722755432,
+        "top10_river_flux_sum": 9.792642593383789
       }
     }
   ]

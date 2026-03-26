@@ -341,13 +341,14 @@ pub(super) fn finalize_crust_update_state(
         land_ratio,
         river_flux: state.river_flux,
         river_next: state.river_next,
+        volcanism: vec![0.0; cell_count],
+        vertex_buoyancy,
         lake_depth: state.lake_depth,
         vertex_weight,
         plate_is_ocean,
         plate_base_height,
         plate_base_weight,
         vertex_age_norm,
-        vertex_buoyancy,
         debug_trench_strength: boundary_fields.debug_trench_strength,
         debug_arc_strength: boundary_fields.debug_arc_strength,
         debug_backarc_strength: boundary_fields.debug_backarc_strength,
@@ -382,6 +383,22 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
     params.boundary_obliquity_mix = clamp(params.boundary_obliquity_mix, 0.0, 1.0);
     params.boundary_distance_falloff = params.boundary_distance_falloff.max(0.1);
     params.boundary_anisotropy = clamp(params.boundary_anisotropy, 0.0, 1.0);
+    params.rollback_gain = params.rollback_gain.max(0.0);
+    params.rollback_suppression = params.rollback_suppression.max(0.0);
+    params.rollback_fraction_max = clamp(params.rollback_fraction_max, 0.0, 1.0);
+    params.rollback_threshold = clamp(params.rollback_threshold, 0.0, 1.0);
+    params.backarc_tension_gain = params.backarc_tension_gain.max(0.0);
+    params.dip_density_scale = params.dip_density_scale.max(1e-4);
+    params.subduction_depth_gain = params.subduction_depth_gain.max(0.0);
+    params.convergence_memory_rate = clamp(params.convergence_memory_rate, 0.0, 1.0);
+    params.convergence_memory_spatial_smooth =
+        clamp(params.convergence_memory_spatial_smooth, 0.0, 1.0);
+    params.arc_volcanism_gain = params.arc_volcanism_gain.max(0.0);
+    params.ridge_volcanism_gain = params.ridge_volcanism_gain.max(0.0);
+    params.hotspot_volcanism_gain = params.hotspot_volcanism_gain.max(0.0);
+    params.backarc_volcanism_gain = params.backarc_volcanism_gain.max(0.0);
+    params.volcanic_uplift_gain = params.volcanic_uplift_gain.max(0.0);
+    params.volcanic_thickening_gain = params.volcanic_thickening_gain.max(0.0);
     params.river_rain_base = params.river_rain_base.max(0.0);
     params.river_accumulation_threshold = params.river_accumulation_threshold.max(0.0);
     params.erosion_iterations = params.erosion_iterations.min(128);
@@ -403,6 +420,12 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
         clamp(params.continent_foldability_from_competence, 0.0, 1.0);
     params.continent_erodibility_from_competence =
         clamp(params.continent_erodibility_from_competence, 0.0, 1.0);
+    params.mantle_density = params.mantle_density.max(1e-3);
+    params.continental_crust_density = params.continental_crust_density.max(1e-3);
+    params.oceanic_base_density = params.oceanic_base_density.max(1e-3);
+    params.age_density_gain = params.age_density_gain.max(0.0);
+    params.erosion_thickness_coupling = clamp(params.erosion_thickness_coupling, 0.0, 2.0);
+    params.deposition_thickness_coupling = clamp(params.deposition_thickness_coupling, 0.0, 2.0);
     params.tectonic_uplift_gain = params.tectonic_uplift_gain.max(0.0);
     params.uplift_saturation_soft = clamp(params.uplift_saturation_soft, 0.0, 1.0);
     params.uplift_saturation_hard = clamp(
@@ -416,4 +439,5 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
     params.age_advection_gain = params.age_advection_gain.max(0.0);
     params.nonlinear_diffusion_gain = params.nonlinear_diffusion_gain.max(0.0);
     params.isostatic_relax_gain = params.isostatic_relax_gain.max(0.0);
+    params.age_ref = params.age_ref.max(1e-4);
 }

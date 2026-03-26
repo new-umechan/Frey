@@ -46,20 +46,52 @@ pub(super) fn run_hydrology_step_profiled(
 }
 
 pub(super) fn apply_hydrology_erosion_to_geology(world: &mut World) {
-    let geology = &mut world.state.geology;
-    let count = geology
-        .height
-        .len()
-        .min(geology.erosion_rate.len())
-        .min(geology.deposition_rate.len());
-    for i in 0..count {
-        let erosion = geology.erosion_rate[i].max(0.0);
-        let deposition = geology.deposition_rate[i].max(0.0);
-        let delta = deposition - erosion;
-        geology.height[i] =
-            (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+    let default_params = crate::GeologyParams::default();
+    let (erosion_thickness_coupling, deposition_thickness_coupling) = world
+        .runtime
+        .hydrology_dynamics
+        .as_ref()
+        .map(|state| {
+            (
+                state.params.erosion_thickness_coupling,
+                state.params.deposition_thickness_coupling,
+            )
+        })
+        .unwrap_or((
+            default_params.erosion_thickness_coupling,
+            default_params.deposition_thickness_coupling,
+        ));
+    let mut deltas = Vec::new();
+    {
+        let geology = &mut world.state.geology;
+        let count = geology
+            .height
+            .len()
+            .min(geology.erosion_rate.len())
+            .min(geology.deposition_rate.len());
+        deltas.reserve(count);
+        for i in 0..count {
+            let erosion = geology.erosion_rate[i].max(0.0);
+            let deposition = geology.deposition_rate[i].max(0.0);
+            let delta = deposition - erosion;
+            geology.height[i] =
+                (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            deltas.push((erosion, deposition));
+        }
+    }
+    if let Some(dynamics) = world.runtime.geology_dynamics.as_mut() {
+        for (i, (erosion, deposition)) in deltas.into_iter().enumerate() {
+            if i >= dynamics.vertex_states.len() {
+                break;
+            }
+            dynamics.vertex_states[i].thickness = (dynamics.vertex_states[i].thickness
+                - erosion * erosion_thickness_coupling.max(0.0)
+                + deposition * deposition_thickness_coupling.max(0.0))
+            .clamp(0.18, 1.25);
+        }
     }
 
+    let geology = &world.state.geology;
     if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
         if state.height.len() == geology.height.len() {
             state.height.clone_from(&geology.height);

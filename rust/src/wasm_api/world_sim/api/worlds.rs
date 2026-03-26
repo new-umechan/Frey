@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 use crate::sim;
+use crate::sim::world::GeologyInternal;
 use crate::sim::{
     exec_world, exec_world_profiled, exec_world_profiled_detailed, world, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed,
@@ -88,11 +89,16 @@ impl WorldSimController {
 
         let river_flow = terrain.river_flux;
         let river_next = terrain.river_next;
+        let volcanism = terrain.volcanism;
+        let vertex_buoyancy = terrain.vertex_buoyancy;
         let geology = world::GeologyState {
             height: terrain.height,
             plate_id,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
+            volcanism,
+            vertex_buoyancy,
+            geology_internal: vec![GeologyInternal::default(); positions.len()],
             boundary_condition: vec![0.0; positions.len()],
         };
 

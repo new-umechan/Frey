@@ -318,7 +318,39 @@ pub struct GeologyState {
     pub plate_id: Vec<PlateId>,
     pub erosion_rate: Vec<f32>,
     pub deposition_rate: Vec<f32>,
+    #[serde(default)]
+    pub volcanism: Vec<f32>,
+    #[serde(default)]
+    pub vertex_buoyancy: Vec<f32>,
+    #[serde(default)]
+    pub geology_internal: Vec<GeologyInternal>,
     pub boundary_condition: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct GeologyInternal {
+    #[serde(default)]
+    pub crust_type: CrustType,
+    #[serde(default)]
+    pub age: f32,
+    #[serde(default = "default_thickness")]
+    pub thickness: f32,
+    #[serde(default = "default_density")]
+    pub density: f32,
+    #[serde(default)]
+    pub stress: StressTensor,
+    #[serde(default)]
+    pub temperature: f32,
+    #[serde(default = "default_rigidity")]
+    pub rigidity: f32,
+    #[serde(default)]
+    pub arc_volcanism: f32,
+    #[serde(default)]
+    pub ridge_volcanism: f32,
+    #[serde(default)]
+    pub hotspot_volcanism: f32,
+    #[serde(default)]
+    pub backarc_volcanism: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -442,6 +474,9 @@ pub struct CellStore<'a> {
     pub plate_id: &'a [PlateId],
     pub erosion_rate: &'a [f32],
     pub deposition_rate: &'a [f32],
+    pub volcanism: &'a [f32],
+    pub vertex_buoyancy: &'a [f32],
+    pub geology_internal: &'a [GeologyInternal],
     pub temperature: &'a [f32],
     pub precipitation: &'a [f32],
     pub evapotranspiration: &'a [f32],
@@ -466,6 +501,9 @@ pub struct CellStoreMut<'a> {
     pub plate_id: &'a mut Vec<PlateId>,
     pub erosion_rate: &'a mut Vec<f32>,
     pub deposition_rate: &'a mut Vec<f32>,
+    pub volcanism: &'a mut Vec<f32>,
+    pub vertex_buoyancy: &'a mut Vec<f32>,
+    pub geology_internal: &'a mut Vec<GeologyInternal>,
     pub temperature: &'a mut Vec<f32>,
     pub precipitation: &'a mut Vec<f32>,
     pub evapotranspiration: &'a mut Vec<f32>,
@@ -513,6 +551,9 @@ impl WorldState {
             plate_id: &self.geology.plate_id,
             erosion_rate: &self.geology.erosion_rate,
             deposition_rate: &self.geology.deposition_rate,
+            volcanism: &self.geology.volcanism,
+            vertex_buoyancy: &self.geology.vertex_buoyancy,
+            geology_internal: &self.geology.geology_internal,
             temperature: &self.climate.temperature,
             precipitation: &self.climate.precipitation,
             evapotranspiration: &self.climate.evapotranspiration,
@@ -539,6 +580,9 @@ impl WorldState {
             plate_id: &mut self.geology.plate_id,
             erosion_rate: &mut self.geology.erosion_rate,
             deposition_rate: &mut self.geology.deposition_rate,
+            volcanism: &mut self.geology.volcanism,
+            vertex_buoyancy: &mut self.geology.vertex_buoyancy,
+            geology_internal: &mut self.geology.geology_internal,
             temperature: &mut self.climate.temperature,
             precipitation: &mut self.climate.precipitation,
             evapotranspiration: &mut self.climate.evapotranspiration,
@@ -659,7 +703,21 @@ pub struct VertexCrustState {
     #[serde(default = "default_rigidity")]
     pub rigidity: f32,
     #[serde(default)]
+    pub arc_volcanism: f32,
+    #[serde(default)]
+    pub ridge_volcanism: f32,
+    #[serde(default)]
+    pub hotspot_volcanism: f32,
+    #[serde(default)]
+    pub backarc_volcanism: f32,
+    #[serde(default)]
     pub stress_tensor: StressTensor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct BoundaryEdgeInternal {
+    #[serde(default)]
+    pub convergence_memory: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -672,6 +730,18 @@ pub struct BoundaryDynamicsState {
     pub dominant_type: Vec<BoundaryType>,
     #[serde(default)]
     pub activity: Vec<f32>,
+    #[serde(default)]
+    pub edge_pairs: Vec<[u32; 2]>,
+    #[serde(default)]
+    pub edge_internal: Vec<BoundaryEdgeInternal>,
+    #[serde(default)]
+    pub rollback_fraction: Vec<f32>,
+    #[serde(default)]
+    pub backarc_tension: Vec<f32>,
+    #[serde(default)]
+    pub slab_convergence_component: Vec<f32>,
+    #[serde(default)]
+    pub slab_rollback_component: Vec<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]

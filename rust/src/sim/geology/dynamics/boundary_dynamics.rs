@@ -23,60 +23,229 @@ pub(super) fn reclassify_boundaries(
     if boundary_state.activity.len() != cell_count {
         boundary_state.activity = vec![0.0; cell_count];
     }
+    if boundary_state.rollback_fraction.len() != cell_count {
+        boundary_state.rollback_fraction = vec![0.0; cell_count];
+    }
+    if boundary_state.backarc_tension.len() != cell_count {
+        boundary_state.backarc_tension = vec![0.0; cell_count];
+    }
+    if boundary_state.slab_convergence_component.len() != cell_count {
+        boundary_state.slab_convergence_component = vec![0.0; cell_count];
+    }
+    if boundary_state.slab_rollback_component.len() != cell_count {
+        boundary_state.slab_rollback_component = vec![0.0; cell_count];
+    }
 
+    let mut edge_pairs = Vec::<[u32; 2]>::new();
     for i in 0..cell_count {
-        let pos_i = positions[i];
-        let vel_i =
-            plate_velocity_from_state(plate_states.get(plate_id[i].as_usize()), plate_id[i], pos_i);
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
-
-        let mut best_type = BoundaryType::PassiveMargin;
-        let mut best_score = 0.0_f32;
-
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
-            if n >= cell_count || plate_id[n] == plate_id[i] {
+            if n >= cell_count || i >= n || plate_id[i] == plate_id[n] {
                 continue;
             }
+            edge_pairs.push([i as u32, n as u32]);
+        }
+    }
 
-            let pos_n = positions[n];
-            let edge_vec = [
-                pos_n[0] - pos_i[0],
-                pos_n[1] - pos_i[1],
-                pos_n[2] - pos_i[2],
-            ];
-            let edge_len = length3(edge_vec).max(1e-5);
-            let edge_dir = [
-                edge_vec[0] / edge_len,
-                edge_vec[1] / edge_len,
-                edge_vec[2] / edge_len,
-            ];
-            let vel_n = plate_velocity_from_state(
-                plate_states.get(plate_id[n].as_usize()),
-                plate_id[n],
-                pos_n,
-            );
-            let rel_v = [
-                vel_n[0] - vel_i[0],
-                vel_n[1] - vel_i[1],
-                vel_n[2] - vel_i[2],
-            ];
-            let rel_n = dot(rel_v, edge_dir);
-            let rel_mag = length3(rel_v);
-            let rel_t = (rel_mag * rel_mag - rel_n * rel_n).max(0.0).sqrt();
+    if boundary_state.edge_pairs != edge_pairs {
+        boundary_state.edge_pairs = edge_pairs.clone();
+        boundary_state.edge_internal = vec![Default::default(); edge_pairs.len()];
+    } else if boundary_state.edge_internal.len() != edge_pairs.len() {
+        boundary_state.edge_internal = vec![Default::default(); edge_pairs.len()];
+    }
 
-            let candidate =
-                classify_boundary_pair(rel_n, rel_t, vertex_states[i], vertex_states[n], params);
-            if candidate.1 > best_score {
-                best_type = candidate.0;
-                best_score = candidate.1;
+    let mut convergence_norm_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut subduction_age_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut subduction_density_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut edge_types = vec![BoundaryType::PassiveMargin; edge_pairs.len()];
+    let mut edge_scores = vec![0.0_f32; edge_pairs.len()];
+
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        let i = pair[0] as usize;
+        let j = pair[1] as usize;
+        let rel = relative_kinematics(
+            positions[i],
+            positions[j],
+            plate_states.get(plate_id[i].as_usize()),
+            plate_states.get(plate_id[j].as_usize()),
+            plate_id[i],
+            plate_id[j],
+        );
+
+        let (bt, score) = classify_boundary_pair(
+            rel.rel_n,
+            rel.rel_t,
+            vertex_states[i],
+            vertex_states[j],
+            params,
+        );
+        edge_types[eid] = bt;
+        edge_scores[eid] = score.clamp(0.0, 1.0);
+
+        if bt == BoundaryType::Subduction {
+            convergence_norm_edge[eid] = (rel.rel_n * 8.0).clamp(0.0, 1.0);
+            if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
+                subduction_age_edge[eid] = oceanic.age.max(0.0);
+                subduction_density_edge[eid] = oceanic.density.max(0.0);
             }
         }
-
-        boundary_state.dominant_type[i] = best_type;
-        boundary_state.activity[i] = best_score.clamp(0.0, 1.0);
     }
+
+    boundary_state
+        .dominant_type
+        .fill(BoundaryType::PassiveMargin);
+    boundary_state.activity.fill(0.0);
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        let bt = edge_types[eid];
+        let score = edge_scores[eid];
+        for cell in [pair[0] as usize, pair[1] as usize] {
+            if score > boundary_state.activity[cell] {
+                boundary_state.activity[cell] = score;
+                boundary_state.dominant_type[cell] = bt;
+            }
+        }
+    }
+
+    let memory_rate = params.convergence_memory_rate.clamp(0.0, 1.0);
+    for (eid, edge_internal) in boundary_state.edge_internal.iter_mut().enumerate() {
+        let prev = edge_internal.convergence_memory;
+        let next = prev + (convergence_norm_edge[eid] - prev) * memory_rate;
+        edge_internal.convergence_memory = next.clamp(0.0, 1.0);
+    }
+
+    let mut incident_edges = vec![Vec::<usize>::new(); cell_count];
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        incident_edges[pair[0] as usize].push(eid);
+        incident_edges[pair[1] as usize].push(eid);
+    }
+
+    let smooth_mix = params.convergence_memory_spatial_smooth.clamp(0.0, 1.0);
+    let old_memory = boundary_state
+        .edge_internal
+        .iter()
+        .map(|edge| edge.convergence_memory)
+        .collect::<Vec<_>>();
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        let mut acc = 0.0_f32;
+        let mut cnt = 0_u32;
+        for &cid in &[pair[0] as usize, pair[1] as usize] {
+            for &other in &incident_edges[cid] {
+                if other == eid {
+                    continue;
+                }
+                acc += old_memory[other];
+                cnt = cnt.saturating_add(1);
+            }
+        }
+        if cnt == 0 {
+            continue;
+        }
+        boundary_state.edge_internal[eid].convergence_memory =
+            lerp(old_memory[eid], acc / cnt as f32, smooth_mix).clamp(0.0, 1.0);
+    }
+
+    boundary_state.rollback_fraction.fill(0.0);
+    boundary_state.backarc_tension.fill(0.0);
+    boundary_state.slab_convergence_component.fill(0.0);
+    boundary_state.slab_rollback_component.fill(0.0);
+
+    let mantle_density = params.mantle_density.max(1e-3);
+    let dip_density_scale = params.dip_density_scale.max(1e-4);
+    let age_ref = params.age_ref.max(1e-4);
+    let mut cell_rollback_count = vec![0_u32; cell_count];
+
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        if edge_types[eid] != BoundaryType::Subduction {
+            continue;
+        }
+
+        let age_norm = (subduction_age_edge[eid] / age_ref).clamp(0.0, 1.0);
+        let density_ocean = subduction_density_edge[eid];
+        let dip_factor = ((density_ocean - mantle_density) / dip_density_scale).clamp(0.0, 1.0);
+        let memory = boundary_state.edge_internal[eid].convergence_memory;
+        let slab_depth_est = params.subduction_depth_gain.max(0.0) * age_norm * memory;
+        let suppression = (1.0 - convergence_norm_edge[eid] * params.rollback_suppression.max(0.0))
+            .clamp(0.0, 1.0);
+        let rollback =
+            (params.rollback_gain.max(0.0) * age_norm * dip_factor * slab_depth_est * suppression)
+                .clamp(0.0, params.rollback_fraction_max.max(0.0));
+
+        let slab_pull_mag = edge_scores[eid].max(0.0)
+            * (density_ocean - mantle_density).max(0.0)
+            * (1.0 + slab_depth_est);
+        let slab_conv = slab_pull_mag * (1.0 - rollback);
+        let slab_roll = slab_pull_mag * rollback;
+        let backarc = if rollback > params.rollback_threshold.max(0.0) {
+            slab_pull_mag * rollback * params.backarc_tension_gain.max(0.0)
+        } else {
+            0.0
+        };
+
+        for cell in [pair[0] as usize, pair[1] as usize] {
+            boundary_state.rollback_fraction[cell] += rollback;
+            boundary_state.backarc_tension[cell] += backarc;
+            boundary_state.slab_convergence_component[cell] += slab_conv;
+            boundary_state.slab_rollback_component[cell] += slab_roll;
+            cell_rollback_count[cell] = cell_rollback_count[cell].saturating_add(1);
+        }
+    }
+
+    for i in 0..cell_count {
+        let denom = cell_rollback_count[i].max(1) as f32;
+        boundary_state.rollback_fraction[i] = (boundary_state.rollback_fraction[i] / denom)
+            .clamp(0.0, params.rollback_fraction_max.max(0.0));
+        boundary_state.backarc_tension[i] /= denom;
+        boundary_state.slab_convergence_component[i] /= denom;
+        boundary_state.slab_rollback_component[i] /= denom;
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RelativeKinematics {
+    rel_n: f32,
+    rel_t: f32,
+}
+
+fn relative_kinematics(
+    pos_i: [f32; 3],
+    pos_j: [f32; 3],
+    state_i: Option<&PlateKinematicsState>,
+    state_j: Option<&PlateKinematicsState>,
+    plate_i: PlateId,
+    plate_j: PlateId,
+) -> RelativeKinematics {
+    let edge_vec = [
+        pos_j[0] - pos_i[0],
+        pos_j[1] - pos_i[1],
+        pos_j[2] - pos_i[2],
+    ];
+    let edge_len = length3(edge_vec).max(1e-5);
+    let edge_dir = [
+        edge_vec[0] / edge_len,
+        edge_vec[1] / edge_len,
+        edge_vec[2] / edge_len,
+    ];
+    let vel_i = plate_velocity_from_state(state_i, plate_i, pos_i);
+    let vel_j = plate_velocity_from_state(state_j, plate_j, pos_j);
+    let rel_v = [
+        vel_j[0] - vel_i[0],
+        vel_j[1] - vel_i[1],
+        vel_j[2] - vel_i[2],
+    ];
+    let rel_n = dot(rel_v, edge_dir);
+    let rel_mag = length3(rel_v);
+    let rel_t = (rel_mag * rel_mag - rel_n * rel_n).max(0.0).sqrt();
+    RelativeKinematics { rel_n, rel_t }
+}
+
+pub(super) fn plate_velocity_for_cell(
+    plate_states: &[PlateKinematicsState],
+    plate_id: PlateId,
+    pos: [f32; 3],
+) -> [f32; 3] {
+    plate_velocity_from_state(plate_states.get(plate_id.as_usize()), plate_id, pos)
 }
 
 pub(super) fn update_plate_kinematics(
@@ -153,11 +322,13 @@ fn classify_boundary_pair(
         }
 
         if let Some(oceanic_state) = oceanic {
-            let age_gate = oceanic_state.age > params.subduction_initiation_threshold;
-            let density_gate = oceanic_state.density > params.subduction_density_threshold;
-            let age_coupled = (oceanic_state.age * params.subduction_age_coupling
-                + oceanic_state.density)
-                .clamp(0.0, 2.0);
+            let age_norm = (oceanic_state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0);
+            let density_norm =
+                (oceanic_state.density / params.mantle_density.max(1e-3)).clamp(0.0, 2.0);
+            let age_gate = age_norm > params.subduction_initiation_threshold;
+            let density_gate = density_norm > params.subduction_density_threshold;
+            let age_coupled =
+                (age_norm * params.subduction_age_coupling + density_norm).clamp(0.0, 2.0);
             if age_gate && density_gate || age_coupled > 1.0 {
                 bt = BoundaryType::Subduction;
             }
@@ -170,6 +341,20 @@ fn classify_boundary_pair(
     }
 
     (BoundaryType::PassiveMargin, 0.03)
+}
+
+fn densest_oceanic(a: VertexCrustState, b: VertexCrustState) -> Option<VertexCrustState> {
+    let mut oceanic = None;
+    if a.crust_type == CrustType::Oceanic {
+        oceanic = Some(a);
+    }
+    if b.crust_type == CrustType::Oceanic {
+        oceanic = Some(match oceanic {
+            Some(prev) if prev.density >= b.density => prev,
+            _ => b,
+        });
+    }
+    oceanic
 }
 
 fn dominant_plate_boundary_type(

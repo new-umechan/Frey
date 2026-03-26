@@ -32,6 +32,8 @@ pub(super) struct I32FieldTracker {
 #[derive(Clone)]
 pub(super) struct WorldSyncState {
     pub height: F32FieldTracker,
+    pub volcanism: F32FieldTracker,
+    pub vertex_buoyancy: F32FieldTracker,
     pub river_flux: F32FieldTracker,
     pub river_next: I32FieldTracker,
     pub mantle_heat: F32FieldTracker,
@@ -274,6 +276,8 @@ impl WorldSyncState {
             .unwrap_or_else(|| vec![0.5; world.state.geology.height.len()]);
         Self {
             height: F32FieldTracker::new(&world.state.geology.height),
+            volcanism: F32FieldTracker::new(&world.state.geology.volcanism),
+            vertex_buoyancy: F32FieldTracker::new(&world.state.geology.vertex_buoyancy),
             river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
             river_next: I32FieldTracker::new(&world.state.hydrology.river_next),
             mantle_heat: F32FieldTracker::new(&mantle_heat),
@@ -291,6 +295,9 @@ impl WorldSyncState {
 
     pub fn observe_world(&mut self, world: &world::World) {
         self.height.observe(&world.state.geology.height);
+        self.volcanism.observe(&world.state.geology.volcanism);
+        self.vertex_buoyancy
+            .observe(&world.state.geology.vertex_buoyancy);
         self.river_flux.observe(&world.state.hydrology.river_flow);
         self.river_next.observe(&world.state.hydrology.river_next);
 
@@ -334,6 +341,20 @@ impl WorldSyncState {
             }
         } else {
             self.height.discard_pending();
+        }
+        if include_field("volcanism") {
+            if let Some(delta) = self.volcanism.take_delta("volcanism") {
+                deltas.push(delta);
+            }
+        } else {
+            self.volcanism.discard_pending();
+        }
+        if include_field("vertex_buoyancy") {
+            if let Some(delta) = self.vertex_buoyancy.take_delta("vertex_buoyancy") {
+                deltas.push(delta);
+            }
+        } else {
+            self.vertex_buoyancy.discard_pending();
         }
         if include_field("river_flux") {
             if let Some(delta) = self.river_flux.take_delta("river_flux") {
@@ -479,6 +500,8 @@ mod tests {
     fn world_sync_state_discards_pending_for_excluded_fields() {
         let mut state = WorldSyncState {
             height: F32FieldTracker::new(&[1.0, 1.0]),
+            volcanism: F32FieldTracker::new(&[0.0, 0.0]),
+            vertex_buoyancy: F32FieldTracker::new(&[0.0, 0.0]),
             river_flux: F32FieldTracker::new(&[0.0, 0.0]),
             river_next: I32FieldTracker::new(&[-1, -1]),
             mantle_heat: F32FieldTracker::new(&[0.5, 0.5]),

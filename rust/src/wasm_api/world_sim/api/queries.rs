@@ -37,6 +37,24 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: None,
             },
+            "volcanism" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.geology.volcanism.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.volcanism.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.geology.volcanism, stride)),
+                u32_data: None,
+                i32_data: None,
+            },
+            "vertex_buoyancy" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.geology.vertex_buoyancy.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.vertex_buoyancy.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.geology.vertex_buoyancy, stride)),
+                u32_data: None,
+                i32_data: None,
+            },
             "river_flux" => FieldResponse {
                 field_kind,
                 stride,
@@ -95,8 +113,14 @@ impl WorldSimController {
                 field_kind,
                 stride,
                 cell_count: world_ref.state.climate.evapotranspiration.len() as u32,
-                sampled_count: sampled_len(world_ref.state.climate.evapotranspiration.len(), stride),
-                f32_data: Some(sample_f32(&world_ref.state.climate.evapotranspiration, stride)),
+                sampled_count: sampled_len(
+                    world_ref.state.climate.evapotranspiration.len(),
+                    stride,
+                ),
+                f32_data: Some(sample_f32(
+                    &world_ref.state.climate.evapotranspiration,
+                    stride,
+                )),
                 u32_data: None,
                 i32_data: None,
             },
@@ -146,7 +170,10 @@ impl WorldSimController {
                 field_kind,
                 stride,
                 cell_count: world_ref.state.hydrology.river_transport_cost.len() as u32,
-                sampled_count: sampled_len(world_ref.state.hydrology.river_transport_cost.len(), stride),
+                sampled_count: sampled_len(
+                    world_ref.state.hydrology.river_transport_cost.len(),
+                    stride,
+                ),
                 f32_data: Some(sample_f32(
                     &world_ref.state.hydrology.river_transport_cost,
                     stride,

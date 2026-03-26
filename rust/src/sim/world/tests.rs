@@ -16,6 +16,9 @@ fn build_world() -> World {
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
+            volcanism: vec![0.0; 4],
+            vertex_buoyancy: vec![0.0; 4],
+            geology_internal: vec![super::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     )
@@ -48,6 +51,9 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
+            volcanism: vec![0.0; 4],
+            vertex_buoyancy: vec![0.0; 4],
+            geology_internal: vec![super::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     );
@@ -138,6 +144,9 @@ fn metrics_collects_height_and_flux_stats() {
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
+            volcanism: vec![0.0; 4],
+            vertex_buoyancy: vec![0.0; 4],
+            geology_internal: vec![super::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     );
@@ -189,6 +198,9 @@ fn metrics_are_deterministic_for_fixed_seed() {
             plate_id: plate_id_a,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
+            volcanism: vec![0.0; positions.len()],
+            vertex_buoyancy: vec![0.0; positions.len()],
+            geology_internal: vec![super::GeologyInternal::default(); positions.len()],
             boundary_condition: vec![0.0; positions.len()],
         },
     );
@@ -203,6 +215,9 @@ fn metrics_are_deterministic_for_fixed_seed() {
             plate_id: plate_id_b,
             erosion_rate: vec![0.0; world_a.cell_count()],
             deposition_rate: vec![0.0; world_a.cell_count()],
+            volcanism: vec![0.0; world_a.cell_count()],
+            vertex_buoyancy: vec![0.0; world_a.cell_count()],
+            geology_internal: vec![super::GeologyInternal::default(); world_a.cell_count()],
             boundary_condition: vec![0.0; world_a.cell_count()],
         },
     );
@@ -255,6 +270,9 @@ fn river_network_persists_without_early_collapse() {
             plate_id,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
+            volcanism: vec![0.0; positions.len()],
+            vertex_buoyancy: vec![0.0; positions.len()],
+            geology_internal: vec![super::GeologyInternal::default(); positions.len()],
             boundary_condition: vec![0.0; positions.len()],
         },
     );

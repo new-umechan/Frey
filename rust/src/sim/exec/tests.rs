@@ -21,6 +21,9 @@ fn build_test_world() -> World {
         plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
         erosion_rate: vec![0.0; 4],
         deposition_rate: vec![0.0; 4],
+        volcanism: vec![0.0; 4],
+        vertex_buoyancy: vec![0.0; 4],
+        geology_internal: vec![crate::sim::world::GeologyInternal::default(); 4],
         boundary_condition: vec![0.0; 4],
     };
     World::new(mesh, geology)

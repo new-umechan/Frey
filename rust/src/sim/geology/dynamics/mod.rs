@@ -4,12 +4,12 @@ mod boundary_dynamics;
 mod surface_dynamics;
 
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, GeologyDynamicsState, GeologyStepMetrics,
-    PlateId, PlateKinematicsState, StressTensor, VertexCrustState, World,
+    BoundaryDynamicsState, BoundaryType, CrustType, GeologyDynamicsState, GeologyInternal,
+    GeologyStepMetrics, PlateId, PlateKinematicsState, StressTensor, VertexCrustState, World,
 };
 
 use crate::sim::exec::math::{hash01, seeded_axis};
-use boundary_dynamics::{reclassify_boundaries, update_plate_kinematics};
+use boundary_dynamics::{plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics};
 use surface_dynamics::{apply_stress_and_surface_update, preserve_target_sea_ratio};
 
 pub(crate) fn run_geology_dynamics_step(world: &mut World) {
@@ -46,6 +46,21 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     if dynamics.boundary_state.activity.len() != cell_count {
         dynamics.boundary_state.activity = vec![0.0; cell_count];
     }
+    if dynamics.boundary_state.rollback_fraction.len() != cell_count {
+        dynamics.boundary_state.rollback_fraction = vec![0.0; cell_count];
+    }
+    if dynamics.boundary_state.backarc_tension.len() != cell_count {
+        dynamics.boundary_state.backarc_tension = vec![0.0; cell_count];
+    }
+    if world.state.geology.volcanism.len() != cell_count {
+        world.state.geology.volcanism = vec![0.0; cell_count];
+    }
+    if world.state.geology.vertex_buoyancy.len() != cell_count {
+        world.state.geology.vertex_buoyancy = vec![0.0; cell_count];
+    }
+    if world.state.geology.geology_internal.len() != cell_count {
+        world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
+    }
 
     let heights = world.state.geology.height.clone();
     let plate_id = world.state.geology.plate_id.clone();
@@ -61,6 +76,34 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         params,
     );
 
+    update_plate_kinematics(
+        &plate_id,
+        &mut dynamics.plate_states,
+        &dynamics.boundary_state,
+        params,
+    );
+
+    let mut next_vertex_states = advect_continuous_attributes(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &plate_id,
+        &dynamics.plate_states,
+        &dynamics.vertex_states,
+        params,
+    );
+    let mut next_plate_id = plate_id.clone();
+    apply_boundary_crossing_discrete_attrs(
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &dynamics.plate_states,
+        &plate_id,
+        &mut next_plate_id,
+        &mut next_vertex_states,
+        &dynamics.boundary_state,
+    );
+
     let reclassify_interval = params.boundary_reclassify_interval.max(1);
     dynamics.boundary_state.reclassify_interval_ticks = reclassify_interval;
     if dynamics.boundary_state.steps_since_reclassify >= reclassify_interval
@@ -70,9 +113,9 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
             &positions,
             &nbr_offsets,
             &nbrs,
-            &plate_id,
+            &next_plate_id,
             &dynamics.plate_states,
-            &dynamics.vertex_states,
+            &next_vertex_states,
             &mut dynamics.boundary_state,
             params,
         );
@@ -87,25 +130,21 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
             .saturating_add(1);
     }
 
-    update_plate_kinematics(
-        &plate_id,
-        &mut dynamics.plate_states,
-        &dynamics.boundary_state,
-        params,
-    );
-
     let mut next_height = heights.clone();
-    let mut next_vertex_states = dynamics.vertex_states.clone();
+    let mut next_volcanism = world.state.geology.volcanism.clone();
+    let mut next_vertex_buoyancy = world.state.geology.vertex_buoyancy.clone();
     let metrics = apply_stress_and_surface_update(
         &nbr_offsets,
         &nbrs,
         &heights,
-        &plate_id,
+        &next_plate_id,
         &dynamics.boundary_state,
         &dynamics.mantle_heat,
         &plume_force,
         &mut next_vertex_states,
         &mut next_height,
+        &mut next_volcanism,
+        &mut next_vertex_buoyancy,
         params,
     );
 
@@ -115,7 +154,14 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     dynamics.cached_metrics = metrics;
     dynamics.update_index = dynamics.update_index.saturating_add(1);
     world.state.geology.height = next_height;
+    world.state.geology.plate_id = next_plate_id;
+    world.state.geology.volcanism = next_volcanism;
+    world.state.geology.vertex_buoyancy = next_vertex_buoyancy;
     world.state.geology.boundary_condition = dynamics.boundary_state.activity.clone();
+    sync_geology_internal(
+        &mut world.state.geology.geology_internal,
+        &dynamics.vertex_states,
+    );
 
     if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
         if state.height.len() == world.state.geology.height.len() {
@@ -157,6 +203,10 @@ fn ensure_geology_dynamics(world: &mut World) {
             stress: 0.0,
             temperature: 0.5,
             rigidity: 0.75,
+            arc_volcanism: 0.0,
+            ridge_volcanism: 0.0,
+            hotspot_volcanism: 0.0,
+            backarc_volcanism: 0.0,
             stress_tensor: StressTensor::default(),
         };
         cell_count
@@ -176,15 +226,40 @@ fn ensure_geology_dynamics(world: &mut World) {
         } else {
             0.65 + h.clamp(0.0, 0.6) * 0.20
         };
-        vertex_states[i].density = if is_oceanic {
-            0.58 + (-h).clamp(0.0, 0.5) * 0.12
-        } else {
-            0.42 + h.max(0.0).clamp(0.0, 0.5) * 0.08
-        };
+        let age_ref = world
+            .runtime
+            .hydrology_dynamics
+            .as_ref()
+            .map(|s| s.params.age_ref.max(1e-4))
+            .unwrap_or(1.0);
+        let oceanic_base_density = world
+            .runtime
+            .hydrology_dynamics
+            .as_ref()
+            .map(|s| s.params.oceanic_base_density)
+            .unwrap_or(2.90);
+        let continental_density = world
+            .runtime
+            .hydrology_dynamics
+            .as_ref()
+            .map(|s| s.params.continental_crust_density)
+            .unwrap_or(2.70);
+        let age_density_gain = world
+            .runtime
+            .hydrology_dynamics
+            .as_ref()
+            .map(|s| s.params.age_density_gain.max(0.0))
+            .unwrap_or(0.25);
         vertex_states[i].age = if is_oceanic {
-            (0.08 + (-h).clamp(0.0, 0.5) * 0.5).clamp(0.0, 1.0)
+            (0.08 + (-h).clamp(0.0, 0.5) * 0.5).clamp(0.0, 1.0) * age_ref
         } else {
-            1.0
+            age_ref
+        };
+        vertex_states[i].density = if is_oceanic {
+            let age_norm = (vertex_states[i].age / age_ref).clamp(0.0, 1.0);
+            oceanic_base_density + age_density_gain * age_norm.sqrt()
+        } else {
+            continental_density
         };
         vertex_states[i].rigidity = if is_oceanic { 0.55 } else { 0.82 };
         mantle_heat[i] = if is_oceanic { 0.34 } else { 0.58 };
@@ -200,10 +275,25 @@ fn ensure_geology_dynamics(world: &mut World) {
             steps_since_reclassify: 0,
             dominant_type: vec![BoundaryType::PassiveMargin; cell_count],
             activity: vec![0.0; cell_count],
+            edge_pairs: Vec::new(),
+            edge_internal: Vec::new(),
+            rollback_fraction: vec![0.0; cell_count],
+            backarc_tension: vec![0.0; cell_count],
+            slab_convergence_component: vec![0.0; cell_count],
+            slab_rollback_component: vec![0.0; cell_count],
         },
         mantle_heat,
         cached_metrics: GeologyStepMetrics::default(),
     });
+    if world.state.geology.geology_internal.len() != cell_count {
+        world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
+    }
+    if let Some(dynamics) = world.runtime.geology_dynamics.as_ref() {
+        sync_geology_internal(
+            &mut world.state.geology.geology_internal,
+            &dynamics.vertex_states,
+        );
+    }
 }
 
 fn build_plate_states(plate_ids: &[PlateId]) -> Vec<PlateKinematicsState> {
@@ -269,4 +359,195 @@ fn update_mantle_heat_and_plumes(
 
     mantle_heat.copy_from_slice(&next);
     plume_force
+}
+
+fn advect_continuous_attributes(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate_states: &[PlateKinematicsState],
+    vertex_states: &[VertexCrustState],
+    params: &GeologyParams,
+) -> Vec<VertexCrustState> {
+    let mut next = vertex_states.to_vec();
+    let dt = params.age_advection_gain.max(0.0).min(0.25);
+    if dt <= 0.0 {
+        return next;
+    }
+
+    let age_ref = params.age_ref.max(1e-4);
+    let density_min = params
+        .continental_crust_density
+        .min(params.oceanic_base_density)
+        * 0.75;
+    let density_max = (params.oceanic_base_density + params.age_density_gain.max(0.0) + 0.2)
+        .max(density_min + 1e-3);
+    let age_values = vertex_states.iter().map(|s| s.age).collect::<Vec<_>>();
+    let thickness_values = vertex_states
+        .iter()
+        .map(|s| s.thickness)
+        .collect::<Vec<_>>();
+    let density_values = vertex_states.iter().map(|s| s.density).collect::<Vec<_>>();
+    for i in 0..vertex_states.len() {
+        let pos_i = positions[i];
+        let velocity = plate_velocity_for_cell(plate_states, plate_id[i], pos_i);
+        let start = nbr_offsets[i] as usize;
+        let end = nbr_offsets[i + 1] as usize;
+        let neighbors = &nbrs[start..end];
+        if neighbors.is_empty() {
+            continue;
+        }
+
+        next[i].age = muscl_like_advect_scalar(
+            i,
+            vertex_states[i].age,
+            &age_values,
+            neighbors,
+            positions,
+            velocity,
+            dt,
+        )
+        .clamp(0.0, age_ref);
+        next[i].thickness = muscl_like_advect_scalar(
+            i,
+            vertex_states[i].thickness,
+            &thickness_values,
+            neighbors,
+            positions,
+            velocity,
+            dt,
+        )
+        .clamp(0.18, 1.25);
+        next[i].density = muscl_like_advect_scalar(
+            i,
+            vertex_states[i].density,
+            &density_values,
+            neighbors,
+            positions,
+            velocity,
+            dt,
+        )
+        .clamp(density_min, density_max);
+    }
+    next
+}
+
+fn muscl_like_advect_scalar(
+    index: usize,
+    center_value: f32,
+    field: &[f32],
+    neighbors: &[u32],
+    positions: &[[f32; 3]],
+    velocity: [f32; 3],
+    dt: f32,
+) -> f32 {
+    let mut raw = 0.0_f32;
+    let mut count = 0_u32;
+    let mut min_v = center_value;
+    let mut max_v = center_value;
+    for &n_u32 in neighbors {
+        let n = n_u32 as usize;
+        if n >= field.len() {
+            continue;
+        }
+        let dir_raw = [
+            positions[n][0] - positions[index][0],
+            positions[n][1] - positions[index][1],
+            positions[n][2] - positions[index][2],
+        ];
+        let len =
+            ((dir_raw[0] * dir_raw[0]) + (dir_raw[1] * dir_raw[1]) + (dir_raw[2] * dir_raw[2]))
+                .sqrt()
+                .max(1e-5);
+        let dir = [dir_raw[0] / len, dir_raw[1] / len, dir_raw[2] / len];
+        let dq = field[n] - center_value;
+        raw += dq * (velocity[0] * dir[0] + velocity[1] * dir[1] + velocity[2] * dir[2]);
+        min_v = min_v.min(field[n]);
+        max_v = max_v.max(field[n]);
+        count = count.saturating_add(1);
+    }
+    if count == 0 {
+        return center_value;
+    }
+    let predicted = center_value - dt * (raw / count as f32);
+    predicted.clamp(min_v, max_v)
+}
+
+fn apply_boundary_crossing_discrete_attrs(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_states: &[PlateKinematicsState],
+    plate_id_prev: &[PlateId],
+    plate_id_next: &mut [PlateId],
+    vertex_states: &mut [VertexCrustState],
+    boundary_state: &BoundaryDynamicsState,
+) {
+    let mut next_crust = vertex_states
+        .iter()
+        .map(|s| s.crust_type)
+        .collect::<Vec<_>>();
+    for i in 0..plate_id_prev.len() {
+        let start = nbr_offsets[i] as usize;
+        let end = nbr_offsets[i + 1] as usize;
+        let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
+        if boundary_activity < 0.12 {
+            continue;
+        }
+
+        let mut best_score = 0.0_f32;
+        let mut best_plate = plate_id_prev[i];
+        let mut best_crust = next_crust[i];
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            if n >= plate_id_prev.len() || plate_id_prev[n] == plate_id_prev[i] {
+                continue;
+            }
+            let vel_n = plate_velocity_for_cell(plate_states, plate_id_prev[n], positions[n]);
+            let dir_raw = [
+                positions[i][0] - positions[n][0],
+                positions[i][1] - positions[n][1],
+                positions[i][2] - positions[n][2],
+            ];
+            let len =
+                ((dir_raw[0] * dir_raw[0]) + (dir_raw[1] * dir_raw[1]) + (dir_raw[2] * dir_raw[2]))
+                    .sqrt()
+                    .max(1e-5);
+            let dir = [dir_raw[0] / len, dir_raw[1] / len, dir_raw[2] / len];
+            let inflow = vel_n[0] * dir[0] + vel_n[1] * dir[1] + vel_n[2] * dir[2];
+            let score = inflow.max(0.0) * boundary_activity;
+            if score > best_score && inflow > 0.02 {
+                best_score = score;
+                best_plate = plate_id_prev[n];
+                best_crust = vertex_states[n].crust_type;
+            }
+        }
+        if best_score > 0.03 {
+            plate_id_next[i] = best_plate;
+            next_crust[i] = best_crust;
+        }
+    }
+    for (i, crust) in next_crust.into_iter().enumerate() {
+        vertex_states[i].crust_type = crust;
+    }
+}
+
+fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustState]) {
+    let count = target.len().min(source.len());
+    for i in 0..count {
+        target[i] = GeologyInternal {
+            crust_type: source[i].crust_type,
+            age: source[i].age,
+            thickness: source[i].thickness,
+            density: source[i].density,
+            stress: source[i].stress_tensor,
+            temperature: source[i].temperature,
+            rigidity: source[i].rigidity,
+            arc_volcanism: source[i].arc_volcanism,
+            ridge_volcanism: source[i].ridge_volcanism,
+            hotspot_volcanism: source[i].hotspot_volcanism,
+            backarc_volcanism: source[i].backarc_volcanism,
+        };
+    }
 }

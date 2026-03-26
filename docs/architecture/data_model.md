@@ -26,8 +26,6 @@ struct Simulation {
 }
 ```
 
----
-
 ## ID型定義
 
 すべてのIDはnewtypeパターンで定義する。異なるID型の混在はコンパイルエラーとなる。
@@ -40,8 +38,6 @@ struct SettlementId(u32);
 struct RegionId(u32);
 struct PlateId(u32);
 ```
-
----
 
 ## CellStore
 
@@ -65,6 +61,10 @@ struct CellStore {
     // --- Geology ---
     height:               Vec<f32>,
     plate_id:             Vec<PlateId>,
+    volcanism:            Vec<f32>,
+    vertex_buoyancy:      Vec<f32>,
+
+    geology_internal:     Vec<GeologyInternal>,
 
     // --- Climate ---
     temperature:          Vec<f32>,
@@ -74,8 +74,7 @@ struct CellStore {
     aridity:              Vec<f32>,
     ocean_temperature:    Vec<f32>,
 
-    // --- Hydrology ---
-    river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,  // (流下先, 分配率) のペア。MFD採用のため複数流下先を持つ
+    river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,
     erosion_rate:         Vec<f32>,
@@ -124,9 +123,31 @@ struct CellStore {
 
 ### 内部状態Componentの型定義
 
-他モジュールが読む公開Componentと、所有モジュール以外が読まない内部状態Componentは、
-同じ `CellStore` 内に置いたまま命名で分離する（`_internal` サフィックス）。
-読み取り規約の境界は `docs/architecture/module_boundaries.md` で定義する。
+```rust
+struct GeologyInternal {
+    crust_type:        CrustType,
+    age:               f32,
+    thickness:         f32,
+    density:           f32,
+
+    stress:            StressTensor,
+    temperature:       f32,
+    rigidity:          f32,
+
+    arc_volcanism:     f32,
+    ridge_volcanism:   f32,
+    hotspot_volcanism: f32,
+    backarc_volcanism: f32,
+}
+
+struct BoundaryEdgeInternal {
+    convergence_memory: f32,
+}
+```
+
+`plate_id` と `crust_type` は離散属性として境界通過で切り替える。
+`age`・`thickness`・`density` は連続属性として移流する。
+`stress`・`temperature`・`rigidity` はその場で毎tick再計算する。
 
 ## hecs::World
 
