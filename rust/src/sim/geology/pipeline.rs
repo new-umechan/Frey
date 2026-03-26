@@ -99,14 +99,16 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 &mut state.rng,
             );
             let mut plate_id = partition_plates(
-                &state.positions,
-                &state.phi,
-                &plate_cost_warp_basis,
-                &state.nbr_offsets,
-                &state.nbrs,
+                PlatePartitionInput {
+                    positions: &state.positions,
+                    phi: &state.phi,
+                    plate_cost_warp_basis: &plate_cost_warp_basis,
+                    nbr_offsets: &state.nbr_offsets,
+                    nbrs: &state.nbrs,
+                    boundary_band: state.params.boundary_band,
+                },
                 &seeds,
                 &growth_profiles,
-                state.params.boundary_band,
             );
             plate_id = compact_plate_ids(plate_id, plate_count);
             cleanup_plate_components(&state.nbr_offsets, &state.nbrs, &mut plate_id, plate_count);
@@ -159,7 +161,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
         }
         CrustUpdatePhase::BuildBaseHeight => {
             let mut height = vec![0.0; state.positions.len()];
-            for v in 0..state.positions.len() {
+            for (v, height_v) in height.iter_mut().enumerate().take(state.positions.len()) {
                 let pid = state.plate_id[v] as usize;
                 let boundary_w = state.plate_boundary_proximity[v];
                 let land_ocean_scale = if state.attributes[pid].is_ocean {
@@ -176,7 +178,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 } else {
                     state.attributes[pid].base_height
                 };
-                height[v] = clamp(
+                *height_v = clamp(
                     crust_base
                         + 0.08 * state.phi[v]
                         + low_amp * state.band_low[v]
@@ -192,27 +194,31 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
         }
         CrustUpdatePhase::ApplyBoundaryRelief => {
             let mut boundary_fields = apply_boundary_model(
-                &state.positions,
-                &state.nbr_offsets,
-                &state.nbrs,
-                &state.plate_id,
-                &state.attributes,
-                &state.vertex_lithosphere,
-                &state.boundary_edges,
+                BoundaryModelInput {
+                    positions: &state.positions,
+                    nbr_offsets: &state.nbr_offsets,
+                    nbrs: &state.nbrs,
+                    plate_id: &state.plate_id,
+                    attributes: &state.attributes,
+                    vertex_lithosphere: &state.vertex_lithosphere,
+                    boundary_edges: &state.boundary_edges,
+                    params: &state.params,
+                },
                 &mut state.height,
-                &state.params,
             );
             apply_intraplate_fold_belts(
-                &state.positions,
-                &state.nbr_offsets,
-                &state.nbrs,
-                &state.plate_id,
-                &state.attributes,
-                &state.vertex_lithosphere,
-                &state.boundary_edges,
+                IntraplateFoldInput {
+                    positions: &state.positions,
+                    nbr_offsets: &state.nbr_offsets,
+                    nbrs: &state.nbrs,
+                    plate_id: &state.plate_id,
+                    attributes: &state.attributes,
+                    vertex_lithosphere: &state.vertex_lithosphere,
+                    boundary_edges: &state.boundary_edges,
+                    params: &state.params,
+                },
                 &mut state.height,
                 &mut boundary_fields,
-                &state.params,
             );
             state.boundary_fields = Some(boundary_fields);
             state.phase = CrustUpdatePhase::ApplyCrustErosion;
@@ -359,7 +365,7 @@ pub(super) fn finalize_crust_update_state(
 
 pub(super) fn sanitize_params(params: &mut GeologyParams) {
     params.level = params.level.min(8);
-    params.harmonic_max_l = params.harmonic_max_l.max(2).min(8);
+    params.harmonic_max_l = params.harmonic_max_l.clamp(2, 8);
     params.spectral_alpha = params.spectral_alpha.max(0.1);
     if params.plate_count_min < 2 {
         params.plate_count_min = 2;

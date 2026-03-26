@@ -157,7 +157,7 @@ pub(super) fn generate_frequency_bands(
     spectral_alpha: f32,
     rng: &mut DeterministicRng,
 ) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
-    let low_max = harmonic_max_l.max(3).min(5);
+    let low_max = harmonic_max_l.clamp(3, 5);
     let mid_max = (harmonic_max_l + 3).max(low_max + 1).min(10);
 
     let mut low = evaluate_phi_band(spherical, 2, low_max, spectral_alpha + 0.35, rng);

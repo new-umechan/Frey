@@ -212,7 +212,7 @@ pub(super) fn enforce_sink_overflow_routes(
         return;
     }
 
-    for i in 0..v_count {
+    for (i, route_cells) in routes.iter_mut().enumerate().take(v_count) {
         let sid_raw = state.sink_id[i];
         if sid_raw < 0 {
             continue;
@@ -225,29 +225,46 @@ pub(super) fn enforce_sink_overflow_routes(
         let spill_from = state.sink_spill_cell.get(sid).copied().unwrap_or(-1);
         let spill_to = state.sink_spill_to.get(sid).copied().unwrap_or(-1);
         if spill_from == i as i32 && spill_to >= 0 {
-            routes[i].clear();
-            routes[i].push((spill_to as u32, 1.0));
+            route_cells.clear();
+            route_cells.push((spill_to as u32, 1.0));
             continue;
         }
 
         let route = state.sink_route_next.get(i).copied().unwrap_or(-1);
         if route >= 0 {
-            routes[i].clear();
-            routes[i].push((route as u32, 1.0));
+            route_cells.clear();
+            route_cells.push((route as u32, 1.0));
         }
     }
 }
 
+pub(super) struct RiverNetworkConstraintInput<'a> {
+    pub height: &'a [f32],
+    pub previous_flux: &'a [f32],
+    pub accumulation_threshold: f32,
+}
+
+pub(super) struct RiverNetworkConstraintBuffers<'a> {
+    pub flux: &'a mut [f32],
+    pub primary_next: &'a mut [i32],
+    pub downstream_offsets: &'a mut [u32],
+    pub downstream_cells: &'a mut Vec<u32>,
+    pub downstream_weights: &'a mut Vec<f32>,
+}
+
 pub(super) fn apply_river_network_constraints(
-    height: &[f32],
-    flux: &mut [f32],
-    primary_next: &mut [i32],
-    downstream_offsets: &mut [u32],
-    downstream_cells: &mut Vec<u32>,
-    downstream_weights: &mut Vec<f32>,
-    previous_flux: &[f32],
-    accumulation_threshold: f32,
+    input: RiverNetworkConstraintInput<'_>,
+    buffers: &mut RiverNetworkConstraintBuffers<'_>,
 ) {
+    let height = input.height;
+    let previous_flux = input.previous_flux;
+    let accumulation_threshold = input.accumulation_threshold;
+    let flux = &mut *buffers.flux;
+    let primary_next = &mut *buffers.primary_next;
+    let downstream_offsets = &mut *buffers.downstream_offsets;
+    let downstream_cells = &mut *buffers.downstream_cells;
+    let downstream_weights = &mut *buffers.downstream_weights;
+
     let threshold_on = accumulation_threshold.max(0.0);
     let threshold_off = (threshold_on * ACTIVE_OFF_THRESHOLD_SCALE).max(0.0);
 
@@ -316,18 +333,18 @@ pub(super) fn align_flow_heading(
     heading: &mut [[f32; 3]],
     river_next: &[i32],
 ) {
-    for i in 0..heading.len() {
+    for (i, heading_i) in heading.iter_mut().enumerate() {
         let next = river_next.get(i).copied().unwrap_or(-1);
         if next < 0 {
-            heading[i] = [0.0, 0.0, 0.0];
+            *heading_i = [0.0, 0.0, 0.0];
             continue;
         }
         let n = next as usize;
         if n >= positions.len() {
-            heading[i] = [0.0, 0.0, 0.0];
+            *heading_i = [0.0, 0.0, 0.0];
             continue;
         }
-        heading[i] = flow_direction(positions, i, n);
+        *heading_i = flow_direction(positions, i, n);
     }
 }
 

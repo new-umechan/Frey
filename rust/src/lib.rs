@@ -1,6 +1,6 @@
 mod common;
-#[path = "generated/geology_params_defaults.rs"]
-mod geology_params_defaults;
+#[path = "generated/terrain_params_defaults.rs"]
+mod terrain_params_defaults;
 pub mod sim;
 mod wasm_api;
 pub use sim::world;

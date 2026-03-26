@@ -473,7 +473,7 @@ impl ManagedWorld {
     }
 
     pub fn save_history_snapshot_if_needed(&mut self) {
-        if self.world.clock.tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
+        if !self.world.clock.tick.is_multiple_of(HISTORY_SNAPSHOT_INTERVAL) {
             return;
         }
         self.world

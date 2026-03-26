@@ -19,7 +19,7 @@ mod sync;
 use fallback::run_river_fallback;
 use network::{
     align_flow_heading, apply_river_network_constraints, build_river_network,
-    smooth_and_normalize_flux,
+    smooth_and_normalize_flux, RiverNetworkConstraintBuffers, RiverNetworkConstraintInput,
 };
 use profiling::{profile_elapsed_ms, profile_now};
 use routing::{
@@ -176,15 +176,20 @@ fn run_river_step_with_erosion_state(
             &mut state.flux_scale_ema,
             &mut state.scratch_flux_samples,
         );
+        let mut constraint_buffers = RiverNetworkConstraintBuffers {
+            flux: &mut rebuilt.flux,
+            primary_next: &mut rebuilt.primary_next,
+            downstream_offsets: &mut rebuilt.downstream_offsets,
+            downstream_cells: &mut rebuilt.downstream_cells,
+            downstream_weights: &mut rebuilt.downstream_weights,
+        };
         apply_river_network_constraints(
-            &state.height,
-            &mut rebuilt.flux,
-            &mut rebuilt.primary_next,
-            &mut rebuilt.downstream_offsets,
-            &mut rebuilt.downstream_cells,
-            &mut rebuilt.downstream_weights,
-            &state.river_flux,
-            state.params.river_accumulation_threshold,
+            RiverNetworkConstraintInput {
+                height: &state.height,
+                previous_flux: &state.river_flux,
+                accumulation_threshold: state.params.river_accumulation_threshold,
+            },
+            &mut constraint_buffers,
         );
         align_flow_heading(mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
         state.prev_river_next.clone_from(&state.river_next);
@@ -326,8 +331,8 @@ fn update_erosion_and_deposition_rates(
         .min(next_height.len());
     geology.erosion_rate.fill(0.0);
     geology.deposition_rate.fill(0.0);
-    for i in 0..count {
-        let delta = next_height[i] - geology.height[i];
+    for (i, &next_h) in next_height.iter().enumerate().take(count) {
+        let delta = next_h - geology.height[i];
         if delta >= 0.0 {
             geology.deposition_rate[i] = delta;
         } else {

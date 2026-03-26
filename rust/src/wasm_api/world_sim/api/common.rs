@@ -23,7 +23,7 @@ pub(super) fn validate_integer_tick(tick: f64, rounded: u64) -> Result<(), JsVal
 }
 
 pub(super) fn validate_history_tick(tick: u64) -> Result<(), JsValue> {
-    if tick % HISTORY_SNAPSHOT_INTERVAL != 0 {
+    if !tick.is_multiple_of(HISTORY_SNAPSHOT_INTERVAL) {
         return Err(JsValue::from_str(&format!(
             "tick {tick} is not aligned with history interval {HISTORY_SNAPSHOT_INTERVAL}"
         )));

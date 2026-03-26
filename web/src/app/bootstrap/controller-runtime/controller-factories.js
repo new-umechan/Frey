@@ -1,4 +1,4 @@
-import { GEOLOGY_PARAMS } from "../../../interface/params/geology.js";
+import { TERRAIN_PARAMS } from "../../../interface/params/terrain.js";
 import { DEFAULT_ERA_SCALE, LEVEL } from "../../../core/constants.js";
 import {
     createEraMetrics,
@@ -153,7 +153,7 @@ function createTerrainGenerationRuntime(context, playbackControllerRef, syncWorl
         seedInput: context.seedInput,
         worldSimController: context.worldSimController,
         level: LEVEL,
-        terrainParams: GEOLOGY_PARAMS,
+        terrainParams: TERRAIN_PARAMS,
         world: context.world,
         worldState: context.worldState,
         createEmptyLayers,
@@ -206,7 +206,7 @@ function createPerfControllers(context, playbackControllerRef) {
         perfControls: context.perfControls,
         perfStatFields: context.perfStatFields,
         workerUrl: PERF_BENCH_WORKER_URL,
-        terrainParams: GEOLOGY_PARAMS,
+        terrainParams: TERRAIN_PARAMS,
         level: LEVEL,
         createBenchmarkProfile,
         createBenchmarkConsoleTable,

@@ -1,16 +1,29 @@
 use super::*;
 
+pub(super) struct BoundaryModelInput<'a> {
+    pub positions: &'a [[f32; 3]],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub plate_id: &'a [u32],
+    pub attributes: &'a [PlateAttr],
+    pub vertex_lithosphere: &'a [VertexLithosphere],
+    pub boundary_edges: &'a [BoundaryEdge],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn apply_boundary_model(
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    plate_id: &[u32],
-    attributes: &[PlateAttr],
-    vertex_lithosphere: &[VertexLithosphere],
-    boundary_edges: &[BoundaryEdge],
+    input: BoundaryModelInput<'_>,
     height: &mut [f32],
-    params: &GeologyParams,
 ) -> BoundaryFields {
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let plate_id = input.plate_id;
+    let attributes = input.attributes;
+    let vertex_lithosphere = input.vertex_lithosphere;
+    let boundary_edges = input.boundary_edges;
+    let params = input.params;
+
     if boundary_edges.is_empty() {
         return BoundaryFields {
             preserve_strength: vec![0.0; height.len()],
@@ -25,7 +38,7 @@ pub(super) fn apply_boundary_model(
         positions,
         nbr_offsets,
         nbrs,
-        &boundary_edges,
+        boundary_edges,
         height.len(),
     );
 
@@ -140,18 +153,18 @@ pub(super) fn apply_boundary_model(
                                     ring_weight(d, arc_center, params.boundary_arc_width * 0.7);
                                 let arc_gain = params.arc_gain;
                                 let (arc_multi_w, arc_multi_dist_scale) =
-                                    accumulate_multi_edge_arc_signal(
-                                        v,
+                                    accumulate_multi_edge_arc_signal(ArcSignalInput {
+                                        vertex: v,
                                         pid,
                                         positions,
                                         nbr_offsets,
                                         nbrs,
-                                        &nearest_edge,
+                                        nearest_edge: &nearest_edge,
                                         boundary_edges,
                                         attributes,
                                         vertex_lithosphere,
                                         params,
-                                    );
+                                    });
                                 let arc_apply_w = arc_multi_w.max(arc_w);
                                 let arc_apply_dist_scale = arc_multi_dist_scale.max(dist_scale);
                                 delta[v] +=
@@ -287,18 +300,31 @@ pub(super) fn apply_boundary_model(
     }
 }
 
+pub(super) struct IntraplateFoldInput<'a> {
+    pub positions: &'a [[f32; 3]],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub plate_id: &'a [u32],
+    pub attributes: &'a [PlateAttr],
+    pub vertex_lithosphere: &'a [VertexLithosphere],
+    pub boundary_edges: &'a [BoundaryEdge],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn apply_intraplate_fold_belts(
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    plate_id: &[u32],
-    attributes: &[PlateAttr],
-    vertex_lithosphere: &[VertexLithosphere],
-    boundary_edges: &[BoundaryEdge],
+    input: IntraplateFoldInput<'_>,
     height: &mut [f32],
     boundary_fields: &mut BoundaryFields,
-    params: &GeologyParams,
 ) {
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let plate_id = input.plate_id;
+    let attributes = input.attributes;
+    let vertex_lithosphere = input.vertex_lithosphere;
+    let boundary_edges = input.boundary_edges;
+    let params = input.params;
+
     if boundary_edges.is_empty() || height.is_empty() {
         return;
     }
@@ -599,18 +625,33 @@ pub(super) fn estimate_subduction_angle_proxy(
     )
 }
 
+pub(super) struct ArcSignalInput<'a> {
+    pub vertex: usize,
+    pub pid: usize,
+    pub positions: &'a [[f32; 3]],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub nearest_edge: &'a [usize],
+    pub boundary_edges: &'a [BoundaryEdge],
+    pub attributes: &'a [PlateAttr],
+    pub vertex_lithosphere: &'a [VertexLithosphere],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn accumulate_multi_edge_arc_signal(
-    vertex: usize,
-    pid: usize,
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    nearest_edge: &[usize],
-    boundary_edges: &[BoundaryEdge],
-    attributes: &[PlateAttr],
-    vertex_lithosphere: &[VertexLithosphere],
-    params: &GeologyParams,
+    input: ArcSignalInput<'_>,
 ) -> (f32, f32) {
+    let vertex = input.vertex;
+    let pid = input.pid;
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let nearest_edge = input.nearest_edge;
+    let boundary_edges = input.boundary_edges;
+    let attributes = input.attributes;
+    let vertex_lithosphere = input.vertex_lithosphere;
+    let params = input.params;
+
     let mut candidates = Vec::with_capacity(24);
     push_unique_edge_candidate(&mut candidates, nearest_edge[vertex]);
 
@@ -709,7 +750,7 @@ pub(super) fn push_unique_edge_candidate(candidates: &mut Vec<usize>, edge_idx: 
     if edge_idx == usize::MAX {
         return;
     }
-    if candidates.iter().any(|&x| x == edge_idx) {
+    if candidates.contains(&edge_idx) {
         return;
     }
     candidates.push(edge_idx);

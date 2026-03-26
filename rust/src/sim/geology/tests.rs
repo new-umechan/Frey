@@ -29,14 +29,16 @@ mod tests {
         let plate_cost_warp_basis =
             super::generate_plate_cost_warp_basis(positions.len(), &nbr_offsets, &nbrs, &mut rng);
         let mut plate_id = super::partition_plates(
-            &positions,
-            &phi,
-            &plate_cost_warp_basis,
-            &nbr_offsets,
-            &nbrs,
+            super::PlatePartitionInput {
+                positions: &positions,
+                phi: &phi,
+                plate_cost_warp_basis: &plate_cost_warp_basis,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                boundary_band: params.boundary_band,
+            },
             &seeds,
             &growth_profiles,
-            params.boundary_band,
         );
         plate_id = super::compact_plate_ids(plate_id, plate_count);
         super::cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
@@ -73,15 +75,17 @@ mod tests {
         }
 
         let _boundary_fields = super::apply_boundary_model(
-            &positions,
-            &nbr_offsets,
-            &nbrs,
-            &plate_id,
-            &attributes,
-            &vertex_lithosphere,
-            &boundary_edges,
+            super::BoundaryModelInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &plate_id,
+                attributes: &attributes,
+                vertex_lithosphere: &vertex_lithosphere,
+                boundary_edges: &boundary_edges,
+                params,
+            },
             &mut height,
-            params,
         );
 
         let vertex_competence = vertex_lithosphere

@@ -44,8 +44,7 @@ impl World {
         let mut top_fluxes = [0.0f32; 10];
         let mut top_fluxes_len = 0usize;
 
-        for i in 0..cell_count {
-            let h = height[i];
+        for (i, &h) in height.iter().enumerate().take(cell_count) {
             let flux = river_flux.get(i).copied().unwrap_or(0.0).max(0.0);
             if h > 0.0 {
                 land_cells += 1;
@@ -237,21 +236,21 @@ fn river_network_metrics(
     let mut run_id = 1u32;
     let mut reaches_ocean_count = 0usize;
     let mut path = Vec::<usize>::new();
+    let mut trace_context = RiverTraceContext {
+        height,
+        river_next,
+        active: &active,
+        memo: &mut memo,
+        visit_mark: &mut visit_mark,
+        run_id: &mut run_id,
+        path: &mut path,
+    };
 
-    for i in 0..cell_count {
-        if !active[i] {
+    for (i, &is_active) in active.iter().enumerate().take(cell_count) {
+        if !is_active {
             continue;
         }
-        if trace_active_to_ocean(
-            i,
-            height,
-            river_next,
-            &active,
-            &mut memo,
-            &mut visit_mark,
-            &mut run_id,
-            &mut path,
-        ) {
+        if trace_active_to_ocean(i, &mut trace_context) {
             reaches_ocean_count += 1;
         }
     }
@@ -295,54 +294,48 @@ fn river_network_metrics(
 
 fn trace_active_to_ocean(
     start: usize,
-    height: &[f32],
-    river_next: &[i32],
-    active: &[bool],
-    memo: &mut [u8],
-    visit_mark: &mut [u32],
-    run_id: &mut u32,
-    path: &mut Vec<usize>,
+    context: &mut RiverTraceContext<'_>,
 ) -> bool {
-    if memo.get(start).copied().unwrap_or(0) == 2 {
+    if context.memo.get(start).copied().unwrap_or(0) == 2 {
         return true;
     }
-    if memo.get(start).copied().unwrap_or(0) == 3 {
+    if context.memo.get(start).copied().unwrap_or(0) == 3 {
         return false;
     }
 
-    path.clear();
-    let current_run = *run_id;
-    *run_id = (*run_id).saturating_add(1).max(1);
+    context.path.clear();
+    let current_run = *context.run_id;
+    *context.run_id = (*context.run_id).saturating_add(1).max(1);
     let mut cur = start;
     let mut result = false;
 
-    for _ in 0..height.len() {
-        if memo[cur] == 2 {
+    for _ in 0..context.height.len() {
+        if context.memo[cur] == 2 {
             result = true;
             break;
         }
-        if memo[cur] == 3 || !active[cur] {
+        if context.memo[cur] == 3 || !context.active[cur] {
             result = false;
             break;
         }
-        if visit_mark[cur] == current_run {
+        if context.visit_mark[cur] == current_run {
             result = false;
             break;
         }
-        visit_mark[cur] = current_run;
-        path.push(cur);
+        context.visit_mark[cur] = current_run;
+        context.path.push(cur);
 
-        let next = river_next.get(cur).copied().unwrap_or(-1);
+        let next = context.river_next.get(cur).copied().unwrap_or(-1);
         if next < 0 {
             result = false;
             break;
         }
         let n = next as usize;
-        if n >= height.len() {
+        if n >= context.height.len() {
             result = false;
             break;
         }
-        if height[n] <= 0.0 {
+        if context.height[n] <= 0.0 {
             result = true;
             break;
         }
@@ -350,8 +343,18 @@ fn trace_active_to_ocean(
     }
 
     let mark = if result { 2 } else { 3 };
-    for &v in path.iter() {
-        memo[v] = mark;
+    for &v in context.path.iter() {
+        context.memo[v] = mark;
     }
     result
+}
+
+struct RiverTraceContext<'a> {
+    height: &'a [f32],
+    river_next: &'a [i32],
+    active: &'a [bool],
+    memo: &'a mut [u8],
+    visit_mark: &'a mut [u32],
+    run_id: &'a mut u32,
+    path: &'a mut Vec<usize>,
 }

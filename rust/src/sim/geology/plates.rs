@@ -274,9 +274,9 @@ pub(super) fn sample_plate_warp_mid(
     v1: usize,
 ) -> f32 {
     let mut acc = 0.0;
-    for i in 0..3 {
-        let mid = 0.5 * (basis[i][v0] + basis[i][v1]);
-        acc += profile.warp_weights[i] * mid;
+    for (weight, component) in profile.warp_weights.iter().zip(basis.iter()) {
+        let mid = 0.5 * (component[v0] + component[v1]);
+        acc += *weight * mid;
     }
     acc
 }
@@ -347,16 +347,27 @@ pub(super) fn local_plate_velocity(attr: &PlateAttr, plate: usize, position: [f3
     }
 }
 
+pub(super) struct PlatePartitionInput<'a> {
+    pub positions: &'a [[f32; 3]],
+    pub phi: &'a [f32],
+    pub plate_cost_warp_basis: &'a [Vec<f32>; 3],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub boundary_band: f32,
+}
+
 pub(super) fn partition_plates(
-    positions: &[[f32; 3]],
-    phi: &[f32],
-    plate_cost_warp_basis: &[Vec<f32>; 3],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
+    input: PlatePartitionInput<'_>,
     seeds: &[usize],
     growth_profiles: &[PlateGrowthProfile],
-    boundary_band: f32,
 ) -> Vec<u32> {
+    let positions = input.positions;
+    let phi = input.phi;
+    let plate_cost_warp_basis = input.plate_cost_warp_basis;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let boundary_band = input.boundary_band;
+
     let mut best_cost = vec![f32::INFINITY; positions.len()];
     let mut plate_id = vec![u32::MAX; positions.len()];
     let mut heap = BinaryHeap::<QueueState>::new();

@@ -6,16 +6,28 @@ use crate::GeologyParams;
 use crate::sim::exec::math::{cross3, dot, length3, seeded_axis};
 use crate::sim::exec::{lerp, CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFORM_THRESHOLD};
 
+pub(super) struct ReclassifyBoundariesInput<'a> {
+    pub positions: &'a [[f32; 3]],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub plate_id: &'a [PlateId],
+    pub plate_states: &'a [PlateKinematicsState],
+    pub vertex_states: &'a [VertexCrustState],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn reclassify_boundaries(
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    plate_id: &[PlateId],
-    plate_states: &[PlateKinematicsState],
-    vertex_states: &[VertexCrustState],
+    input: ReclassifyBoundariesInput<'_>,
     boundary_state: &mut BoundaryDynamicsState,
-    params: &GeologyParams,
 ) {
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let plate_id = input.plate_id;
+    let plate_states = input.plate_states;
+    let vertex_states = input.vertex_states;
+    let params = input.params;
+
     let cell_count = plate_id.len();
     if boundary_state.dominant_type.len() != cell_count {
         boundary_state.dominant_type = vec![BoundaryType::PassiveMargin; cell_count];
@@ -192,8 +204,8 @@ pub(super) fn reclassify_boundaries(
         }
     }
 
-    for i in 0..cell_count {
-        let denom = cell_rollback_count[i].max(1) as f32;
+    for (i, count) in cell_rollback_count.iter().enumerate().take(cell_count) {
+        let denom = (*count).max(1) as f32;
         boundary_state.rollback_fraction[i] = (boundary_state.rollback_fraction[i] / denom)
             .clamp(0.0, params.rollback_fraction_max.max(0.0));
         boundary_state.backarc_tension[i] /= denom;
@@ -261,8 +273,8 @@ pub(super) fn update_plate_kinematics(
     let mut plate_activity = vec![0.0_f32; plate_states.len()];
     let mut plate_count = vec![0_u32; plate_states.len()];
 
-    for i in 0..plate_id.len() {
-        let pid = plate_id[i].as_usize();
+    for (i, plate) in plate_id.iter().enumerate() {
+        let pid = plate.as_usize();
         if pid >= plate_states.len() {
             continue;
         }
@@ -363,8 +375,8 @@ fn dominant_plate_boundary_type(
     boundary_types: &[BoundaryType],
 ) -> BoundaryType {
     let mut counts = [0_u32; 6];
-    for i in 0..plate_id.len() {
-        if plate_id[i] != plate {
+    for (i, current_plate) in plate_id.iter().enumerate() {
+        if *current_plate != plate {
             continue;
         }
         let t = boundary_types

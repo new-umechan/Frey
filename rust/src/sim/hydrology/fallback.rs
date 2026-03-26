@@ -34,15 +34,20 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         &mut flux_scale_ema,
         &mut scratch_flux_samples,
     );
+    let mut constraint_buffers = RiverNetworkConstraintBuffers {
+        flux: &mut rebuilt.flux,
+        primary_next: &mut rebuilt.primary_next,
+        downstream_offsets: &mut rebuilt.downstream_offsets,
+        downstream_cells: &mut rebuilt.downstream_cells,
+        downstream_weights: &mut rebuilt.downstream_weights,
+    };
     apply_river_network_constraints(
-        &world.state.geology.height,
-        &mut rebuilt.flux,
-        &mut rebuilt.primary_next,
-        &mut rebuilt.downstream_offsets,
-        &mut rebuilt.downstream_cells,
-        &mut rebuilt.downstream_weights,
-        &previous_flux,
-        params.river_accumulation_threshold,
+        RiverNetworkConstraintInput {
+            height: &world.state.geology.height,
+            previous_flux: &previous_flux,
+            accumulation_threshold: params.river_accumulation_threshold,
+        },
+        &mut constraint_buffers,
     );
 
     world.state.hydrology.river_next = rebuilt.primary_next;

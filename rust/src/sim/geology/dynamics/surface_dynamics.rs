@@ -6,21 +6,42 @@ use crate::GeologyParams;
 
 use crate::sim::exec::{DEFAULT_DIFFUSION_WEIGHT, MAX_HEIGHT_DELTA_PER_STEP};
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct SurfaceUpdateInput<'a> {
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub heights: &'a [f32],
+    pub plate_id: &'a [PlateId],
+    pub boundary_state: &'a BoundaryDynamicsState,
+    pub mantle_heat: &'a [f32],
+    pub plume_force: &'a [f32],
+    pub params: &'a GeologyParams,
+}
+
+pub(super) struct SurfaceUpdateOutput<'a> {
+    pub next_vertex_states: &'a mut [VertexCrustState],
+    pub next_height: &'a mut [f32],
+    pub next_volcanism: &'a mut [f32],
+    pub next_vertex_buoyancy: &'a mut [f32],
+}
+
 pub(super) fn apply_stress_and_surface_update(
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    heights: &[f32],
-    plate_id: &[PlateId],
-    boundary_state: &BoundaryDynamicsState,
-    mantle_heat: &[f32],
-    plume_force: &[f32],
-    next_vertex_states: &mut [VertexCrustState],
-    next_height: &mut [f32],
-    next_volcanism: &mut [f32],
-    next_vertex_buoyancy: &mut [f32],
-    params: &GeologyParams,
+    input: SurfaceUpdateInput<'_>,
+    output: &mut SurfaceUpdateOutput<'_>,
 ) -> GeologyStepMetrics {
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let heights = input.heights;
+    let plate_id = input.plate_id;
+    let boundary_state = input.boundary_state;
+    let mantle_heat = input.mantle_heat;
+    let plume_force = input.plume_force;
+    let params = input.params;
+
+    let next_vertex_states = &mut *output.next_vertex_states;
+    let next_height = &mut *output.next_height;
+    let next_volcanism = &mut *output.next_volcanism;
+    let next_vertex_buoyancy = &mut *output.next_vertex_buoyancy;
+
     let cell_count = heights.len();
     let mut terrain_delta_sum = 0.0_f32;
     let mut boundary_sum = 0.0_f32;

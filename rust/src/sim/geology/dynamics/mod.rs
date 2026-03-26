@@ -9,8 +9,11 @@ use crate::sim::world::{
 };
 
 use crate::sim::exec::math::{hash01, seeded_axis};
-use boundary_dynamics::{plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics};
-use surface_dynamics::apply_stress_and_surface_update;
+use boundary_dynamics::{
+    plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics,
+    ReclassifyBoundariesInput,
+};
+use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
 
 pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
@@ -94,14 +97,16 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     );
     let mut next_plate_id = plate_id.clone();
     apply_boundary_crossing_discrete_attrs(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
-        &dynamics.plate_states,
-        &plate_id,
+        BoundaryCrossingInput {
+            positions: &positions,
+            nbr_offsets: &nbr_offsets,
+            nbrs: &nbrs,
+            plate_states: &dynamics.plate_states,
+            plate_id_prev: &plate_id,
+            boundary_state: &dynamics.boundary_state,
+        },
         &mut next_plate_id,
         &mut next_vertex_states,
-        &dynamics.boundary_state,
     );
 
     let reclassify_interval = params.boundary_reclassify_interval.max(1);
@@ -110,14 +115,16 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         || dynamics.boundary_state.steps_since_reclassify == 0
     {
         reclassify_boundaries(
-            &positions,
-            &nbr_offsets,
-            &nbrs,
-            &next_plate_id,
-            &dynamics.plate_states,
-            &next_vertex_states,
+            ReclassifyBoundariesInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &next_plate_id,
+                plate_states: &dynamics.plate_states,
+                vertex_states: &next_vertex_states,
+                params,
+            },
             &mut dynamics.boundary_state,
-            params,
         );
         dynamics.boundary_state.steps_since_reclassify = 1;
     } else {
@@ -133,19 +140,24 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     let mut next_height = heights.clone();
     let mut next_volcanism = world.state.geology.volcanism.clone();
     let mut next_vertex_buoyancy = world.state.geology.vertex_buoyancy.clone();
+    let mut surface_output = SurfaceUpdateOutput {
+        next_vertex_states: &mut next_vertex_states,
+        next_height: &mut next_height,
+        next_volcanism: &mut next_volcanism,
+        next_vertex_buoyancy: &mut next_vertex_buoyancy,
+    };
     let metrics = apply_stress_and_surface_update(
-        &nbr_offsets,
-        &nbrs,
-        &heights,
-        &next_plate_id,
-        &dynamics.boundary_state,
-        &dynamics.mantle_heat,
-        &plume_force,
-        &mut next_vertex_states,
-        &mut next_height,
-        &mut next_volcanism,
-        &mut next_vertex_buoyancy,
-        params,
+        SurfaceUpdateInput {
+            nbr_offsets: &nbr_offsets,
+            nbrs: &nbrs,
+            heights: &heights,
+            plate_id: &next_plate_id,
+            boundary_state: &dynamics.boundary_state,
+            mantle_heat: &dynamics.mantle_heat,
+            plume_force: &plume_force,
+            params,
+        },
+        &mut surface_output,
     );
 
     dynamics.vertex_states = next_vertex_states;
@@ -369,7 +381,7 @@ fn advect_continuous_attributes(
     params: &GeologyParams,
 ) -> Vec<VertexCrustState> {
     let mut next = vertex_states.to_vec();
-    let dt = params.age_advection_gain.max(0.0).min(0.25);
+    let dt = params.age_advection_gain.clamp(0.0, 0.25);
     if dt <= 0.0 {
         return next;
     }
@@ -472,16 +484,27 @@ fn muscl_like_advect_scalar(
     predicted.clamp(min_v, max_v)
 }
 
+struct BoundaryCrossingInput<'a> {
+    positions: &'a [[f32; 3]],
+    nbr_offsets: &'a [u32],
+    nbrs: &'a [u32],
+    plate_states: &'a [PlateKinematicsState],
+    plate_id_prev: &'a [PlateId],
+    boundary_state: &'a BoundaryDynamicsState,
+}
+
 fn apply_boundary_crossing_discrete_attrs(
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    plate_states: &[PlateKinematicsState],
-    plate_id_prev: &[PlateId],
+    input: BoundaryCrossingInput<'_>,
     plate_id_next: &mut [PlateId],
     vertex_states: &mut [VertexCrustState],
-    boundary_state: &BoundaryDynamicsState,
 ) {
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let plate_states = input.plate_states;
+    let plate_id_prev = input.plate_id_prev;
+    let boundary_state = input.boundary_state;
+
     let mut next_crust = vertex_states
         .iter()
         .map(|s| s.crust_type)

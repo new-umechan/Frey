@@ -362,19 +362,24 @@ pub(super) fn apply_hydraulic_erosion(
                     sediment.min(deposit_cap.max(0.0)),
                 );
                 if deposit_amount > 0.0 {
-                    distribute_deposition_by_context(
+                    let mut deposition_buffer = DepositionBuffer {
                         nbr_offsets,
                         nbrs,
                         height,
-                        &mut delta,
-                        &mut deposition_armor,
+                        delta: &mut delta,
+                        deposition_armor: &mut deposition_armor,
                         params,
+                    };
+                    distribute_deposition_by_context(
+                        &mut deposition_buffer,
                         i,
                         deposit_amount,
-                        flattening,
-                        openness,
-                        estuary_factor,
-                        shallow_factor,
+                        DepositionContext {
+                            flattening,
+                            openness,
+                            estuary_factor,
+                            shallow_factor,
+                        },
                     );
                     sediment -= deposit_amount;
                 }
@@ -390,19 +395,24 @@ pub(super) fn apply_hydraulic_erosion(
                         params.erosion_max_delta_per_iter * 0.75,
                     );
                     if residual_deep_deposit > 0.0 {
-                        distribute_deposition_by_context(
+                        let mut deposition_buffer = DepositionBuffer {
                             nbr_offsets,
                             nbrs,
                             height,
-                            &mut delta,
-                            &mut deposition_armor,
+                            delta: &mut delta,
+                            deposition_armor: &mut deposition_armor,
                             params,
+                        };
+                        distribute_deposition_by_context(
+                            &mut deposition_buffer,
                             i,
                             residual_deep_deposit,
-                            0.2,
-                            0.1,
-                            0.0,
-                            0.0,
+                            DepositionContext {
+                                flattening: 0.2,
+                                openness: 0.1,
+                                estuary_factor: 0.0,
+                                shallow_factor: 0.0,
+                            },
                         );
                         sediment -= residual_deep_deposit;
                     }
@@ -487,20 +497,40 @@ pub(super) fn apply_deposit_to_cell(
     deposition_armor[v] = clamp(deposition_armor[v] + 0.55 * armor_gain, 0.0, 1.0);
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct DepositionContext {
+    pub flattening: f32,
+    pub openness: f32,
+    pub estuary_factor: f32,
+    pub shallow_factor: f32,
+}
+
+pub(super) struct DepositionBuffer<'a> {
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub height: &'a [f32],
+    pub delta: &'a mut [f32],
+    pub deposition_armor: &'a mut [f32],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn distribute_deposition_by_context(
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    height: &[f32],
-    delta: &mut [f32],
-    deposition_armor: &mut [f32],
-    params: &GeologyParams,
+    buffer: &mut DepositionBuffer<'_>,
     center: usize,
     amount: f32,
-    flattening: f32,
-    openness: f32,
-    estuary_factor: f32,
-    shallow_factor: f32,
+    context: DepositionContext,
 ) {
+    let nbr_offsets = buffer.nbr_offsets;
+    let nbrs = buffer.nbrs;
+    let height = buffer.height;
+    let delta = &mut *buffer.delta;
+    let deposition_armor = &mut *buffer.deposition_armor;
+    let params = buffer.params;
+    let flattening = context.flattening;
+    let openness = context.openness;
+    let estuary_factor = context.estuary_factor;
+    let shallow_factor = context.shallow_factor;
+
     if amount <= 0.0 {
         return;
     }
@@ -750,13 +780,15 @@ fn process_async_erosion_cell(
     state.armor[i] *= 0.985;
 
     let (mut next_idx, local_slope, next_h) = find_local_flow_target(
-        &state.positions,
-        &state.nbr_offsets,
-        &state.nbrs,
-        &state.height,
-        &state.river_next,
-        &state.flow_heading,
-        &state.params,
+        FlowTargetInput {
+            positions: &state.positions,
+            nbr_offsets: &state.nbr_offsets,
+            nbrs: &state.nbrs,
+            height: &state.height,
+            prev_next: &state.river_next,
+            flow_heading: &state.flow_heading,
+            params: &state.params,
+        },
         i,
     );
     let downstream_slope = if let Some(n) = next_idx {
@@ -854,18 +886,23 @@ fn process_async_erosion_cell(
             sediment.min(deposit_cap.max(0.0)),
         );
         if deposit_amount > 0.0 {
-            distribute_deposition_direct_by_context(
-                &state.nbr_offsets,
-                &state.nbrs,
-                &mut state.height,
-                &mut state.armor,
+            let mut deposition_buffer = DirectDepositionBuffer {
+                nbr_offsets: &state.nbr_offsets,
+                nbrs: &state.nbrs,
+                height: &mut state.height,
+                armor: &mut state.armor,
                 params,
+            };
+            distribute_deposition_direct_by_context(
+                &mut deposition_buffer,
                 i,
                 deposit_amount,
-                flattening,
-                openness,
-                estuary_factor,
-                shallow_factor,
+                DepositionContext {
+                    flattening,
+                    openness,
+                    estuary_factor,
+                    shallow_factor,
+                },
             );
             sediment -= deposit_amount;
             result.changed = true;
@@ -1042,16 +1079,28 @@ pub(super) fn mark_neighbors_changed(
     }
 }
 
+pub(super) struct FlowTargetInput<'a> {
+    pub positions: &'a [[f32; 3]],
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub height: &'a [f32],
+    pub prev_next: &'a [i32],
+    pub flow_heading: &'a [[f32; 3]],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn find_local_flow_target(
-    positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    height: &[f32],
-    prev_next: &[i32],
-    flow_heading: &[[f32; 3]],
-    params: &GeologyParams,
+    input: FlowTargetInput<'_>,
     v: usize,
 ) -> (Option<usize>, f32, f32) {
+    let positions = input.positions;
+    let nbr_offsets = input.nbr_offsets;
+    let nbrs = input.nbrs;
+    let height = input.height;
+    let prev_next = input.prev_next;
+    let flow_heading = input.flow_heading;
+    let params = input.params;
+
     let start = nbr_offsets[v] as usize;
     let end = nbr_offsets[v + 1] as usize;
     if end <= start {
@@ -1150,19 +1199,30 @@ pub(super) fn apply_deposit_direct_to_cell(
     armor[v] = clamp(armor[v] + 0.55 * armor_gain, 0.0, 1.0);
 }
 
+pub(super) struct DirectDepositionBuffer<'a> {
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub height: &'a mut [f32],
+    pub armor: &'a mut [f32],
+    pub params: &'a GeologyParams,
+}
+
 pub(super) fn distribute_deposition_direct_by_context(
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    height: &mut [f32],
-    armor: &mut [f32],
-    params: &GeologyParams,
+    buffer: &mut DirectDepositionBuffer<'_>,
     center: usize,
     amount: f32,
-    flattening: f32,
-    openness: f32,
-    estuary_factor: f32,
-    shallow_factor: f32,
+    context: DepositionContext,
 ) {
+    let nbr_offsets = buffer.nbr_offsets;
+    let nbrs = buffer.nbrs;
+    let height = &mut *buffer.height;
+    let armor = &mut *buffer.armor;
+    let params = buffer.params;
+    let flattening = context.flattening;
+    let openness = context.openness;
+    let estuary_factor = context.estuary_factor;
+    let shallow_factor = context.shallow_factor;
+
     if amount <= 0.0 {
         return;
     }

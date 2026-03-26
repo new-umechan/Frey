@@ -19,7 +19,7 @@ fn clamp_scalar(value: f32, min: f32, max: f32) -> f32 {
 }
 
 fn build_render_positions_native(input: RenderPositionsInput) -> Result<Vec<f32>, String> {
-    if input.base_positions.len() % 3 != 0 {
+    if !input.base_positions.len().is_multiple_of(3) {
         return Err("base_positions length must be divisible by 3".to_string());
     }
     let vertex_count = input.base_positions.len() / 3;

@@ -1,4 +1,4 @@
-use crate::geology_params_defaults;
+use crate::terrain_params_defaults;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -109,7 +109,7 @@ pub struct GeologyParams {
 
 impl Default for GeologyParams {
     fn default() -> Self {
-        geology_params_defaults::build_default_geology_params()
+        terrain_params_defaults::build_default_terrain_params()
     }
 }
 
