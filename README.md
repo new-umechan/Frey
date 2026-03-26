@@ -28,15 +28,7 @@ docs/README.mdに仕様の全体像をメモ
 - JavaScript（レンダリングとUI）
 - Three.js（現状の描画）
 
-## Development
-
-`npm run dev`で開発サバーを起動できる。
-開発中に`rust/`を編集するとWASMを自動で再ビルドしてVite画面に反映される。
-`config/terrain.yaml`編集時は地形パラメータを同期し、必要な再ビルドが走る。
-`config/runtime.yaml`編集時はランタイム制御パラメータを同期し、Vite画面へ反映される。
-Perf BenchはデフォルトOFF。`?perf=1`（または`?bench=1`）付きURLで有効化できる。
-
-## Benchmark Data
+## External Data
 
 Climate単体ベンチ（Phase 2）では、外部実データを使用する。
 
@@ -44,17 +36,3 @@ Climate単体ベンチ（Phase 2）では、外部実データを使用する。
 - WorldClim v2.1（`temperature` / `precipitation`）
 - ERA5-Land monthly means（`runoff` / `evapotranspiration`）
 - CGIAR Aridity Index（`aridity`）
-
-生データはGit管理しない方針。配置先と生成物は以下。
-
-- 生データ: `data/raw/`
-- 地形生データ: `data/raw/geology/`
-- ベンチ用キャッシュ: `bench/data/`
-- 地形キャッシュ: `bench/data/terrain_ref.bin`
-- ベンチ実行ログ: `bench/results/`
-- Climate Phase 2生スコア: `bench/results/climate_phase2_scores.jsonl`（実行ごとに自動追記）
-
-ERA5-Land（`runoff` / `evapotranspiration`）は次で取得・整形できる。
-
-1. `npm run bench:fetch:era5`
-2. `npm run bench:prepare:era5`
