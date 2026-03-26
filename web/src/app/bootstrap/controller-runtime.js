@@ -23,7 +23,6 @@ import {
 import { createWorldUiController } from "../world-ui-controller.js";
 import { createWorldSessionController } from "../world-session-controller.js";
 import { createWorldStepper } from "../world-stepper.js";
-import { createPerfBenchmarkController } from "../perf-benchmark-controller.js";
 import {
     createBenchmarkConsoleTable,
     createBenchmarkProfile,
@@ -36,6 +35,7 @@ import { createPlaybackController } from "../playback-controller.js";
 import { pushStepBreakdownSamples } from "../perf-step-breakdown.js";
 import { resetWorldProgress } from "../world-loop.js";
 import { runInitialWorldAndUiSync } from "./post-init-sync.js";
+import { createPerfRuntime } from "./perf-runtime.js";
 
 const PERF_BENCH_WORKER_URL = new URL("../../workers/perf-benchmark-worker.js", import.meta.url);
 
@@ -159,10 +159,9 @@ export function createControllerRuntime(options = {}) {
     });
     const { syncVisibleFieldsForCurrentView, stepWorldTick } = worldStepper;
 
-    const perfUiEnabled = isPerfEnabled && Boolean(perfControls);
-    const perfBenchmarkController = createPerfBenchmarkController({
-        enabled: perfUiEnabled,
-        controls: perfControls,
+    const { perfUiEnabled, perfBenchmarkController } = createPerfRuntime({
+        isPerfEnabled,
+        perfControls,
         perfStatFields,
         workerUrl: PERF_BENCH_WORKER_URL,
         terrainParams: GEOLOGY_PARAMS,
@@ -187,7 +186,6 @@ export function createControllerRuntime(options = {}) {
             playbackController.syncAfterWorldSync();
         },
     });
-    perfBenchmarkController.initialize();
 
     const viewModeController = createViewModeController({
         viewModeInputs,
