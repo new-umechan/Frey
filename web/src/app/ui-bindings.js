@@ -33,6 +33,52 @@ function createSubmitSeedErrorHandler(setStatus, seedInput, seedForm) {
     };
 }
 
+function createUiHandlers(options = {}) {
+    const {
+        sidebarToggle,
+        setSidebarOpen,
+        onResize,
+        setEraScale,
+        setStatus,
+        seedInput,
+        seedForm,
+        plateHover,
+        globePinchFocusController,
+        setDebugModeEnabled,
+        setViewMode,
+        setCellMetric,
+        setSurfaceMode,
+        playbackController,
+        runPerfBenchmark,
+        copyPerfBenchmarkResult,
+        updateTerrain,
+    } = options;
+
+    return {
+        onSidebarToggle: createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize),
+        onEraScaleChange: createEraScaleChangeHandler(setEraScale),
+        onSubmitSeedError: createSubmitSeedErrorHandler(setStatus, seedInput, seedForm),
+        canvasInputHandlers: createCanvasInputHandlers({
+            plateHover,
+            globePinchFocusController,
+        }),
+        onDebugToggle: setDebugModeEnabled,
+        onViewModeChange: setViewMode,
+        onCellMetricChange: setCellMetric,
+        onToggleSurface: setSurfaceMode,
+        onToggleDebug: setDebugModeEnabled,
+        onTogglePlay: playbackController.handleTogglePlay,
+        onStepForward: playbackController.handleStepForward,
+        onRewind: playbackController.handleRewind,
+        onHistorySeek: playbackController.handleHistorySeek,
+        onHistoryStepDirection: playbackController.handleHistoryStepDirection,
+        onEventLogJump: playbackController.handleHistoryJump,
+        onRunPerfBenchmark: runPerfBenchmark,
+        onCopyPerfBenchmark: copyPerfBenchmarkResult,
+        onSubmitSeed: updateTerrain,
+    };
+}
+
 export function bindAppUiControls(options = {}) {
     const {
         canvas,
@@ -69,12 +115,24 @@ export function bindAppUiControls(options = {}) {
         setStatus,
     } = options;
 
-    const handleSidebarToggle = createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize);
-    const handleEraScaleChange = createEraScaleChangeHandler(setEraScale);
-    const handleSubmitSeedError = createSubmitSeedErrorHandler(setStatus, seedInput, seedForm);
-    const canvasInputHandlers = createCanvasInputHandlers({
+    const handlers = createUiHandlers({
+        sidebarToggle,
+        setSidebarOpen,
+        onResize,
+        setEraScale,
+        setStatus,
+        seedInput,
+        seedForm,
         plateHover,
         globePinchFocusController,
+        setDebugModeEnabled,
+        setViewMode,
+        setCellMetric,
+        setSurfaceMode,
+        playbackController,
+        runPerfBenchmark,
+        copyPerfBenchmarkResult,
+        updateTerrain,
     });
 
     setupUiControls({
@@ -93,27 +151,27 @@ export function bindAppUiControls(options = {}) {
         seedForm,
         seedInput,
         onResize,
-        onSidebarToggle: handleSidebarToggle,
-        canvasInputHandlers,
-        onDebugToggle: setDebugModeEnabled,
-        onEraScaleChange: handleEraScaleChange,
-        onViewModeChange: setViewMode,
-        onCellMetricChange: setCellMetric,
-        onToggleSurface: setSurfaceMode,
-        onToggleDebug: setDebugModeEnabled,
-        onTogglePlay: playbackController.handleTogglePlay,
-        onStepForward: playbackController.handleStepForward,
-        onRewind: playbackController.handleRewind,
-        onHistorySeek: playbackController.handleHistorySeek,
-        onHistoryStepDirection: playbackController.handleHistoryStepDirection,
-        onEventLogJump: playbackController.handleHistoryJump,
-        onRunPerfBenchmark: runPerfBenchmark,
-        onCopyPerfBenchmark: copyPerfBenchmarkResult,
+        onSidebarToggle: handlers.onSidebarToggle,
+        canvasInputHandlers: handlers.canvasInputHandlers,
+        onDebugToggle: handlers.onDebugToggle,
+        onEraScaleChange: handlers.onEraScaleChange,
+        onViewModeChange: handlers.onViewModeChange,
+        onCellMetricChange: handlers.onCellMetricChange,
+        onToggleSurface: handlers.onToggleSurface,
+        onToggleDebug: handlers.onToggleDebug,
+        onTogglePlay: handlers.onTogglePlay,
+        onStepForward: handlers.onStepForward,
+        onRewind: handlers.onRewind,
+        onHistorySeek: handlers.onHistorySeek,
+        onHistoryStepDirection: handlers.onHistoryStepDirection,
+        onEventLogJump: handlers.onEventLogJump,
+        onRunPerfBenchmark: handlers.onRunPerfBenchmark,
+        onCopyPerfBenchmark: handlers.onCopyPerfBenchmark,
         getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentViewMode,
         getCurrentCellMetric,
-        onSubmitSeed: updateTerrain,
-        onSubmitSeedError: handleSubmitSeedError,
+        onSubmitSeed: handlers.onSubmitSeed,
+        onSubmitSeedError: handlers.onSubmitSeedError,
     });
 }

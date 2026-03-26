@@ -39,7 +39,7 @@ import { createPerfRuntime } from "./perf-runtime.js";
 
 const PERF_BENCH_WORKER_URL = new URL("../../workers/perf-benchmark-worker.js", import.meta.url);
 
-export function createControllerRuntime(options = {}) {
+function createRuntimeContext(options = {}) {
     const {
         elements,
         isPerfEnabled,
@@ -77,92 +77,211 @@ export function createControllerRuntime(options = {}) {
         viewportPanel,
     } = elements;
 
-    const playbackState = worldState.playback;
-    const worldSimController = new WorldSimController();
-    let playbackController = null;
-
-    const worldUiController = createWorldUiController({
+    return {
+        elements,
+        isPerfEnabled,
+        setStatus,
+        world,
+        worldState,
+        getState,
+        setState,
+        getCurrentEraMetrics,
         cameraController,
         terrainRenderer,
         wireframe,
         plateHover,
+        globePinchFocusController,
+        loadingOverlayController,
+        syncClimateUi,
+        renderFrame,
+        renderInitializationFrames,
+        seedForm,
+        seedInput,
         debugToggleInput,
-        statusEraLabel,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
+        viewModeInputs,
+        statFields,
+        statusEraLabel,
+        playbackControls,
+        eventLogList,
+        perfControls,
+        perfStatFields,
+        viewportPanel,
+    };
+}
+
+function createWorldUiRuntime(context, playbackControllerRef) {
+    const worldUiController = createWorldUiController({
+        cameraController: context.cameraController,
+        terrainRenderer: context.terrainRenderer,
+        wireframe: context.wireframe,
+        plateHover: context.plateHover,
+        debugToggleInput: context.debugToggleInput,
+        statusEraLabel: context.statusEraLabel,
+        eraScaleSelect: context.eraScaleSelect,
+        eraScaleTickLabel: context.eraScaleTickLabel,
+        eraScaleWeightFields: context.eraScaleWeightFields,
         getEraScalePreset,
         createEraMetrics,
         renderEraScaleControls,
-        worldState,
+        worldState: context.worldState,
         defaultEraScale: DEFAULT_ERA_SCALE,
-        getState,
-        setState,
-        setStatus,
+        getState: context.getState,
+        setState: context.setState,
+        setStatus: context.setStatus,
         appendPlaybackEvent: (...args) => {
-            playbackController?.appendPlaybackEvent(...args);
+            playbackControllerRef.current?.appendPlaybackEvent(...args);
         },
     });
-    const { setSurfaceMode, setDebugModeEnabled, setEraScale } = worldUiController;
-    const setSurfaceModeWithPinchReset = (nextMode) => {
-        globePinchFocusController.reset();
-        setSurfaceMode(nextMode);
-    };
 
-    const worldSessionController = createWorldSessionController({
-        worldSimController,
-        world,
-        terrainRenderer,
+    const {
+        setSurfaceMode,
+        setDebugModeEnabled,
+        setEraScale,
+    } = worldUiController;
+
+    return {
+        setDebugModeEnabled,
+        setEraScale,
+        setSurfaceModeWithPinchReset: (nextMode) => {
+            context.globePinchFocusController.reset();
+            setSurfaceMode(nextMode);
+        },
+    };
+}
+
+function createWorldSessionRuntime(context, playbackControllerRef, setEraScale) {
+    return createWorldSessionController({
+        worldSimController: context.worldSimController,
+        world: context.world,
+        terrainRenderer: context.terrainRenderer,
         createEraMetrics,
         buildEraMetricsFromRuntime,
         setEraScale,
         syncWorldFromController,
         refreshWorldStatsFromController,
         setCurrentTerrainData: (core) => {
-            setState({ currentTerrainData: core });
+            context.setState({ currentTerrainData: core });
         },
-        syncClimateUi,
+        syncClimateUi: context.syncClimateUi,
         hidePlateHover: () => {
-            plateHover.hidePopup();
+            context.plateHover.hidePopup();
         },
         syncAfterWorldSync: () => {
-            playbackController.syncAfterWorldSync();
+            playbackControllerRef.current?.syncAfterWorldSync();
         },
-        getCurrentSeed: () => getState().currentSeed,
-        getCurrentSurfaceMode: () => getState().currentSurfaceMode,
-        getActiveWorldId: () => getState().activeWorldId,
-        statFields,
+        getCurrentSeed: () => context.getState().currentSeed,
+        getCurrentSurfaceMode: () => context.getState().currentSurfaceMode,
+        getActiveWorldId: () => context.getState().activeWorldId,
+        statFields: context.statFields,
         level: LEVEL,
     });
-    const { syncWorldFromActiveController, refreshActiveWorldStats } = worldSessionController;
+}
 
-    const worldStepper = createWorldStepper({
-        worldSimController,
-        world,
-        worldState,
-        terrainRenderer,
+function createWorldStepperRuntime(context, playbackControllerRef, setEraScale, refreshWorldStats) {
+    return createWorldStepper({
+        worldSimController: context.worldSimController,
+        world: context.world,
+        worldState: context.worldState,
+        terrainRenderer: context.terrainRenderer,
         createEraMetrics,
         buildEraMetricsFromRuntime,
         setEraScale,
         syncWorldDeltaFromController,
         syncVisibleCoreFieldsFromController,
         getDeltaFieldKindsForView,
-        refreshWorldStats: refreshActiveWorldStats,
-        syncClimateUi,
+        refreshWorldStats,
+        syncClimateUi: context.syncClimateUi,
         syncAfterWorldStep: () => {
-            playbackController.syncAfterWorldStep();
+            playbackControllerRef.current?.syncAfterWorldStep();
         },
-        setStatus,
-        getCurrentState: getState,
+        setStatus: context.setStatus,
+        getCurrentState: context.getState,
         pushStepBreakdownSamples,
         getEraScalePreset,
     });
-    const { syncVisibleFieldsForCurrentView, stepWorldTick } = worldStepper;
+}
 
+function createViewModeRuntime(context, syncVisibleFieldsForCurrentView) {
+    return createViewModeController({
+        viewModeInputs: context.viewModeInputs,
+        normalizeCellMetric,
+        terrainRenderer: context.terrainRenderer,
+        plateHover: context.plateHover,
+        syncClimateUi: context.syncClimateUi,
+        syncVisibleFieldsForCurrentView,
+        getCurrentViewMode: () => context.getState().currentViewMode,
+        getCurrentCellMetric: () => context.getState().currentCellMetric,
+        getDebugEnabled: () => context.getState().debugEnabled,
+        setCurrentViewMode: (nextMode) => {
+            context.setState({ currentViewMode: nextMode });
+        },
+        setCurrentCellMetric: (nextMetric) => {
+            context.setState({ currentCellMetric: nextMetric });
+        },
+    });
+}
+
+function createTerrainGenerationRuntime(context, playbackControllerRef, syncWorldFromActiveController) {
+    return createTerrainGenerationController({
+        seedForm: context.seedForm,
+        seedInput: context.seedInput,
+        worldSimController: context.worldSimController,
+        level: LEVEL,
+        terrainParams: GEOLOGY_PARAMS,
+        world: context.world,
+        worldState: context.worldState,
+        createEmptyLayers,
+        createInitialBudgets,
+        createEraMetrics,
+        resetWorldProgress,
+        getEraScalePreset,
+        setStatus: context.setStatus,
+        syncWorldFromActiveController,
+        getCurrentEraScale: () => context.getState().currentEraScale,
+        getCurrentSeed: () => context.getState().currentSeed,
+        setCurrentState: context.setState,
+        setPlaybackRunning: (isPlaying) => {
+            playbackControllerRef.current?.setPlaybackRunning(isPlaying);
+        },
+        appendPlaybackEvent: (...args) => {
+            playbackControllerRef.current?.appendPlaybackEvent(...args);
+        },
+        onInitWorldStart: async () => {
+            context.loadingOverlayController.setWorldInitializing(true);
+            context.loadingOverlayController.render();
+            await context.renderInitializationFrames(context.renderFrame);
+        },
+        onInitWorldEnd: () => {
+            context.loadingOverlayController.setWorldInitializing(false);
+            context.loadingOverlayController.clear();
+        },
+    });
+}
+
+function createPlaybackRuntime(context, syncWorldFromActiveController, stepWorldTick) {
+    return createPlaybackController({
+        playbackControls: context.playbackControls,
+        eventLogList: context.eventLogList,
+        playbackState: context.worldState.playback,
+        worldState: context.worldState,
+        worldSimController: context.worldSimController,
+        getActiveWorldId: () => context.getState().activeWorldId,
+        getCurrentTerrainData: () => context.getState().currentTerrainData,
+        getWorldTick: () => context.world.tick,
+        syncWorldFromActiveController,
+        stepWorldTick,
+        setStatus: context.setStatus,
+    });
+}
+
+function createPerfControllers(context, playbackControllerRef) {
     const { perfUiEnabled, perfBenchmarkController } = createPerfRuntime({
-        isPerfEnabled,
-        perfControls,
-        perfStatFields,
+        isPerfEnabled: context.isPerfEnabled,
+        perfControls: context.perfControls,
+        perfStatFields: context.perfStatFields,
         workerUrl: PERF_BENCH_WORKER_URL,
         terrainParams: GEOLOGY_PARAMS,
         level: LEVEL,
@@ -174,113 +293,110 @@ export function createControllerRuntime(options = {}) {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         canRunBenchmark: () => {
-            const state = getState();
+            const state = context.getState();
             return Boolean(state.activeWorldId && state.currentTerrainData);
         },
         setPlaybackRunning: (nextPlaying) => {
-            const wasPlaying = playbackState.isPlaying;
-            playbackController.setPlaybackRunning(nextPlaying);
+            const wasPlaying = context.worldState.playback.isPlaying;
+            playbackControllerRef.current?.setPlaybackRunning(nextPlaying);
             return wasPlaying;
         },
         syncPlaybackUi: () => {
-            playbackController.syncAfterWorldSync();
+            playbackControllerRef.current?.syncAfterWorldSync();
         },
     });
 
-    const viewModeController = createViewModeController({
-        viewModeInputs,
-        normalizeCellMetric,
-        terrainRenderer,
-        plateHover,
-        syncClimateUi,
-        syncVisibleFieldsForCurrentView,
-        getCurrentViewMode: () => getState().currentViewMode,
-        getCurrentCellMetric: () => getState().currentCellMetric,
-        getDebugEnabled: () => getState().debugEnabled,
-        setCurrentViewMode: (nextMode) => {
-            setState({ currentViewMode: nextMode });
-        },
-        setCurrentCellMetric: (nextMetric) => {
-            setState({ currentCellMetric: nextMetric });
-        },
-    });
-    const { setViewMode, setCellMetric } = viewModeController;
+    return {
+        perfUiEnabled,
+        runPerfBenchmark: perfBenchmarkController.runBenchmark,
+        copyPerfBenchmarkResult: perfBenchmarkController.copyResult,
+        getLastPerfBenchmarkResult: () => perfBenchmarkController.getLastResult(),
+    };
+}
 
-    const terrainGenerationController = createTerrainGenerationController({
-        seedForm,
-        seedInput,
-        worldSimController,
-        level: LEVEL,
-        terrainParams: GEOLOGY_PARAMS,
-        world,
-        worldState,
-        createEmptyLayers,
-        createInitialBudgets,
-        createEraMetrics,
-        resetWorldProgress,
-        getEraScalePreset,
-        setStatus,
-        syncWorldFromActiveController,
-        getCurrentEraScale: () => getState().currentEraScale,
-        getCurrentSeed: () => getState().currentSeed,
-        setCurrentState: setState,
-        setPlaybackRunning: (isPlaying) => {
-            playbackController.setPlaybackRunning(isPlaying);
-        },
-        appendPlaybackEvent: (...args) => {
-            playbackController.appendPlaybackEvent(...args);
-        },
-        onInitWorldStart: async () => {
-            loadingOverlayController.setWorldInitializing(true);
-            loadingOverlayController.render();
-            await renderInitializationFrames(renderFrame);
-        },
-        onInitWorldEnd: () => {
-            loadingOverlayController.setWorldInitializing(false);
-            loadingOverlayController.clear();
-        },
-    });
-    const { updateTerrain } = terrainGenerationController;
-
-    playbackController = createPlaybackController({
-        playbackControls,
-        eventLogList,
-        playbackState,
-        worldState,
-        worldSimController,
-        getActiveWorldId: () => getState().activeWorldId,
-        getCurrentTerrainData: () => getState().currentTerrainData,
-        getWorldTick: () => world.tick,
-        syncWorldFromActiveController,
-        stepWorldTick,
-        setStatus,
-    });
+function createRuntimeActions(context, runtimeControllers) {
+    const {
+        updateTerrain,
+        setEraScale,
+        playbackController,
+    } = runtimeControllers;
 
     async function runInitialSync() {
         await runInitialWorldAndUiSync({
             updateTerrain,
-            defaultTerrainSeed: getState().currentSeed,
-            eraScaleSelect,
-            eraScaleTickLabel,
-            eraScaleWeightFields,
+            defaultTerrainSeed: context.getState().currentSeed,
+            eraScaleSelect: context.eraScaleSelect,
+            eraScaleTickLabel: context.eraScaleTickLabel,
+            eraScaleWeightFields: context.eraScaleWeightFields,
             currentEraScale: DEFAULT_ERA_SCALE,
-            currentEraMetrics: getCurrentEraMetrics(),
+            currentEraMetrics: context.getCurrentEraMetrics(),
             setEraScale,
-            syncClimateUi,
+            syncClimateUi: context.syncClimateUi,
             playbackController,
-            viewportPanel,
+            viewportPanel: context.viewportPanel,
             onResize: () => {
-                cameraController.onResize();
-                loadingOverlayController.render();
+                context.cameraController.onResize();
+                context.loadingOverlayController.render();
             },
-            plateHover,
+            plateHover: context.plateHover,
         });
     }
 
     function shouldAdvanceWorld() {
-        const state = getState();
-        return playbackState.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
+        const state = context.getState();
+        return context.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
     }
+
+    return {
+        runInitialSync,
+        shouldAdvanceWorld,
+    };
+}
+
+export function createControllerRuntime(options = {}) {
+    const context = createRuntimeContext(options);
+    context.worldSimController = new WorldSimController();
+
+    const playbackControllerRef = { current: null };
+    const {
+        setDebugModeEnabled,
+        setEraScale,
+        setSurfaceModeWithPinchReset,
+    } = createWorldUiRuntime(context, playbackControllerRef);
+
+    const {
+        syncWorldFromActiveController,
+        refreshActiveWorldStats,
+    } = createWorldSessionRuntime(context, playbackControllerRef, setEraScale);
+
+    const {
+        syncVisibleFieldsForCurrentView,
+        stepWorldTick,
+    } = createWorldStepperRuntime(context, playbackControllerRef, setEraScale, refreshActiveWorldStats);
+
+    const { setViewMode, setCellMetric } = createViewModeRuntime(context, syncVisibleFieldsForCurrentView);
+
+    const { updateTerrain } = createTerrainGenerationRuntime(
+        context,
+        playbackControllerRef,
+        syncWorldFromActiveController,
+    );
+
+    const playbackController = createPlaybackRuntime(context, syncWorldFromActiveController, stepWorldTick);
+    playbackControllerRef.current = playbackController;
+
+    const {
+        perfUiEnabled,
+        runPerfBenchmark,
+        copyPerfBenchmarkResult,
+        getLastPerfBenchmarkResult,
+    } = createPerfControllers(context, playbackControllerRef);
+
+    const { runInitialSync, shouldAdvanceWorld } = createRuntimeActions(context, {
+        updateTerrain,
+        setEraScale,
+        playbackController,
+    });
 
     return {
         perfUiEnabled,
@@ -292,10 +408,10 @@ export function createControllerRuntime(options = {}) {
         stepWorldTick,
         updateTerrain,
         playbackController,
-        runPerfBenchmark: perfBenchmarkController.runBenchmark,
-        copyPerfBenchmarkResult: perfBenchmarkController.copyResult,
+        runPerfBenchmark,
+        copyPerfBenchmarkResult,
         runInitialSync,
         shouldAdvanceWorld,
-        getLastPerfBenchmarkResult: () => perfBenchmarkController.getLastResult(),
+        getLastPerfBenchmarkResult,
     };
 }

@@ -5,6 +5,81 @@ import { createSceneRuntime } from "./bootstrap/scene-runtime.js";
 import { createControllerRuntime } from "./bootstrap/controller-runtime.js";
 import { renderInitializationFrames } from "./bootstrap/initialization-frames.js";
 
+function createControllerDeps(options) {
+    const {
+        elements,
+        isPerfEnabled,
+        setStatus,
+        runtimeStore,
+        sceneRuntime,
+    } = options;
+
+    return {
+        elements,
+        isPerfEnabled,
+        setStatus,
+        world: runtimeStore.world,
+        worldState: runtimeStore.worldState,
+        getState: runtimeStore.getState,
+        setState: runtimeStore.setState,
+        getCurrentEraMetrics: runtimeStore.getCurrentEraMetrics,
+        cameraController: sceneRuntime.cameraController,
+        terrainRenderer: sceneRuntime.terrainRenderer,
+        wireframe: sceneRuntime.wireframe,
+        plateHover: sceneRuntime.plateHover,
+        globePinchFocusController: sceneRuntime.globePinchFocusController,
+        loadingOverlayController: sceneRuntime.loadingOverlayController,
+        syncClimateUi: sceneRuntime.syncClimateUi,
+        renderFrame: sceneRuntime.renderFrame,
+        renderInitializationFrames,
+    };
+}
+
+function bindRuntimeUi(options) {
+    const {
+        elements,
+        sceneRuntime,
+        controllerRuntime,
+        getState,
+        setStatus,
+    } = options;
+
+    bindAppUiControls({
+        canvas: elements.canvas,
+        viewportPanel: elements.viewportPanel,
+        sidebarToggle: elements.sidebarToggle,
+        debugToggleInput: elements.debugToggleInput,
+        eraScaleSelect: elements.eraScaleSelect,
+        viewModeInputs: elements.viewModeInputs,
+        controlHelpModal: elements.controlHelpModal,
+        controlHelpCloseButton: elements.controlHelpCloseButton,
+        playbackControls: elements.playbackControls,
+        eventLogList: elements.eventLogList,
+        perfEnabled: controllerRuntime.perfUiEnabled,
+        perfControls: elements.perfControls,
+        seedForm: elements.seedForm,
+        seedInput: elements.seedInput,
+        onResize: sceneRuntime.onResize,
+        setSidebarOpen: elements.setSidebarOpen,
+        plateHover: sceneRuntime.plateHover,
+        globePinchFocusController: sceneRuntime.globePinchFocusController,
+        setDebugModeEnabled: controllerRuntime.setDebugModeEnabled,
+        setEraScale: controllerRuntime.setEraScale,
+        setViewMode: controllerRuntime.setViewMode,
+        setCellMetric: controllerRuntime.setCellMetric,
+        setSurfaceMode: controllerRuntime.setSurfaceModeWithPinchReset,
+        playbackController: controllerRuntime.playbackController,
+        runPerfBenchmark: controllerRuntime.runPerfBenchmark,
+        copyPerfBenchmarkResult: controllerRuntime.copyPerfBenchmarkResult,
+        getDebugEnabled: () => getState().debugEnabled,
+        getCurrentSurfaceMode: () => getState().currentSurfaceMode,
+        getCurrentViewMode: () => getState().currentViewMode,
+        getCurrentCellMetric: () => getState().currentCellMetric,
+        updateTerrain: controllerRuntime.updateTerrain,
+        setStatus,
+    });
+}
+
 export function bootstrapAppRuntime(options = {}) {
     const {
         elements,
@@ -13,131 +88,43 @@ export function bootstrapAppRuntime(options = {}) {
         basePositions,
         indices,
     } = options;
-    const {
-        debugToggleInput,
-        eraScaleSelect,
-        viewModeInputs,
-        controlHelpModal,
-        controlHelpCloseButton,
-        playbackControls,
-        eventLogList,
-        perfControls,
-        seedForm,
-        seedInput,
-        canvas,
-        viewportPanel,
-        sidebarToggle,
-    } = elements;
 
     const runtimeStore = createRuntimeStore({
         basePositions,
         indices,
         createEraMetrics,
-        debugEnabled: debugToggleInput.checked,
+        debugEnabled: elements.debugToggleInput.checked,
     });
-    const {
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-    } = runtimeStore;
 
     const sceneRuntime = createSceneRuntime({
         elements,
         indices,
         basePositions,
-        getState,
+        getState: runtimeStore.getState,
     });
-    const {
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
-        onResize,
-    } = sceneRuntime;
 
-    const controllerRuntime = createControllerRuntime({
+    const controllerRuntime = createControllerRuntime(createControllerDeps({
         elements,
         isPerfEnabled,
         setStatus,
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
-        renderInitializationFrames,
-    });
-    const {
-        perfUiEnabled,
-        setDebugModeEnabled,
-        setEraScale,
-        setViewMode,
-        setCellMetric,
-        setSurfaceModeWithPinchReset,
-        stepWorldTick,
-        updateTerrain,
-        playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
-        runInitialSync,
-        shouldAdvanceWorld,
-        getLastPerfBenchmarkResult,
-    } = controllerRuntime;
+        runtimeStore,
+        sceneRuntime,
+    }));
 
-    bindAppUiControls({
-        canvas,
-        viewportPanel,
-        sidebarToggle,
-        debugToggleInput,
-        eraScaleSelect,
-        viewModeInputs,
-        controlHelpModal,
-        controlHelpCloseButton,
-        playbackControls,
-        eventLogList,
-        perfEnabled: perfUiEnabled,
-        perfControls,
-        seedForm,
-        seedInput,
-        onResize,
-        setSidebarOpen: elements.setSidebarOpen,
-        plateHover,
-        globePinchFocusController,
-        setDebugModeEnabled,
-        setEraScale,
-        setViewMode,
-        setCellMetric,
-        setSurfaceMode: setSurfaceModeWithPinchReset,
-        playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
-        getDebugEnabled: () => getState().debugEnabled,
-        getCurrentSurfaceMode: () => getState().currentSurfaceMode,
-        getCurrentViewMode: () => getState().currentViewMode,
-        getCurrentCellMetric: () => getState().currentCellMetric,
-        updateTerrain,
+    bindRuntimeUi({
+        elements,
+        sceneRuntime,
+        controllerRuntime,
+        getState: runtimeStore.getState,
         setStatus,
     });
 
     return {
-        renderFrame,
-        worldState,
-        stepWorldTick,
-        runInitialSync,
-        shouldAdvanceWorld,
-        getLastPerfBenchmarkResult,
+        renderFrame: sceneRuntime.renderFrame,
+        worldState: runtimeStore.worldState,
+        stepWorldTick: controllerRuntime.stepWorldTick,
+        runInitialSync: controllerRuntime.runInitialSync,
+        shouldAdvanceWorld: controllerRuntime.shouldAdvanceWorld,
+        getLastPerfBenchmarkResult: controllerRuntime.getLastPerfBenchmarkResult,
     };
 }
