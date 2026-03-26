@@ -1,19 +1,5 @@
 import importPlugin from "eslint-plugin-import";
-
-const browserGlobals = {
-    window: "readonly",
-    document: "readonly",
-    navigator: "readonly",
-    performance: "readonly",
-    requestAnimationFrame: "readonly",
-    cancelAnimationFrame: "readonly",
-    HTMLElement: "readonly",
-    Worker: "readonly",
-    URL: "readonly",
-    Intl: "readonly",
-    self: "readonly",
-    console: "readonly",
-};
+import globals from "globals";
 
 export default [
     {
@@ -21,7 +7,7 @@ export default [
         languageOptions: {
             ecmaVersion: "latest",
             sourceType: "module",
-            globals: browserGlobals,
+            globals: globals.browser,
         },
         plugins: {
             import: importPlugin,

@@ -23,7 +23,7 @@
         "seed:gate:heavy": "npm run seed:regression:dev -- --seeds alpha,beta,gamma,delta,eta,theta,kappa,mu --ticks 24 --baseline test/seed-regression/seed-regression-heavy-baseline.json --check --threshold 0.005 --threshold-top10-river-flux-sum 0.01",
         "bench:dump-centroids": "node tools/bench/dump-cell-centroids.mjs --level 6 --out bench/data/cell_centroids.csv",
         "bench:fetch:era5": "CDSAPI_RC=.cdsapirc python3 tools/bench/fetch-era5-land-monthly.py --start-year 1970 --end-year 2000 --out data/raw/climate/era5_land_monthly_1970_2000.zip",
-        "bench:fetch:glofas": "python3 tools/bench/fetch-glofas-historical.py --start-year 1979 --end-year 2000 --out-dir data/raw/hydrology/glofas_raw --system-version version_4_0 --hydrological-model lisflood",
+        "bench:fetch:glofas": "CDSAPI_RC=.cdsapirc python3 tools/bench/fetch-glofas-historical.py --start-year 1979 --end-year 1985 --out-dir data/raw/hydrology/glofas_raw --system-version version_4_0 --hydrological-model lisflood --days 01,08,15,22,29",
         "bench:prepare:era5": "python3 tools/bench/prepare-era5-land-climate.py --input data/raw/climate/era5_land_monthly_1970_2000.zip --start-year 1970 --end-year 2000 --out data/raw/climate/era5_land_annual_1970_2000.nc",
         "bench:prepare:glofas": "python3 tools/bench/prepare-glofas-hydrology.py --input-dir data/raw/hydrology/glofas_raw --output data/raw/hydrology/glofas_era5_annual_mean.nc",
         "bench:prepare:worldclim": "python3 tools/bench/prepare-worldclim-climate.py --input-dir data/raw/climate --out-temperature data/raw/climate/worldclim_tavg_annual_c.tif --out-precipitation data/raw/climate/worldclim_prec_annual_mm.tif",
@@ -41,6 +41,7 @@
     "devDependencies": {
         "eslint": "^9.39.4",
         "eslint-plugin-import": "^2.32.0",
+        "globals": "^17.4.0",
         "vite": "^7.1.9"
     }
 }
