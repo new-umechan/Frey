@@ -103,9 +103,10 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 
 | 変数 | 信頼度 | 備考 |
 |---|---|---|
-| `biome` | 中 | WWFバイオーム地図との一致率 |
-| `tree_cover` | 中 | MODIS等の衛星データとの相関 |
-| `soil_fertility` | 低 | 実データが粗い |
+| `biome` | 中 | 衛星 land cover + 気候 + 水文 + 地形から合成した参照バイオームとの macro F1 |
+| `tree_cover` | 中 | MODIS VCF 由来の樹木被覆との相関 |
+| `ground_cover` | 中 | MODIS VCF 由来の non-tree vegetation との相関（開放系植生に限定） |
+| `soil_fertility` | 低 | SoilGrids 由来 proxy との相関。参考値扱い |
 
 ---
 
@@ -133,6 +134,8 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 ### Ecologyの評価軸（Phase 1）
 
 - `biome`：代表地域のバイオームラベルが現実と一致しているか
+- `tree_cover`：代表地域の樹木被覆の大小関係が現実と一致しているか
+- `ground_cover`：代表地域の草本・低木被覆の大小関係が現実と一致しているか
 
 ---
 
@@ -148,7 +151,11 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 ## ベンチマーク基盤（Hydrology・Ecology・統合ベンチ用）
 
 Climate単体ベンチで確立したリサンプリング基盤・出力フォーマット・合否基準の設計を他ベンチでも踏襲する。
-各ベンチの詳細仕様は確定次第docs/manage/bench/配下に追記する。
+詳細仕様は次を参照する。
+
+- `docs/manage/bench/climate_solo_benchmark.md`
+- `docs/manage/bench/hydrology_solo_benchmark.md`
+- `docs/manage/bench/ecology_solo_benchmark.md`
 
 ### 収束判定
 
