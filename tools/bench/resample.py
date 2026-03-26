@@ -434,45 +434,105 @@ def write_hydro_ref_bin(path: Path, river_flow: np.ndarray, is_lake: np.ndarray)
         handle.write(lake_values.tobytes(order="C"))
 
 
+def signed_ring_area(points: list[tuple[float, float]]) -> float:
+    area = 0.0
+    count = len(points)
+    if count < 3:
+        return 0.0
+    for index in range(count):
+        x0, y0 = points[index]
+        x1, y1 = points[(index + 1) % count]
+        area += (x0 * y1) - (x1 * y0)
+    return area * 0.5
+
+
+def point_in_ring(lon: float, lat: float, ring: list[tuple[float, float]]) -> bool:
+    inside = False
+    count = len(ring)
+    if count < 3:
+        return False
+    for index in range(count):
+        x0, y0 = ring[index]
+        x1, y1 = ring[(index + 1) % count]
+        if (y0 > lat) == (y1 > lat):
+            continue
+        if y1 == y0:
+            continue
+        cross_lon = x0 + (lat - y0) * (x1 - x0) / (y1 - y0)
+        if cross_lon == lon:
+            return True
+        if cross_lon > lon:
+            inside = not inside
+    return inside
+
+
+def shape_rings(shape) -> list[list[tuple[float, float]]]:
+    points = [(float(lon), float(lat)) for lon, lat in shape.points]
+    part_starts = list(shape.parts) + [len(points)]
+    rings = []
+    for start, end in zip(part_starts, part_starts[1:]):
+        ring = points[start:end]
+        if len(ring) >= 3:
+            rings.append(ring)
+    return rings
+
+
+def shape_contains_point(lon: float, lat: float, shape) -> bool:
+    outer_rings = []
+    hole_rings = []
+    for ring in shape_rings(shape):
+        if signed_ring_area(ring) < 0.0:
+            outer_rings.append(ring)
+        else:
+            hole_rings.append(ring)
+    if not outer_rings:
+        outer_rings = shape_rings(shape)
+    if not any(point_in_ring(lon, lat, ring) for ring in outer_rings):
+        return False
+    return not any(point_in_ring(lon, lat, ring) for ring in hole_rings)
+
+
 def rasterize_lake_polygons(
     path: Path, centroid_lat: np.ndarray, centroid_lon: np.ndarray
 ) -> np.ndarray:
     try:
-        import geopandas as gpd
+        import shapefile
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError("geopandas is required to read HydroLAKES polygons") from exc
+        raise RuntimeError("pyshp is required to read HydroLAKES polygons") from exc
 
-    try:
-        from shapely.geometry import Point
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError("shapely is required to test HydroLAKES point inclusion") from exc
-
-    lakes = gpd.read_file(path)
-    if lakes.empty:
-        return np.zeros(centroid_lat.shape, dtype=np.uint8)
-    if lakes.crs is None:
-        raise ValueError(f"lake shapefile is missing CRS metadata: {path}")
-    if str(lakes.crs).lower() not in {"epsg:4326", "ogc:crs84"}:
-        lakes = lakes.to_crs("EPSG:4326")
-
+    reader = shapefile.Reader(str(path), encoding="latin1")
+    fields = [field[0] for field in reader.fields[1:]]
     area_column = next(
-        (name for name in ("Lake_area", "Lake_area_km2", "area_km2") if name in lakes.columns),
+        (name for name in ("Lake_area", "Lake_area_km2", "area_km2") if name in fields),
         None,
     )
     if area_column is None:
         raise ValueError(
             "lake shapefile must include an area column such as Lake_area or Lake_area_km2"
         )
-    lakes = lakes[lakes[area_column].fillna(0.0) >= 1500.0]
-    if lakes.empty:
+    area_index = fields.index(area_column)
+    if reader.numRecords == 0:
         return np.zeros(centroid_lat.shape, dtype=np.uint8)
 
-    points = gpd.GeoDataFrame(
-        geometry=[Point(lon, lat) for lat, lon in zip(centroid_lat, centroid_lon)],
-        crs="EPSG:4326",
-    )
-    joined = gpd.sjoin(points, lakes[["geometry"]], how="left", predicate="within")
-    return joined["index_right"].notna().astype(np.uint8).to_numpy()
+    is_lake = np.zeros(centroid_lat.shape, dtype=np.uint8)
+    for shape_record in reader.iterShapeRecords():
+        area_value = shape_record.record[area_index]
+        if area_value is None or float(area_value) < 1500.0:
+            continue
+        min_lon, min_lat, max_lon, max_lat = shape_record.shape.bbox
+        candidates = np.where(
+            (is_lake == 0)
+            & (centroid_lon >= min_lon)
+            & (centroid_lon <= max_lon)
+            & (centroid_lat >= min_lat)
+            & (centroid_lat <= max_lat)
+        )[0]
+        if candidates.size == 0:
+            continue
+        for index in candidates:
+            if shape_contains_point(float(centroid_lon[index]), float(centroid_lat[index]), shape_record.shape):
+                is_lake[index] = 1
+    return is_lake
 
 
 def transform_aridity(values: np.ndarray, source: str) -> np.ndarray:
