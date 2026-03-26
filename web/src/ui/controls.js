@@ -1,8 +1,5 @@
 import { createControlHelpController } from "./controls/control-help-controller.js";
-import {
-    isHelpToggleKey,
-    isInteractiveTarget,
-} from "./controls/keyboard-guards.js";
+import { createGlobalKeyboardHandler } from "./controls/keyboard-shortcuts.js";
 import {
     bindPerfEvents,
     bindPlaybackUiEvents,
@@ -114,107 +111,19 @@ export function setupUiControls({
     });
     bindPerfEvents(perfEnabled, perfControls, onRunPerfBenchmark, onCopyPerfBenchmark);
 
-    document.addEventListener("keydown", (event) => {
-        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
-            return;
-        }
-
-        if (isInteractiveTarget(event.target)) {
-            return;
-        }
-
-        const lowerKey = event.key.toLowerCase();
-
-        if (isHelpToggleKey(event)) {
-            event.preventDefault();
-            controlHelp.toggleControlHelp();
-            return;
-        }
-
-        if (controlHelp.isOpen()) {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                controlHelp.closeControlHelp();
-            }
-            return;
-        }
-
-        if (event.key === "ArrowUp" || lowerKey === "k") {
-            event.preventDefault();
-            viewCui.moveViewCursor(-1);
-            return;
-        }
-
-        if (event.key === "ArrowDown" || lowerKey === "j") {
-            event.preventDefault();
-            viewCui.moveViewCursor(1);
-            return;
-        }
-
-        if (event.key === "Enter" || lowerKey === "l") {
-            event.preventDefault();
-            viewCui.commitViewSelection();
-            return;
-        }
-
-        if ((event.key === "Escape" || lowerKey === "h") && viewCui.backViewMenu()) {
-            event.preventDefault();
-            return;
-        }
-
-        if (viewCui.handleDigitSelect(event.key)) {
-            event.preventDefault();
-            return;
-        }
-
-        if (lowerKey === "t" || lowerKey === "s") {
-            event.preventDefault();
-            seedInput.focus();
-            seedInput.select();
-            return;
-        }
-
-        if (lowerKey === "d") {
-            event.preventDefault();
-            onToggleDebug(!getDebugEnabled());
-            return;
-        }
-
-        if (lowerKey === "v") {
-            event.preventDefault();
-            onToggleSurface(getCurrentSurfaceMode() === "globe" ? "map" : "globe");
-            return;
-        }
-
-        if (event.code === "Space") {
-            event.preventDefault();
-            onTogglePlay();
-            return;
-        }
-
-        if (event.key === ".") {
-            event.preventDefault();
-            onStepForward();
-            return;
-        }
-
-        if (event.key === ",") {
-            event.preventDefault();
-            onRewind();
-            return;
-        }
-
-        if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            onHistoryStepDirection(-1);
-            return;
-        }
-
-        if (event.key === "ArrowRight") {
-            event.preventDefault();
-            onHistoryStepDirection(1);
-        }
-    });
+    document.addEventListener("keydown", createGlobalKeyboardHandler({
+        controlHelp,
+        viewCui,
+        seedInput,
+        getDebugEnabled,
+        getCurrentSurfaceMode,
+        onToggleDebug,
+        onToggleSurface,
+        onTogglePlay,
+        onStepForward,
+        onRewind,
+        onHistoryStepDirection,
+    }));
 
     seedForm.addEventListener("submit", async (event) => {
         event.preventDefault();
