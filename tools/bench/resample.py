@@ -14,6 +14,7 @@ CLIMATE_MAGIC = b"CLIMREF1"
 TERRAIN_MAGIC = b"TERRREF1"
 HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
+ECOLOGY_REF_MAGIC = b"ECOREF01"
 VERSION = 1
 CLIMATE_VARIABLES = [
     "temperature",
@@ -32,6 +33,10 @@ class GridData:
     values: np.ndarray
 
 
+def is_geographic_crs_string(crs_str: str) -> bool:
+    return ("4326" in crs_str) or ("9518" in crs_str)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resample reference rasters onto CellStore centroids."
@@ -39,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--module",
         required=True,
-        choices=["climate", "terrain", "hydro-input", "hydro-ref"],
+        choices=["climate", "terrain", "hydro-input", "hydro-ref", "ecology-ref"],
     )
     parser.add_argument(
         "--centroids",
@@ -85,6 +90,63 @@ def parse_args() -> argparse.Namespace:
         help="Optional NetCDF variable mapping, e.g. temperature=tavg.",
     )
     parser.add_argument("--height", help="Input raster/NetCDF for terrain height.")
+    parser.add_argument("--tree-cover", help="Input raster for MOD44B tree cover.")
+    parser.add_argument(
+        "--non-tree-cover",
+        help="Input raster for MOD44B non-tree vegetation cover.",
+    )
+    parser.add_argument(
+        "--bare-cover",
+        help="Input raster for MOD44B non-vegetated cover.",
+    )
+    parser.add_argument("--landcover", help="Input raster for MCD12Q1 LC_Type1.")
+    parser.add_argument("--landuse", help="Input raster for MCD12Q1 LC_Prop2.")
+    parser.add_argument(
+        "--soil-soc",
+        help="Optional input raster for SoilGrids SOC (0-30cm aggregated).",
+    )
+    parser.add_argument(
+        "--soil-cec",
+        help="Optional input raster for SoilGrids CEC (0-30cm aggregated).",
+    )
+    parser.add_argument(
+        "--soil-ph",
+        help="Optional input raster for SoilGrids pH(H2O) (0-30cm aggregated).",
+    )
+    parser.add_argument(
+        "--soil-bdod",
+        help="Optional input raster for SoilGrids bulk density (0-30cm aggregated).",
+    )
+    parser.add_argument(
+        "--soil-dir",
+        help=(
+            "Optional directory containing 12 SoilGrids depth rasters "
+            "(prop_{0_5,5_15,15_30}cm_mean_{suffix}.tif)."
+        ),
+    )
+    parser.add_argument(
+        "--soil-suffix",
+        default="0p1deg",
+        help="Suffix for depth rasters under --soil-dir (default: 0p1deg).",
+    )
+    parser.add_argument(
+        "--soil-w-0-5",
+        type=float,
+        default=5.0,
+        help="Depth weight for 0-5cm when using --soil-dir.",
+    )
+    parser.add_argument(
+        "--soil-w-5-15",
+        type=float,
+        default=3.5,
+        help="Depth weight for 5-15cm when using --soil-dir.",
+    )
+    parser.add_argument(
+        "--soil-w-15-30",
+        type=float,
+        default=1.5,
+        help="Depth weight for 15-30cm when using --soil-dir.",
+    )
     parser.add_argument(
         "--height-var-name",
         default=None,
@@ -184,8 +246,8 @@ def load_geotiff(path: Path) -> GridData:
         if ds.count < 1:
             raise ValueError(f"GeoTIFF has no bands: {path}")
         crs_str = str(ds.crs or "")
-        # Accept common geographic CRS encodings for global DEM/Climate rasters.
-        if "4326" not in crs_str and "9518" not in crs_str:
+        # Accept common geographic CRS encodings for global rasters.
+        if not is_geographic_crs_string(crs_str):
             raise ValueError(
                 f"GeoTIFF CRS must be geographic (e.g. EPSG:4326/9518): {path} (crs={crs_str})"
             )
@@ -199,6 +261,67 @@ def load_geotiff(path: Path) -> GridData:
         lon = transform.c + cols * transform.a
         lat = transform.f + rows * transform.e
     return normalize_grid_axes(lat=lat, lon=lon, values=values)
+
+
+def sample_geotiff_projected_nearest(
+    path: Path, query_lat: np.ndarray, query_lon: np.ndarray
+) -> np.ndarray:
+    try:
+        import rasterio
+        from rasterio.warp import transform
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("rasterio is required to read projected GeoTIFF inputs") from exc
+
+    with rasterio.open(path) as ds:
+        crs = ds.crs
+        if crs is None:
+            raise ValueError(f"GeoTIFF CRS is missing: {path}")
+        x_vals, y_vals = transform(
+            "EPSG:4326",
+            crs,
+            query_lon.astype(float).tolist(),
+            query_lat.astype(float).tolist(),
+        )
+        coords = list(zip(x_vals, y_vals))
+        sampled = np.array([v[0] for v in ds.sample(coords)], dtype=np.float64)
+        nodata = ds.nodata
+        if nodata is not None:
+            sampled[np.isclose(sampled, nodata)] = np.nan
+        return sampled
+
+
+def sample_input_at_centroids(
+    path: Path,
+    preferred_var: str | None,
+    query_lat: np.ndarray,
+    query_lon: np.ndarray,
+    method: str,
+) -> np.ndarray:
+    suffix = path.suffix.lower()
+    if suffix in {".nc", ".nc4", ".netcdf"}:
+        grid = load_netcdf(path, preferred_var)
+        return interpolate_grid(grid, query_lat, query_lon, method)
+    if suffix not in {".tif", ".tiff"}:
+        raise ValueError(
+            f"unsupported input extension for {path}. Use GeoTIFF(.tif/.tiff) or NetCDF(.nc/.nc4)."
+        )
+
+    try:
+        import rasterio
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("rasterio is required to read GeoTIFF inputs") from exc
+
+    with rasterio.open(path) as ds:
+        crs_str = str(ds.crs or "")
+    if is_geographic_crs_string(crs_str):
+        grid = load_geotiff(path)
+        return interpolate_grid(grid, query_lat, query_lon, method)
+
+    if method != "nearest":
+        print(
+            f"WARNING: projected raster sampled with nearest instead of {method}: {path}"
+        )
+    return sample_geotiff_projected_nearest(path, query_lat, query_lon)
 
 
 def load_netcdf(path: Path, preferred_var: str | None) -> GridData:
@@ -434,6 +557,46 @@ def write_hydro_ref_bin(path: Path, river_flow: np.ndarray, is_lake: np.ndarray)
         handle.write(lake_values.tobytes(order="C"))
 
 
+def write_ecology_ref_bin(
+    path: Path,
+    tree_cover: np.ndarray,
+    ground_cover: np.ndarray,
+    soil_fertility: np.ndarray,
+    biome: np.ndarray,
+    natural_mask: np.ndarray,
+    open_canopy_mask: np.ndarray,
+) -> None:
+    tree_values = np.asarray(tree_cover, dtype="<f4")
+    ground_values = np.asarray(ground_cover, dtype="<f4")
+    soil_values = np.asarray(soil_fertility, dtype="<f4")
+    biome_values = np.asarray(biome, dtype=np.uint8)
+    natural_values = np.asarray(natural_mask, dtype=np.uint8)
+    open_canopy_values = np.asarray(open_canopy_mask, dtype=np.uint8)
+
+    length = int(tree_values.size)
+    for name, values in (
+        ("ground_cover", ground_values),
+        ("soil_fertility", soil_values),
+        ("biome", biome_values),
+        ("natural_mask", natural_values),
+        ("open_canopy_mask", open_canopy_values),
+    ):
+        if int(values.size) != length:
+            raise ValueError(f"length mismatch for {name}: expected {length}, got {values.size}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(ECOLOGY_REF_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", length))
+        handle.write(tree_values.tobytes(order="C"))
+        handle.write(ground_values.tobytes(order="C"))
+        handle.write(soil_values.tobytes(order="C"))
+        handle.write(biome_values.tobytes(order="C"))
+        handle.write(natural_values.tobytes(order="C"))
+        handle.write(open_canopy_values.tobytes(order="C"))
+
+
 def signed_ring_area(points: list[tuple[float, float]]) -> float:
     area = 0.0
     count = len(points)
@@ -575,6 +738,154 @@ def write_terrain_ref_bin(path: Path, heights: np.ndarray) -> None:
         handle.write(values.tobytes(order="C"))
 
 
+def to_fraction_cover(values: np.ndarray) -> np.ndarray:
+    out = np.asarray(values, dtype=np.float64).copy()
+    invalid = ~np.isfinite(out) | (out >= 200.0) | (out < 0.0)
+    out[invalid] = np.nan
+    out = np.clip(out / 100.0, 0.0, 1.0)
+    return out
+
+
+def to_height_m(values: np.ndarray, args: argparse.Namespace) -> np.ndarray:
+    out = np.asarray(values, dtype=np.float64).copy()
+    if args.height_source == "meters":
+        out = out - float(args.sea_level_m)
+    else:
+        out = out * float(args.height_to_meters)
+    out[~np.isfinite(out)] = np.nan
+    return out
+
+
+def percentile_rank(values: np.ndarray) -> np.ndarray:
+    arr = np.asarray(values, dtype=np.float64)
+    out = np.full(arr.shape, np.nan, dtype=np.float64)
+    valid = np.isfinite(arr)
+    if not np.any(valid):
+        return out
+    valid_values = arr[valid]
+    order = np.argsort(valid_values, kind="mergesort")
+    ranks = np.empty_like(order, dtype=np.float64)
+    ranks[order] = np.arange(order.size, dtype=np.float64)
+    if order.size > 1:
+        ranks /= float(order.size - 1)
+    else:
+        ranks.fill(0.5)
+    out[valid] = ranks
+    return out
+
+
+def ph_suitability(values: np.ndarray) -> np.ndarray:
+    ph = np.asarray(values, dtype=np.float64)
+    out = np.full(ph.shape, np.nan, dtype=np.float64)
+    valid = np.isfinite(ph)
+    if not np.any(valid):
+        return out
+    pv = ph[valid]
+    score = np.zeros_like(pv)
+    score[(pv >= 6.0) & (pv <= 7.5)] = 1.0
+    left = (pv >= 4.0) & (pv < 6.0)
+    score[left] = (pv[left] - 4.0) / 2.0
+    right = (pv > 7.5) & (pv <= 9.0)
+    score[right] = (9.0 - pv[right]) / 1.5
+    out[valid] = np.clip(score, 0.0, 1.0)
+    return out
+
+
+def load_weighted_soil_from_depths(
+    soil_dir: Path,
+    prop: str,
+    suffix: str,
+    centroid_lat: np.ndarray,
+    centroid_lon: np.ndarray,
+    method: str,
+    w_0_5: float,
+    w_5_15: float,
+    w_15_30: float,
+) -> np.ndarray:
+    paths = [
+        soil_dir / f"{prop}_0_5cm_mean_{suffix}.tif",
+        soil_dir / f"{prop}_5_15cm_mean_{suffix}.tif",
+        soil_dir / f"{prop}_15_30cm_mean_{suffix}.tif",
+    ]
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"missing SoilGrids depth raster: {path}")
+
+    depth_0_5 = sample_input_at_centroids(paths[0], None, centroid_lat, centroid_lon, method)
+    depth_5_15 = sample_input_at_centroids(paths[1], None, centroid_lat, centroid_lon, method)
+    depth_15_30 = sample_input_at_centroids(paths[2], None, centroid_lat, centroid_lon, method)
+
+    denom = w_0_5 + w_5_15 + w_15_30
+    if denom <= 0.0:
+        raise ValueError("soil depth weights must sum to > 0")
+    weighted = depth_0_5 * w_0_5 + depth_5_15 * w_5_15 + depth_15_30 * w_15_30
+    out = np.full(depth_0_5.shape, np.nan, dtype=np.float64)
+    finite = np.isfinite(depth_0_5) & np.isfinite(depth_5_15) & np.isfinite(depth_15_30)
+    out[finite] = weighted[finite] / denom
+    return out
+
+
+def build_natural_mask(lc_type1: np.ndarray, lc_prop2: np.ndarray | None) -> np.ndarray:
+    lc = np.asarray(lc_type1, dtype=np.float64)
+    mask = np.isfinite(lc)
+    excluded_type1 = {0, 12, 13, 14, 15, 17, 254, 255}
+    for code in excluded_type1:
+        mask &= lc != float(code)
+    if lc_prop2 is not None:
+        prop2 = np.asarray(lc_prop2, dtype=np.float64)
+        # Keep this conservative: only mark obvious no-data/fill values as excluded.
+        mask &= np.isfinite(prop2)
+        mask &= prop2 != 255.0
+    return mask.astype(np.uint8)
+
+
+def classify_biome_ref(
+    tree_cover: np.ndarray,
+    bare_cover: np.ndarray,
+    temperature: np.ndarray,
+    precipitation: np.ndarray,
+    river_flow: np.ndarray,
+    height_m: np.ndarray,
+    lc_type1: np.ndarray,
+    natural_mask: np.ndarray,
+) -> np.ndarray:
+    biome = np.full(tree_cover.shape, 255, dtype=np.uint8)
+    natural = natural_mask == 1
+    if not np.any(natural):
+        return biome
+
+    river_valid = np.isfinite(river_flow)
+    river_q98 = np.nanquantile(river_flow[river_valid], 0.98) if np.any(river_valid) else np.nan
+
+    tundra = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature <= -2.0) & (tree_cover < 0.25)
+    alpine = natural & np.isfinite(height_m) & np.isfinite(tree_cover) & (height_m >= 2500.0) & (tree_cover < 0.20)
+    desert = natural & np.isfinite(bare_cover) & np.isfinite(precipitation) & (bare_cover >= 0.60) & (precipitation < 300.0)
+    wetland = natural & np.isfinite(lc_type1) & (lc_type1 == 11.0)
+    if np.isfinite(river_q98):
+        lowland = np.isfinite(height_m) & (height_m <= 300.0)
+        high_flow = np.isfinite(river_flow) & (river_flow >= river_q98)
+        wetland = wetland | (natural & lowland & high_flow)
+
+    tropical_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 22.0) & (tree_cover >= 0.60)
+    savanna = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 22.0) & (tree_cover >= 0.10)
+    temperate_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 6.0) & (tree_cover >= 0.55)
+    boreal_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature < 6.0) & (tree_cover >= 0.35)
+
+    # Biome encoding aligned with rust enum:
+    # 0 TropicalForest, 1 Savanna, 2 Desert, 3 Grassland, 4 TemperateForest,
+    # 5 BorealForest, 6 Tundra, 7 Wetland, 8 Alpine, 255 excluded.
+    biome[grassland := natural] = 3
+    biome[boreal_forest] = 5
+    biome[temperate_forest] = 4
+    biome[savanna] = 1
+    biome[tropical_forest] = 0
+    biome[wetland] = 7
+    biome[desert] = 2
+    biome[tundra] = 6
+    biome[alpine] = 8
+    return biome
+
+
 def summarize(name: str, values: np.ndarray) -> str:
     valid = np.isfinite(values)
     valid_count = int(np.sum(valid))
@@ -600,6 +911,8 @@ def main() -> None:
             output_path = Path("bench/data/hydro_input.bin")
         elif args.module == "hydro-ref":
             output_path = Path("bench/data/hydro_ref.bin")
+        elif args.module == "ecology-ref":
+            output_path = Path("bench/data/ecology_ref.bin")
         else:
             output_path = Path("bench/data/terrain_ref.bin")
     else:
@@ -681,6 +994,216 @@ def main() -> None:
         write_hydro_ref_bin(output_path, river_flow, is_lake)
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(river_flow)}")
+        return
+
+    if args.module == "ecology-ref":
+        required = {
+            "tree_cover": args.tree_cover,
+            "non_tree_cover": args.non_tree_cover,
+            "bare_cover": args.bare_cover,
+            "landcover": args.landcover,
+            "temperature": args.temperature,
+            "precipitation": args.precipitation,
+            "river_flow": args.river_flow,
+            "height": args.height,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(f"missing required args for ecology-ref module: {missing}")
+
+        tree_cover = to_fraction_cover(
+            sample_input_at_centroids(
+                Path(args.tree_cover), None, centroid_lat, centroid_lon, args.method
+            )
+        )
+        ground_cover = to_fraction_cover(
+            sample_input_at_centroids(
+                Path(args.non_tree_cover), None, centroid_lat, centroid_lon, args.method
+            )
+        )
+        bare_cover = to_fraction_cover(
+            sample_input_at_centroids(
+                Path(args.bare_cover), None, centroid_lat, centroid_lon, args.method
+            )
+        )
+        lc_type1 = sample_input_at_centroids(
+            Path(args.landcover),
+            None,
+            centroid_lat,
+            centroid_lon,
+            "nearest",
+        )
+        lc_prop2 = None
+        if args.landuse:
+            lc_prop2 = sample_input_at_centroids(
+                Path(args.landuse), None, centroid_lat, centroid_lon, "nearest"
+            )
+
+        temperature = sample_input_at_centroids(
+            Path(args.temperature), None, centroid_lat, centroid_lon, args.method
+        )
+        precipitation = sample_input_at_centroids(
+            Path(args.precipitation), None, centroid_lat, centroid_lon, args.method
+        )
+        river_flow = sample_input_at_centroids(
+            Path(args.river_flow), None, centroid_lat, centroid_lon, args.method
+        )
+        height_m = to_height_m(
+            sample_input_at_centroids(
+                Path(args.height),
+                args.height_var_name,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+            ),
+            args,
+        )
+
+        natural_mask = build_natural_mask(lc_type1, lc_prop2)
+        open_canopy_mask = ((natural_mask == 1) & np.isfinite(tree_cover) & (tree_cover <= 0.40)).astype(np.uint8)
+        biome = classify_biome_ref(
+            tree_cover=tree_cover,
+            bare_cover=bare_cover,
+            temperature=temperature,
+            precipitation=precipitation,
+            river_flow=river_flow,
+            height_m=height_m,
+            lc_type1=lc_type1,
+            natural_mask=natural_mask,
+        )
+
+        soil_fertility = np.full(tree_cover.shape, np.nan, dtype=np.float64)
+        if args.soil_soc and args.soil_cec and args.soil_ph and args.soil_bdod:
+            soc = sample_input_at_centroids(
+                Path(args.soil_soc),
+                None,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+            )
+            cec = sample_input_at_centroids(
+                Path(args.soil_cec),
+                None,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+            )
+            sph = sample_input_at_centroids(
+                Path(args.soil_ph),
+                None,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+            )
+            bdod = sample_input_at_centroids(
+                Path(args.soil_bdod),
+                None,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+            )
+            soil_fertility = (
+                0.45 * percentile_rank(soc)
+                + 0.25 * percentile_rank(cec)
+                + 0.20 * ph_suitability(sph)
+                + 0.10 * (1.0 - percentile_rank(bdod))
+            )
+            soil_fertility = np.clip(soil_fertility, 0.0, 1.0)
+        elif args.soil_dir:
+            soil_dir = Path(args.soil_dir)
+            w_0_5 = float(args.soil_w_0_5)
+            w_5_15 = float(args.soil_w_5_15)
+            w_15_30 = float(args.soil_w_15_30)
+            soc = load_weighted_soil_from_depths(
+                soil_dir=soil_dir,
+                prop="soc",
+                suffix=args.soil_suffix,
+                centroid_lat=centroid_lat,
+                centroid_lon=centroid_lon,
+                method=args.method,
+                w_0_5=w_0_5,
+                w_5_15=w_5_15,
+                w_15_30=w_15_30,
+            )
+            cec = load_weighted_soil_from_depths(
+                soil_dir=soil_dir,
+                prop="cec",
+                suffix=args.soil_suffix,
+                centroid_lat=centroid_lat,
+                centroid_lon=centroid_lon,
+                method=args.method,
+                w_0_5=w_0_5,
+                w_5_15=w_5_15,
+                w_15_30=w_15_30,
+            )
+            sph = load_weighted_soil_from_depths(
+                soil_dir=soil_dir,
+                prop="phh2o",
+                suffix=args.soil_suffix,
+                centroid_lat=centroid_lat,
+                centroid_lon=centroid_lon,
+                method=args.method,
+                w_0_5=w_0_5,
+                w_5_15=w_5_15,
+                w_15_30=w_15_30,
+            )
+            bdod = load_weighted_soil_from_depths(
+                soil_dir=soil_dir,
+                prop="bdod",
+                suffix=args.soil_suffix,
+                centroid_lat=centroid_lat,
+                centroid_lon=centroid_lon,
+                method=args.method,
+                w_0_5=w_0_5,
+                w_5_15=w_5_15,
+                w_15_30=w_15_30,
+            )
+            print(
+                "soil_depth_weights: "
+                f"w0_5={w_0_5:.3f} w5_15={w_5_15:.3f} w15_30={w_15_30:.3f}"
+            )
+            soil_fertility = (
+                0.45 * percentile_rank(soc)
+                + 0.25 * percentile_rank(cec)
+                + 0.20 * ph_suitability(sph)
+                + 0.10 * (1.0 - percentile_rank(bdod))
+            )
+            soil_fertility = np.clip(soil_fertility, 0.0, 1.0)
+        else:
+            print("soil_fertility: no soil rasters provided, writing NaN")
+
+        print(summarize("tree_cover", tree_cover))
+        print(summarize("ground_cover", ground_cover))
+        print(
+            f"natural_mask: valid={int(natural_mask.size)}/{int(natural_mask.size)} "
+            f"true={int(np.count_nonzero(natural_mask))} false={int(natural_mask.size - np.count_nonzero(natural_mask))}"
+        )
+        print(
+            f"open_canopy_mask: valid={int(open_canopy_mask.size)}/{int(open_canopy_mask.size)} "
+            f"true={int(np.count_nonzero(open_canopy_mask))} false={int(open_canopy_mask.size - np.count_nonzero(open_canopy_mask))}"
+        )
+        print(
+            "biome_ref: "
+            + ", ".join(
+                [
+                    f"{code}={int(np.count_nonzero(biome == code))}"
+                    for code in [0, 1, 2, 3, 4, 5, 6, 7, 8, 255]
+                ]
+            )
+        )
+        print(summarize("soil_fertility", soil_fertility))
+
+        write_ecology_ref_bin(
+            output_path,
+            tree_cover.astype(np.float32, copy=False),
+            ground_cover.astype(np.float32, copy=False),
+            soil_fertility.astype(np.float32, copy=False),
+            biome,
+            natural_mask,
+            open_canopy_mask,
+        )
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(tree_cover)}")
         return
 
     if not args.height:

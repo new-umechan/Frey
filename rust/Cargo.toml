@@ -24,3 +24,7 @@ harness = false
 [[bench]]
 name = "hydrology_solo"
 harness = false
+
+[[bench]]
+name = "ecology_solo"
+harness = false

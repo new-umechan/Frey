@@ -129,6 +129,10 @@ pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u3
     }
 }
 
+pub fn run_ecology_step_for_bench(world: &mut world::World, ecology_budget: u32) {
+    ecology::run_ecology_step(world, ecology_budget);
+}
+
 pub(crate) fn step_erosion_automaton(
     state: &mut erosion::ErosionAutomatonState,
     budget_cells: u32,

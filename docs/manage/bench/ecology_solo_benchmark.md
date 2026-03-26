@@ -27,6 +27,7 @@ cargo bench --bench ecology_solo
 
 このベンチは、既存の `bench/data/terrain_ref.bin`・`bench/data/climate_ref.bin`・`bench/data/hydro_ref.bin` に加え、
 Ecology単体ベンチ専用の評価キャッシュ `bench/data/ecology_ref.bin` を使う。
+実データの取得元と保存先の運用は `docs/manage/bench/ecology_benchmark_data_acquisition.md` を参照する。
 
 - `terrain_ref.bin`
   - `height`
@@ -53,7 +54,7 @@ Ecology単体ベンチ専用の評価キャッシュ `bench/data/ecology_ref.bin
 5. `npm run bench:resample:climate -- --temperature data/raw/climate/worldclim_tavg_annual_c.tif --precipitation data/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration data/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff data/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity data/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
 6. `npm run bench:resample:hydro-ref -- --river-flow data/raw/hydrology/glofas_era5_annual_mean.nc --lakes data/raw/hydrology/HydroLAKES_polys_v10.shp`
 7. Ecology 参照データを `data/raw/ecology/` に配置する
-8. `python3 tools/bench/resample.py --module ecology-ref ...` 相当の専用処理で `bench/data/ecology_ref.bin` を生成する
+8. `npm run bench:resample:ecology-ref:with-soil` で `bench/data/ecology_ref.bin` を生成する
 
 ### 既存データの再利用
 
@@ -282,16 +283,24 @@ SoilGrids の topsoil 指標から benchmark専用 proxy を作る。
 - pH
 - bulk density
 
-深さは 0-5 cm、5-15 cm、15-30 cm を厚み重みで合成して 0-30 cm 平均を作る。
+深さは 0-5 cm、5-15 cm、15-30 cm を重み付きで合成して 0-30 cm 平均を作る。
+固定運用の重みは `5 : 3.5 : 1.5` とする。
+これは厚み比の厳密モデルではなく、生物利用のしやすさを優先する benchmark 上の運用パラメータである。
+実装では12ファイルを保持し、`bench:resample:ecology-ref:with-soil` 実行時にこの重みで合成する。
 
 #### 参照 proxy
 
 ```rust
 soil_fertility_ref =
+    let soc_0_30 = weighted_mean(soc_0_5, soc_5_15, soc_15_30, [5, 3.5, 1.5]);
+    let cec_0_30 = weighted_mean(cec_0_5, cec_5_15, cec_15_30, [5, 3.5, 1.5]);
+    let ph_0_30 = weighted_mean(ph_0_5, ph_5_15, ph_15_30, [5, 3.5, 1.5]);
+    let bdod_0_30 = weighted_mean(bdod_0_5, bdod_5_15, bdod_15_30, [5, 3.5, 1.5]);
+
     0.45 * percentile_rank(soc_0_30)
   + 0.25 * percentile_rank(cec_0_30)
   + 0.20 * ph_suitability(ph_0_30)
-  + 0.10 * (1.0 - percentile_rank(bulk_density_0_30));
+  + 0.10 * (1.0 - percentile_rank(bdod_0_30));
 ```
 
 `ph_suitability` は `6.5` を最適値とする台形関数で定義する。
