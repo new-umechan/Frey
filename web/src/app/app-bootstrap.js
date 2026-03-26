@@ -2,7 +2,7 @@ import { bindAppUiControls } from "./ui-bindings.js";
 import { createEraMetrics } from "./era-presets.js";
 import { createRuntimeStore } from "./bootstrap/runtime-store.js";
 import { createSceneRuntime } from "./bootstrap/scene-runtime.js";
-import { createControllerRuntime } from "./bootstrap/controller-runtime.js";
+import { createControllerRuntime } from "./bootstrap/controller-runtime/create-controller-runtime.js";
 import { renderInitializationFrames } from "./bootstrap/initialization-frames.js";
 
 function createControllerDeps(options) {

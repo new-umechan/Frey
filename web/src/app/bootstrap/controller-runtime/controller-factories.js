@@ -1,116 +1,39 @@
-import { WorldSimController } from "../../interface/wasm.js";
-import { GEOLOGY_PARAMS } from "../../interface/params/geology.js";
-import { DEFAULT_ERA_SCALE, LEVEL } from "../../core/constants.js";
+import { GEOLOGY_PARAMS } from "../../../interface/params/geology.js";
+import { DEFAULT_ERA_SCALE, LEVEL } from "../../../core/constants.js";
 import {
     createEraMetrics,
     buildEraMetricsFromRuntime,
     getEraScalePreset,
     renderEraScaleControls,
-} from "../era-presets.js";
+} from "../../era-presets.js";
 import {
     createEmptyLayers,
     createInitialBudgets,
-} from "../runtime/state.js";
-import {
-    getDeltaFieldKindsForView,
-} from "../world-sync/view-mode.js";
-import { refreshWorldStatsFromController } from "../world-sync/stats-sync.js";
-import { syncVisibleCoreFieldsFromController } from "../world-sync/field-io.js";
+} from "../../runtime/state.js";
+import { getDeltaFieldKindsForView } from "../../world-sync/view-mode.js";
+import { refreshWorldStatsFromController } from "../../world-sync/stats-sync.js";
+import { syncVisibleCoreFieldsFromController } from "../../world-sync/field-io.js";
 import {
     syncWorldDeltaFromController,
     syncWorldFromController,
-} from "../world-sync/world-state-sync.js";
-import { createWorldUiController } from "../world-ui-controller.js";
-import { createWorldSessionController } from "../world-session-controller.js";
-import { createWorldStepper } from "../world-stepper.js";
+} from "../../world-sync/world-state-sync.js";
+import { createWorldUiController } from "../../world-ui-controller.js";
+import { createWorldSessionController } from "../../world-session-controller.js";
+import { createWorldStepper } from "../../world-stepper.js";
 import {
     createBenchmarkConsoleTable,
     createBenchmarkProfile,
     formatBenchmarkSummaryLine,
-} from "../perf-benchmark.js";
-import { createViewModeController } from "../view-mode-controller.js";
-import { normalizeCellMetric } from "../cell-metric.js";
-import { createTerrainGenerationController } from "../terrain-generation-controller.js";
-import { createPlaybackController } from "../playback-controller.js";
-import { pushStepBreakdownSamples } from "../perf-step-breakdown.js";
-import { resetWorldProgress } from "../world-loop.js";
-import { runInitialWorldAndUiSync } from "./post-init-sync.js";
-import { createPerfRuntime } from "./perf-runtime.js";
+} from "../../perf-benchmark.js";
+import { createViewModeController } from "../../view-mode-controller.js";
+import { normalizeCellMetric } from "../../cell-metric.js";
+import { createTerrainGenerationController } from "../../terrain-generation-controller.js";
+import { createPlaybackController } from "../../playback-controller.js";
+import { pushStepBreakdownSamples } from "../../perf-step-breakdown.js";
+import { resetWorldProgress } from "../../world-loop.js";
+import { createPerfRuntime } from "../perf-runtime.js";
 
-const PERF_BENCH_WORKER_URL = new URL("../../workers/perf-benchmark-worker.js", import.meta.url);
-
-function createRuntimeContext(options = {}) {
-    const {
-        elements,
-        isPerfEnabled,
-        setStatus,
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
-        renderInitializationFrames,
-    } = options;
-
-    const {
-        seedForm,
-        seedInput,
-        debugToggleInput,
-        eraScaleSelect,
-        eraScaleTickLabel,
-        eraScaleWeightFields,
-        viewModeInputs,
-        statFields,
-        statusEraLabel,
-        playbackControls,
-        eventLogList,
-        perfControls,
-        perfStatFields,
-        viewportPanel,
-    } = elements;
-
-    return {
-        elements,
-        isPerfEnabled,
-        setStatus,
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
-        renderInitializationFrames,
-        seedForm,
-        seedInput,
-        debugToggleInput,
-        eraScaleSelect,
-        eraScaleTickLabel,
-        eraScaleWeightFields,
-        viewModeInputs,
-        statFields,
-        statusEraLabel,
-        playbackControls,
-        eventLogList,
-        perfControls,
-        perfStatFields,
-        viewportPanel,
-    };
-}
+const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-benchmark-worker.js", import.meta.url);
 
 function createWorldUiRuntime(context, playbackControllerRef) {
     const worldUiController = createWorldUiController({
@@ -314,49 +237,7 @@ function createPerfControllers(context, playbackControllerRef) {
     };
 }
 
-function createRuntimeActions(context, runtimeControllers) {
-    const {
-        updateTerrain,
-        setEraScale,
-        playbackController,
-    } = runtimeControllers;
-
-    async function runInitialSync() {
-        await runInitialWorldAndUiSync({
-            updateTerrain,
-            defaultTerrainSeed: context.getState().currentSeed,
-            eraScaleSelect: context.eraScaleSelect,
-            eraScaleTickLabel: context.eraScaleTickLabel,
-            eraScaleWeightFields: context.eraScaleWeightFields,
-            currentEraScale: DEFAULT_ERA_SCALE,
-            currentEraMetrics: context.getCurrentEraMetrics(),
-            setEraScale,
-            syncClimateUi: context.syncClimateUi,
-            playbackController,
-            viewportPanel: context.viewportPanel,
-            onResize: () => {
-                context.cameraController.onResize();
-                context.loadingOverlayController.render();
-            },
-            plateHover: context.plateHover,
-        });
-    }
-
-    function shouldAdvanceWorld() {
-        const state = context.getState();
-        return context.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
-    }
-
-    return {
-        runInitialSync,
-        shouldAdvanceWorld,
-    };
-}
-
-export function createControllerRuntime(options = {}) {
-    const context = createRuntimeContext(options);
-    context.worldSimController = new WorldSimController();
-
+export function createRuntimeControllers(context) {
     const playbackControllerRef = { current: null };
     const {
         setDebugModeEnabled,
@@ -372,6 +253,7 @@ export function createControllerRuntime(options = {}) {
     const {
         syncVisibleFieldsForCurrentView,
         stepWorldTick,
+        stepWorldPlayback,
     } = createWorldStepperRuntime(context, playbackControllerRef, setEraScale, refreshActiveWorldStats);
 
     const { setViewMode, setCellMetric } = createViewModeRuntime(context, syncVisibleFieldsForCurrentView);
@@ -392,12 +274,6 @@ export function createControllerRuntime(options = {}) {
         getLastPerfBenchmarkResult,
     } = createPerfControllers(context, playbackControllerRef);
 
-    const { runInitialSync, shouldAdvanceWorld } = createRuntimeActions(context, {
-        updateTerrain,
-        setEraScale,
-        playbackController,
-    });
-
     return {
         perfUiEnabled,
         setDebugModeEnabled,
@@ -406,12 +282,11 @@ export function createControllerRuntime(options = {}) {
         setCellMetric,
         setSurfaceModeWithPinchReset,
         stepWorldTick,
+        stepWorldPlayback,
         updateTerrain,
         playbackController,
         runPerfBenchmark,
         copyPerfBenchmarkResult,
-        runInitialSync,
-        shouldAdvanceWorld,
         getLastPerfBenchmarkResult,
     };
 }
