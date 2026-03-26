@@ -5,10 +5,10 @@
     "type": "module",
     "scripts": {
         "runtime:sync": "node tools/sync/sync-runtime-params.mjs",
-        "geology:sync": "node tools/sync/sync-geology-params.mjs",
+        "terrain:sync": "node tools/sync/sync-terrain-params.mjs",
         "runtime-params:sync": "npm run runtime:sync",
-        "geology-params:sync": "npm run geology:sync",
-        "dev": "npm run runtime:sync && npm run geology:sync && node tools/dev/dev-hotreload.mjs",
+        "terrain-params:sync": "npm run terrain:sync",
+        "dev": "npm run runtime:sync && npm run terrain:sync && node tools/dev/dev-hotreload.mjs",
         "build": "npm run runtime:sync && npm run wasm:build && vite build --config web/vite.config.js",
         "preview": "vite preview --config web/vite.config.js",
         "lint:web": "eslint \"web/src/**/*.js\"",
@@ -33,8 +33,8 @@
         "bench:resample:hydro-input": "python3 tools/bench/resample.py --module hydro-input --centroids bench/data/cell_centroids.csv --output bench/data/hydro_input.bin",
         "bench:resample:hydro-ref": "python3 tools/bench/resample.py --module hydro-ref --centroids bench/data/cell_centroids.csv --output bench/data/hydro_ref.bin",
         "bench:resample:terrain": "python3 tools/bench/resample.py --module terrain --centroids bench/data/cell_centroids.csv --output bench/data/terrain_ref.bin",
-        "wasm:build": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
-        "wasm:build:dev": "npm run geology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
+        "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
+        "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
     },
     "dependencies": {
