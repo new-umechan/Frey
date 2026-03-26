@@ -143,7 +143,20 @@ struct GeologyInternal {
 struct BoundaryEdgeInternal {
     convergence_memory: f32,
 }
+
+struct BoundaryDynamicsState {
+    edge_pairs: Vec<[u32; 2]>,
+    edge_internal: Vec<BoundaryEdgeInternal>,
+    rollback_fraction: Vec<f32>,
+    backarc_tension: Vec<f32>,
+    slab_convergence_component: Vec<f32>,
+    slab_rollback_component: Vec<f32>,
+}
 ```
+
+`BoundaryEdgeInternal` は境界edgeごとの収束履歴のみを保持する。
+境界edgeの対応関係（`edge_pairs`）とスラブ成分（`slab_*_component`）は
+`BoundaryDynamicsState` で管理する。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。
 `age`・`thickness`・`density` は連続属性として移流する。

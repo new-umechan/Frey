@@ -68,7 +68,7 @@ heat_release_rate: プルーム発生時の放熱率
    - uplift_forceも応力として追加
 6. 火山モデル
 7. 各セルの標高・地殻厚を更新
-8. 侵食・堆積更新（河川更新はHydrologyステージで実施）
+8. 侵食・堆積の算出と地形反映（算出はHydrologyステージ、反映はHydrologyステージ直後）
 9. アイソスタシー
 10. 活動量メトリクス更新
 
@@ -470,7 +470,17 @@ struct VertexCrustState {
 struct BoundaryEdgeInternal {
     convergence_memory: f32,
 }
+
+struct BoundaryDynamicsState {
+    edge_pairs: Vec<[u32; 2]>,
+    edge_internal: Vec<BoundaryEdgeInternal>,
+    slab_convergence_component: Vec<f32>,
+    slab_rollback_component: Vec<f32>,
+}
 ```
+
+`BoundaryEdgeInternal` は各境界edgeの内部履歴（`convergence_memory`）のみを保持する。
+`edge_pairs` と `slab_*_component` は `BoundaryDynamicsState` 側で管理する。
 
 ## 5. API構成（仕様）
 
@@ -601,9 +611,13 @@ struct BoundaryEdgeInternal {
 4. 境界通過処理による離散属性更新
 5. 境界再抽出/再分類
 6. 境界由来の隆起・沈降・火山・背弧引張の増分適用
-7. 侵食・堆積の増分更新（thickness含む）
+7. 侵食・堆積の増分を地形へ反映（thickness含む）
 8. アイソスタシー補正
 9. 活動量メトリクス更新
+
+注:
+- 7は実装上、`Hydrology` ステージで算出された `erosion_rate` / `deposition_rate` を
+  `Hydrology` ステージ直後に地形へ反映する処理に対応する。
 
 ### 7.2 プレート運動更新
 
