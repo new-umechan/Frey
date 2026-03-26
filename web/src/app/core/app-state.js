@@ -4,13 +4,13 @@ import {
     DEFAULT_SURFACE_MODE,
     DEFAULT_TERRAIN_SEED,
     DEFAULT_VIEW_MODE,
-} from "../core/constants.js";
+} from "../../core/constants.js";
 import {
     createEmptyCore,
     createEmptyLayers,
     createInitialBudgets,
     createInitialRuntimeState,
-} from "./runtime/state.js";
+} from "../runtime/state.js";
 
 export function createMeshBuffers(mesh) {
     return {

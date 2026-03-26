@@ -1,7 +1,7 @@
-import { setupUiControls } from "../ui/controls.js";
-import { renderEraScaleControls } from "./era-presets.js";
-import { createCanvasInputHandlers } from "./canvas-input-handlers.js";
-import { formatStatusError } from "./status-error.js";
+import { setupUiControls } from "../../ui/controls.js";
+import { renderEraScaleControls } from "../core/era-presets.js";
+import { createCanvasInputHandlers } from "../input/canvas-input-handlers.js";
+import { formatStatusError } from "../core/status-error.js";
 
 function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
     return () => {

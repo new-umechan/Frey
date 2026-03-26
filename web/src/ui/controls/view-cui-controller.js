@@ -1,4 +1,4 @@
-import { getMetricCategories } from "../../app/cell-metric.js";
+import { getMetricCategories } from "../../app/rendering/cell-metric.js";
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));

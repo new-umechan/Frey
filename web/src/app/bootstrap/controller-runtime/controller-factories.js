@@ -5,7 +5,7 @@ import {
     buildEraMetricsFromRuntime,
     getEraScalePreset,
     renderEraScaleControls,
-} from "../../era-presets.js";
+} from "../../core/era-presets.js";
 import {
     createEmptyLayers,
     createInitialBudgets,
@@ -17,20 +17,20 @@ import {
     syncWorldDeltaFromController,
     syncWorldFromController,
 } from "../../world-sync/world-state-sync.js";
-import { createWorldUiController } from "../../world-ui-controller.js";
-import { createWorldSessionController } from "../../world-session-controller.js";
-import { createWorldStepper } from "../../world-stepper.js";
+import { createWorldUiController } from "../../ui/world-ui-controller.js";
+import { createWorldSessionController } from "../../sim/world-session-controller.js";
+import { createWorldStepper } from "../../sim/world-stepper.js";
 import {
     createBenchmarkConsoleTable,
     createBenchmarkProfile,
     formatBenchmarkSummaryLine,
-} from "../../perf-benchmark.js";
-import { createViewModeController } from "../../view-mode-controller.js";
-import { normalizeCellMetric } from "../../cell-metric.js";
-import { createTerrainGenerationController } from "../../terrain-generation-controller.js";
-import { createPlaybackController } from "../../playback-controller.js";
-import { pushStepBreakdownSamples } from "../../perf-step-breakdown.js";
-import { resetWorldProgress } from "../../world-loop.js";
+} from "../../perf-benchmark/perf-benchmark.js";
+import { createViewModeController } from "../../ui/view-mode-controller.js";
+import { normalizeCellMetric } from "../../rendering/cell-metric.js";
+import { createTerrainGenerationController } from "../../ui/terrain-generation-controller.js";
+import { createPlaybackController } from "../../playback/playback-controller.js";
+import { pushStepBreakdownSamples } from "../../perf-benchmark/perf-step-breakdown.js";
+import { resetWorldProgress } from "../../sim/world-loop.js";
 import { createPerfRuntime } from "../perf-runtime.js";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-benchmark-worker.js", import.meta.url);

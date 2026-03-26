@@ -1,4 +1,4 @@
-import { renderEraScaleControls } from "../era-presets.js";
+import { renderEraScaleControls } from "../core/era-presets.js";
 
 export async function runInitialWorldAndUiSync({
     updateTerrain,

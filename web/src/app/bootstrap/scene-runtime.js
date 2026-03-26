@@ -5,9 +5,9 @@ import { createGlobePinchFocusController } from "../../gfx/views/globe-pinch-foc
 import { buildRenderPositions } from "../../gfx/views/terrain-visuals.js";
 import { createLoadingOverlayController } from "./loading-overlay.js";
 import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup.js";
-import { createClimateUiController } from "../climate-ui-controller.js";
-import { createPlateHover } from "../plate-hover.js";
-import { createTerrainRenderer } from "../terrain-renderer.js";
+import { createClimateUiController } from "../ui/climate-ui-controller.js";
+import { createPlateHover } from "../input/plate-hover.js";
+import { createTerrainRenderer } from "../rendering/terrain-renderer.js";
 import { DEFAULT_VIEW_MODE } from "../../core/constants.js";
 
 export function createSceneRuntime(options = {}) {

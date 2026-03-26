@@ -1,4 +1,4 @@
-import { getCellMetricMeta } from "./cell-metric.js";
+import { getCellMetricMeta } from "../rendering/cell-metric.js";
 
 function computeLegendStats(values) {
     if (!values || values.length === 0) {

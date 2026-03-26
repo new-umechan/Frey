@@ -1,4 +1,4 @@
-import { DEFAULT_ERA_SCALE } from "../core/constants.js";
+import { DEFAULT_ERA_SCALE } from "../../core/constants.js";
 
 export function resetWorldProgress(world, worldState, createEmptyLayers, createInitialBudgets, createEraMetrics) {
     world.tick = 0;

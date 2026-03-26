@@ -1,4 +1,4 @@
-import { getCellMetricMeta } from "../cell-metric.js";
+import { getCellMetricMeta } from "../rendering/cell-metric.js";
 import { DELTA_FIELD_KIND_BY_VIEW } from "./constants.js";
 
 export function getDeltaFieldKindsForView({ viewMode, cellMetric }) {

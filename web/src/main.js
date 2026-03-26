@@ -1,5 +1,5 @@
 import { createApp } from "./app/app.js";
-import { formatStatusError } from "./app/status-error.js";
+import { formatStatusError } from "./app/core/status-error.js";
 
 function showInitializationError(error) {
     const statusMessage = document.getElementById("status-message");

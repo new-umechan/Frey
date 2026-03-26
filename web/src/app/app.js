@@ -11,9 +11,9 @@ import {
     DEFAULT_TERRAIN_SEED,
     LEVEL,
 } from "../core/constants.js";
-import { advanceWorldLoop } from "./world-loop.js";
-import { createMeshBuffers } from "./app-state.js";
-import { bootstrapAppRuntime } from "./app-bootstrap.js";
+import { advanceWorldLoop } from "./sim/world-loop.js";
+import { createMeshBuffers } from "./core/app-state.js";
+import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap.js";
 
 function createSidebarController(options = {}) {
     const { appShell, sidebarToggle } = options;

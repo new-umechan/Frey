@@ -1,6 +1,6 @@
 import { createTickPerfRecorder } from "./perf-benchmark.js";
-import { createControllerState, rebuildControllerState } from "./perf-benchmark/controller-state.js";
-import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./perf-benchmark/diagnostics.js";
+import { createControllerState, rebuildControllerState } from "./controller-state.js";
+import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./diagnostics.js";
 import {
     defaultNowMs,
     formatError,
@@ -8,8 +8,8 @@ import {
     pushRiverBreakdownSamples,
     pushStepBreakdownSamples,
     roundMs,
-} from "./perf-benchmark/helpers.js";
-import { applyWorldDeltaToCore, estimateRiverMaskUpdate } from "./perf-benchmark/world-core.js";
+} from "./helpers.js";
+import { applyWorldDeltaToCore, estimateRiverMaskUpdate } from "./world-core.js";
 
 export function createPerfBenchmarkRunner(deps = {}) {
     const {

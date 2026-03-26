@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { PLATE_HOVER_POPUP_DELAY_MS } from "../core/constants.js";
-import { getCellMetricMeta } from "./cell-metric.js";
+import { PLATE_HOVER_POPUP_DELAY_MS } from "../../core/constants.js";
+import { getCellMetricMeta } from "../rendering/cell-metric.js";
 
 export function createPlateHover({
     canvas,

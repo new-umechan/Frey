@@ -3,7 +3,7 @@ import initWasm, {
     build_render_positions,
     generate_mesh,
 } from "../interface/wasm.js";
-import { createPerfBenchmarkRunner } from "../app/perf-benchmark-runner.js";
+import { createPerfBenchmarkRunner } from "../app/perf-benchmark/perf-benchmark-runner.js";
 
 const runner = createPerfBenchmarkRunner({
     WorldSimController,

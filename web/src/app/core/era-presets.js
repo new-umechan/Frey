@@ -2,7 +2,7 @@ import {
     DEFAULT_ERA_SCALE,
     ERA_SCALE_PRESETS,
     formatRealYearsPerTick,
-} from "../core/constants.js";
+} from "../../core/constants.js";
 
 export function getEraScalePreset(key) {
     if (Object.hasOwn(ERA_SCALE_PRESETS, key)) {

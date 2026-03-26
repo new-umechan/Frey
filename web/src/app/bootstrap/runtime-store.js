@@ -1,5 +1,5 @@
 import { DEFAULT_ERA_SCALE } from "../../core/constants.js";
-import { createMutableStateStore, createWorldState } from "../app-state.js";
+import { createMutableStateStore, createWorldState } from "../core/app-state.js";
 
 export function createRuntimeStore(options = {}) {
     const {

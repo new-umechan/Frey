@@ -1,4 +1,4 @@
-import { createPerfBenchmarkController } from "../perf-benchmark-controller.js";
+import { createPerfBenchmarkController } from "../perf-benchmark/perf-benchmark-controller.js";
 
 export function createPerfRuntime(options = {}) {
     const {
