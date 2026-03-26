@@ -68,8 +68,12 @@ heat_release_rate: プルーム発生時の放熱率
    - uplift_forceも応力として追加
 6. 火山モデル
 7. 各セルの標高・地殻厚を更新
+
+   - 構造隆起
+   - 構造沈降
+   - 海洋熱沈降
 8. 侵食・堆積の算出と地形反映（算出はHydrologyステージ、反映はHydrologyステージ直後）
-9. アイソスタシー
+9. アイソスタシー調整
 10. 活動量メトリクス更新
 
 ## 3. 具体的な仕様
@@ -369,6 +373,45 @@ thickness[cell] += volcanism * volcanic_thickening_gain
 
 海嶺火山は新規海洋地殻生成と一体で扱うため、`oceanic_initial_thickness` と `oceanic_base_density` を再設定してよい。
 
+### 3.5 標高更新モデル
+
+時間発展時の標高更新は、単一の「沈降」係数でまとめず、次の独立した項として扱う。
+
+- 構造起伏変化
+  - 圧縮応力による隆起
+  - 張力場による構造沈降
+  - 火山活動による隆起と厚化
+- 海洋熱沈降
+  - 海洋地殻のみ対象
+  - 地殻年齢の増加に応じた長期的沈降
+- アイソスタシー調整
+  - 地殻厚と密度差に基づく平衡高度への緩和
+- 侵食・堆積反映
+  - `Hydrology` が算出した侵食量・堆積量を `Geology` が標高と地殻厚へ反映する
+
+擬似式:
+
+```text
+height_next
+= height
++ tectonic_uplift
+- tectonic_subsidence
+- thermal_subsidence
++ erosion_deposition_delta
++ isostatic_adjustment
+```
+
+ここでの各項は次の意味を持つ。
+
+- `tectonic_uplift`: 圧縮応力と火山活動による隆起
+- `tectonic_subsidence`: 張力場やリフト形成に伴う構造沈降
+- `thermal_subsidence`: 海洋地殻の冷却と高密度化に伴う沈降
+- `erosion_deposition_delta`: 侵食量と堆積量の差分
+- `isostatic_adjustment`: 平衡高度との差を埋める緩和項
+
+海陸比を目標値へ毎tick補正する処理は、この地学モデルの正式な更新項には含めない。
+必要なら実装上の初期正規化や数値安定化として別レイヤーで扱う。
+
 ## 4. 入出力と状態
 
 ### 4.1 入力
@@ -384,10 +427,11 @@ thickness[cell] += volcanism * volcanic_thickening_gain
 - `river_rebuild_interval_max`: 河川再計算の最長Tick間隔
 - `river_activity_high_threshold`: 高活動時の河川更新閾値
 - `river_activity_low_threshold`: 低活動時の河川更新閾値
-- `uplift_rate_gain`: 造山の増分係数
-- `subsidence_rate_gain`: 沈降の増分係数
+- `tectonic_uplift_gain`: 圧縮応力と火山活動を標高隆起へ変換する係数
+- `tectonic_subsidence_gain`: 張力場を構造沈降へ変換する係数
+- `thermal_subsidence_gain`: 海洋地殻年齢を熱沈降へ変換する係数
 - `stress_relaxation_rate`: 応力緩和係数
-- `isostasy_rate`: アイソスタシー緩和係数
+- `isostatic_adjustment_rate`: アイソスタシー調整の緩和係数
 - `subduction_age_coupling`: 海洋地殻年齢と沈み込み強度の連動係数
 - `subduction_initiation_threshold`: PassiveMarginから沈み込み開始へ移行する最小海洋地殻年齢
 - `subduction_density_threshold`: PassiveMarginから沈み込み開始へ移行する最小密度
@@ -415,6 +459,7 @@ thickness[cell] += volcanism * volcanic_thickening_gain
 
 注意:
 - 既存の境界係数や侵食係数はそのまま使い、時間発展では「1回適用の強さ」ではなく「単位時間あたりの増分率」として解釈する。
+- 現行実装に `subsidence_rate_gain` や `isostasy_rate` が残っていても、この文書では意味の分離を優先し、項ごとに別パラメータとして定義する。
 
 ### 4.2 地形スナップショット出力（公開）
 
@@ -610,14 +655,16 @@ struct BoundaryDynamicsState {
 3. 地殻属性の移流
 4. 境界通過処理による離散属性更新
 5. 境界再抽出/再分類
-6. 境界由来の隆起・沈降・火山・背弧引張の増分適用
-7. 侵食・堆積の増分を地形へ反映（thickness含む）
-8. アイソスタシー補正
-9. 活動量メトリクス更新
+6. 構造起伏変化の適用
+7. 海洋熱沈降の適用
+8. 侵食・堆積の増分を地形へ反映（thickness含む）
+9. アイソスタシー調整
+10. 活動量メトリクス更新
 
 注:
-- 7は実装上、`Hydrology` ステージで算出された `erosion_rate` / `deposition_rate` を
+- 8は実装上、`Hydrology` ステージで算出された `erosion_rate` / `deposition_rate` を
   `Hydrology` ステージ直後に地形へ反映する処理に対応する。
+- 海陸比を固定目標へ寄せる補正は、この更新順序には含めない。
 
 ### 7.2 プレート運動更新
 
@@ -640,9 +687,46 @@ struct BoundaryDynamicsState {
 
 この分離により、境界ぼけを抑えつつ連続量の移動を表現する。
 
-### 7.4 アイソスタシー
+### 7.4 構造起伏変化
 
-アイソスタシーの平衡高度は地殻厚と密度から求める。
+構造起伏変化は、境界応力と火山活動に由来する短中期の標高変化である。
+
+```text
+tectonic_uplift
+= compressive_stress * tectonic_uplift_gain
++ volcanism * volcanic_uplift_gain
+```
+
+```text
+tectonic_subsidence
+= tensile_stress * tectonic_subsidence_gain
+```
+
+火山による厚化は、標高だけでなく地殻厚にも加える。
+
+```text
+thickness[cell] += volcanism * volcanic_thickening_gain
+```
+
+### 7.5 海洋熱沈降
+
+海洋熱沈降は、海洋地殻の冷却と高密度化に伴う長期変化として、構造沈降とは独立に扱う。
+
+```text
+if crust_type[cell] == Oceanic {
+    age_norm = clamp(age[cell] / age_ref, 0, 1)
+    thermal_subsidence = thermal_subsidence_gain * thermal_curve(age_norm)
+} else {
+    thermal_subsidence = 0
+}
+```
+
+`thermal_curve` は単調増加関数とし、初版では `sqrt(age_norm)` または同等の緩やかな曲線でよい。
+海洋地殻の密度更新はこの熱沈降項と整合するように設計するが、密度増加と沈降量を同一式に直結させない。
+
+### 7.6 アイソスタシー調整
+
+アイソスタシー調整の平衡高度は地殻厚と密度から求める。
 
 ```text
 h_eq = thickness * (1 - density_c / mantle_density)
@@ -651,12 +735,15 @@ h_eq = thickness * (1 - density_c / mantle_density)
 更新は緩和型とする。
 
 ```text
-height[cell] += (h_eq - height[cell]) * isostasy_rate
+isostatic_adjustment = (h_eq - height[cell]) * isostatic_adjustment_rate
+height[cell] += isostatic_adjustment
 ```
 
 公開用 `vertex_buoyancy` は `h_eq - height` として保持する。
 
-### 7.5 侵食・堆積との連動
+アイソスタシー調整は地形変化の主因ではなく、厚さと密度に対する平衡追従として扱う。
+
+### 7.7 侵食・堆積との連動
 
 侵食と堆積は `height` だけでなく `thickness` にも反映する。
 
@@ -671,8 +758,9 @@ thickness[cell] += deposited * deposition_thickness_coupling
 ```
 
 これにより侵食後のリバウンドと堆積盆の沈降を表現する。
+ただし、河道・湖沼・デルタの形成判定と侵食量・堆積量の算出責務は引き続き `Hydrology` に置く。
 
-### 7.6 活動量メトリクス
+### 7.8 活動量メトリクス
 
 時代遷移判定や予算配分のため、毎 `step_tectonic_terrain` 呼び出しで活動量を記録する。
 
@@ -687,6 +775,19 @@ thickness[cell] += deposited * deposition_thickness_coupling
 - `terrain_activity` は `sum(abs(delta_height)) / V` を基準に正規化する
 - `boundary_activity` は境界辺ごとの相対速度指標の平均または総和を正規化する
 - 正規化後の値域目標は `[0, 1]`
+
+## 8. 移行メモ
+
+現行実装から新仕様へ移行する際の注意点をまとめる。
+
+- 現行実装で単一の沈降項にまとめている処理は、新仕様では
+  - 構造沈降
+  - 海洋熱沈降
+  - アイソスタシー調整
+  の3項へ分離する
+- 現行設定に未使用の海洋沈降用パラメータがある場合は、新仕様では `thermal_subsidence_gain` 系へ統合する
+- 海陸比を目標値へ寄せる処理は、地学仕様の本体から外し、必要なら初期正規化または数値安定化として別扱いにする
+- `Hydrology` との境界は維持し、侵食量・堆積量の算出責務は `Hydrology`、標高と地殻厚への最終反映責務は `Geology` に残す
 
 ## 9. `World` との接続
 
