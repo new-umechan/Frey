@@ -58,7 +58,7 @@ pub(super) fn apply_stress_and_surface_update(
             boundary_state.activity.get(i).copied().unwrap_or(0.0),
         );
 
-        let plume = plume_force.get(i).copied().unwrap_or(0.0);
+        let plume = finite_or(plume_force.get(i).copied().unwrap_or(0.0), 0.0).max(0.0);
         tensor.xx += plume * 0.7;
         tensor.yy += plume * 0.7;
         let slab_conv = boundary_state
@@ -112,8 +112,9 @@ pub(super) fn apply_stress_and_surface_update(
         tensor.xy += nbr_stress.xy;
 
         let prev = next_vertex_states[i];
+        let mantle_heat_i = finite_or(mantle_heat.get(i).copied().unwrap_or(0.5), 0.5).clamp(0.0, 1.0);
         let rigidity =
-            (prev.rigidity + 0.15 * prev.thickness - 0.20 * mantle_heat[i]).clamp(0.20, 1.40);
+            (prev.rigidity + 0.15 * prev.thickness - 0.20 * mantle_heat_i).clamp(0.20, 1.40);
         let inv_rigidity = 1.0 / rigidity.max(1e-3);
 
         tensor.xx *= inv_rigidity;
@@ -125,7 +126,7 @@ pub(super) fn apply_stress_and_surface_update(
         let stress = prev.stress * (1.0 - relax) + stress_scalar * relax;
 
         let mut state = prev;
-        state.temperature = mantle_heat[i];
+        state.temperature = mantle_heat_i;
         state.stress_tensor = tensor;
         state.stress = stress;
 
@@ -148,16 +149,24 @@ pub(super) fn apply_stress_and_surface_update(
             .copied()
             .unwrap_or(BoundaryType::PassiveMargin);
         let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
-        let rollback_fraction = boundary_state
+        let rollback_fraction = finite_or(
+            boundary_state
             .rollback_fraction
             .get(i)
             .copied()
-            .unwrap_or(0.0);
-        let convergence_memory = boundary_state
+            .unwrap_or(0.0),
+            0.0,
+        )
+        .max(0.0);
+        let convergence_memory = finite_or(
+            boundary_state
             .edge_internal
             .get(i)
             .map(|s| s.convergence_memory)
-            .unwrap_or(0.0);
+            .unwrap_or(0.0),
+            0.0,
+        )
+        .clamp(0.0, 1.0);
 
         state.arc_volcanism = if boundary_type == BoundaryType::Subduction {
             boundary_activity
@@ -218,6 +227,14 @@ pub(super) fn apply_stress_and_surface_update(
             + volcanism * params.volcanic_thickening_gain.max(0.0)
             + plume * 0.1)
             .clamp(0.18, 1.25);
+        state.age = finite_or(state.age, 0.0);
+        state.density = finite_or(state.density, params.continental_crust_density.max(1e-3));
+        state.thickness = finite_or(state.thickness, 0.65).clamp(0.18, 1.25);
+        state.temperature = finite_or(state.temperature, 0.5).clamp(0.0, 1.0);
+        state.stress = finite_or(state.stress, 0.0);
+        state.stress_tensor.xx = finite_or(state.stress_tensor.xx, 0.0);
+        state.stress_tensor.yy = finite_or(state.stress_tensor.yy, 0.0);
+        state.stress_tensor.xy = finite_or(state.stress_tensor.xy, 0.0);
         let density_ratio = (state.density / params.mantle_density.max(1e-3)).clamp(0.1, 1.4);
         let h_eq = state.thickness * (1.0 - density_ratio);
         next_h = (next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0))
@@ -270,5 +287,13 @@ fn boundary_tensor(boundary_type: BoundaryType, activity: f32) -> StressTensor {
             yy: 0.0,
             xy: 0.0,
         },
+    }
+}
+
+fn finite_or(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        fallback
     }
 }

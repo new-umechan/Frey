@@ -386,13 +386,17 @@ fn advect_continuous_attributes(
         return next;
     }
 
-    let age_ref = params.age_ref.max(1e-4);
-    let density_min = params
+    let age_ref = finite_or(params.age_ref.max(1e-4), 1.0);
+    let mut density_min = params
         .continental_crust_density
         .min(params.oceanic_base_density)
         * 0.75;
-    let density_max = (params.oceanic_base_density + params.age_density_gain.max(0.0) + 0.2)
+    density_min = finite_or(density_min, 0.5).max(1e-4);
+    let mut density_max = (params.oceanic_base_density + params.age_density_gain.max(0.0) + 0.2)
         .max(density_min + 1e-3);
+    if !density_max.is_finite() || density_max < density_min {
+        density_max = density_min + 1e-3;
+    }
     let age_values = vertex_states.iter().map(|s| s.age).collect::<Vec<_>>();
     let thickness_values = vertex_states
         .iter()
@@ -452,13 +456,18 @@ fn muscl_like_advect_scalar(
     velocity: [f32; 3],
     dt: f32,
 ) -> f32 {
+    let center = finite_or(center_value, 0.0);
     let mut raw = 0.0_f32;
     let mut count = 0_u32;
-    let mut min_v = center_value;
-    let mut max_v = center_value;
+    let mut min_v = center;
+    let mut max_v = center;
     for &n_u32 in neighbors {
         let n = n_u32 as usize;
         if n >= field.len() {
+            continue;
+        }
+        let neighbor_value = field[n];
+        if !neighbor_value.is_finite() {
             continue;
         }
         let dir_raw = [
@@ -471,17 +480,39 @@ fn muscl_like_advect_scalar(
                 .sqrt()
                 .max(1e-5);
         let dir = [dir_raw[0] / len, dir_raw[1] / len, dir_raw[2] / len];
-        let dq = field[n] - center_value;
-        raw += dq * (velocity[0] * dir[0] + velocity[1] * dir[1] + velocity[2] * dir[2]);
-        min_v = min_v.min(field[n]);
-        max_v = max_v.max(field[n]);
+        let dq = neighbor_value - center;
+        if !dq.is_finite() {
+            continue;
+        }
+        let projected_velocity = velocity[0] * dir[0] + velocity[1] * dir[1] + velocity[2] * dir[2];
+        let contribution = dq * projected_velocity;
+        if !contribution.is_finite() {
+            continue;
+        }
+        raw += contribution;
+        min_v = min_v.min(neighbor_value);
+        max_v = max_v.max(neighbor_value);
         count = count.saturating_add(1);
     }
     if count == 0 {
-        return center_value;
+        return center;
     }
-    let predicted = center_value - dt * (raw / count as f32);
+    if !min_v.is_finite() || !max_v.is_finite() || min_v > max_v {
+        return center;
+    }
+    let predicted = center - dt * (raw / count as f32);
+    if !predicted.is_finite() {
+        return center;
+    }
     predicted.clamp(min_v, max_v)
+}
+
+fn finite_or(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        fallback
+    }
 }
 
 struct BoundaryCrossingInput<'a> {

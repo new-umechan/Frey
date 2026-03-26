@@ -556,17 +556,18 @@ fn sink_capacity_remaining_values_by_cell(world: &crate::sim::world::World) -> V
 fn sink_fill_ratio_values_by_cell(world: &crate::sim::world::World) -> Vec<f32> {
     map_sink_f32_by_cell(world, 0.0, |state, _, sid| {
         let total = state.sink_capacity_total.get(sid).copied().unwrap_or(0.0);
-        let remain = state
+        if !total.is_finite() || total <= 1e-6 {
+            return 0.0;
+        }
+        let remain_raw = state
             .sink_capacity_remaining
             .get(sid)
-            .copied()
-            .unwrap_or(total)
-            .clamp(0.0, total.max(0.0));
-        if total > 1e-6 {
-            (1.0 - remain / total).clamp(0.0, 1.0)
-        } else {
-            0.0
-        }
+            .copied();
+        let remain = match remain_raw {
+            Some(value) if value.is_finite() => value.clamp(0.0, total),
+            _ => total,
+        };
+        (1.0 - remain / total).clamp(0.0, 1.0)
     })
 }
 

@@ -222,4 +222,34 @@ mod tests {
         let result = controller.fork_world_js(world_id, 32.5);
         assert!(result.is_err(), "fractional tick must be rejected");
     }
+
+    #[wasm_bindgen_test]
+    fn long_exec_keeps_world_observable() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-long".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+        let world_id = init_data.world_id;
+
+        controller
+            .exec_world_js(world_id.clone(), 96)
+            .expect("long step world");
+
+        let metrics = controller
+            .get_metrics_js(world_id.clone())
+            .expect("get metrics after long exec");
+        let metrics_data: MetricsResponse =
+            serde_wasm_bindgen::from_value(metrics).expect("parse metrics after long exec");
+        assert!(metrics_data.tick.is_finite());
+        assert!(metrics_data.tick >= 96.0);
+
+        let history_ticks = controller
+            .list_history_ticks_js(world_id)
+            .expect("list history ticks");
+        let history_data: HistoryTicksResponse =
+            serde_wasm_bindgen::from_value(history_ticks).expect("parse history ticks");
+        assert!(history_data.ticks.contains(&64.0));
+        assert!(history_data.ticks.iter().all(|tick| tick.is_finite()));
+    }
 }
