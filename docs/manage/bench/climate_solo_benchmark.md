@@ -94,7 +94,7 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 
 ---
 
-### Phase 2：Spearman相関（主指標）
+### 主評価：全球比較
 
 #### 実データソース
 
@@ -126,7 +126,8 @@ CellStore（正二十面体分割の約4万セル）と実データグリッド�
 ```
 bench/data/
   climate_ref.bin   # リサンプリング済み実データ（変数ごとのVec<f32>を直列化）
-  hydro_ref.bin     # Hydrology用（別途）
+  hydro_input.bin   # Hydrology入力用（別途）
+  hydro_ref.bin     # Hydrology評価用（別途）
   ecology_ref.bin   # Ecology用（別途）
 ```
 
@@ -168,19 +169,19 @@ fn spearman(a: &[f32], b: &[f32]) -> f32 {
 陸セルのみで計算する（`geology.height > 0` のセルに限定）。
 海セルを含めると `temperature` の相関が見かけ上高くなり（海は均質）、モデル評価として意味がなくなる。
 
-#### 評価方針（Phase 2）
+#### 評価方針
 
-Phase 2は閾値判定を行わず、`rho` の生スコアを記録して比較する。
+主評価は閾値判定を行わず、`rho` の生スコアを記録して比較する。
 モデル変更の判断は、同一条件での前後差（どの変数がどれだけ上がったか/下がったか）で行う。
 
 ---
 
-### Phase 1：代表地域ランキング（診断ツール）
+### 補助評価：代表地域診断
 
-Phase 2のスコアが変動した原因を掘り下げるために使う。
+主評価のスコアが変動した原因を掘り下げるために使う。
 合否判定は「アサーション一覧の何割が通るか」で表す。
 
-#### 合否基準（Phase 1）
+#### 合否基準
 
 - **Pass**：アサーション通過率 ≥ 80%
 - **Warn**：通過率 60〜80%
@@ -235,14 +236,14 @@ Phase 2のスコアが変動した原因を掘り下げるために使う。
 ```
 === Climate Solo Bench ===
 
--- Phase 2: Spearman Correlation (land cells only) --
+-- Main Evaluation: Spearman Correlation (land cells only) --
 temperature:      rho=0.923
 precipitation:    rho=0.612
 aridity:          rho=0.588
 evapotranspiration: rho=0.541
 runoff:           rho=0.498
 
--- Phase 1: Ranking Assertions --
+-- Diagnostic Evaluation: Ranking Assertions --
 [temperature]  7/7 passed                        PASS
 [precipitation] 5/5 passed  (excl. 2 known-hard) PASS
 [aridity]       5/5 passed                       PASS
@@ -251,9 +252,9 @@ runoff:           rho=0.498
 P-06  maritime_europe > siberia:  FAIL  (624.0 vs 487.0)
 P-07  monsoon_india > arabia:     PASS  (792.0 vs 88.0)
 
--- Phase 2 Summary: metrics_reported=5 --
--- Phase 1 Summary: 3/3 PASS (excl. known-hard) --
--- Phase 2 State: READY --
+-- Main Evaluation Summary: metrics_reported=5 --
+-- Diagnostic Evaluation Summary: 3/3 PASS (excl. known-hard) --
+-- Main Evaluation State: READY --
 -- Score Save: OK --
 ```
 
@@ -262,9 +263,9 @@ P-07  monsoon_india > arabia:     PASS  (792.0 vs 88.0)
 ### 実データ未整備時の暫定運用
 
 `bench/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
-`bench/data/climate_ref.bin` が存在しない場合、Phase 2はスキップしてPhase 1のみ実行する。
+`bench/data/climate_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
 
-Phase 1は実データ不要（代表セルのシミュレーション出力値同士を比較するだけ）のため、
+補助評価は実データ不要（代表セルのシミュレーション出力値同士を比較するだけ）のため、
 実データ整備前から即座に実行できる。
 
 ```
@@ -279,12 +280,12 @@ To generate:
 ```
 === Climate Solo Bench ===
 
--- Phase 2: Spearman Correlation (land cells only) --
+-- Main Evaluation: Spearman Correlation (land cells only) --
 SKIPPED  (bench/data/climate_ref.bin not found)
 To generate:
   npm run bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>
 
--- Phase 1: Ranking Assertions --
+-- Diagnostic Evaluation: Ranking Assertions --
 （以下、通常通り出力）
 ```
 
@@ -330,10 +331,10 @@ npm run bench:dump-centroids
 
 ### スコア保存フロー（実測後）
 
-`cargo bench --manifest-path rust/Cargo.toml --bench climate_solo` 実行時に、Phase 1要約とPhase 2生スコアをJSONLへ追記保存する。
+`cargo bench --manifest-path rust/Cargo.toml --bench climate_solo` 実行時に、補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
-- 保存先: `bench/results/climate_phase2_scores.jsonl`
-- 1実行 = 1行（時刻、seed、mesh_level、cell_count、各指標のrho、Phase 1要約）
+- 保存先: `bench/results/climate_main_scores.jsonl`
+- 1実行 = 1行（時刻、seed、mesh_level、cell_count、各指標のrho、補助評価要約）
 - 実行ごとの差分比較はこのJSONLを入力に行う
 
 依存ライブラリ（Pythonツール群）：
