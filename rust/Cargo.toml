@@ -20,3 +20,7 @@ wasm-bindgen-test = "0.3"
 [[bench]]
 name = "climate_solo"
 harness = false
+
+[[bench]]
+name = "hydrology_solo"
+harness = false

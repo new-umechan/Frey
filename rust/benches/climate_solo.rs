@@ -328,6 +328,9 @@ fn main() {
         plate_id,
         erosion_rate: vec![0.0; cell_count],
         deposition_rate: vec![0.0; cell_count],
+        volcanism: terrain.volcanism,
+        vertex_buoyancy: terrain.vertex_buoyancy,
+        geology_internal: vec![world::GeologyInternal::default(); cell_count],
         boundary_condition: vec![0.0; cell_count],
     };
 
@@ -347,7 +350,7 @@ fn main() {
     println!("=== Climate Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
     println!();
-    println!("-- Phase 2: Spearman Correlation (land cells only) --");
+    println!("-- Main Evaluation: Spearman Correlation (land cells only) --");
 
     let phase2_state = match find_climate_ref_cache_path() {
         Some(path) => match load_climate_ref(&path) {
@@ -357,7 +360,10 @@ fn main() {
                     println!("{:<16} rho={:.3}", format!("{}:", metric.name), metric.rho);
                 }
                 println!();
-                println!("-- Phase 2 Summary: metrics_reported={} --", results.len());
+                println!(
+                    "-- Main Evaluation Summary: metrics_reported={} --",
+                    results.len()
+                );
                 Phase2State::Ready {
                     reference_path: path,
                     metrics: results,
@@ -395,7 +401,7 @@ fn main() {
     );
 
     println!();
-    println!("-- Phase 1: Ranking Assertions --");
+    println!("-- Diagnostic Evaluation: Ranking Assertions --");
     print_assertion_summary("temperature", &temperature_results);
     print_assertion_summary("precipitation", &precipitation_results);
     print_assertion_summary("aridity", &aridity_results);
@@ -436,14 +442,14 @@ fn main() {
         .filter(|state| **state == PhaseStatus::Pass)
         .count();
     println!(
-        "-- Phase 1 Summary: {}/3 PASS (excl. known-hard) --",
+        "-- Diagnostic Evaluation Summary: {}/3 PASS (excl. known-hard) --",
         phase1_pass
     );
 
     match &phase2_state {
-        Phase2State::Ready { .. } => println!("-- Phase 2 State: READY --"),
-        Phase2State::Skipped => println!("-- Phase 2 State: SKIPPED --"),
-        Phase2State::Error(_) => println!("-- Phase 2 State: ERROR --"),
+        Phase2State::Ready { .. } => println!("-- Main Evaluation State: READY --"),
+        Phase2State::Skipped => println!("-- Main Evaluation State: SKIPPED --"),
+        Phase2State::Error(_) => println!("-- Main Evaluation State: ERROR --"),
     }
 
     if let Err(error) = append_score_record_jsonl(
@@ -853,8 +859,8 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
 
 fn score_output_path() -> PathBuf {
     let candidates = [
-        Path::new("bench/results/climate_phase2_scores.jsonl"),
-        Path::new("../bench/results/climate_phase2_scores.jsonl"),
+        Path::new("bench/results/climate_main_scores.jsonl"),
+        Path::new("../bench/results/climate_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {

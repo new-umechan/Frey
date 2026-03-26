@@ -66,6 +66,69 @@ pub fn run_climate_step_for_bench(world: &mut world::World, climate_budget: u32)
     climate::surface::run_climate_step(world, climate_budget);
 }
 
+pub fn build_hydrology_state_for_bench(
+    world: &world::World,
+    params: GeologyParams,
+) -> erosion::ErosionAutomatonState {
+    const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
+
+    let cell_count = world.state.geology.height.len();
+    erosion::ErosionAutomatonState {
+        positions: world.mesh.positions.clone(),
+        nbr_offsets: world.mesh.nbr_offsets.clone(),
+        nbrs: world.mesh.nbrs.clone(),
+        height: world.state.geology.height.clone(),
+        water: vec![0.0; cell_count],
+        sediment: vec![0.0; cell_count],
+        armor: vec![0.0; cell_count],
+        rain: world
+            .state
+            .climate
+            .runoff
+            .iter()
+            .copied()
+            .map(|value| (value.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0))
+            .collect(),
+        river_flux: world.state.hydrology.river_flow.clone(),
+        river_next: world.state.hydrology.river_next.clone(),
+        active_queue: (0..cell_count as u32).collect(),
+        active_head: 0,
+        in_queue: vec![1; cell_count],
+        rain_cursor: 0,
+        tick: world.clock.tick,
+        last_rebuild_tick: world.clock.tick.saturating_sub(1),
+        last_sink_full_rebuild_tick: world.clock.tick.saturating_sub(8),
+        flux_scale_ema: 1.0,
+        last_river_driver: 1.0,
+        prev_river_next: world.state.hydrology.river_next.clone(),
+        flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
+        groundwater_storage: vec![0.0; cell_count],
+        scratch_effective_runoff: vec![0.0; cell_count],
+        scratch_changed_mark: vec![0; cell_count],
+        scratch_flux_samples: Vec::with_capacity(cell_count / 2),
+        recent_changed: Vec::new(),
+        sink_id: vec![-1; cell_count],
+        sink_route_next: vec![-1; cell_count],
+        sink_spill_cell: Vec::new(),
+        sink_spill_to: Vec::new(),
+        sink_capacity_total: Vec::new(),
+        sink_capacity_remaining: Vec::new(),
+        sink_storage_sediment: Vec::new(),
+        sink_spill_level: Vec::new(),
+        sink_overflow_active: Vec::new(),
+        sink_dirty: vec![1; cell_count],
+        params,
+    }
+}
+
+pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u32, run_mfd: bool) {
+    if run_mfd {
+        hydrology::run_hydrology_step(world, geology_budget);
+    } else {
+        hydrology::run_hydrology_flow_step(world, geology_budget);
+    }
+}
+
 pub(crate) fn step_erosion_automaton(
     state: &mut erosion::ErosionAutomatonState,
     budget_cells: u32,

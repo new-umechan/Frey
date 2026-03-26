@@ -46,7 +46,10 @@ Hydrology単体ベンチ専用の入力キャッシュ `bench/data/hydro_input.b
 （`npm run bench:fetch:era5` で取得可）。
 
 GloFAS-ERA5 は `data/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
-（Copernicus CDS から取得: https://cds.climate.copernicus.eu）。
+（Copernicus EWDS から取得: https://ewds.climate.copernicus.eu）。
+このファイルは、日次データをそのまま全件取得した年平均ではなく、
+複数年・複数月に対して7日刻み（既定: `01,08,15,22,29`）で取得した日次サンプルの平均から作る近似年平均でもよい。
+固定ベンチの比較用参照として年ごとの偏りを抑えることを優先する。
 
 HydroLAKES は `data/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
 （https://www.hydrosheds.org/products/hydrolakes）。
@@ -102,7 +105,7 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 
 | 変数 | データソース | 解像度 | 取得先 |
 |---|---|---|---|
-| `river_flow` | GloFAS-ERA5（年平均流量） | 0.1度（約11km） | https://cds.climate.copernicus.eu |
+| `river_flow` | GloFAS-ERA5（近似複数年平均流量） | 0.05度（version_4_0） | https://ewds.climate.copernicus.eu |
 
 #### 対数変換
 
@@ -368,7 +371,7 @@ python tools/bench/resample.py --module hydro-ref \
 3. CellStore のセル重心座標一覧（`bench/data/cell_centroids.csv`）を読む
 4. 各セルの重心座標でバイリニア補間し、`runoff` を `hydro_input.bin` に保存する
 5. `hydro-ref`
-6. GloFAS-ERA5 NetCDF を読み、年平均流量グリッドを取得する
+6. GloFAS-ERA5 NetCDF を読み、近似複数年平均流量グリッドを取得する
 7. HydroLAKES シェープファイルを読み、面積 1,500 km² 以上の湖ポリゴンを抽出する
 8. `river_flow` は各セルの重心座標でバイリニア補間する
 9. `is_lake` は各セルの重心が湖ポリゴン内に含まれるか判定する

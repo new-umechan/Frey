@@ -6,6 +6,8 @@ rust/target/
 
 docs/manage/todo.md
 .cdsapirc
+__pycache__/
+*.pyc
 
 # Benchmark data artifacts
 data/raw/

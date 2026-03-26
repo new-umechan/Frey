@@ -12,6 +12,8 @@ import numpy as np
 
 CLIMATE_MAGIC = b"CLIMREF1"
 TERRAIN_MAGIC = b"TERRREF1"
+HYDRO_INPUT_MAGIC = b"HYDINPUT1"
+HYDRO_REF_MAGIC = b"HYDROREF1"
 VERSION = 1
 CLIMATE_VARIABLES = [
     "temperature",
@@ -20,6 +22,7 @@ CLIMATE_VARIABLES = [
     "runoff",
     "aridity",
 ]
+HYDRO_INPUT_VARIABLES = ["runoff"]
 
 
 @dataclass
@@ -33,7 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resample reference rasters onto CellStore centroids."
     )
-    parser.add_argument("--module", required=True, choices=["climate", "terrain"])
+    parser.add_argument(
+        "--module",
+        required=True,
+        choices=["climate", "terrain", "hydro-input", "hydro-ref"],
+    )
     parser.add_argument(
         "--centroids",
         default="bench/data/cell_centroids.csv",
@@ -57,6 +64,8 @@ def parse_args() -> argparse.Namespace:
         help="Input raster/NetCDF for evapotranspiration.",
     )
     parser.add_argument("--runoff", help="Input raster/NetCDF for runoff.")
+    parser.add_argument("--river-flow", help="Input raster/NetCDF for river flow.")
+    parser.add_argument("--lakes", help="Input shapefile for lake polygons.")
     parser.add_argument("--aridity", help="Input raster/NetCDF for aridity.")
     parser.add_argument(
         "--aridity-source",
@@ -398,6 +407,74 @@ def write_climate_ref_bin(path: Path, vectors: Dict[str, np.ndarray]) -> None:
             handle.write(data.tobytes(order="C"))
 
 
+def write_hydro_input_bin(path: Path, runoff: np.ndarray) -> None:
+    values = np.asarray(runoff, dtype="<f4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(HYDRO_INPUT_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_hydro_ref_bin(path: Path, river_flow: np.ndarray, is_lake: np.ndarray) -> None:
+    flow_values = np.asarray(river_flow, dtype="<f4")
+    lake_values = np.asarray(is_lake, dtype=np.uint8)
+    if flow_values.size != lake_values.size:
+        raise ValueError(
+            "hydro ref arrays must have the same length: "
+            f"river_flow={flow_values.size}, is_lake={lake_values.size}"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(HYDRO_REF_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(flow_values.size)))
+        handle.write(flow_values.tobytes(order="C"))
+        handle.write(lake_values.tobytes(order="C"))
+
+
+def rasterize_lake_polygons(
+    path: Path, centroid_lat: np.ndarray, centroid_lon: np.ndarray
+) -> np.ndarray:
+    try:
+        import geopandas as gpd
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("geopandas is required to read HydroLAKES polygons") from exc
+
+    try:
+        from shapely.geometry import Point
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("shapely is required to test HydroLAKES point inclusion") from exc
+
+    lakes = gpd.read_file(path)
+    if lakes.empty:
+        return np.zeros(centroid_lat.shape, dtype=np.uint8)
+    if lakes.crs is None:
+        raise ValueError(f"lake shapefile is missing CRS metadata: {path}")
+    if str(lakes.crs).lower() not in {"epsg:4326", "ogc:crs84"}:
+        lakes = lakes.to_crs("EPSG:4326")
+
+    area_column = next(
+        (name for name in ("Lake_area", "Lake_area_km2", "area_km2") if name in lakes.columns),
+        None,
+    )
+    if area_column is None:
+        raise ValueError(
+            "lake shapefile must include an area column such as Lake_area or Lake_area_km2"
+        )
+    lakes = lakes[lakes[area_column].fillna(0.0) >= 1500.0]
+    if lakes.empty:
+        return np.zeros(centroid_lat.shape, dtype=np.uint8)
+
+    points = gpd.GeoDataFrame(
+        geometry=[Point(lon, lat) for lat, lon in zip(centroid_lat, centroid_lon)],
+        crs="EPSG:4326",
+    )
+    joined = gpd.sjoin(points, lakes[["geometry"]], how="left", predicate="within")
+    return joined["index_right"].notna().astype(np.uint8).to_numpy()
+
+
 def transform_aridity(values: np.ndarray, source: str) -> np.ndarray:
     if source == "pet_over_precip":
         return values
@@ -459,6 +536,10 @@ def main() -> None:
     if args.output is None:
         if args.module == "climate":
             output_path = Path("bench/data/climate_ref.bin")
+        elif args.module == "hydro-input":
+            output_path = Path("bench/data/hydro_input.bin")
+        elif args.module == "hydro-ref":
+            output_path = Path("bench/data/hydro_ref.bin")
         else:
             output_path = Path("bench/data/terrain_ref.bin")
     else:
@@ -498,6 +579,48 @@ def main() -> None:
         write_climate_ref_bin(output_path, output_vectors)
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(output_vectors['temperature'])}")
+        return
+
+    if args.module == "hydro-input":
+        var_map = parse_var_map(args.var_name)
+        if not args.runoff:
+            raise ValueError("missing required arg for hydro-input module: --runoff")
+
+        grid = load_input_grid(Path(args.runoff), var_map.get("runoff"))
+        runoff = interpolate_grid(
+            grid=grid,
+            query_lat=centroid_lat,
+            query_lon=centroid_lon,
+            method=args.method,
+        ).astype(np.float32, copy=False)
+        print(summarize("runoff", runoff))
+        write_hydro_input_bin(output_path, runoff)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(runoff)}")
+        return
+
+    if args.module == "hydro-ref":
+        if not args.river_flow or not args.lakes:
+            raise ValueError(
+                "missing required args for hydro-ref module: --river-flow, --lakes"
+            )
+
+        flow_grid = load_input_grid(Path(args.river_flow), None)
+        river_flow = interpolate_grid(
+            grid=flow_grid,
+            query_lat=centroid_lat,
+            query_lon=centroid_lon,
+            method=args.method,
+        ).astype(np.float32, copy=False)
+        is_lake = rasterize_lake_polygons(Path(args.lakes), centroid_lat, centroid_lon)
+        print(summarize("river_flow", river_flow))
+        print(
+            f"is_lake: valid={int(is_lake.size)}/{int(is_lake.size)} "
+            f"true={int(np.count_nonzero(is_lake))} false={int(is_lake.size - np.count_nonzero(is_lake))}"
+        )
+        write_hydro_ref_bin(output_path, river_flow, is_lake)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(river_flow)}")
         return
 
     if not args.height:
