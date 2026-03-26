@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import initWasm, {
     WorldSimController,
     generate_mesh,
@@ -12,6 +11,7 @@ import {
     isPerfFeatureEnabled,
     setPerfPanelVisibility,
 } from "./bootstrap/status-ui.js";
+import { createLoadingOverlayController } from "./bootstrap/loading-overlay.js";
 import { setupTerrainGeometryAttributes } from "./bootstrap/terrain-geometry-setup.js";
 import { runInitialWorldAndUiSync } from "./bootstrap/post-init-sync.js";
 import { createGlobeScene, resizeViewport } from "../gfx/scene.js";
@@ -64,6 +64,114 @@ import { createTerrainGenerationController } from "./terrain-generation-controll
 import { createWorldSessionController } from "./world-session-controller.js";
 import { bindAppUiControls } from "./ui-bindings.js";
 
+function createSidebarController(options = {}) {
+    const { appShell, sidebarToggle } = options;
+    function setSidebarOpen(isOpen) {
+        if (!sidebarToggle) {
+            return;
+        }
+        appShell.classList.toggle("is-sidebar-collapsed", !isOpen);
+        sidebarToggle.setAttribute("aria-expanded", String(isOpen));
+    }
+    return { setSidebarOpen };
+}
+
+function createMeshBuffers(mesh) {
+    return {
+        basePositions: new Float32Array(mesh.positions),
+        indices: new Uint32Array(mesh.indices),
+    };
+}
+
+function createWorldState(options = {}) {
+    const { basePositions, indices, currentEraMetrics } = options;
+    const world = {
+        tick: 0,
+        era: DEFAULT_ERA_SCALE,
+        mesh: {
+            positions: basePositions,
+            indices,
+            nbrOffsets: null,
+            nbrs: null,
+        },
+        core: createEmptyCore(),
+        layers: createEmptyLayers(),
+        budgets: createInitialBudgets(),
+        runtime: createInitialRuntimeState(currentEraMetrics.runtimeTickMs),
+    };
+    return {
+        world,
+        worldState: world.runtime,
+    };
+}
+
+function createMutableStateHandlers(options = {}) {
+    const {
+        getActiveWorldId,
+        setActiveWorldId,
+        getCurrentSeed,
+        setCurrentSeed,
+        getCurrentTerrainData,
+        getCurrentSurfaceMode,
+        setCurrentSurfaceMode,
+        getCurrentViewMode,
+        getCurrentCellMetric,
+        getCurrentEraScale,
+        setCurrentEraScale,
+        getCurrentEraMetrics,
+        setCurrentEraMetrics,
+        getDebugEnabled,
+        setDebugEnabled,
+        getWorldTick,
+    } = options;
+    const getMutableState = () => {
+        return {
+            activeWorldId: getActiveWorldId(),
+            currentSeed: getCurrentSeed(),
+            currentTerrainData: getCurrentTerrainData(),
+            currentSurfaceMode: getCurrentSurfaceMode(),
+            currentViewMode: getCurrentViewMode(),
+            currentCellMetric: getCurrentCellMetric(),
+            currentEraScale: getCurrentEraScale(),
+            currentEraMetrics: getCurrentEraMetrics(),
+            debugEnabled: getDebugEnabled(),
+            worldTick: getWorldTick(),
+        };
+    };
+    const stateSetters = {
+        activeWorldId: (value) => { setActiveWorldId(value); },
+        currentSeed: (value) => { setCurrentSeed(value); },
+        currentEraScale: (value) => { setCurrentEraScale(value); },
+        currentEraMetrics: (value) => { setCurrentEraMetrics(value); },
+        currentSurfaceMode: (value) => { setCurrentSurfaceMode(value); },
+        debugEnabled: (value) => { setDebugEnabled(value); },
+    };
+    const setMutableState = (patch = {}) => {
+        for (const [key, value] of Object.entries(patch)) {
+            stateSetters[key]?.(value);
+        }
+    };
+    return {
+        getMutableState,
+        setMutableState,
+    };
+}
+
+function renderOnNextAnimationFrame(renderFrame) {
+    return new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+            renderFrame();
+            resolve();
+        });
+    });
+}
+
+async function renderInitializationFrames(renderFrame, frameCount = 2) {
+    for (let i = 0; i < frameCount; i += 1) {
+        await renderOnNextAnimationFrame(renderFrame);
+    }
+}
+
 const PERF_BENCH_WORKER_URL = new URL("../workers/perf-benchmark-worker.js", import.meta.url);
 export async function createApp() {
     const isPerfEnabled = isPerfFeatureEnabled();
@@ -93,20 +201,9 @@ export async function createApp() {
         perfStatFields,
         statFields,
     } = collectAppElements({ perfEnabled: isPerfEnabled });
+    const { setSidebarOpen } = createSidebarController({ appShell, sidebarToggle });
     const statusRows = [statusEraLabel, eraScaleTickLabel];
     const { setStatus } = createStatusController(statusMessage, statusRows);
-    const loadingOverlayContext = loadingOverlayCanvas.getContext("2d");
-    if (!loadingOverlayContext) {
-        throw new Error("loading overlay canvas context is unavailable");
-    }
-
-    function setSidebarOpen(isOpen) {
-        if (!sidebarToggle) {
-            return;
-        }
-        appShell.classList.toggle("is-sidebar-collapsed", !isOpen);
-        sidebarToggle.setAttribute("aria-expanded", String(isOpen));
-    }
 
     setPerfPanelVisibility(perfPanel, isPerfEnabled);
     if (sidebarToggle) {
@@ -117,8 +214,7 @@ export async function createApp() {
     await initWasm();
     setStatus("Preparing mesh...");
     const mesh = generate_mesh(LEVEL);
-    const basePositions = new Float32Array(mesh.positions);
-    const indices = new Uint32Array(mesh.indices);
+    const { basePositions, indices } = createMeshBuffers(mesh);
 
     const {
         scene,
@@ -156,22 +252,12 @@ export async function createApp() {
     let currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
     const worldSimController = new WorldSimController();
     let activeWorldId = null;
-    const world = {
-        tick: 0,
-        era: DEFAULT_ERA_SCALE,
-        mesh: {
-            positions: basePositions,
-            indices,
-            nbrOffsets: null,
-            nbrs: null,
-        },
-        core: createEmptyCore(),
-        layers: createEmptyLayers(),
-        budgets: createInitialBudgets(),
-        runtime: createInitialRuntimeState(currentEraMetrics.runtimeTickMs),
-    };
+    const { world, worldState } = createWorldState({
+        basePositions,
+        indices,
+        currentEraMetrics,
+    });
     let currentTerrainData = world.core;
-    const worldState = world.runtime;
     const playbackState = worldState.playback;
 
     setupTerrainGeometryAttributes({
@@ -220,112 +306,39 @@ export async function createApp() {
         globeControls,
         getCurrentSurfaceMode: () => currentSurfaceMode,
     });
-    const loadingPlanetCenterWorld = new THREE.Vector3();
-    const loadingPlanetEdgeWorld = new THREE.Vector3();
-    const loadingPlanetCenterNdc = new THREE.Vector3();
-    const loadingPlanetEdgeNdc = new THREE.Vector3();
-    const loadingPlanetEdgeLocal = new THREE.Vector3(1, 0, 0);
-    const LOADING_CIRCLE_COLOR = "#E5EAEE";
-    let isWorldInitializing = false;
-
-    function syncLoadingOverlayCanvasSize() {
-        const panelRect = viewportPanel.getBoundingClientRect();
-        const panelWidth = Math.max(1, Math.floor(panelRect.width));
-        const panelHeight = Math.max(1, Math.floor(panelRect.height));
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const bufferWidth = Math.max(1, Math.floor(panelWidth * dpr));
-        const bufferHeight = Math.max(1, Math.floor(panelHeight * dpr));
-        if (
-            loadingOverlayCanvas.width !== bufferWidth ||
-            loadingOverlayCanvas.height !== bufferHeight
-        ) {
-            loadingOverlayCanvas.width = bufferWidth;
-            loadingOverlayCanvas.height = bufferHeight;
-        }
-        loadingOverlayContext.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return {
-            panelWidth,
-            panelHeight,
-        };
-    }
-
-    function clearLoadingOverlay() {
-        const { panelWidth, panelHeight } = syncLoadingOverlayCanvasSize();
-        loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
-    }
-
-    function measurePlanetScreenRadius(camera, panelWidth, panelHeight) {
-        sphere.getWorldPosition(loadingPlanetCenterWorld);
-        loadingPlanetEdgeWorld.copy(loadingPlanetEdgeLocal);
-        sphere.localToWorld(loadingPlanetEdgeWorld);
-
-        loadingPlanetCenterNdc.copy(loadingPlanetCenterWorld).project(camera);
-        loadingPlanetEdgeNdc.copy(loadingPlanetEdgeWorld).project(camera);
-
-        const centerX = (loadingPlanetCenterNdc.x * 0.5 + 0.5) * panelWidth;
-        const centerY = (1 - (loadingPlanetCenterNdc.y * 0.5 + 0.5)) * panelHeight;
-        const edgeX = (loadingPlanetEdgeNdc.x * 0.5 + 0.5) * panelWidth;
-        const edgeY = (1 - (loadingPlanetEdgeNdc.y * 0.5 + 0.5)) * panelHeight;
-
-        return Math.hypot(edgeX - centerX, edgeY - centerY);
-    }
-
-    function renderLoadingOverlay() {
-        if (!isWorldInitializing) {
-            clearLoadingOverlay();
-            return;
-        }
-
-        const { panelWidth, panelHeight } = syncLoadingOverlayCanvasSize();
-        loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
-
-        const camera = cameraController.getCamera();
-        const radius = measurePlanetScreenRadius(camera, panelWidth, panelHeight);
-        if (!Number.isFinite(radius) || radius <= 0) {
-            return;
-        }
-
-        loadingOverlayContext.fillStyle = LOADING_CIRCLE_COLOR;
-        loadingOverlayContext.beginPath();
-        loadingOverlayContext.arc(panelWidth * 0.5, panelHeight * 0.5, radius, 0, Math.PI * 2);
-        loadingOverlayContext.fill();
-    }
+    const loadingOverlayController = createLoadingOverlayController({
+        loadingOverlayCanvas,
+        viewportPanel,
+        sphere,
+        getCamera: () => cameraController.getCamera(),
+    });
 
     function renderFrame() {
         globePinchFocusController.update();
         cameraController.getActiveControls().update();
         renderer.render(scene, cameraController.getCamera());
-        renderLoadingOverlay();
+        loadingOverlayController.render();
     }
 
     let playbackController = null;
-    const getMutableState = () => {
-        return {
-            activeWorldId,
-            currentSeed,
-            currentTerrainData,
-            currentSurfaceMode,
-            currentViewMode,
-            currentCellMetric,
-            currentEraScale,
-            currentEraMetrics,
-            debugEnabled,
-            worldTick: world.tick,
-        };
-    };
-    const stateSetters = {
-        activeWorldId: (value) => { activeWorldId = value; },
-        currentSeed: (value) => { currentSeed = value; },
-        currentEraScale: (value) => { currentEraScale = value; },
-        currentEraMetrics: (value) => { currentEraMetrics = value; },
-        currentSurfaceMode: (value) => { currentSurfaceMode = value; },
-        debugEnabled: (value) => { debugEnabled = value; },
-    };
-    const setMutableState = (patch = {}) => {
-        for (const [key, value] of Object.entries(patch)) {
-            stateSetters[key]?.(value);
-        }
-    };
+    const { getMutableState, setMutableState } = createMutableStateHandlers({
+        getActiveWorldId: () => activeWorldId,
+        setActiveWorldId: (value) => { activeWorldId = value; },
+        getCurrentSeed: () => currentSeed,
+        setCurrentSeed: (value) => { currentSeed = value; },
+        getCurrentTerrainData: () => currentTerrainData,
+        getCurrentSurfaceMode: () => currentSurfaceMode,
+        setCurrentSurfaceMode: (value) => { currentSurfaceMode = value; },
+        getCurrentViewMode: () => currentViewMode,
+        getCurrentCellMetric: () => currentCellMetric,
+        getCurrentEraScale: () => currentEraScale,
+        setCurrentEraScale: (value) => { currentEraScale = value; },
+        getCurrentEraMetrics: () => currentEraMetrics,
+        setCurrentEraMetrics: (value) => { currentEraMetrics = value; },
+        getDebugEnabled: () => debugEnabled,
+        setDebugEnabled: (value) => { debugEnabled = value; },
+        getWorldTick: () => world.tick,
+    });
     const worldUiController = createWorldUiController({
         cameraController,
         terrainRenderer,
@@ -455,7 +468,7 @@ export async function createApp() {
 
     function onResize() {
         cameraController.onResize();
-        renderLoadingOverlay();
+        loadingOverlayController.render();
     }
 
     const terrainGenerationController = createTerrainGenerationController({
@@ -483,24 +496,13 @@ export async function createApp() {
             playbackController.appendPlaybackEvent(...args);
         },
         onInitWorldStart: async () => {
-            isWorldInitializing = true;
-            renderLoadingOverlay();
-            await new Promise((resolve) => {
-                window.requestAnimationFrame(() => {
-                    renderFrame();
-                    resolve();
-                });
-            });
-            await new Promise((resolve) => {
-                window.requestAnimationFrame(() => {
-                    renderFrame();
-                    resolve();
-                });
-            });
+            loadingOverlayController.setWorldInitializing(true);
+            loadingOverlayController.render();
+            await renderInitializationFrames(renderFrame);
         },
         onInitWorldEnd: () => {
-            isWorldInitializing = false;
-            clearLoadingOverlay();
+            loadingOverlayController.setWorldInitializing(false);
+            loadingOverlayController.clear();
         },
     });
     const { updateTerrain } = terrainGenerationController;
