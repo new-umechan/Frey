@@ -58,7 +58,7 @@ async function buildWasm() {
     }
 }
 
-async function syncGeologyParams() {
+async function syncTerrainParams() {
     if (syncTerrainRunning) {
         syncTerrainQueued = true;
         return;
@@ -66,7 +66,7 @@ async function syncGeologyParams() {
 
     syncTerrainRunning = true;
     console.log("[dev] syncing terrain params...");
-    const result = await runCommand("npm", ["run", "geology:sync"]);
+    const result = await runCommand("npm", ["run", "terrain:sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] terrain params sync failed (code: ${result.code ?? "null"})`);
@@ -78,7 +78,7 @@ async function syncGeologyParams() {
 
     if (syncTerrainQueued && !shutdownRequested) {
         syncTerrainQueued = false;
-        await syncGeologyParams();
+        await syncTerrainParams();
     }
 }
 
@@ -145,8 +145,8 @@ function scheduleBuild(filename) {
     }, 150);
 }
 
-function scheduleGeologyParamsSync(filename) {
-    if (filename !== "geology.yaml") {
+function scheduleTerrainParamsSync(filename) {
+    if (filename !== "terrain.yaml") {
         return;
     }
 
@@ -157,7 +157,7 @@ function scheduleGeologyParamsSync(filename) {
     syncTerrainDebounceTimer = setTimeout(() => {
         syncTerrainDebounceTimer = null;
         if (!shutdownRequested) {
-            void syncGeologyParams();
+            void syncTerrainParams();
         }
     }, 150);
 }
@@ -196,7 +196,7 @@ function startRustWatcher() {
 function startConfigWatcher() {
     const watcher = watch(configDir, { recursive: true }, (_eventType, filename) => {
         if (typeof filename === "string") {
-            scheduleGeologyParamsSync(filename);
+            scheduleTerrainParamsSync(filename);
             scheduleRuntimeParamsSync(filename);
         }
     });
@@ -222,7 +222,7 @@ async function main() {
         process.exit(runtimeSyncInitial.code ?? 1);
     }
 
-    const syncInitial = await runCommand("npm", ["run", "geology:sync"]);
+    const syncInitial = await runCommand("npm", ["run", "terrain:sync"]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }
