@@ -100,7 +100,6 @@ export function createWorldStepper(options = {}) {
 
         const runTick = () => {
             const liveState = getCurrentState();
-            const benchmarkMode = tickOptions?.benchmarkMode === true;
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
             const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
             const previousTick = world.tick;
