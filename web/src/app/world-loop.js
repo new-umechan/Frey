@@ -1,5 +1,8 @@
 import { DEFAULT_ERA_SCALE } from "../core/constants.js";
 
+const ADAPTIVE_SYNC_BATCH_MAX_TICKS = 4;
+const ADAPTIVE_SYNC_BATCH_TRIGGER_LAG_TICKS = 2;
+
 export function resetWorldProgress(world, worldState, createEmptyLayers, createInitialBudgets, createEraMetrics) {
     world.tick = 0;
     world.era = DEFAULT_ERA_SCALE;
@@ -54,9 +57,18 @@ export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldTick) {
         worldState.accumulatorMs >= worldState.runtimeTickMs &&
         ticksProcessed < worldState.maxTicksPerFrame
     ) {
-        stepWorldTick();
-        worldState.accumulatorMs -= worldState.runtimeTickMs;
-        ticksProcessed += 1;
+        const remainingBudget = worldState.maxTicksPerFrame - ticksProcessed;
+        const lagTicks = Math.floor(worldState.accumulatorMs / worldState.runtimeTickMs);
+        const shouldBatch = lagTicks >= ADAPTIVE_SYNC_BATCH_TRIGGER_LAG_TICKS;
+        const batchCount = shouldBatch
+            ? Math.max(1, Math.min(ADAPTIVE_SYNC_BATCH_MAX_TICKS, lagTicks, remainingBudget))
+            : 1;
+        stepWorldTick(null, {
+            batchCount,
+            batched: batchCount > 1,
+        });
+        worldState.accumulatorMs -= worldState.runtimeTickMs * batchCount;
+        ticksProcessed += batchCount;
     }
 
     if (ticksProcessed >= worldState.maxTicksPerFrame) {

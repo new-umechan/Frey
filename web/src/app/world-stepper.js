@@ -18,8 +18,13 @@ export function createWorldStepper(options = {}) {
         getEraScalePreset,
     } = options;
 
-    const shouldRefreshStatsAtTick = (tick) => {
-        return (tick % 8) === 0;
+    const shouldRefreshStatsForAdvance = (previousTick, nextTick) => {
+        const safePrev = Math.max(0, Math.floor(previousTick ?? 0));
+        const safeNext = Math.max(safePrev, Math.floor(nextTick ?? safePrev));
+        if (safeNext <= safePrev) {
+            return false;
+        }
+        return Math.floor(safePrev / 8) < Math.floor(safeNext / 8);
     };
 
     const getCurrentDeltaFieldKinds = () => {
@@ -54,22 +59,24 @@ export function createWorldStepper(options = {}) {
             const liveState = getCurrentState();
             const benchmarkMode = tickOptions?.benchmarkMode === true;
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
-            const nextTick = world.tick + 1;
+            const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
+            const previousTick = world.tick;
+            const nextTick = previousTick + batchCount;
 
             if (perfRecorder) {
                 perfRecorder.measure("exec_world", () => {
                     if (sampleStepBreakdown) {
-                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId, 1);
+                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId, batchCount);
                         pushStepBreakdownSamples(perfRecorder, profiled);
                         return;
                     }
-                    worldSimController.exec_world(liveState.activeWorldId, 1);
+                    worldSimController.exec_world(liveState.activeWorldId, batchCount);
                 });
             } else {
-                worldSimController.exec_world(liveState.activeWorldId, 1);
+                worldSimController.exec_world(liveState.activeWorldId, batchCount);
             }
 
-            const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsAtTick(nextTick);
+            const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
             const { changes, statsRefreshed } = syncWorldDeltaFromController({
                 worldSimController,
                 worldId: liveState.activeWorldId,
@@ -95,7 +102,12 @@ export function createWorldStepper(options = {}) {
                 );
             }
             if (!benchmarkMode) {
-                syncAfterWorldStep();
+                syncAfterWorldStep({
+                    previousTick,
+                    nextTick: world.tick,
+                    ticksAdvanced: batchCount,
+                    batched: tickOptions?.batched === true,
+                });
             }
             return true;
         };

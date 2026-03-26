@@ -317,9 +317,25 @@ export function createPlaybackController({
         });
     }
 
-    function syncAfterWorldStep() {
+    function shouldRefreshHistoryOnAdvance(previousTick, nextTick) {
+        const safePrevTick = sanitizeTick(previousTick);
+        const safeNextTick = sanitizeTick(nextTick);
+        const interval = Math.max(1, sanitizeTick(playbackState.historyInterval) ?? 1);
+
+        if (safeNextTick !== null && (safeNextTick % interval) === 0) {
+            return true;
+        }
+        if (safePrevTick === null || safeNextTick === null || safeNextTick <= safePrevTick) {
+            return false;
+        }
+        return Math.floor(safePrevTick / interval) < Math.floor(safeNextTick / interval);
+    }
+
+    function syncAfterWorldStep(stepInfo = {}) {
         const worldTick = getWorldTick();
-        if ((worldTick % playbackState.historyInterval) === 0) {
+        const previousTick = stepInfo?.previousTick;
+        const nextTick = stepInfo?.nextTick ?? worldTick;
+        if (shouldRefreshHistoryOnAdvance(previousTick, nextTick)) {
             refreshHistoryTicks();
         }
         syncPlaybackUi();
