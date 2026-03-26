@@ -12,6 +12,8 @@
         "build": "npm run runtime:sync && npm run wasm:build && vite build --config web/vite.config.js",
         "preview": "vite preview --config web/vite.config.js",
         "lint:web": "eslint \"web/src/**/*.js\"",
+        "lint:rust": "cargo clippy --manifest-path rust/Cargo.toml --all-targets",
+        "lint:prepush": "npm run lint:web && npm run lint:rust",
         "hooks:install": "node tools/dev/install-git-hooks.mjs",
         "bench": "node tools/bench/bench.mjs",
         "bench:dev": "npm run wasm:build:dev:no-sync && node tools/bench/bench.mjs",
