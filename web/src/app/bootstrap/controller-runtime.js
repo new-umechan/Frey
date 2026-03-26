@@ -13,11 +13,13 @@ import {
 } from "../runtime/state.js";
 import {
     getDeltaFieldKindsForView,
-    refreshWorldStatsFromController,
-    syncVisibleCoreFieldsFromController,
+} from "../world-sync/view-mode.js";
+import { refreshWorldStatsFromController } from "../world-sync/stats-sync.js";
+import { syncVisibleCoreFieldsFromController } from "../world-sync/field-io.js";
+import {
     syncWorldDeltaFromController,
     syncWorldFromController,
-} from "../world-sync.js";
+} from "../world-sync/world-state-sync.js";
 import { createWorldUiController } from "../world-ui-controller.js";
 import { createWorldSessionController } from "../world-session-controller.js";
 import { createWorldStepper } from "../world-stepper.js";

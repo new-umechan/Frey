@@ -1,4 +1,4 @@
-export function requireElement(id, type) {
+function requireElement(id, type) {
     const element = document.getElementById(id);
     if (!(element instanceof type)) {
         throw new Error(`required DOM element is missing: #${id}`);
@@ -6,7 +6,7 @@ export function requireElement(id, type) {
     return element;
 }
 
-export function optionalElement(id, type) {
+function optionalElement(id, type) {
     const element = document.getElementById(id);
     return element instanceof type ? element : null;
 }

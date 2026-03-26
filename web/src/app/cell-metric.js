@@ -137,14 +137,8 @@ const CATEGORY_META = Object.freeze({
 });
 
 const METRIC_BY_KEY = new Map(CELL_METRIC_DEFS.map((metric) => [metric.key, metric]));
-const METRIC_KIND_BY_KEY = new Map(CELL_METRIC_DEFS.map((metric, index) => [metric.key, index]));
 
-export const DEFAULT_CELL_METRIC = "height";
-export const DEFAULT_VIEW_MODE = "normal";
-
-export function getCellMetricDefs() {
-    return CELL_METRIC_DEFS;
-}
+const DEFAULT_CELL_METRIC = "height";
 
 export function normalizeCellMetric(metricKey) {
     return METRIC_BY_KEY.has(metricKey) ? metricKey : DEFAULT_CELL_METRIC;
@@ -152,10 +146,6 @@ export function normalizeCellMetric(metricKey) {
 
 export function getCellMetricMeta(metricKey) {
     return METRIC_BY_KEY.get(normalizeCellMetric(metricKey)) ?? CELL_METRIC_DEFS[0];
-}
-
-export function getMetricKindIndex(metricKey) {
-    return METRIC_KIND_BY_KEY.get(normalizeCellMetric(metricKey)) ?? 0;
 }
 
 export function getMetricCategories() {

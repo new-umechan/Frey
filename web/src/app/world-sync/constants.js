@@ -51,7 +51,7 @@ export const CORE_KEY_BY_FIELD_KIND = Object.freeze({
     river_transport_cost: "riverTransportCost",
 });
 
-export const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
+const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
     height: "height",
     river_flux: "river",
     river_next: "river",

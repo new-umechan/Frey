@@ -1,4 +1,4 @@
-export function renderOnNextAnimationFrame(renderFrame) {
+function renderOnNextAnimationFrame(renderFrame) {
     return new Promise((resolve) => {
         window.requestAnimationFrame(() => {
             renderFrame();

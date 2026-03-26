@@ -17,7 +17,7 @@ function createFallbackFieldData(fieldKind, fallbackCellCount) {
     return new Int32Array(count);
 }
 
-export function getFieldData(controller, worldId, fieldKind, fallbackCellCount = 0) {
+function getFieldData(controller, worldId, fieldKind, fallbackCellCount = 0) {
     let response = null;
     try {
         response = controller.get_field(worldId, fieldKind, 1);
