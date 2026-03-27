@@ -247,6 +247,19 @@ aridity:          rho=0.588
 evapotranspiration: rho=0.541
 runoff:           rho=0.498
 
+-- Main Evaluation Summary: metrics_reported=5 --
+
+-- Main Diagnostics: Precipitation by Latitude Band (land only) --
+[tropics  0.0-23.5] rho=0.556
+[subtropics 23.5-35.0] rho=0.146
+[midlat 35.0-55.0] rho=0.476
+[highlat 55.0-90.0] rho=0.578
+
+-- Main Diagnostics: Top Precipitation Residual Cells (land only) --
+#1  cell=39252  lat=   4.11 lon=  -77.47 model=   820.9 ref=  6975.2 abs_err=  6154.2
+#2  cell=9826   lat=   5.87 lon=  -76.50 model=   511.8 ref=  6512.6 abs_err=  6000.8
+#3  cell=1918   lat= -50.52 lon=  -75.46 model=   800.6 ref=  6440.0 abs_err=  5639.4
+
 -- Diagnostic Evaluation: Ranking Assertions --
 [temperature] matched=7/7  coverage_ratio=1.000
 [precipitation] matched=5/5  coverage_ratio=1.000  (excl. 2 known-hard)
@@ -256,7 +269,6 @@ runoff:           rho=0.498
 P-06  maritime_europe > siberia:  mismatch  (624.0 vs 487.0)
 P-07  monsoon_india > arabia:     match  (792.0 vs 88.0)
 
--- Main Evaluation Summary: metrics_reported=5 --
 -- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio=1.000 (excl. known-hard) --
 -- Main Evaluation State: READY --
 -- Score Save: OK --

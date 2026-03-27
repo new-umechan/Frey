@@ -61,6 +61,12 @@ struct Phase2MetricResult {
     rho: f32,
 }
 
+struct LatBand {
+    name: &'static str,
+    lat_min: f32,
+    lat_max: f32,
+}
+
 enum Phase2State {
     Ready {
         reference_path: PathBuf,
@@ -256,6 +262,29 @@ const ARIDITY_ASSERTIONS: &[Assertion] = &[
     },
 ];
 
+const PRECIP_LAT_BANDS: &[LatBand] = &[
+    LatBand {
+        name: "tropics",
+        lat_min: 0.0,
+        lat_max: 23.5,
+    },
+    LatBand {
+        name: "subtropics",
+        lat_min: 23.5,
+        lat_max: 35.0,
+    },
+    LatBand {
+        name: "midlat",
+        lat_min: 35.0,
+        lat_max: 55.0,
+    },
+    LatBand {
+        name: "highlat",
+        lat_min: 55.0,
+        lat_max: 90.0,
+    },
+];
+
 fn main() {
     let geology_params = GeologyParams {
         level: 6,
@@ -349,6 +378,7 @@ fn main() {
                     "-- Main Evaluation Summary: metrics_reported={} --",
                     results.len()
                 );
+                print_precipitation_diagnostics(&sim_world, &reference);
                 Phase2State::Ready {
                     reference_path: path,
                     metrics: results,
@@ -503,6 +533,43 @@ fn spearman_on_land(model_field: &[f32], ref_field: &[f32], geology_height: &[f3
     let mut ref_values = Vec::with_capacity(len);
     for i in 0..len {
         if geology_height[i] <= 0.0 {
+            continue;
+        }
+        let model = model_field[i];
+        let reference = ref_field[i];
+        if !model.is_finite() || !reference.is_finite() {
+            continue;
+        }
+        model_values.push(model);
+        ref_values.push(reference);
+    }
+    if model_values.len() < 3 {
+        return None;
+    }
+    spearman(&model_values, &ref_values)
+}
+
+fn spearman_on_land_with_filter<F>(
+    model_field: &[f32],
+    ref_field: &[f32],
+    geology_height: &[f32],
+    mut include: F,
+) -> Option<f32>
+where
+    F: FnMut(usize) -> bool,
+{
+    let len = model_field
+        .len()
+        .min(ref_field.len())
+        .min(geology_height.len());
+    if len < 3 {
+        return None;
+    }
+
+    let mut model_values = Vec::with_capacity(len);
+    let mut ref_values = Vec::with_capacity(len);
+    for i in 0..len {
+        if !include(i) || geology_height[i] <= 0.0 {
             continue;
         }
         let model = model_field[i];
@@ -803,8 +870,8 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
             name,
             summary.matched,
             summary.total,
-            summary.excluded_known_hard,
-            summary.coverage_ratio
+            summary.coverage_ratio,
+            summary.excluded_known_hard
         );
     } else {
         println!(
@@ -812,6 +879,72 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
             name, summary.matched, summary.total, summary.coverage_ratio
         );
     }
+}
+
+fn print_precipitation_diagnostics(world: &world::World, reference: &ClimateRef) {
+    let model_precip = &world.state.climate.precipitation;
+    let ref_precip = &reference.precipitation;
+    let geology_height = &world.state.geology.height;
+    let positions = &world.mesh.positions;
+
+    println!("-- Main Diagnostics: Precipitation by Latitude Band (land only) --");
+    for band in PRECIP_LAT_BANDS {
+        let rho = spearman_on_land_with_filter(
+            model_precip,
+            ref_precip,
+            geology_height,
+            |idx| {
+                let lat = positions
+                    .get(idx)
+                    .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
+                    .unwrap_or(0.0);
+                lat >= band.lat_min && lat < band.lat_max
+            },
+        )
+        .unwrap_or(f32::NAN);
+        println!(
+            "[{} {:>4.1}-{:<4.1}] rho={:.3}",
+            band.name, band.lat_min, band.lat_max, rho
+        );
+    }
+
+    let len = model_precip
+        .len()
+        .min(ref_precip.len())
+        .min(geology_height.len())
+        .min(positions.len());
+    let mut residuals = Vec::<(usize, f32, f32, f32)>::new();
+    for i in 0..len {
+        if geology_height[i] <= 0.0 {
+            continue;
+        }
+        let model = model_precip[i];
+        let reference = ref_precip[i];
+        if !model.is_finite() || !reference.is_finite() {
+            continue;
+        }
+        residuals.push((i, (model - reference).abs(), model, reference));
+    }
+    residuals.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    println!();
+    println!("-- Main Diagnostics: Top Precipitation Residual Cells (land only) --");
+    for (rank, (idx, abs_err, model, reference)) in residuals.iter().take(8).enumerate() {
+        let pos = positions[*idx];
+        let lat = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
+        let lon = pos[2].atan2(pos[0]).to_degrees();
+        println!(
+            "#{:<2} cell={:<6} lat={:>7.2} lon={:>8.2} model={:>8.1} ref={:>8.1} abs_err={:>8.1}",
+            rank + 1,
+            idx,
+            lat,
+            lon,
+            model,
+            reference,
+            abs_err
+        );
+    }
+    println!();
 }
 
 fn score_output_path() -> PathBuf {

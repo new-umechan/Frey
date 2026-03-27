@@ -91,6 +91,12 @@ P = (P_bg(lat) + P_conv + P_orog) * F_shadow * F_continental * F_depletion
 係数は `config/climate.yaml` から管理し、`tools/sync/sync-climate-params.mjs` で
 `rust/src/generated/climate_params_defaults.rs` を生成して反映する。
 
+#### 再設計試行メモ（不採用）
+
+2026-03-27 に、降水本体を「水蒸気在庫を反復輸送・消費するモデル」へ再設計する試行を実施した。
+ただし `climate_solo` の主指標で、`precipitation rho` が既存モデルを下回ったため不採用とした。
+このため、現行の本書は既存モデル（`F_depletion` を含む合成モデル）を正とし、再設計案は採用しない。
+
 ### 蒸発散と流出
 
 潜在蒸発散量はThornthwaite式を使う。
