@@ -12,7 +12,10 @@
 
 ```
 # repo root から pnpm wrapper で実行
-pnpm bench -- --suite climate_solo
+pnpm run bench --suite climate_solo
+
+# 旧形式（互換）
+pnpm run bench -- --suite climate_solo
 
 # または cargo bench を直接実行
 # repo root から実行
@@ -249,6 +252,10 @@ runoff:           rho=0.498
 
 -- Main Evaluation Summary: metrics_reported=5 --
 
+-- Main Diagnostics: Precipitation Process (land aggregate) --
+continental_reduction=11.2%  cap_reduction=0.0%  depletion_reduction=12.4%  cold_coast_reduction=5.9%
+cap_hit_ratio=0.0%  mean_monsoon_boost_mm=8.2
+
 -- Main Diagnostics: Precipitation by Latitude Band (land only) --
 [tropics  0.0-23.5] rho=0.556
 [subtropics 23.5-35.0] rho=0.146
@@ -352,6 +359,32 @@ pnpm bench:dump-centroids
 - 保存先: `benches/results/climate_main_scores.jsonl`
 - 1実行 = 1行（時刻、seed、mesh_level、cell_count、各指標のrho、補助評価要約）
 - 実行ごとの差分比較はこのJSONLを入力に行う
+
+### チューニング記録フロー（現行）
+
+`climate_solo` のチューニング履歴は `benches/results/climate_tuning/` に集約して保存する。
+
+```
+benches/results/climate_tuning/
+  runs/       # 各試行のJSONL
+  baselines/  # 比較元スナップショット
+  summaries/  # 変更点と差分の要約
+  notes/      # 採用/不採用理由と次仮説
+```
+
+現行スクリプトのデフォルト出力先:
+
+- `benches/scripts/tune-climate-params.py`
+  - `benches/results/climate_tuning/runs/climate_tuning_runs.jsonl`
+- `benches/scripts/tune-climate-structure.py`
+  - `benches/results/climate_tuning/runs/climate_structure_tuning_runs.jsonl`
+
+推奨手順:
+
+1. 実験前に baseline を `baselines/` に保存
+2. チューニング実行で `runs/` にJSONL追記
+3. 実験単位で `summaries/` に差分記録
+4. 判断理由と次仮説を `notes/` に記録
 
 依存ライブラリ（Pythonツール群）：
 
