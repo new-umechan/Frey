@@ -36,14 +36,14 @@ Hydrology単体ベンチ専用の入力キャッシュ `benches/data/hydro_input
 
 現在の実運用では、リポジトリルートで次の順に準備する。
 
-1. `npm run bench:dump-centroids`（未実行の場合のみ）
-2. `npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
-3. `npm run bench:prepare:era5`（未実行の場合のみ）
-4. `npm run bench:resample:hydro-input -- --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
-5. `npm run bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
+1. `pnpm bench:dump-centroids`（未実行の場合のみ）
+2. `pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
+3. `pnpm bench:prepare:era5`（未実行の場合のみ）
+4. `pnpm bench:resample:hydro-input -- --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
+5. `pnpm bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
 
 `bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
-（`npm run bench:fetch:era5` で取得可）。
+（`pnpm bench:fetch:era5` で取得可）。
 
 GloFAS-ERA5 は `benches/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
 （Copernicus EWDS から取得: https://ewds.climate.copernicus.eu）。
@@ -305,8 +305,8 @@ ganges_delta:      river_flow=6800.0
 
 -- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --
 To generate:
-  1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  1) pnpm bench:dump-centroids
+  2) pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
@@ -314,7 +314,7 @@ To generate:
 
 -- Hydro Input: SKIPPED (benches/data/hydro_input.bin not found) --
 To generate:
-  npm run bench:resample:hydro-input -- --runoff <path>
+  pnpm bench:resample:hydro-input -- --runoff <path>
 ```
 
 ```
@@ -322,7 +322,7 @@ To generate:
 
 -- Main Evaluation: SKIPPED (benches/data/hydro_ref.bin not found) --
 To generate:
-  npm run bench:resample:hydro-ref -- --river-flow <path> --lakes <path>
+  pnpm bench:resample:hydro-ref -- --river-flow <path> --lakes <path>
 
 -- Diagnostic Evaluation 2-A: River Flow Ranking Assertions --
 （以下、通常通り出力）

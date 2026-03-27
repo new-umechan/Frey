@@ -42,7 +42,7 @@ async function buildWasm() {
 
     buildRunning = true;
     console.log("[dev] rebuilding wasm...");
-    const result = await runCommand("npm", ["run", "wasm:build:dev:no-sync"]);
+    const result = await runCommand("pnpm", ["run", "wasm:build:dev:no-sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] wasm build failed (code: ${result.code ?? "null"})`);
@@ -66,7 +66,7 @@ async function syncTerrainParams() {
 
     syncTerrainRunning = true;
     console.log("[dev] syncing terrain params...");
-    const result = await runCommand("npm", ["run", "terrain:sync"]);
+    const result = await runCommand("pnpm", ["run", "terrain:sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] terrain params sync failed (code: ${result.code ?? "null"})`);
@@ -90,7 +90,7 @@ async function syncRuntimeParams() {
 
     syncRuntimeRunning = true;
     console.log("[dev] syncing runtime params...");
-    const result = await runCommand("npm", ["run", "runtime:sync"]);
+    const result = await runCommand("pnpm", ["run", "runtime:sync"]);
 
     if (result.code !== 0) {
         console.error(`[dev] runtime params sync failed (code: ${result.code ?? "null"})`);
@@ -107,7 +107,7 @@ async function syncRuntimeParams() {
 }
 
 function startVite() {
-    viteProcess = spawn("npx", ["vite", "--config", "web/vite.config.js"], {
+    viteProcess = spawn("pnpm", ["exec", "vite", "--config", "web/vite.config.js"], {
         cwd: rootDir,
         stdio: "inherit",
         shell: process.platform === "win32",
@@ -217,17 +217,17 @@ function stopChild(child) {
 }
 
 async function main() {
-    const runtimeSyncInitial = await runCommand("npm", ["run", "runtime:sync"]);
+    const runtimeSyncInitial = await runCommand("pnpm", ["run", "runtime:sync"]);
     if (runtimeSyncInitial.code !== 0) {
         process.exit(runtimeSyncInitial.code ?? 1);
     }
 
-    const syncInitial = await runCommand("npm", ["run", "terrain:sync"]);
+    const syncInitial = await runCommand("pnpm", ["run", "terrain:sync"]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }
 
-    const initial = await runCommand("npm", ["run", "wasm:build:dev:no-sync"]);
+    const initial = await runCommand("pnpm", ["run", "wasm:build:dev:no-sync"]);
     if (initial.code !== 0) {
         process.exit(initial.code ?? 1);
     }

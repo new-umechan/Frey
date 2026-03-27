@@ -11,8 +11,8 @@
 ### 実行コマンド（現行）
 
 ```
-# repo root から npm wrapper で実行
-npm run bench -- --suite climate_solo
+# repo root から pnpm wrapper で実行
+pnpm bench -- --suite climate_solo
 
 # または cargo bench を直接実行
 # repo root から実行
@@ -35,14 +35,14 @@ cargo bench --bench climate_solo
 
 現在の実運用では、リポジトリルートで次の順に準備する。
 
-1. `npm run bench:dump-centroids`
-2. `npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
-3. `npm run bench:prepare:worldclim`
-4. `npm run bench:prepare:era5`
-5. `npm run bench:resample:climate -- --temperature benches/raw/climate/worldclim_tavg_annual_c.tif --precipitation benches/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration benches/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity benches/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
+1. `pnpm bench:dump-centroids`
+2. `pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
+3. `pnpm bench:prepare:worldclim`
+4. `pnpm bench:prepare:era5`
+5. `pnpm bench:resample:climate -- --temperature benches/raw/climate/worldclim_tavg_annual_c.tif --precipitation benches/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration benches/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity benches/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
 
 `bench:prepare:worldclim` の前提として、`benches/raw/climate/` に `wc2.1_30s_tavg_01..12.tif` と `wc2.1_30s_prec_01..12.tif` を置く。
-`bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`npm run bench:fetch:era5` で取得可）。
+`bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`pnpm bench:fetch:era5` で取得可）。
 `aridity` は `benches/raw/climate/ai_et0.tif` を参照する。
 `terrain` は海抜mのDEM（ETOPO 2022 **Ice Surface** 推奨）を指定し、内部標高単位（`height * 6000m`）へ変換して保存する。
 
@@ -289,8 +289,8 @@ P-07  monsoon_india > arabia:     match  (792.0 vs 88.0)
 
 -- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --
 To generate:
-  1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  1) pnpm bench:dump-centroids
+  2) pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
@@ -299,7 +299,7 @@ To generate:
 -- Main Evaluation: Spearman Correlation (land cells only) --
 SKIPPED  (benches/data/climate_ref.bin not found)
 To generate:
-  npm run bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>
+  pnpm bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>
 
 -- Diagnostic Evaluation: Ranking Assertions --
 （以下、通常通り出力）
@@ -333,7 +333,7 @@ python benches/scripts/resample.py --module terrain \
 事前に重心CSVが必要な場合は以下を実行する。
 
 ```
-npm run bench:dump-centroids
+pnpm bench:dump-centroids
 ```
 
 処理手順：

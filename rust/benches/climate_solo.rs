@@ -313,8 +313,8 @@ fn main() {
             println!();
             println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --");
             println!("To generate:");
-            println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  1) pnpm bench:dump-centroids");
+            println!("  2) pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -392,8 +392,8 @@ fn main() {
         None => {
             println!("SKIPPED  (benches/data/climate_ref.bin not found)");
             println!("To generate:");
-            println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>");
+            println!("  1) pnpm bench:dump-centroids");
+            println!("  2) pnpm bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>");
             Phase2State::Skipped
         }
     };

@@ -32,7 +32,7 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 
 運用:
 - すでにファイルがあるなら再取得不要
-- `npm run bench:resample:terrain -- --height ...` で使う
+- `pnpm bench:resample:terrain -- --height ...` で使う
 
 ### 2. 気候
 
@@ -49,8 +49,8 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 - ERA5-Land monthly means: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-monthly-means?tab=download
 
 運用:
-- WorldClim の月次 tif 群が `benches/raw/climate/` にあれば、`npm run bench:prepare:worldclim` で年平均・年積算を再生成できる
-- ERA5-Land は既存の `npm run bench:fetch:era5` / `npm run bench:prepare:era5` を使う
+- WorldClim の月次 tif 群が `benches/raw/climate/` にあれば、`pnpm bench:prepare:worldclim` で年平均・年積算を再生成できる
+- ERA5-Land は既存の `pnpm bench:fetch:era5` / `pnpm bench:prepare:era5` を使う
 
 ### 3. 水文
 
@@ -66,7 +66,7 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 - HydroLAKES: https://www.hydrosheds.org/page/hydrolakes
 
 運用:
-- GloFAS は既存の `npm run bench:fetch:glofas` / `npm run bench:prepare:glofas` を使う
+- GloFAS は既存の `pnpm bench:fetch:glofas` / `pnpm bench:prepare:glofas` を使う
 - HydroLAKES shapefile があるなら再取得不要
 
 ## 新規に取得するもの
@@ -152,7 +152,7 @@ Ecology benchmark の参照正解生成に必要だが、現在の `benches/raw`
 benchmark 用 canonical GeoTIFF を生成する。
 
 ```sh
-npm run bench:prepare:ecology-modis
+pnpm bench:prepare:ecology-modis
 ```
 
 生成されるファイル:
@@ -208,11 +208,11 @@ npm run bench:prepare:ecology-modis
 1. 次のコマンドで、0.1度へ再投影した12ファイルを直接作成する
 
 ```sh
-npm run bench:prepare:soilgrids:0p1deg
+pnpm bench:prepare:soilgrids:0p1deg
 ```
 
 2. 出力先は`benches/raw/ecology/soilgrids/`で固定
-3. `npm run bench:resample:ecology-ref:with-soil`で、12ファイルを入力に重み付き0-30cmを内部合成して`ecology_ref.bin`を再生成する
+3. `pnpm bench:resample:ecology-ref:with-soil`で、12ファイルを入力に重み付き0-30cmを内部合成して`ecology_ref.bin`を再生成する
 固定運用の深さ重みは `0-5 : 5-15 : 15-30 = 5 : 3.5 : 1.5` とする。
 これは厳密な層厚比ではなく、生物利用しやすさを優先した benchmark 運用値である。
 
@@ -256,14 +256,14 @@ benches/raw/ecology/soilgrids/
 
 既存スクリプトがあるもの:
 
-- `npm run bench:fetch:era5`
-- `npm run bench:prepare:era5`
-- `npm run bench:fetch:glofas`
-- `npm run bench:prepare:glofas`
-- `npm run bench:prepare:worldclim`
-- `npm run bench:prepare:ecology-modis`
-- `npm run bench:prepare:soilgrids:0p1deg`
-- `npm run bench:prepare:soilgrids:aggregate`（任意。4枚の事前集約ファイルが必要な場合のみ）
+- `pnpm bench:fetch:era5`
+- `pnpm bench:prepare:era5`
+- `pnpm bench:fetch:glofas`
+- `pnpm bench:prepare:glofas`
+- `pnpm bench:prepare:worldclim`
+- `pnpm bench:prepare:ecology-modis`
+- `pnpm bench:prepare:soilgrids:0p1deg`
+- `pnpm bench:prepare:soilgrids:aggregate`（任意。4枚の事前集約ファイルが必要な場合のみ）
 
 まだ自動化がないもの:
 

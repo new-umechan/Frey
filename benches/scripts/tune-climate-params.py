@@ -88,11 +88,11 @@ def apply_values(yaml_path: Path, values: Dict[str, float]) -> None:
 
 
 def sync_climate_params(repo: Path) -> None:
-    run(["npm", "run", "climate:sync"], repo)
+    run(["pnpm", "run", "climate:sync"], repo)
 
 
 def run_bench(repo: Path) -> Dict[str, float]:
-    completed = run(["npm", "run", "bench", "--", "--suite", "climate_solo"], repo)
+    completed = run(["pnpm", "run", "bench", "--", "--suite", "climate_solo"], repo)
     output = f"{completed.stdout}\n{completed.stderr}"
     return parse_metrics(output)
 

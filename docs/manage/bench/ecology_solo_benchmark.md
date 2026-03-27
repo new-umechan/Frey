@@ -47,14 +47,14 @@ Ecology単体ベンチ専用の評価キャッシュ `benches/data/ecology_ref.b
 現時点では実装前提の仕様として、リポジトリルートで次の順に準備する。
 既存の benchmark 用データを極力使い回し、Ecology 固有の参照データだけを追加する方針とする。
 
-1. `npm run bench:dump-centroids`（未実行の場合のみ）
-2. `npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
-3. `npm run bench:prepare:worldclim`（未実行の場合のみ）
-4. `npm run bench:prepare:era5`（未実行の場合のみ）
-5. `npm run bench:resample:climate -- --temperature benches/raw/climate/worldclim_tavg_annual_c.tif --precipitation benches/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration benches/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity benches/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
-6. `npm run bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
+1. `pnpm bench:dump-centroids`（未実行の場合のみ）
+2. `pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
+3. `pnpm bench:prepare:worldclim`（未実行の場合のみ）
+4. `pnpm bench:prepare:era5`（未実行の場合のみ）
+5. `pnpm bench:resample:climate -- --temperature benches/raw/climate/worldclim_tavg_annual_c.tif --precipitation benches/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration benches/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity benches/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
+6. `pnpm bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
 7. Ecology 参照データを `benches/raw/ecology/` に配置する
-8. `npm run bench:resample:ecology-ref:with-soil` で `benches/data/ecology_ref.bin` を生成する
+8. `pnpm bench:resample:ecology-ref:with-soil` で `benches/data/ecology_ref.bin` を生成する
 
 ### 既存データの再利用
 

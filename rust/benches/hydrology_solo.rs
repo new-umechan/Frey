@@ -180,8 +180,8 @@ fn main() {
             println!();
             println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --");
             println!("To generate:");
-            println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  1) pnpm bench:dump-centroids");
+            println!("  2) pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -213,7 +213,7 @@ fn main() {
             println!();
             println!("-- Hydro Input: SKIPPED (benches/data/hydro_input.bin not found) --");
             println!("To generate:");
-            println!("  npm run bench:resample:hydro-input -- --runoff <path>");
+            println!("  pnpm bench:resample:hydro-input -- --runoff <path>");
             return;
         }
     };
@@ -304,7 +304,7 @@ fn main() {
         None => {
             println!("SKIPPED  (benches/data/hydro_ref.bin not found)");
             println!("To generate:");
-            println!("  npm run bench:resample:hydro-ref -- --river-flow <path> --lakes <path>");
+            println!("  pnpm bench:resample:hydro-ref -- --river-flow <path> --lakes <path>");
             println!();
             MainEvaluationState::Skipped
         }

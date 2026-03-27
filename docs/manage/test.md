@@ -33,8 +33,8 @@
 
 #### seed固定回帰CLIの運用ルール（2026-03-17）
 
-- 実行は `npm run seed:regression:dev -- ...` を基本とする
-- `npm run seed:regression -- ...` はWASMを自動ビルドしないため、古い生成物を参照する可能性がある
+- 実行は `pnpm seed:regression:dev -- ...` を基本とする
+- `pnpm seed:regression -- ...` はWASMを自動ビルドしないため、古い生成物を参照する可能性がある
 
 ゲート運用:
 
@@ -75,11 +75,11 @@
 推奨コマンド例:
 
 ```sh
-npm run seed:gate:quick
+pnpm seed:gate:quick
 ```
 
 ```sh
-npm run seed:gate:heavy
+pnpm seed:gate:heavy
 ```
 
 実行オプション（現行）:
@@ -116,7 +116,7 @@ baseline誤用防止:
 - コマンド:
 
 ```sh
-npm run perf:gate
+pnpm perf:gate
 ```
 
 自動化:

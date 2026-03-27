@@ -6,19 +6,19 @@
 
 - ERA5 monthly zip  
   - ファイル: `benches/raw/climate/era5_land_monthly_1970_2000.zip`
-  - 再取得: `npm run bench:fetch:era5`
+  - 再取得: `pnpm bench:fetch:era5`
 - ERA5 annual nc（zip から再生成）
   - ファイル: `benches/raw/climate/era5_land_annual_1970_2000.nc`
-  - 再生成: `npm run bench:prepare:era5`
+  - 再生成: `pnpm bench:prepare:era5`
 - GloFAS raw 群
   - ディレクトリ: `benches/raw/hydrology/glofas_raw/`
-  - 再取得: `npm run bench:fetch:glofas`
+  - 再取得: `pnpm bench:fetch:glofas`
 - GloFAS annual nc（raw から再生成）
   - ファイル: `benches/raw/hydrology/glofas_era5_annual_mean.nc`
-  - 再生成: `npm run bench:prepare:glofas`
+  - 再生成: `pnpm bench:prepare:glofas`
 - SoilGrids 出力
   - ディレクトリ: `benches/raw/ecology/soilgrids/`
-  - 再生成: `npm run bench:prepare:soilgrids:0p1deg`
+  - 再生成: `pnpm bench:prepare:soilgrids:0p1deg`
 
 ## 手動依存（保持推奨）
 
@@ -31,8 +31,8 @@
 ## 削除コマンド
 
 ```bash
-npm run bench:raw:prune:recoverable:dry-run
-npm run bench:raw:prune:recoverable
+pnpm bench:raw:prune:recoverable:dry-run
+pnpm bench:raw:prune:recoverable
 ```
 
 実体は `benches/scripts/prune-recoverable-raw.sh`。圧縮には依存しない。
