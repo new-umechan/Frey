@@ -157,6 +157,7 @@ struct BoundaryDynamicsState {
 `BoundaryEdgeInternal` は境界edgeごとの収束履歴のみを保持する。
 境界edgeの対応関係（`edge_pairs`）とスラブ成分（`slab_*_component`）は
 `BoundaryDynamicsState` で管理する。
+境界タイプ自体はedge単位では永続保持せず、必要時に再計算する。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。
 `age`・`thickness`・`density` は連続属性として移流する。

@@ -433,8 +433,8 @@ height_next
 - `stress_relaxation_rate`: 応力緩和係数
 - `isostatic_adjustment_rate`: アイソスタシー調整の緩和係数
 - `subduction_age_coupling`: 海洋地殻年齢と沈み込み強度の連動係数
-- `subduction_initiation_threshold`: PassiveMarginから沈み込み開始へ移行する最小海洋地殻年齢
-- `subduction_density_threshold`: PassiveMarginから沈み込み開始へ移行する最小密度
+- `subduction_initiation_threshold`: PassiveMarginから沈み込み開始へ移行する年齢側しきい値（正規化後）
+- `subduction_density_threshold`: PassiveMarginから沈み込み開始へ移行する密度側しきい値（正規化後）
 - `age_ref`
 - `oceanic_base_density`
 - `age_density_gain`
