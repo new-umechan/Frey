@@ -31,6 +31,7 @@ const SCHEMA = [
     ["orography.downwind_depletion_gain", "downwind_depletion_gain", "f32"],
     ["orography.downwind_depletion_max", "downwind_depletion_max", "f32"],
     ["orography.downwind_depletion_steps", "downwind_depletion_steps", "u32"],
+    ["orography.downwind_depletion_passes", "downwind_depletion_passes", "u32"],
     ["orography.downwind_depletion_decay", "downwind_depletion_decay", "f32"],
     ["orography.downwind_alignment_min", "downwind_alignment_min", "f32"],
     ["precipitation.cap_from_moisture", "precip_cap_from_moisture", "f32"],

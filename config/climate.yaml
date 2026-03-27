@@ -8,10 +8,10 @@ precipitation:
   hadley_anomaly_gain: 0.4
   distance_scale_km: 1300.0
   continentality_gain: 0.52
-  moisture_convergence_gain: 32000.0
+  moisture_convergence_gain: 28000.0
   convergence_min_mm: -260.0
   convergence_max_mm: 480.0
-  convergence_blend: 0.2
+  convergence_blend: 0.16
   cap_from_moisture: 2.2
 orography:
   uplift_gain_mm: 300.0
@@ -23,8 +23,9 @@ orography:
   rain_shadow_scale_m: 1400.0
   rain_shadow_distance_km: 260.0
   downwind_depletion_gain: 0.14
-  downwind_depletion_max: 0.15
+  downwind_depletion_max: 0.12
   downwind_depletion_steps: 3
+  downwind_depletion_passes: 2
   downwind_depletion_decay: 0.72
   downwind_alignment_min: 0.20
 

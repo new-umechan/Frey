@@ -1,6 +1,8 @@
 {
-    "orography.downwind_depletion_gain": [0.06, 0.10, 0.14],
-    "orography.downwind_depletion_max": [0.15, 0.20],
+    "orography.downwind_depletion_gain": [0.10, 0.14],
+    "orography.downwind_depletion_max": [0.12, 0.15],
     "orography.downwind_depletion_steps": [2, 3],
-    "precipitation.cap_from_moisture": [2.2, 2.6]
+    "orography.downwind_depletion_passes": [2, 3],
+    "precipitation.convergence_blend": [0.16, 0.20, 0.24],
+    "precipitation.moisture_convergence_gain": [28000.0, 32000.0, 36000.0]
 }

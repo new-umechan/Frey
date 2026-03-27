@@ -100,12 +100,15 @@ def run_bench(repo: Path) -> Dict[str, float]:
 def objective_score(
     metrics: Dict[str, float],
     baseline_temperature: float,
+    baseline_runoff: float,
     min_aridity: float,
     max_temp_drop: float,
+    max_runoff_drop: float,
 ) -> Tuple[bool, float]:
     feasible = (
         metrics["aridity"] >= min_aridity
         and metrics["temperature"] >= (baseline_temperature - max_temp_drop)
+        and metrics["runoff"] >= (baseline_runoff - max_runoff_drop)
     )
     if not feasible:
         return False, -math.inf
@@ -131,6 +134,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default="benches/results/climate_tuning_runs.jsonl")
     parser.add_argument("--min-aridity", type=float, default=0.34)
     parser.add_argument("--max-temp-drop", type=float, default=0.01)
+    parser.add_argument("--max-runoff-drop", type=float, default=0.01)
     parser.add_argument(
         "--max-runs",
         type=int,
@@ -172,6 +176,7 @@ def main() -> int:
 
     baseline_metrics = run_bench(repo)
     baseline_temperature = baseline_metrics["temperature"]
+    baseline_runoff = baseline_metrics["runoff"]
     best: TrialResult | None = None
     results: List[TrialResult] = []
 
@@ -184,8 +189,10 @@ def main() -> int:
             feasible, score = objective_score(
                 metrics,
                 baseline_temperature,
+                baseline_runoff,
                 args.min_aridity,
                 args.max_temp_drop,
+                args.max_runoff_drop,
             )
             elapsed = time.time() - started
             trial = TrialResult(
@@ -223,7 +230,9 @@ def main() -> int:
         "constraints": {
             "min_aridity": args.min_aridity,
             "max_temp_drop": args.max_temp_drop,
+            "max_runoff_drop": args.max_runoff_drop,
             "baseline_temperature": baseline_temperature,
+            "baseline_runoff": baseline_runoff,
         },
         "best": None
         if best is None

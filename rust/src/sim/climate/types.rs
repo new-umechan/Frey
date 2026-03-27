@@ -24,6 +24,7 @@ pub struct ClimateParams {
     pub downwind_depletion_gain: f32,
     pub downwind_depletion_max: f32,
     pub downwind_depletion_steps: u32,
+    pub downwind_depletion_passes: u32,
     pub downwind_depletion_decay: f32,
     pub downwind_alignment_min: f32,
     pub precip_cap_from_moisture: f32,

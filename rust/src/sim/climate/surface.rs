@@ -20,7 +20,6 @@ const MOISTURE_SOURCE_BASE: f32 = 240.0;
 const MOISTURE_SOURCE_OCEAN_GAIN: f32 = 1_250.0;
 const MOISTURE_SOURCE_DISTANCE_KM: f32 = 1_200.0;
 const MOISTURE_FLUX_GAIN: f32 = 0.95;
-const DOWNWIND_DEPLETION_PASSES: usize = 2;
 
 #[derive(Debug, Clone, Copy, Default)]
 struct OrographicSignal {
@@ -569,7 +568,8 @@ fn apply_downwind_moisture_depletion_iterative(
         return;
     }
 
-    for _ in 0..DOWNWIND_DEPLETION_PASSES {
+    let pass_count = params.downwind_depletion_passes.max(1) as usize;
+    for _ in 0..pass_count {
         let depletion =
             apply_downwind_moisture_depletion(
                 world,
