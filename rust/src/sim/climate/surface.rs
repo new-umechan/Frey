@@ -430,7 +430,10 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
 fn continentality_factor(distance_from_ocean: f32, params: &ClimateParams) -> f32 {
     let continentality =
         1.0 - (-distance_from_ocean.max(0.0) / params.distance_scale_km.max(1.0)).exp();
-    (1.0 - continentality * params.continentality_gain).clamp(0.35, 1.0)
+    let near_coast = smoothstep(0.0, 0.35, continentality);
+    let deep_inland = smoothstep(0.35, 0.90, continentality);
+    let inland_weight = (0.30 * near_coast + 0.70 * deep_inland).clamp(0.0, 1.0);
+    (1.0 - inland_weight * params.continentality_gain).clamp(0.35, 1.0)
 }
 
 fn ocean_current_offset(latitude_abs: f32, coast_side: CoastSide) -> f32 {
