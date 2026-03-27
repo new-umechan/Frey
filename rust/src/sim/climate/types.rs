@@ -1,1 +1,37 @@
-// 型定義はこのファイルに分離する。
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClimateParams {
+    pub lapse_rate_c_per_km: f32,
+    pub height_to_meters: f32,
+    pub precip_min_mm: f32,
+    pub precip_max_mm: f32,
+    pub hadley_anomaly_gain: f32,
+    pub distance_scale_km: f32,
+    pub continentality_gain: f32,
+    pub moisture_convergence_gain: f32,
+    pub convergence_min_mm: f32,
+    pub convergence_max_mm: f32,
+    pub convergence_blend: f32,
+    pub orographic_uplift_gain_mm: f32,
+    pub orographic_rise_scale_m: f32,
+    pub orographic_trace_steps: u32,
+    pub orographic_trace_alignment_min: f32,
+    pub orographic_step_decay: f32,
+    pub rain_shadow_gain: f32,
+    pub rain_shadow_scale_m: f32,
+    pub rain_shadow_distance_km: f32,
+    pub downwind_depletion_gain: f32,
+    pub downwind_depletion_max: f32,
+    pub downwind_depletion_steps: u32,
+    pub downwind_depletion_decay: f32,
+    pub downwind_alignment_min: f32,
+    pub precip_cap_from_moisture: f32,
+    pub cold_coast_gain: f32,
+}
+
+impl Default for ClimateParams {
+    fn default() -> Self {
+        crate::climate_params_defaults::build_default_climate_params()
+    }
+}

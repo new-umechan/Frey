@@ -1,5 +1,6 @@
 use std::f32::consts::{PI, TAU};
 
+use crate::sim::climate::types::ClimateParams;
 use crate::sim::exec::{blend_alpha, lerp};
 use crate::sim::geo::{
     add3, dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, scale3, sub3,
@@ -8,17 +9,6 @@ use crate::sim::world::World;
 use crate::sim::world::{CoastSide, EraKind};
 
 const CLIMATE_BLEND_BASE: f32 = 0.32;
-const LAPSE_RATE_C_PER_KM: f32 = 6.5;
-const HEIGHT_TO_METERS: f32 = 6_000.0;
-const PRECIP_MIN_MM: f32 = 25.0;
-const PRECIP_MAX_MM: f32 = 4_000.0;
-const DISTANCE_SCALE_KM: f32 = 1_500.0;
-const CONTINENTALITY_GAIN: f32 = 0.4;
-const K_OROGRAPHIC: f32 = 1.5;
-const K_RAIN_SHADOW: f32 = 2.0;
-const OROGRAPHIC_SCALE_M: f32 = 1_000.0;
-const RAIN_SHADOW_SCALE_M: f32 = 1_500.0;
-const COLD_COAST_GAIN: f32 = 0.8;
 const EPS: f32 = 1e-3;
 const ITCZ_WIDTH_DEG: f32 = 11.0;
 const SUBTROPICAL_CENTER_DEG: f32 = 24.0;
@@ -30,9 +20,14 @@ const MOISTURE_SOURCE_BASE: f32 = 240.0;
 const MOISTURE_SOURCE_OCEAN_GAIN: f32 = 1_250.0;
 const MOISTURE_SOURCE_DISTANCE_KM: f32 = 1_200.0;
 const MOISTURE_FLUX_GAIN: f32 = 0.95;
-const MOISTURE_CONVERGENCE_GAIN: f32 = 35_000.0;
-const CONVERGENCE_MIN_MM: f32 = -260.0;
-const CONVERGENCE_MAX_MM: f32 = 480.0;
+
+#[derive(Debug, Clone, Copy, Default)]
+struct OrographicSignal {
+    rise_m: f32,
+    barrier_m: f32,
+    barrier_distance_km: f32,
+    ocean_fetch: f32,
+}
 
 pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -40,6 +35,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     }
 
     let cell_count = world.state.geology.height.len();
+    let climate_params = ClimateParams::default();
     ensure_climate_field_lengths(world, cell_count);
     let alpha = blend_alpha(budget, CLIMATE_BLEND_BASE);
     let mut target_temperature = vec![0.0; cell_count];
@@ -49,6 +45,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut target_wind_v = vec![0.0; cell_count];
     let mut target_moisture_flux_u = vec![0.0; cell_count];
     let mut target_moisture_flux_v = vec![0.0; cell_count];
+    let mut target_moisture_source = vec![0.0; cell_count];
     let mut wind_vectors = vec![[0.0, 0.0, 0.0]; cell_count];
     let mut flux_vectors = vec![[0.0, 0.0, 0.0]; cell_count];
     let mut precip_factor = vec![1.0; cell_count];
@@ -56,9 +53,9 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
         let latitude_abs = latitude.abs();
-        let elevation_m = world.state.geology.height[i].max(0.0) * HEIGHT_TO_METERS;
-        let temperature =
-            base_land_temperature(latitude) - LAPSE_RATE_C_PER_KM * elevation_m / 1_000.0;
+        let elevation_m = world.state.geology.height[i].max(0.0) * climate_params.height_to_meters;
+        let temperature = base_land_temperature(latitude)
+            - climate_params.lapse_rate_c_per_km * elevation_m / 1_000.0;
         let mut ocean_temperature = base_ocean_temperature(latitude);
         if world.state.geo.is_coastal.get(i).copied().unwrap_or(false) {
             let coast_side = world
@@ -80,6 +77,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         target_ocean_temperature[i] = ocean_temperature;
         target_wind_u[i] = wind_u;
         target_wind_v[i] = wind_v;
+        target_moisture_source[i] = moisture_source;
         wind_vectors[i] = wind_vector;
         target_moisture_flux_u[i] = flux_magnitude * wind_u;
         target_moisture_flux_v[i] = flux_magnitude * wind_v;
@@ -90,15 +88,31 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
         let latitude_abs = latitude.abs();
         let baseline = latitude_band_precipitation_reference_mm(latitude_abs)
-            + 0.35 * hadley_precipitation_anomaly_mm(latitude_abs);
+            + climate_params.hadley_anomaly_gain * hadley_precipitation_anomaly_mm(latitude_abs);
         if world.state.geology.height[i] <= 0.0 {
-            target_precipitation[i] = baseline.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
+            target_precipitation[i] =
+                baseline.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
             continue;
         }
-        let (windward_factor, leeward_factor) = orographic_factors(world, i, wind_vectors[i]);
-        let convergence = moisture_convergence_mm(world, i, &flux_vectors);
-        let mut precipitation = baseline + 0.18 * convergence;
-        precipitation *= windward_factor * leeward_factor;
+        let convergence = moisture_convergence_mm(world, i, &flux_vectors, &climate_params);
+        let signal = orographic_signal(world, i, wind_vectors[i], &climate_params);
+        let rise_norm =
+            (signal.rise_m / climate_params.orographic_rise_scale_m.max(1.0)).clamp(0.0, 3.0);
+        let fetch_factor = (0.70 + 0.60 * signal.ocean_fetch).clamp(0.5, 1.3);
+        let uplift_mm = climate_params.orographic_uplift_gain_mm * rise_norm * fetch_factor;
+        let barrier_norm =
+            (signal.barrier_m / climate_params.rain_shadow_scale_m.max(1.0)).clamp(0.0, 3.0);
+        let distance_decay = if signal.barrier_distance_km > 0.0 {
+            (-signal.barrier_distance_km / climate_params.rain_shadow_distance_km.max(1.0)).exp()
+        } else {
+            0.0
+        };
+        let shadow_factor = (-climate_params.rain_shadow_gain * barrier_norm * distance_decay)
+            .exp()
+            .clamp(0.20, 1.0);
+        let mut precipitation =
+            baseline + climate_params.convergence_blend * convergence + uplift_mm;
+        precipitation *= shadow_factor;
         precipitation *= continentality_factor(
             world
                 .state
@@ -107,16 +121,35 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
                 .get(i)
                 .copied()
                 .unwrap_or(0.0),
+            &climate_params,
         );
-        target_precipitation[i] = precipitation.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
+        let moisture_cap =
+            climate_params.precip_cap_from_moisture * target_moisture_source[i].max(0.0);
+        precipitation = precipitation.min(moisture_cap.max(climate_params.precip_min_mm));
+        target_precipitation[i] =
+            precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
 
-    apply_cold_coast_precipitation(world, &target_ocean_temperature, &mut precip_factor);
+    apply_downwind_moisture_depletion(
+        world,
+        &wind_vectors,
+        &target_moisture_source,
+        &mut target_precipitation,
+        &climate_params,
+    );
+
+    apply_cold_coast_precipitation(
+        world,
+        &target_ocean_temperature,
+        &mut precip_factor,
+        &climate_params,
+    );
 
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
         let mut precipitation = target_precipitation[i] * precip_factor[i];
-        precipitation = precipitation.clamp(PRECIP_MIN_MM, PRECIP_MAX_MM);
+        precipitation =
+            precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
         let vegetation_density = vegetation_density_proxy(world, i);
         let pet = annual_pet_mm(target_temperature[i], latitude);
         let evapotranspiration =
@@ -268,7 +301,12 @@ fn moisture_source_mm(world: &World, index: usize, ocean_temperature: f32) -> f3
     MOISTURE_SOURCE_BASE + MOISTURE_SOURCE_OCEAN_GAIN * oceanity * (0.75 + 0.25 * warm_ocean_bonus)
 }
 
-fn moisture_convergence_mm(world: &World, index: usize, flux_vectors: &[[f32; 3]]) -> f32 {
+fn moisture_convergence_mm(
+    world: &World,
+    index: usize,
+    flux_vectors: &[[f32; 3]],
+    params: &ClimateParams,
+) -> f32 {
     let pos = world
         .mesh
         .positions
@@ -310,65 +348,73 @@ fn moisture_convergence_mm(world: &World, index: usize, flux_vectors: &[[f32; 3]
         return 0.0;
     }
     let normalized_divergence = divergence / weight_sum;
-    (-normalized_divergence * MOISTURE_CONVERGENCE_GAIN)
-        .clamp(CONVERGENCE_MIN_MM, CONVERGENCE_MAX_MM)
+    (-normalized_divergence * params.moisture_convergence_gain)
+        .clamp(params.convergence_min_mm, params.convergence_max_mm)
 }
 
-fn orographic_factors(world: &World, index: usize, wind_vec: [f32; 3]) -> (f32, f32) {
+fn orographic_signal(
+    world: &World,
+    index: usize,
+    wind_vec: [f32; 3],
+    params: &ClimateParams,
+) -> OrographicSignal {
     let cell_count = world.state.geology.height.len();
     if index >= cell_count {
-        return (1.0, 1.0);
+        return OrographicSignal::default();
     }
-    let pos = world
-        .mesh
-        .positions
-        .get(index)
-        .copied()
-        .unwrap_or([0.0, 0.0, 1.0]);
-    let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-    let end = world
-        .mesh
-        .nbr_offsets
-        .get(index + 1)
-        .copied()
-        .unwrap_or(start as u32) as usize;
-    let current_elevation_m = world.state.geology.height[index].max(0.0) * HEIGHT_TO_METERS;
-    let mut best_rise_m = 0.0;
-    let mut best_rise_distance_km = 1.0;
-    let mut best_drop_m: f32 = 0.0;
+    let mut rise_m = 0.0;
+    let mut barrier_m = 0.0;
+    let mut barrier_distance_km = 0.0;
+    let mut ocean_fetch_weight = 0.0;
+    let mut fetch_weight_sum = 0.0;
+    let mut traveled_km = 0.0;
+    let mut cursor = index;
+    let mut cursor_elevation_m =
+        world.state.geology.height[index].max(0.0) * params.height_to_meters;
+    let base_elevation_m = cursor_elevation_m;
+    let upwind_vec = normalize3(scale3(wind_vec, -1.0));
 
-    for &n_u32 in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
-        let n = n_u32 as usize;
-        if n >= cell_count {
-            continue;
+    for step in 0..params.orographic_trace_steps.max(1) {
+        let Some((next, edge_km, _alignment)) = best_neighbor_toward(
+            world,
+            cursor,
+            upwind_vec,
+            params.orographic_trace_alignment_min,
+            false,
+        ) else {
+            break;
+        };
+        let next_elevation_m = world.state.geology.height[next].max(0.0) * params.height_to_meters;
+        let step_weight = params
+            .orographic_step_decay
+            .clamp(0.0, 1.0)
+            .powi(step as i32);
+        rise_m += (cursor_elevation_m - next_elevation_m).max(0.0) * step_weight;
+        fetch_weight_sum += step_weight;
+        if world.state.geology.height[next] <= 0.0 {
+            ocean_fetch_weight += step_weight;
         }
-        let neighbor_pos = world
-            .mesh
-            .positions
-            .get(n)
-            .copied()
-            .unwrap_or([0.0, 0.0, 1.0]);
-        let dir = normalize3(project_to_tangent(sub3(neighbor_pos, pos), pos));
-        let alignment = dot3(dir, wind_vec);
-        let neighbor_elevation_m = world.state.geology.height[n].max(0.0) * HEIGHT_TO_METERS;
-        let edge_distance_km = edge_distance_km(pos, neighbor_pos).max(1.0);
-        if alignment < -0.15 {
-            let rise_m = (current_elevation_m - neighbor_elevation_m).max(0.0);
-            if rise_m > best_rise_m {
-                best_rise_m = rise_m;
-                best_rise_distance_km = edge_distance_km;
-            }
-        } else if alignment > 0.15 {
-            let drop_m = (current_elevation_m - neighbor_elevation_m).max(0.0);
-            best_drop_m = best_drop_m.max(drop_m);
+        traveled_km += edge_km;
+        let barrier_here = (next_elevation_m - base_elevation_m).max(0.0);
+        if barrier_here > barrier_m {
+            barrier_m = barrier_here;
+            barrier_distance_km = traveled_km;
         }
+        cursor = next;
+        cursor_elevation_m = next_elevation_m;
     }
+    let ocean_fetch = if fetch_weight_sum > 0.0 {
+        (ocean_fetch_weight / fetch_weight_sum).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
 
-    let slope_sin = sin_slope(best_rise_m, best_rise_distance_km * 1_000.0);
-    let windward_factor = 1.0 + K_OROGRAPHIC * slope_sin;
-    let normalized_descent = (best_drop_m / RAIN_SHADOW_SCALE_M).clamp(0.0, 2.5);
-    let leeward_factor = (-K_RAIN_SHADOW * normalized_descent).exp();
-    (windward_factor.max(0.4), leeward_factor.clamp(0.15, 1.0))
+    OrographicSignal {
+        rise_m,
+        barrier_m,
+        barrier_distance_km,
+        ocean_fetch,
+    }
 }
 
 fn gaussian(value: f32, center: f32, width: f32) -> f32 {
@@ -381,9 +427,10 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-fn continentality_factor(distance_from_ocean: f32) -> f32 {
-    let continentality = 1.0 - (-distance_from_ocean.max(0.0) / DISTANCE_SCALE_KM).exp();
-    (1.0 - continentality * CONTINENTALITY_GAIN).clamp(0.35, 1.0)
+fn continentality_factor(distance_from_ocean: f32, params: &ClimateParams) -> f32 {
+    let continentality =
+        1.0 - (-distance_from_ocean.max(0.0) / params.distance_scale_km.max(1.0)).exp();
+    (1.0 - continentality * params.continentality_gain).clamp(0.35, 1.0)
 }
 
 fn ocean_current_offset(latitude_abs: f32, coast_side: CoastSide) -> f32 {
@@ -401,6 +448,7 @@ fn apply_cold_coast_precipitation(
     world: &World,
     ocean_temperature: &[f32],
     precip_factor: &mut [f32],
+    params: &ClimateParams,
 ) {
     for i in 0..world.state.geology.height.len() {
         if world.state.geology.height[i] <= 0.0 {
@@ -421,7 +469,7 @@ fn apply_cold_coast_precipitation(
             continue;
         }
         let cold_factor =
-            1.0 - COLD_COAST_GAIN * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
+            1.0 - params.cold_coast_gain * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
         let (wind_u, wind_v) = hadley_wind_components(latitude);
         let mut current = i;
         for step in 0..4 {
@@ -433,7 +481,8 @@ fn apply_cold_coast_precipitation(
             );
             precip_factor[current] *= step_factor;
             let wind_vector = local_wind_vector(world, current, wind_u, wind_v);
-            let Some(next) = best_downwind_land_neighbor(world, current, wind_vector) else {
+            let Some((next, _, _)) = best_neighbor_toward(world, current, wind_vector, 0.15, true)
+            else {
                 break;
             };
             if next == current {
@@ -444,7 +493,87 @@ fn apply_cold_coast_precipitation(
     }
 }
 
-fn best_downwind_land_neighbor(world: &World, index: usize, wind_vec: [f32; 3]) -> Option<usize> {
+fn apply_downwind_moisture_depletion(
+    world: &World,
+    wind_vectors: &[[f32; 3]],
+    moisture_source: &[f32],
+    precipitation: &mut [f32],
+    params: &ClimateParams,
+) {
+    let cell_count = world.state.geology.height.len();
+    if wind_vectors.len() != cell_count
+        || moisture_source.len() != cell_count
+        || precipitation.len() != cell_count
+    {
+        return;
+    }
+    let mut depletion = vec![0.0_f32; cell_count];
+    let step_count = params.downwind_depletion_steps.max(1);
+    for i in 0..cell_count {
+        if world.state.geology.height[i] <= 0.0 {
+            continue;
+        }
+        let local_source = moisture_source[i].max(1.0);
+        let local_cap = (params.precip_cap_from_moisture * local_source).max(params.precip_min_mm);
+        let local_span = (local_cap - params.precip_min_mm).max(1.0);
+        let precip_norm =
+            ((precipitation[i] - params.precip_min_mm).max(0.0) / local_span).clamp(0.0, 1.0);
+        let source_weight = (local_source / (local_source + 300.0)).clamp(0.0, 1.0);
+        let mut carry = params.downwind_depletion_gain * precip_norm * source_weight;
+        if carry <= 0.0 {
+            continue;
+        }
+        let mut current = i;
+        for step in 0..step_count {
+            let current_wind = wind_vectors
+                .get(current)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0]);
+            let Some((next, _, _)) = best_neighbor_toward(
+                world,
+                current,
+                current_wind,
+                params.downwind_alignment_min,
+                true,
+            ) else {
+                break;
+            };
+            if next == current {
+                break;
+            }
+            let attenuation = params
+                .downwind_depletion_decay
+                .clamp(0.0, 1.0)
+                .powi(step as i32);
+            depletion[next] += carry * attenuation;
+            carry *= 0.92;
+            if carry < 1e-4 {
+                break;
+            }
+            current = next;
+        }
+    }
+
+    for i in 0..cell_count {
+        if world.state.geology.height[i] <= 0.0 {
+            continue;
+        }
+        let reduction = depletion[i].clamp(0.0, params.downwind_depletion_max.clamp(0.0, 0.95));
+        if reduction <= 0.0 {
+            continue;
+        }
+        precipitation[i] *= 1.0 - reduction;
+        precipitation[i] = precipitation[i].clamp(params.precip_min_mm, params.precip_max_mm);
+    }
+}
+
+fn best_neighbor_toward(
+    world: &World,
+    index: usize,
+    direction_vec: [f32; 3],
+    min_alignment: f32,
+    land_only: bool,
+) -> Option<(usize, f32, f32)> {
     let pos = world
         .mesh
         .positions
@@ -458,11 +587,14 @@ fn best_downwind_land_neighbor(world: &World, index: usize, wind_vec: [f32; 3]) 
         .get(index + 1)
         .copied()
         .unwrap_or(start as u32) as usize;
-    let mut best = None::<(usize, f32)>;
+    let mut best = None::<(usize, f32, f32)>;
 
     for &n_u32 in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
         let n = n_u32 as usize;
-        if n >= world.state.geology.height.len() || world.state.geology.height[n] <= 0.0 {
+        if n >= world.state.geology.height.len() {
+            continue;
+        }
+        if land_only && world.state.geology.height[n] <= 0.0 {
             continue;
         }
         let neighbor_pos = world
@@ -472,15 +604,16 @@ fn best_downwind_land_neighbor(world: &World, index: usize, wind_vec: [f32; 3]) 
             .copied()
             .unwrap_or([0.0, 0.0, 1.0]);
         let dir = normalize3(project_to_tangent(sub3(neighbor_pos, pos), pos));
-        let alignment = dot3(dir, wind_vec);
+        let alignment = dot3(dir, direction_vec);
+        let edge_km = edge_distance_km(pos, neighbor_pos).max(1.0);
         match best {
-            Some((_, best_alignment)) if alignment <= best_alignment => {}
-            _ if alignment > 0.15 => best = Some((n, alignment)),
+            Some((_, _, best_alignment)) if alignment <= best_alignment => {}
+            _ if alignment > min_alignment => best = Some((n, edge_km, alignment)),
             _ => {}
         }
     }
 
-    best.map(|(n, _)| n)
+    best
 }
 
 fn vegetation_density_proxy(world: &World, index: usize) -> f32 {
@@ -551,12 +684,4 @@ fn actual_evapotranspiration_mm(
     let w = 1.5 + 1.5 * vegetation_density.clamp(0.0, 1.0);
     let inner = (1.0 + phi.powf(-w)).powf(-1.0 / w);
     (precipitation_mm * (1.0 - inner)).clamp(0.0, precipitation_mm)
-}
-
-fn sin_slope(vertical_m: f32, horizontal_m: f32) -> f32 {
-    if vertical_m <= 0.0 {
-        return 0.0;
-    }
-    let adjusted_horizontal = horizontal_m.max(OROGRAPHIC_SCALE_M);
-    vertical_m / (vertical_m.powi(2) + adjusted_horizontal.powi(2)).sqrt()
 }

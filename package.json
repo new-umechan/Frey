@@ -6,6 +6,7 @@
     "scripts": {
         "runtime:sync": "node tools/sync/sync-runtime-params.mjs",
         "terrain:sync": "node tools/sync/sync-terrain-params.mjs",
+        "climate:sync": "node tools/sync/sync-climate-params.mjs",
         "runtime-params:sync": "npm run runtime:sync",
         "terrain-params:sync": "npm run terrain:sync",
         "dev": "npm run runtime:sync && npm run terrain:sync && node tools/dev/dev-hotreload.mjs",
@@ -16,6 +17,7 @@
         "lint:prepush": "npm run lint:web && npm run lint:rust",
         "hooks:install": "node tools/dev/install-git-hooks.mjs",
         "bench": "node benches/scripts/bench.mjs",
+        "bench:tune:climate": "python3 benches/scripts/tune-climate-params.py",
         "bench:tui": "node benches/scripts/tui-dashboard.mjs",
         "perf:run": "node tests/perf/scripts/perf.mjs",
         "perf:run:dev": "npm run wasm:build:dev:no-sync && node tests/perf/scripts/perf.mjs",
@@ -42,8 +44,8 @@
         "bench:resample:terrain": "python3 benches/scripts/resample.py --module terrain --centroids benches/data/cell_centroids.csv --output benches/data/terrain_ref.bin",
         "bench:raw:prune:recoverable:dry-run": "bash benches/scripts/prune-recoverable-raw.sh",
         "bench:raw:prune:recoverable": "bash benches/scripts/prune-recoverable-raw.sh --apply",
-        "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
-        "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
+        "wasm:build": "npm run terrain:sync && npm run climate:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
+        "wasm:build:dev": "npm run terrain:sync && npm run climate:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
     },
     "dependencies": {

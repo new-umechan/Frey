@@ -72,17 +72,24 @@ T(lat, elev) = 30 * cos(lat_rad) - 5 - 6.5 * elev_km
 
 ### 降水
 
-降水量は、年平均の簡易循環モデルで求める。
+降水量は、年平均の水蒸気収支モデルで求める。
 Hadley循環を中心に風場（`wind_u` / `wind_v`）と湿潤フラックス（`moisture_flux_u` / `moisture_flux_v`）を計算し、
-近傍収束量を基礎降水へ反映する。
+次の合成で年間降水量を計算する。
 
-降水は次の順で補正する。
+```text
+P = (P_bg(lat) + P_conv + P_orog) * F_shadow * F_continental * F_depletion
+```
 
-1. Hadley起源の連続緯度分布（ITCZ上昇帯 + 亜熱帯沈降帯 + 中緯度擾乱帯）
-2. 風場と湿潤フラックスからの近傍収束/発散補正
-3. 風向に対する風上増雨と風下減雨
-4. 海からの距離による大陸度補正
-5. 寒流沿岸とその風下1から3セルへの乾燥補正
+- `P_bg(lat)`: ITCZ・亜熱帯沈降帯・中緯度擾乱帯を含む緯度帯背景降水
+- `P_conv`: 近傍フラックスの収束/発散から計算した降水偏差
+- `P_orog`: 風上方向を2〜3ステップ追跡した累積持ち上げ量に応じた地形増雨
+- `F_shadow`: 風上障壁高と障壁距離の減衰で決まる雨陰係数
+- `F_continental`: 海からの距離で減衰する大陸度係数
+- `F_depletion`: 風上セルでの降水消費を風下へ伝播した水蒸気枯渇係数
+
+最後に、可用水蒸気量から導く上限をかけ、寒流沿岸の乾燥補正を適用する。
+係数は `config/climate.yaml` から管理し、`tools/sync/sync-climate-params.mjs` で
+`rust/src/generated/climate_params_defaults.rs` を生成して反映する。
 
 ### 蒸発散と流出
 

@@ -1,0 +1,9 @@
+{
+    "precipitation.hadley_anomaly_gain": [0.40, 0.50],
+    "precipitation.continentality_gain": [0.44, 0.52],
+    "precipitation.moisture_convergence_gain": [32000.0, 38000.0],
+    "precipitation.convergence_blend": [0.20, 0.26],
+    "precipitation.cap_from_moisture": [2.2, 3.0],
+    "orography.uplift_gain_mm": [300.0, 380.0],
+    "orography.rain_shadow_gain": [1.5, 1.9]
+}

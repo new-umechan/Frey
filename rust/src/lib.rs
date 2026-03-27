@@ -1,3 +1,5 @@
+#[path = "generated/climate_params_defaults.rs"]
+mod climate_params_defaults;
 mod common;
 pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
