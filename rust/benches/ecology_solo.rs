@@ -209,7 +209,7 @@ fn main() {
         level: 6,
         ..Default::default()
     };
-    let mesh_level = geology_params.level as u32;
+    let mesh_level = geology_params.level;
     let seed = "earth";
 
     let (mut terrain, positions, nbr_offsets, nbrs) =
@@ -1045,7 +1045,7 @@ fn pearson_corr(a: &[f32], b: &[f32]) -> Option<f32> {
     Some((numerator / denom).clamp(-1.0, 1.0))
 }
 
-fn percentile_sorted(values: &mut Vec<f32>, quantile: f32) -> f32 {
+fn percentile_sorted(values: &mut [f32], quantile: f32) -> f32 {
     if values.is_empty() {
         return f32::NAN;
     }
