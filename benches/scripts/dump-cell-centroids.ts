@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import initWasm, { generate_mesh } from "../../generated/wasm/web/frey_wasm.js";
+import initWasm, { generate_mesh } from "../../generated/wasm/web/frey_wasm";
 
 function parseNumber(value, name) {
     const parsed = Number(value);

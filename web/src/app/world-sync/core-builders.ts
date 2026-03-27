@@ -1,6 +1,6 @@
-import { type WorldSimController } from "../../interface/wasm.js";
-import { FLOAT32_FIELDS, OPTIONAL_FIELD_KINDS, type FieldKind } from "./constants.js";
-import { type CoreBuffers, type TypedArray } from "./types.js";
+import { type WorldSimController } from "../../interface/wasm";
+import { FLOAT32_FIELDS, OPTIONAL_FIELD_KINDS, type FieldKind } from "./constants";
+import { type CoreBuffers, type TypedArray } from "./types";
 
 function createFieldData(fieldKind: FieldKind, cellCount: number): TypedArray {
     const count = Math.max(0, Math.floor(cellCount || 0));

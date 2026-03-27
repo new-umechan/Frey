@@ -1,16 +1,16 @@
-import { resizeViewport, createGlobeScene, type GlobeScene } from "../../gfx/scene.js";
-import { buildRiverMaskTexture } from "../../gfx/materials/river-mask.js";
-import { createCameraController } from "../../gfx/views/camera-controller.js";
-import { createGlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller.js";
-import { buildRenderPositions } from "../../gfx/views/terrain-visuals.js";
-import { createLoadingOverlayController } from "./loading-overlay.js";
-import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup.js";
-import { createClimateUiController } from "../ui/climate-ui-controller.js";
-import { createPlateHover } from "../input/plate-hover.js";
-import { createTerrainRenderer } from "../rendering/terrain-renderer.js";
-import { DEFAULT_VIEW_MODE } from "../../core/constants.js";
-import { type AppElements } from "../../ui/dom.js";
-import { type AppState } from "../core/app-state.js";
+import { resizeViewport, createGlobeScene, type GlobeScene } from "../../gfx/scene";
+import { buildRiverMaskTexture } from "../../gfx/materials/river-mask";
+import { createCameraController } from "../../gfx/views/camera-controller";
+import { createGlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+import { buildRenderPositions } from "../../gfx/views/terrain-visuals";
+import { createLoadingOverlayController } from "./loading-overlay";
+import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup";
+import { createClimateUiController } from "../ui/climate-ui-controller";
+import { createPlateHover } from "../input/plate-hover";
+import { createTerrainRenderer } from "../rendering/terrain-renderer";
+import { DEFAULT_VIEW_MODE } from "../../core/constants";
+import { type AppElements } from "../../ui/dom";
+import { type AppState } from "../core/app-state";
 
 export interface SceneRuntimeOptions {
     elements: AppElements;

@@ -1,7 +1,7 @@
 import {
     isHelpToggleKey,
     isInteractiveTarget,
-} from "./keyboard-guards.js";
+} from "./keyboard-guards";
 
 export function createGlobalKeyboardHandler({
     controlHelp,

@@ -1,4 +1,4 @@
-import { roundMs, roundRatio } from "./helpers.js";
+import { roundMs, roundRatio } from "./helpers";
 
 export interface Diagnostics {
     profile_attempt_count: number;

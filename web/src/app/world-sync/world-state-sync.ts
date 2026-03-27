@@ -1,7 +1,7 @@
-import { buildCoreBuffers } from "./core-builders.js";
-import { applyWorldDeltaToCore } from "./delta-sync.js";
-import { refreshWorldStatsFromController } from "./stats-sync.js";
-import { type SyncOptions, type SyncDeltaOptions, type SyncVisibleOptions } from "./types.js";
+import { buildCoreBuffers } from "./core-builders";
+import { applyWorldDeltaToCore } from "./delta-sync";
+import { refreshWorldStatsFromController } from "./stats-sync";
+import { type SyncOptions, type SyncDeltaOptions, type SyncVisibleOptions } from "./types";
 
 export function syncWorldFromController(options: SyncOptions) {
     const {

@@ -19,7 +19,7 @@ let debounceTimer = null;
 let syncTerrainDebounceTimer = null;
 let syncRuntimeDebounceTimer = null;
 
-function runCommand(command, args, options = {}) {
+function runCommand(command: string, args: string[], options: any = {}): Promise<{ code: number | null; signal: string | null }> {
     return new Promise((resolve) => {
         const child = spawn(command, args, {
             cwd: rootDir,
@@ -29,7 +29,7 @@ function runCommand(command, args, options = {}) {
         });
 
         child.on("exit", (code, signal) => {
-            resolve({ code, signal });
+            resolve({ code, signal: signal as string | null });
         });
     });
 }

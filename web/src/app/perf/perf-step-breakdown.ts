@@ -13,7 +13,7 @@ const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_history_snapshot",
 ];
 
-export function pushStepBreakdownSamples(perfRecorder, profiledResult, options = {}) {
+export function pushStepBreakdownSamples(perfRecorder, profiledResult, options: any = {}) {
     if (!perfRecorder || !profiledResult) {
         return;
     }

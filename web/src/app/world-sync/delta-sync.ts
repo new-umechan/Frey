@@ -3,7 +3,7 @@ import {
     createWorldChangeset,
     markFieldChange,
     type FieldKind,
-} from "./constants.js";
+} from "./constants";
 
 type NumericArray = Float32Array | Int32Array | Uint32Array | number[];
 

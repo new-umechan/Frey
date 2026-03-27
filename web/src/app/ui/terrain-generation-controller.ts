@@ -1,4 +1,4 @@
-export function createTerrainGenerationController(options = {}) {
+export function createTerrainGenerationController(options: any = {}) {
     const {
         seedForm,
         seedInput,

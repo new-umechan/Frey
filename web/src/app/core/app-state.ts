@@ -4,15 +4,15 @@ import {
     DEFAULT_SURFACE_MODE,
     DEFAULT_TERRAIN_SEED,
     DEFAULT_VIEW_MODE,
-} from "../../core/constants.js";
+} from "../../core/constants";
 import {
     createEmptyCore,
     createEmptyLayers,
     createInitialBudgets,
     createInitialRuntimeState,
     type RuntimeState,
-} from "../runtime/state.js";
-import { type EraMetrics } from "./era-presets.js";
+} from "../runtime/state";
+import { type EraMetrics } from "./era-presets";
 
 export interface Mesh {
     positions: Float32Array;

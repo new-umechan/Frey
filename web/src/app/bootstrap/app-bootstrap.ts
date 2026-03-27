@@ -1,10 +1,10 @@
-import { bindAppUiControls } from "../ui/ui-bindings.js";
-import { createEraMetrics } from "../core/era-presets.js";
-import { createRuntimeStore, type RuntimeStore } from "./runtime-store.js";
-import { createSceneRuntime, type SceneRuntime } from "./scene-runtime.js";
-import { createControllerRuntime, type ControllerDeps } from "./controller-runtime/create-controller-runtime.js";
-import { renderInitializationFrames } from "./initialization-frames.js";
-import { type AppElements } from "../../ui/dom.js";
+import { bindAppUiControls } from "../ui/ui-bindings";
+import { createEraMetrics } from "../core/era-presets";
+import { createRuntimeStore, type RuntimeStore } from "./runtime-store";
+import { createSceneRuntime, type SceneRuntime } from "./scene-runtime";
+import { createControllerRuntime, type ControllerDeps } from "./controller-runtime/create-controller-runtime";
+import { renderInitializationFrames } from "./initialization-frames";
+import { type AppElements } from "../../ui/dom";
 
 function createControllerDeps(options: {
     elements: AppElements;

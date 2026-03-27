@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
-import { createTerrainMaterial, type TerrainMaterialController } from "./materials/terrain.js";
+import { createTerrainMaterial, type TerrainMaterialController } from "./materials/terrain";
 
 const PLANET_CENTER_X = 0.16;
 const INITIAL_GLOBE_CAMERA_DISTANCE = 3.2;

@@ -1,14 +1,14 @@
-import { createControlHelpController } from "./controls/control-help-controller.js";
-import { createGlobalKeyboardHandler } from "./controls/keyboard-shortcuts.js";
+import { createControlHelpController } from "./controls/control-help-controller";
+import { createGlobalKeyboardHandler } from "./controls/keyboard-shortcuts";
 import {
     bindPerfEvents,
     bindPlaybackUiEvents,
-} from "./controls/ui-event-bindings.js";
-import { createViewCuiController } from "./controls/view-cui-controller.js";
+} from "./controls/ui-event-bindings";
+import { createViewCuiController } from "./controls/view-cui-controller";
 import {
     type PlaybackControlsElements,
     type PerfControlsElements,
-} from "./dom.js";
+} from "./dom";
 
 export interface CanvasInputHandlers {
     onPointerDown?: (event: PointerEvent) => void;

@@ -5,10 +5,10 @@ import initWasm, {
     WorldSimController,
     build_render_positions,
     generate_mesh,
-} from "../../../generated/wasm/web/frey_wasm.js";
-import { createPerfProfile } from "../../../web/src/app/perf/recorder.js";
-import { createPerfRunner } from "../../../web/src/app/perf/runner.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain.js";
+} from "../../../generated/wasm/web/frey_wasm";
+import { createPerfProfile } from "../../../web/src/app/perf/recorder";
+import { createPerfRunner } from "../../../web/src/app/perf/runner";
+import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
 
 const DEFAULT_THRESHOLD = 0.10;
 
@@ -65,7 +65,7 @@ function parseArgs(argv) {
             i += 1;
             break;
         case "--level":
-            args.level = Math.max(0, Math.floor(parseNumber(next, "--level")));
+            (args as any).level = Math.max(0, Math.floor(parseNumber(next, "--level")));
             i += 1;
             break;
         case "--out":

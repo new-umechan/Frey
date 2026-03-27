@@ -3,7 +3,7 @@ import {
     FIELD_KIND_BY_CELL_METRIC,
     RIVER_BREAKDOWN_METRIC_NAMES,
     STEP_BREAKDOWN_METRIC_NAMES,
-} from "./constants.js";
+} from "./constants";
 
 export function defaultNowMs(): number {
     if (globalThis.performance && typeof globalThis.performance.now === "function") {

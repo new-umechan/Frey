@@ -1,4 +1,4 @@
-import { buildCoreBuffers, type CoreBuffers } from "./world-core.js";
+import { buildCoreBuffers, type CoreBuffers } from "./world-core";
 
 export interface ControllerState {
     controller: any;

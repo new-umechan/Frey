@@ -1,4 +1,4 @@
-import { type FieldKind } from "./constants.js";
+import { type FieldKind } from "./constants";
 
 interface FieldResponse {
     f32_data?: Float32Array;
@@ -17,7 +17,7 @@ export function readFieldToBuffer(
     let response: FieldResponse | null = null;
     try {
         response = controller.get_field(worldId, fieldKind, mode);
-    } catch (error) {
+    } catch (_error) {
         return false;
     }
 
@@ -54,7 +54,7 @@ export function writeBufferToField(
             return false;
         }
         return true;
-    } catch (error) {
+    } catch (_error) {
         return false;
     }
 }

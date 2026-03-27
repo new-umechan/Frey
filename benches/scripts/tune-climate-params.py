@@ -88,7 +88,7 @@ def apply_values(yaml_path: Path, values: Dict[str, float]) -> None:
 
 
 def sync_climate_params(repo: Path) -> None:
-    run(["node", "tools/sync/sync-climate-params.mjs"], repo)
+    run(["npm", "run", "climate:sync"], repo)
 
 
 def run_bench(repo: Path) -> Dict[str, float]:

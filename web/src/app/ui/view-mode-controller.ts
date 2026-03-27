@@ -1,4 +1,4 @@
-export function createViewModeController(options = {}) {
+export function createViewModeController(options: any = {}) {
     const {
         viewModeInputs,
         normalizeCellMetric,

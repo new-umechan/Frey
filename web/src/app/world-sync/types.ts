@@ -1,5 +1,5 @@
-import { type WorldSimController } from "../../interface/wasm.js";
-import { type FieldKind, type WorldChangeset } from "./constants.js";
+import { type WorldSimController } from "../../interface/wasm";
+import { type FieldKind } from "./constants";
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 

@@ -2,7 +2,7 @@ function renderOnNextAnimationFrame(renderFrame) {
     return new Promise((resolve) => {
         window.requestAnimationFrame(() => {
             renderFrame();
-            resolve();
+            resolve(undefined);
         });
     });
 }

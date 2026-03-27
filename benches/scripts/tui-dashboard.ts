@@ -314,7 +314,7 @@ function runBench(bench, states, onLog, onUpdate) {
             };
             onLog(`[${bench.title}] process error: ${error.message}`);
             onUpdate(bench.id);
-            resolveRun();
+            resolveRun(undefined);
         });
 
         child.on("close", async (code, signal) => {
@@ -335,7 +335,7 @@ function runBench(bench, states, onLog, onUpdate) {
 
             states[bench.id] = next;
             onUpdate(bench.id);
-            resolveRun();
+            resolveRun(undefined);
         });
     });
 }

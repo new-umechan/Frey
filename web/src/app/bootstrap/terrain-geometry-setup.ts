@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildTerrainUvFromPositions } from "../../gfx/materials/river-mask.js";
+import { buildTerrainUvFromPositions } from "../../gfx/materials/river-mask";
 
 export function setupTerrainGeometryAttributes({
     geometry,

@@ -1,8 +1,7 @@
-import { setupUiControls } from "../../ui/controls.js";
-import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../core/era-presets.js";
-import { createCanvasInputHandlers } from "../input/canvas-input-handlers.js";
-import { formatStatusError } from "../core/status-error.js";
-import { type AppElements, type PlaybackControlsElements, type PerfControlsElements } from "../../ui/dom.js";
+import { setupUiControls } from "../../ui/controls";
+import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../core/era-presets";
+import { createCanvasInputHandlers } from "../input/canvas-input-handlers";
+import { formatStatusError } from "../core/status-error";
 
 function createSidebarToggleHandler(
     sidebarToggle: HTMLButtonElement | null,

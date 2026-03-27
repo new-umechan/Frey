@@ -2,8 +2,8 @@ import initWasm, {
     WorldSimController,
     build_render_positions,
     generate_mesh,
-} from "../interface/wasm.js";
-import { createPerfRunner } from "../app/perf/runner.js";
+} from "../interface/wasm";
+import { createPerfRunner } from "../app/perf/runner";
 
 const runner = createPerfRunner({
     WorldSimController,

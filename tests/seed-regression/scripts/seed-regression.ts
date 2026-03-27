@@ -1,8 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import initWasm, { WorldSimController } from "../../../generated/wasm/web/frey_wasm.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain.js";
+import initWasm, { WorldSimController } from "../../../generated/wasm/web/frey_wasm";
+import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
 
 const DEFAULT_TICKS = 32;
 const DEFAULT_THRESHOLD = 0.005;
@@ -81,7 +81,7 @@ function parseArgs(argv) {
             break;
         }
         case "--level":
-            args.level = Math.max(0, Math.floor(parseNumber(next, "--level")));
+            (args as any).level = Math.max(0, Math.floor(parseNumber(next, "--level")));
             i += 1;
             break;
         case "--out":

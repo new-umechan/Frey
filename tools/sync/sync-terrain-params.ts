@@ -202,7 +202,7 @@ function validateAgainstSchema(parsed) {
     }
 
     for (const key of parsedKeys) {
-        if (!schemaKeys.has(key)) {
+        if (!schemaKeys.has(key as string)) {
             throw new Error(`Unknown key in YAML: "${key}"`);
         }
     }

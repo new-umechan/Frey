@@ -1,6 +1,6 @@
 import {
     build_render_positions as wasmBuildRenderPositions,
-} from "../../interface/wasm.js";
+} from "../../interface/wasm";
 
 export function buildRenderPositions(basePositions, heightData, surfaceMode = "globe") {
     const positions = wasmBuildRenderPositions({

@@ -1,4 +1,4 @@
-export function createWorldUiController(options = {}) {
+export function createWorldUiController(options: any = {}) {
     const {
         cameraController,
         terrainRenderer,

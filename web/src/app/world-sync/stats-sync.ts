@@ -1,17 +1,4 @@
-import { type StatFields } from "../../ui/dom.js";
-
-function formatCompact(value: number): string {
-    if (!Number.isFinite(value)) {
-        return "-";
-    }
-    if (value >= 1000000) {
-        return `${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-        return `${(value / 1000).toFixed(1)}k`;
-    }
-    return Math.floor(value).toString();
-}
+import { type StatFields } from "../../ui/dom";
 
 function formatPercent(ratio: number): string {
     if (!Number.isFinite(ratio)) {

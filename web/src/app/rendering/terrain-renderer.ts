@@ -1,6 +1,5 @@
 import * as THREE from "three";
-import { type CoreBuffers, type WorldChangeset } from "../perf/world-core.js";
-import { type TickPerfRecorder } from "../perf/recorder.js";
+import { type TickPerfRecorder } from "../perf/recorder";
 
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;

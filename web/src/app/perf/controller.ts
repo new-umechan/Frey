@@ -1,6 +1,6 @@
 import {
     STEP_BREAKDOWN_SAMPLE_INTERVAL,
-} from "./perf-step-breakdown.js";
+} from "./perf-step-breakdown";
 
 function formatMs(value) {
     if (!Number.isFinite(value)) {
@@ -24,7 +24,7 @@ function createPerfStatsRenderer(perfStatFields) {
     };
 }
 
-export function createPerfController(options = {}) {
+export function createPerfController(options: any = {}) {
     const {
         enabled,
         controls,

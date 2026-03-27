@@ -1,4 +1,4 @@
-import { getCellMetricMeta } from "../rendering/cell-metric.js";
+import { getCellMetricMeta } from "../rendering/cell-metric";
 
 function computeLegendStats(values) {
     if (!values || values.length === 0) {
@@ -26,7 +26,7 @@ function computeLegendStats(values) {
     };
 }
 
-export function createClimateUiController(options = {}) {
+export function createClimateUiController(options: any = {}) {
     const {
         climateLegend,
         getCurrentViewMode,

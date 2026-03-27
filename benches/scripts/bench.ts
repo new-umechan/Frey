@@ -77,7 +77,7 @@ function runCargoBench(suite) {
                 reject(new Error(`${suite} failed with exit code ${code}`));
                 return;
             }
-            resolve();
+            resolve(undefined);
         });
     });
 }

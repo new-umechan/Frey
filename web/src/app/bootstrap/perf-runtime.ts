@@ -1,6 +1,6 @@
-import { createPerfController } from "../perf/controller.js";
+import { createPerfController } from "../perf/controller";
 
-export function createPerfRuntime(options = {}) {
+export function createPerfRuntime(options: any = {}) {
     const {
         isPerfEnabled,
         perfControls,

@@ -1,4 +1,4 @@
-import { FLOAT32_FIELDS } from "./constants.js";
+import { FLOAT32_FIELDS } from "./constants";
 
 const OPTIONAL_FIELD_KINDS = new Set([
     "erosion_rate",

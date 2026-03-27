@@ -1,6 +1,6 @@
-import { createTickPerfRecorder } from "./recorder.js";
-import { createControllerState, rebuildControllerState } from "./controller-state.js";
-import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./diagnostics.js";
+import { createTickPerfRecorder } from "./recorder";
+import { createControllerState, rebuildControllerState } from "./controller-state";
+import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./diagnostics";
 import {
     defaultNowMs,
     formatError,
@@ -8,8 +8,8 @@ import {
     pushRiverBreakdownSamples,
     pushStepBreakdownSamples,
     roundMs,
-} from "./helpers.js";
-import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset } from "./world-core.js";
+} from "./helpers";
+import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset } from "./world-core";
 
 export interface PerfRunnerDeps {
     WorldSimController?: any;

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export function createLoadingOverlayController(options = {}) {
+export function createLoadingOverlayController(options: any = {}) {
     const {
         loadingOverlayCanvas,
         viewportPanel,

@@ -10,7 +10,7 @@ export function normalizeTicks(rawTicks) {
                 .map((value) => sanitizeTick(value))
                 .filter((value) => value !== null),
         ),
-    ).sort((a, b) => a - b);
+    ).sort((a: number, b: number) => a - b);
 }
 
 export function resolveStepTick(ticks, baseTick, direction, interval) {

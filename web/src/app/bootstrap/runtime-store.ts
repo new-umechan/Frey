@@ -1,7 +1,7 @@
-import { DEFAULT_ERA_SCALE } from "../../core/constants.js";
-import { createMutableStateStore, createWorldState, type WorldState } from "../core/app-state.js";
-import { type EraMetrics } from "../core/era-presets.js";
-import { type RuntimeState } from "../runtime/state.js";
+import { DEFAULT_ERA_SCALE } from "../../core/constants";
+import { createMutableStateStore, createWorldState, type WorldState } from "../core/app-state";
+import { type EraMetrics } from "../core/era-presets";
+import { type RuntimeState } from "../runtime/state";
 
 export interface RuntimeStoreOptions {
     basePositions: Float32Array;

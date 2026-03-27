@@ -1,6 +1,6 @@
-import { type WorldState } from "../core/app-state.js";
-import { type EraMetrics } from "../core/era-presets.js";
-import { type StatFields } from "../../ui/dom.js";
+import { type WorldState } from "../core/app-state";
+import { type EraMetrics } from "../core/era-presets";
+import { type StatFields } from "../../ui/dom";
 
 export interface WorldSessionControllerOptions {
     worldSimController: any;

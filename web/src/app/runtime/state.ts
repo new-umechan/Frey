@@ -1,5 +1,5 @@
-import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants.js";
-import { type CoreBuffers } from "../world-sync/types.js";
+import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants";
+import { type CoreBuffers } from "../world-sync/types";
 
 export interface PlaybackState {
     isPlaying: boolean;

@@ -1,7 +1,7 @@
-import { type WorldState, type AppState } from "../core/app-state.js";
-import { type RuntimeState } from "../runtime/state.js";
-import { type EraMetrics, type EraScaleConfig } from "../core/era-presets.js";
-import { type TickPerfRecorder } from "../perf/recorder.js";
+import { type WorldState, type AppState } from "../core/app-state";
+import { type RuntimeState } from "../runtime/state";
+import { type EraMetrics, type EraScaleConfig } from "../core/era-presets";
+import { type TickPerfRecorder } from "../perf/recorder";
 
 export interface WorldStepperOptions {
     worldSimController: any;

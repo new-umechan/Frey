@@ -1,39 +1,39 @@
-import { TERRAIN_PARAMS } from "../../../interface/params/terrain.js";
-import { DEFAULT_ERA_SCALE, LEVEL } from "../../../core/constants.js";
+import { TERRAIN_PARAMS } from "../../../interface/params/terrain";
+import { DEFAULT_ERA_SCALE, LEVEL } from "../../../core/constants";
 import {
     createEraMetrics,
     buildEraMetricsFromRuntime,
     getEraScalePreset,
     renderEraScaleControls,
-} from "../../core/era-presets.js";
+} from "../../core/era-presets";
 import {
     createEmptyLayers,
     createInitialBudgets,
-} from "../../runtime/state.js";
-import { getDeltaFieldKindsForView } from "../../world-sync/view-mode.js";
-import { refreshWorldStatsFromController } from "../../world-sync/stats-sync.js";
+} from "../../runtime/state";
+import { getDeltaFieldKindsForView } from "../../world-sync/view-mode";
+import { refreshWorldStatsFromController } from "../../world-sync/stats-sync";
 import {
     syncVisibleCoreFieldsFromController,
     syncWorldDeltaFromController,
     syncWorldFromController,
-} from "../../world-sync/world-state-sync.js";
-import { createWorldUiController } from "../../ui/world-ui-controller.js";
-import { createWorldSessionController } from "../../sim/world-session-controller.js";
-import { createWorldStepper } from "../../sim/world-stepper.js";
+} from "../../world-sync/world-state-sync";
+import { createWorldUiController } from "../../ui/world-ui-controller";
+import { createWorldSessionController } from "../../sim/world-session-controller";
+import { createWorldStepper } from "../../sim/world-stepper";
 import {
     createPerfConsoleTable,
     createPerfProfile,
     formatPerfSummaryLine,
-} from "../../perf/recorder.js";
-import { createViewModeController } from "../../ui/view-mode-controller.js";
-import { normalizeCellMetric } from "../../rendering/cell-metric.js";
-import { createTerrainGenerationController } from "../../ui/terrain-generation-controller.js";
-import { createPlaybackController } from "../../playback/playback-controller.js";
-import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown.js";
-import { resetWorldProgress } from "../../sim/world-loop.js";
-import { createPerfRuntime } from "../perf-runtime.js";
-import { type RuntimeContext } from "./create-controller-runtime.js";
-import { type CoreBuffers } from "../../world-sync/types.js";
+} from "../../perf/recorder";
+import { createViewModeController } from "../../ui/view-mode-controller";
+import { normalizeCellMetric } from "../../rendering/cell-metric";
+import { createTerrainGenerationController } from "../../ui/terrain-generation-controller";
+import { createPlaybackController } from "../../playback/playback-controller";
+import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown";
+import { resetWorldProgress } from "../../sim/world-loop";
+import { createPerfRuntime } from "../perf-runtime";
+import { type RuntimeContext } from "./create-controller-runtime";
+import { type CoreBuffers } from "../../world-sync/types";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 

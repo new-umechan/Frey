@@ -1,4 +1,4 @@
-import { DELTA_FIELD_KIND_BY_VIEW, type FieldKind } from "./constants.js";
+import { DELTA_FIELD_KIND_BY_VIEW, type FieldKind } from "./constants";
 
 export function getDeltaFieldKindsForView(options: {
     viewMode?: string;

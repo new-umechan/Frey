@@ -1,16 +1,16 @@
-import { WorldSimController } from "../../../interface/wasm.js";
-import { createRuntimeControllers } from "./controller-factories.js";
-import { DEFAULT_ERA_SCALE } from "../../../core/constants.js";
-import { runInitialWorldAndUiSync } from "../post-init-sync.js";
+import { WorldSimController } from "../../../interface/wasm";
+import { createRuntimeControllers } from "./controller-factories";
+import { DEFAULT_ERA_SCALE } from "../../../core/constants";
+import { runInitialWorldAndUiSync } from "../post-init-sync";
 import {
     type AppElements,
     type StatFields,
     type EraScaleWeightFields,
     type PerfStatFields,
-} from "../../../ui/dom.js";
-import { type AppState, type WorldState } from "../../core/app-state.js";
-import { type EraMetrics } from "../../core/era-presets.js";
-import { type RuntimeState } from "../../runtime/state.js";
+} from "../../../ui/dom";
+import { type AppState, type WorldState } from "../../core/app-state";
+import { type EraMetrics } from "../../core/era-presets";
+import { type RuntimeState } from "../../runtime/state";
 
 export interface ControllerDeps {
     elements: AppElements;

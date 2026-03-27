@@ -1,19 +1,19 @@
 import initWasm, {
     generate_mesh,
-} from "../interface/wasm.js";
-import { collectAppElements, type AppElements } from "../ui/dom.js";
+} from "../interface/wasm";
+import { collectAppElements, type AppElements } from "../ui/dom";
 import {
     createStatusController,
     isPerfFeatureEnabled,
     setPerfPanelVisibility,
-} from "./bootstrap/status-ui.js";
+} from "./bootstrap/status-ui";
 import {
     DEFAULT_TERRAIN_SEED,
     LEVEL,
-} from "../core/constants.js";
-import { advanceWorldLoop } from "./sim/world-loop.js";
-import { createMeshBuffers } from "./core/app-state.js";
-import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap.js";
+} from "../core/constants";
+import { advanceWorldLoop } from "./sim/world-loop";
+import { createMeshBuffers } from "./core/app-state";
+import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap";
 
 interface SidebarControllerOptions {
     appShell: HTMLElement;

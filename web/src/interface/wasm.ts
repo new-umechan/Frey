@@ -5,7 +5,7 @@ import initWasm, {
     generate_mesh,
     type InitInput,
     type InitOutput,
-} from "../../../generated/wasm/web/frey_wasm.js";
+} from "../../../generated/wasm/web/frey_wasm";
 
 export default initWasm as (input?: InitInput | Promise<InitInput>) => Promise<InitOutput>;
 
