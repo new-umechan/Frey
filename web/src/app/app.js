@@ -1,6 +1,6 @@
 import initWasm, {
     generate_mesh,
-} from "../interface/wasm.js";
+} from "../interface/wasm";
 import { collectAppElements } from "../ui/dom.js";
 import {
     createStatusController,

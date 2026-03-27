@@ -1,5 +1,5 @@
-import { TERRAIN_LEVEL } from "../interface/params/terrain.js";
-import { RUNTIME_PARAMS } from "../interface/params/runtime.js";
+import { TERRAIN_LEVEL } from "../interface/params/terrain";
+import { RUNTIME_PARAMS } from "../interface/params/runtime";
 
 export const LEVEL = TERRAIN_LEVEL;
 export const DEFAULT_TERRAIN_SEED = "alpha";
@@ -10,20 +10,31 @@ export const DEFAULT_SURFACE_MODE = "globe";
 export const DEFAULT_ERA_SCALE = "crust";
 export const PLATE_HOVER_POPUP_DELAY_MS = 450;
 
-export const WORLD_SUBSYSTEM_KEYS = Object.freeze([
+export const WORLD_SUBSYSTEM_KEYS = [
     "geology",
     "climate",
     "ecology",
     "civilization",
-]);
+] as const;
 
-export const LAYER_KIND = Object.freeze({
+export type WorldSubsystemKey = (typeof WORLD_SUBSYSTEM_KEYS)[number];
+
+export const LAYER_KIND = {
     CLIMATE: "climate",
     ECOLOGY: "ecology",
     CIVILIZATION: "civilization",
-});
+} as const;
 
-export const ERA_SCALE_PRESETS = Object.freeze({
+export type LayerKind = (typeof LAYER_KIND)[keyof typeof LAYER_KIND];
+
+export interface EraScaleConfig {
+    label: string;
+    tickLabel: string;
+    runtimeTickMs: number;
+    weights: Record<WorldSubsystemKey, number>;
+}
+
+export const ERA_SCALE_PRESETS: Record<string, EraScaleConfig> = Object.freeze({
     crust: {
         label: "地殻形成期",
         tickLabel: "500万年",
@@ -56,11 +67,11 @@ export const ERA_SCALE_PRESETS = Object.freeze({
     },
 });
 
-function formatCompactDecimal(value, digits) {
+function formatCompactDecimal(value: number, digits: number): string {
     return value.toFixed(digits).replace(/\.0+$/, "");
 }
 
-export function formatRealYearsPerTick(years) {
+export function formatRealYearsPerTick(years: number): string {
     if (!Number.isFinite(years) || years <= 0) {
         return "-";
     }
