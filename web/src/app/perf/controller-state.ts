@@ -1,18 +1,19 @@
 import { buildCoreBuffers, type CoreBuffers } from "./world-core";
+import { type WorldSimController } from "../../interface/wasm";
 
 export interface ControllerState {
-    controller: any;
+    controller: WorldSimController;
     worldId: string;
     core: CoreBuffers;
 }
 
 export function createControllerState(
-    WorldSimController: any,
+    WorldSimControllerConstructor: new () => WorldSimController,
     profile: any,
     level: number,
     terrainParams: any
 ): ControllerState {
-    const controller = new WorldSimController();
+    const controller = new WorldSimControllerConstructor();
     const initResult = controller.init_world(profile.seed ?? "alpha", level, {
         geology_params: terrainParams,
     });
@@ -28,14 +29,14 @@ export function createControllerState(
 }
 
 export function rebuildControllerState(
-    WorldSimController: any,
+    WorldSimControllerConstructor: new () => WorldSimController,
     profile: any,
     level: number,
     terrainParams: any,
     completedTicks: number,
     deltaFieldKinds: string[]
 ): ControllerState {
-    const state = createControllerState(WorldSimController, profile, level, terrainParams);
+    const state = createControllerState(WorldSimControllerConstructor, profile, level, terrainParams);
     if (completedTicks > 0) {
         state.controller.exec_world(state.worldId, completedTicks);
     }

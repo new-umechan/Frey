@@ -1,4 +1,4 @@
-import { getMetricCategories } from "../../app/rendering/cell-metric";
+import { getMetricCategories, type CellMetricDef } from "../../app/rendering/cell-metric";
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -83,7 +83,7 @@ export function createViewCuiController(options: {
                     label: appendCurrentSuffix(
                         `${index + 2}: ${category.label}`,
                         checkedMode === "metric" &&
-                            category.metrics.some((metric: any) => metric.key === checkedMetric)
+                            category.metrics.some((metric: CellMetricDef) => metric.key === checkedMetric)
                     ),
                     next: category.key,
                     type: "next" as const,
@@ -95,7 +95,7 @@ export function createViewCuiController(options: {
         if (!category) {
             return [];
         }
-        return category.metrics.map((metric: any, index: number) => ({
+        return category.metrics.map((metric: CellMetricDef, index: number) => ({
             label: appendCurrentSuffix(
                 `${index + 1}: ${metric.label}`,
                 checkedMode === "metric" && checkedMetric === metric.key
@@ -138,7 +138,7 @@ export function createViewCuiController(options: {
             }
             const checkedMetric = getCheckedMetric();
             const selectedCategoryIndex = categories.findIndex((category) => {
-                return category.metrics.some((metric: any) => metric.key === checkedMetric);
+                return category.metrics.some((metric: CellMetricDef) => metric.key === checkedMetric);
             });
             viewCursorIndex = selectedCategoryIndex >= 0 ? selectedCategoryIndex + 1 : 0;
             return;

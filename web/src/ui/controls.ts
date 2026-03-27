@@ -55,7 +55,7 @@ export interface SetupUiControlsOptions {
     getCurrentSurfaceMode: () => string;
     getCurrentCellMetric: () => string;
     onSubmitSeed: (seed: string) => Promise<void>;
-    onSubmitSeedError: (error: any) => void;
+    onSubmitSeedError: (error: unknown) => void;
 }
 
 export function setupUiControls(options: SetupUiControlsOptions) {

@@ -6,13 +6,29 @@ const MAX_ROTATE_STEP_RAD = 0.075;
 const EPSILON = 1e-6;
 const MIN_POINTERS_FOR_PINCH = 2;
 
+export interface GlobePinchFocusController {
+    reset: () => void;
+    update: () => void;
+    onPointerDown: (event: PointerEvent) => void;
+    onPointerMove: (event: PointerEvent) => void;
+    onPointerUp: (event: PointerEvent) => void;
+    onPointerCancel: (event: PointerEvent) => void;
+    onWheel: (event: WheelEvent) => boolean;
+}
+
 export function createGlobePinchFocusController({
     canvas,
     sphere,
     globeCamera,
     globeControls,
     getCurrentSurfaceMode,
-}) {
+}: {
+    canvas: HTMLCanvasElement;
+    sphere: THREE.Mesh;
+    globeCamera: THREE.PerspectiveCamera;
+    globeControls: any; // TODO: improve this type if possible
+    getCurrentSurfaceMode: () => string;
+}): GlobePinchFocusController {
     const activePointers = new Map();
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();

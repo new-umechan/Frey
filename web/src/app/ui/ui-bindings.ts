@@ -1,7 +1,10 @@
-import { setupUiControls } from "../../ui/controls";
+import { setupUiControls, type PlaybackControlsElements, type PerfControlsElements } from "../../ui/controls";
 import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../core/era-presets";
 import { createCanvasInputHandlers } from "../input/canvas-input-handlers";
 import { formatStatusError } from "../core/status-error";
+import type { PlateHoverController } from "../input/plate-hover";
+import type { GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+import type { PlaybackController } from "../playback/playback-controller";
 
 function createSidebarToggleHandler(
     sidebarToggle: HTMLButtonElement | null,
@@ -48,7 +51,7 @@ function createSubmitSeedErrorHandler(
     seedInput: HTMLInputElement,
     seedForm: HTMLFormElement
 ) {
-    return (error: any) => {
+    return (error: unknown) => {
         setStatus(formatStatusError("Generation", error));
         seedInput.removeAttribute("disabled");
         seedForm.querySelector("button")?.removeAttribute("disabled");
@@ -64,13 +67,13 @@ interface CreateUiHandlersOptions {
     setStatus: (msg: string) => void;
     seedInput: HTMLInputElement;
     seedForm: HTMLFormElement;
-    plateHover: any;
-    globePinchFocusController: any;
+    plateHover: PlateHoverController;
+    globePinchFocusController: GlobePinchFocusController;
     setDebugModeEnabled: (enabled: boolean) => void;
     setViewMode: (mode: string) => void;
     setCellMetric: (metric: string) => void;
     setSurfaceMode: (mode: string) => void;
-    playbackController: any;
+    playbackController: PlaybackController;
     runPerf: () => void;
     copyPerfResult: () => void;
     updateTerrain: (seed: string) => Promise<void>;
@@ -158,14 +161,14 @@ export interface BindAppUiControlsOptions {
     seedInput: HTMLInputElement;
     onResize: () => void;
     setSidebarOpen: ((isOpen: boolean) => void) | undefined;
-    plateHover: any;
-    globePinchFocusController: any;
+    plateHover: PlateHoverController;
+    globePinchFocusController: GlobePinchFocusController;
     setDebugModeEnabled: (enabled: boolean) => void;
     setEraScale: (value: string) => void;
     setViewMode: (mode: string) => void;
     setCellMetric: (metric: string) => void;
     setSurfaceMode: (mode: string) => void;
-    playbackController: any;
+    playbackController: PlaybackController;
     runPerf: () => void;
     copyPerfResult: () => void;
     getDebugEnabled: () => boolean;

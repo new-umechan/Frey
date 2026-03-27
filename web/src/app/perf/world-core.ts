@@ -1,4 +1,5 @@
 import { FLOAT32_FIELDS } from "./constants";
+import { type WorldSimController } from "../../interface/wasm";
 
 const OPTIONAL_FIELD_KINDS = new Set([
     "erosion_rate",
@@ -16,6 +17,20 @@ const OPTIONAL_FIELD_KINDS = new Set([
 
 type TypedArray = Float32Array | Int32Array | Uint32Array;
 
+interface DeltaRange {
+    start: number;
+    end: number;
+}
+
+interface FieldDelta {
+    mode?: "full" | "range";
+    field_kind?: string;
+    ranges?: DeltaRange[];
+    f32_data?: Float32Array;
+    i32_data?: Int32Array;
+    u32_data?: Uint32Array;
+}
+
 function createFallbackFieldData(fieldKind: string, fallbackCellCount: number): TypedArray {
     const count = Math.max(0, Math.floor(fallbackCellCount || 0));
     if (FLOAT32_FIELDS.has(fieldKind)) {
@@ -27,7 +42,7 @@ function createFallbackFieldData(fieldKind: string, fallbackCellCount: number): 
     return new Int32Array(count);
 }
 
-function getFieldData(controller: any, worldId: string, fieldKind: string, fallbackCellCount = 0): TypedArray {
+function getFieldData(controller: WorldSimController, worldId: string, fieldKind: string, fallbackCellCount = 0): TypedArray {
     let response: any = null;
     try {
         response = controller.get_field(worldId, fieldKind, 1);
@@ -66,7 +81,7 @@ export interface CoreBuffers {
     riverTransportCost: TypedArray;
 }
 
-export function buildCoreBuffers(controller: any, worldId: string): CoreBuffers {
+export function buildCoreBuffers(controller: WorldSimController, worldId: string): CoreBuffers {
     const heightData = getFieldData(controller, worldId, "height");
     const cellCount = heightData.length;
     return {
@@ -90,7 +105,7 @@ export function buildCoreBuffers(controller: any, worldId: string): CoreBuffers 
     };
 }
 
-function applyNumericDelta(target: TypedArray, fieldDelta: any): boolean {
+function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
     const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
     const canFastCopy =
@@ -100,7 +115,7 @@ function applyNumericDelta(target: TypedArray, fieldDelta: any): boolean {
     if (fieldDelta?.mode === "full") {
         const copyLength = Math.min(target.length, values.length);
         if (canFastCopy) {
-            (target as any).set((values as any).subarray(0, copyLength), 0);
+            (target as TypedArray).set((values as TypedArray).subarray(0, copyLength), 0);
             return copyLength > 0;
         }
         for (let i = 0; i < copyLength; i += 1) {
@@ -119,7 +134,7 @@ function applyNumericDelta(target: TypedArray, fieldDelta: any): boolean {
         const rangeLength = end - start;
         const copyLength = Math.max(0, Math.min(rangeLength, (values as any).length - offset));
         if (canFastCopy && copyLength > 0) {
-            (target as any).set((values as any).subarray(offset, offset + copyLength), start);
+            (target as TypedArray).set((values as TypedArray).subarray(offset, offset + copyLength), start);
             offset += rangeLength;
             continue;
         }
@@ -131,7 +146,7 @@ function applyNumericDelta(target: TypedArray, fieldDelta: any): boolean {
     return ranges.length > 0;
 }
 
-function countDeltaCells(delta: any, targetLength: number): number {
+function countDeltaCells(delta: FieldDelta, targetLength: number): number {
     if (delta?.mode === "full") {
         return targetLength;
     }
@@ -154,7 +169,7 @@ export interface WorldChangeset {
     metric: boolean;
 }
 
-export function applyWorldDeltaToCore(core: CoreBuffers, worldDelta: any): WorldChangeset {
+export function applyWorldDeltaToCore(core: CoreBuffers, worldDelta: { deltas?: FieldDelta[] }): WorldChangeset {
     const changes: WorldChangeset = {
         height: false,
         heightChangedCount: 0,

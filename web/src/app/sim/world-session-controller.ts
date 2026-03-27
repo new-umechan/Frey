@@ -1,17 +1,20 @@
 import { type WorldState } from "../core/app-state";
 import { type EraMetrics } from "../core/era-presets";
 import { type StatFields } from "../../ui/dom";
+import { type WorldSimController } from "../../interface/wasm";
+import { type TerrainRenderer } from "../rendering/terrain-renderer";
+import { type SyncOptions, type CoreBuffers } from "../world-sync/types";
 
 export interface WorldSessionControllerOptions {
-    worldSimController: any;
+    worldSimController: WorldSimController;
     world: WorldState;
-    terrainRenderer: any;
+    terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
     buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldFromController: (options: any) => any;
+    syncWorldFromController: (options: SyncOptions) => any;
     refreshWorldStatsFromController: (options: any) => any;
-    setCurrentTerrainData: (data: any) => void;
+    setCurrentTerrainData: (data: CoreBuffers) => void;
     syncClimateUi: () => void;
     hidePlateHover: () => void;
     syncAfterWorldSync: () => void;

@@ -1,4 +1,43 @@
-export function createTerrainGenerationController(options: any = {}) {
+import { type WorldSimController } from "../interface/wasm";
+import { type WorldState } from "../core/app-state";
+import { type RuntimeState } from "../runtime/state";
+import { type EraMetrics, type EraScalePreset } from "../core/era-presets";
+
+export interface TerrainGenerationController {
+    updateTerrain: (seed: string) => Promise<void>;
+}
+
+export interface TerrainGenerationControllerOptions {
+    seedForm: HTMLFormElement;
+    seedInput: HTMLInputElement;
+    worldSimController: WorldSimController;
+    level: number;
+    terrainParams: any;
+    world: WorldState;
+    worldState: RuntimeState;
+    createEmptyLayers: () => any;
+    createInitialBudgets: () => any;
+    createEraMetrics: (era: string) => EraMetrics;
+    resetWorldProgress: (
+        world: WorldState,
+        worldState: RuntimeState,
+        createEmptyLayers: () => any,
+        createInitialBudgets: () => any,
+        createEraMetrics: (era: string) => EraMetrics,
+    ) => EraMetrics;
+    getEraScalePreset: (era: string) => EraScalePreset;
+    setStatus: (msg: string) => void;
+    syncWorldFromActiveController: () => Promise<void>;
+    getCurrentEraScale: () => string;
+    getCurrentSeed: () => string;
+    setCurrentState: (patch: any) => void;
+    setPlaybackRunning: (isPlaying: boolean) => void;
+    appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
+    onInitWorldStart?: () => Promise<void>;
+    onInitWorldEnd?: () => void;
+}
+
+export function createTerrainGenerationController(options: TerrainGenerationControllerOptions): TerrainGenerationController {
     const {
         seedForm,
         seedInput,
@@ -24,7 +63,7 @@ export function createTerrainGenerationController(options: any = {}) {
     } = options;
 
     let generationToken = 0;
-    const updateTerrain = async (seed) => {
+    const updateTerrain = async (seed: string) => {
         const token = ++generationToken;
         const nextSeed = seed.trim() || getCurrentSeed();
 

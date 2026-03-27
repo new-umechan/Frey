@@ -1,12 +1,21 @@
 import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants";
 import { type CoreBuffers } from "../world-sync/types";
 
+export interface PlaybackEvent {
+    id: number;
+    type: string;
+    tick: number;
+    label: string;
+    detail: string;
+    createdAtMs: number;
+}
+
 export interface PlaybackState {
     isPlaying: boolean;
     historyInterval: number;
     selectedTick: number | null;
     availableTicks: number[];
-    eventLog: any[];
+    eventLog: PlaybackEvent[];
     nextLogId: number;
 }
 
@@ -25,7 +34,13 @@ export function createEmptyCore(): CoreBuffers | null {
     return null;
 }
 
-export function createEmptyLayers(): Record<string, any> {
+export interface WorldLayers {
+    [LAYER_KIND.CLIMATE]: any; // TODO: define climate layer type
+    [LAYER_KIND.ECOLOGY]: any; // TODO: define ecology layer type
+    [LAYER_KIND.CIVILIZATION]: any; // TODO: define civilization layer type
+}
+
+export function createEmptyLayers(): WorldLayers {
     return {
         [LAYER_KIND.CLIMATE]: null,
         [LAYER_KIND.ECOLOGY]: null,
@@ -52,11 +67,11 @@ export interface RuntimeState {
     sliceBusy: boolean;
     slicePhase: string;
     maxRiverStepsPerFrame: number;
-    erosionAutomatonState: any;
+    erosionAutomatonState: any | null; // TODO: define automaton state type
     pendingRiverSteps: number;
     terrainErosionDirty: boolean;
     terrainCoreDirty: boolean;
-    terrainDynamics: any;
+    terrainDynamics: any | null; // TODO: define dynamics type
     latestActivity: Record<WorldSubsystemKey, number>;
     carry: Record<WorldSubsystemKey, number>;
     executedSteps: Record<WorldSubsystemKey, number>;

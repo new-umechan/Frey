@@ -1,5 +1,10 @@
 import { type WorldSimController } from "../../interface/wasm";
 import { type FieldKind } from "./constants";
+import { type TerrainRenderer } from "../rendering/terrain-renderer";
+import { type WorldState } from "../core/app-state";
+import { type EraMetrics } from "../core/era-presets";
+import { type StatFields } from "../../ui/dom";
+import { type TickPerfRecorder } from "../perf/recorder";
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 
@@ -36,32 +41,32 @@ export interface CoreBuffers {
 export interface SyncOptions {
     worldSimController: WorldSimController;
     worldId: string;
-    world: any;
+    world: WorldState;
     currentSeed: string;
     currentSurfaceMode: string;
-    terrainRenderer: any;
-    createEraMetrics: (era: string) => any;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => any;
+    terrainRenderer: TerrainRenderer;
+    createEraMetrics: (era: string) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
     setCurrentTerrainData: (data: CoreBuffers) => void;
-    statFields: any;
+    statFields: StatFields;
     level: number;
 }
 
 export interface SyncDeltaOptions {
     worldSimController: WorldSimController;
     worldId: string;
-    world: any;
+    world: WorldState;
     core: CoreBuffers;
     currentSurfaceMode: string;
-    terrainRenderer: any;
-    createEraMetrics: (era: string) => any;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => any;
+    terrainRenderer: TerrainRenderer;
+    createEraMetrics: (era: string) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
     refreshStats: boolean;
     refreshWorldStats: () => boolean;
     deltaFieldKinds: FieldKind[];
-    perfRecorder?: any;
+    perfRecorder?: TickPerfRecorder | null;
 }
 
 export interface SyncVisibleOptions {

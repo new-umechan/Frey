@@ -3,9 +3,11 @@ import {
     createWorldChangeset,
     markFieldChange,
     type FieldKind,
+    type WorldChangeset,
 } from "./constants";
+import { type CoreBuffers, type TypedArray } from "./types";
 
-type NumericArray = Float32Array | Int32Array | Uint32Array | number[];
+type NumericArray = TypedArray | number[];
 
 interface DeltaRange {
     start: number;
@@ -31,14 +33,14 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
     if (fieldDelta?.mode === "full") {
         const copyLength = Math.min(target.length, values.length);
         if (canFastCopy) {
-            (target as Float32Array | Int32Array | Uint32Array).set(
-                (values as Float32Array | Int32Array | Uint32Array).subarray(0, copyLength),
+            (target as TypedArray).set(
+                (values as TypedArray).subarray(0, copyLength),
                 0
             );
             return copyLength > 0;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as any)[i] = (values as any)[i];
+            (target as number[])[i] = (values as any)[i];
         }
         return copyLength > 0;
     }
@@ -53,22 +55,22 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
         const rangeLength = end - start;
         const copyLength = Math.max(0, Math.min(rangeLength, (values as any).length - offset));
         if (canFastCopy && copyLength > 0) {
-            (target as Float32Array | Int32Array | Uint32Array).set(
-                (values as Float32Array | Int32Array | Uint32Array).subarray(offset, offset + copyLength),
+            (target as TypedArray).set(
+                (values as TypedArray).subarray(offset, offset + copyLength),
                 start
             );
             offset += rangeLength;
             continue;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as any)[start + i] = (values as any)[offset + i];
+            (target as number[])[start + i] = (values as any)[offset + i];
         }
         offset += rangeLength;
     }
     return ranges.length > 0;
 }
 
-export function applyWorldDeltaToCore(core: any, worldDelta: { deltas?: FieldDelta[] }) {
+export function applyWorldDeltaToCore(core: CoreBuffers, worldDelta: { deltas?: FieldDelta[] }): WorldChangeset {
     const changes = createWorldChangeset();
     for (const delta of worldDelta?.deltas ?? []) {
         const fieldKind = delta?.field_kind;
@@ -79,7 +81,11 @@ export function applyWorldDeltaToCore(core: any, worldDelta: { deltas?: FieldDel
         if (!coreKey || !(coreKey in core)) {
             continue;
         }
-        const didChange = applyNumericDelta(core[coreKey], delta);
+        const target = core[coreKey];
+        if (!target || !(target instanceof Float32Array || target instanceof Int32Array || target instanceof Uint32Array)) {
+            continue;
+        }
+        const didChange = applyNumericDelta(target, delta);
         if (didChange) {
             markFieldChange(changes, fieldKind);
         }

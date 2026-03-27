@@ -2,6 +2,12 @@ import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../../core/constants";
 import { getCellMetricMeta } from "../rendering/cell-metric";
 
+export interface PlateHoverController {
+    hidePopup: () => void;
+    updateFromPointer: (event: PointerEvent) => void;
+    syncDebugMode: () => void;
+}
+
 export function createPlateHover({
     canvas,
     sphere,
@@ -10,7 +16,15 @@ export function createPlateHover({
     plateHoverPopup,
     getState,
     onClimateHover,
-}) {
+}: {
+    canvas: HTMLCanvasElement;
+    sphere: THREE.Mesh;
+    geometry: THREE.BufferGeometry;
+    viewportPanel: HTMLElement;
+    plateHoverPopup: HTMLElement;
+    getState: () => any; // TODO: improve this type if possible
+    onClimateHover?: (data: { label: string; value: string } | null) => void;
+}): PlateHoverController {
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
     const hoverLocalPoint = new THREE.Vector3();

@@ -2,21 +2,25 @@ import { type WorldState, type AppState } from "../core/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../core/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
+import { type WorldSimController } from "../../interface/wasm";
+import { type TerrainRenderer } from "../rendering/terrain-renderer";
+import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from "../world-sync/types";
+import { type FieldKind } from "../world-sync/constants";
 
 export interface WorldStepperOptions {
-    worldSimController: any;
+    worldSimController: WorldSimController;
     world: WorldState;
     worldState: RuntimeState;
-    terrainRenderer: any;
+    terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
     buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldDeltaFromController: (options: any) => any;
-    syncVisibleCoreFieldsFromController: (options: any) => any;
-    getDeltaFieldKindsForView: (options: any) => string[];
-    refreshWorldStats: (options: any) => any;
+    syncWorldDeltaFromController: (options: SyncDeltaOptions) => { changes: any; statsRefreshed: boolean };
+    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => any;
+    getDeltaFieldKindsForView: (options: { viewMode: string; cellMetric: string }) => FieldKind[];
+    refreshWorldStats: (options: any) => boolean;
     syncClimateUi: () => void;
-    syncAfterWorldStep: (options: any) => void;
+    syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
     getCurrentState: () => AppState;
     pushStepBreakdownSamples: (recorder: TickPerfRecorder, profiled: any) => void;
@@ -69,14 +73,17 @@ export function createWorldStepper(options: WorldStepperOptions) {
         const changes = syncVisibleCoreFieldsFromController({
             worldSimController,
             worldId: state.activeWorldId,
-            core: state.currentTerrainData,
+            core: state.currentTerrainData as CoreBuffers,
             fieldKinds: getCurrentDeltaFieldKinds(),
         });
-        terrainRenderer.applyCoreChanges(state.currentTerrainData, changes, state.currentSurfaceMode, world.tick);
+        terrainRenderer.applyCoreChanges(state.currentTerrainData as CoreBuffers, changes, state.currentSurfaceMode, world.tick);
     };
 
-    const syncCompletedWorldStep = (tickOptions: any = {}, perfRecorder: TickPerfRecorder | null = null) => {
+    const syncCompletedWorldStep = (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {
         const liveState = getCurrentState();
+        if (!liveState.activeWorldId || !liveState.currentTerrainData) {
+            return false;
+        }
         const benchmarkMode = tickOptions?.benchmarkMode === true;
         const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
         const previousTick = Math.max(0, Math.floor(tickOptions?.previousTick ?? world.tick));
@@ -86,7 +93,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             worldSimController,
             worldId: liveState.activeWorldId,
             world,
-            core: liveState.currentTerrainData,
+            core: liveState.currentTerrainData as CoreBuffers,
             currentSurfaceMode: liveState.currentSurfaceMode,
             terrainRenderer,
             createEraMetrics,
@@ -118,7 +125,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         return true;
     };
 
-    const stepWorldTick = (perfRecorder: TickPerfRecorder | null = null, tickOptions: any = {}) => {
+    const stepWorldTick = (perfRecorder: TickPerfRecorder | null = null, tickOptions: { sampleStepBreakdown?: boolean; batchCount?: number; benchmarkMode?: boolean; batched?: boolean } = {}) => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             return false;
@@ -133,14 +140,14 @@ export function createWorldStepper(options: WorldStepperOptions) {
             if (perfRecorder) {
                 perfRecorder.measure("exec_world", () => {
                     if (sampleStepBreakdown) {
-                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId, batchCount);
+                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId!, batchCount);
                         pushStepBreakdownSamples(perfRecorder, profiled);
                         return;
                     }
-                    worldSimController.exec_world(liveState.activeWorldId, batchCount);
+                    worldSimController.exec_world(liveState.activeWorldId!, batchCount);
                 });
             } else {
-                worldSimController.exec_world(liveState.activeWorldId, batchCount);
+                worldSimController.exec_world(liveState.activeWorldId!, batchCount);
             }
 
             return syncCompletedWorldStep({

@@ -9,24 +9,29 @@ import {
     pushStepBreakdownSamples,
     roundMs,
 } from "./helpers";
-import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset } from "./world-core";
+import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset, type CoreBuffers } from "./world-core";
+import { type WorldSimController } from "../../interface/wasm";
 
 export interface PerfRunnerDeps {
-    WorldSimController?: any;
-    build_render_positions?: (options: any) => void;
-    generate_mesh?: (level: number) => any;
+    WorldSimController: new () => WorldSimController;
+    build_render_positions: (options: {
+        base_positions: Float32Array;
+        height_data: Float32Array;
+        surface_mode: string;
+    }) => void;
+    generate_mesh: (level: number) => { positions: number[] | Float32Array };
     nowMs?: () => number;
 }
 
-export function createPerfRunner(deps: PerfRunnerDeps = {}) {
+export function createPerfRunner(deps: PerfRunnerDeps) {
     const {
-        WorldSimController,
+        WorldSimController: WorldSimControllerConstructor,
         build_render_positions,
         generate_mesh,
         nowMs = defaultNowMs,
     } = deps;
 
-    if (typeof WorldSimController !== "function") {
+    if (typeof WorldSimControllerConstructor !== "function") {
         throw new Error("WorldSimController is required");
     }
     if (typeof build_render_positions !== "function") {
@@ -81,7 +86,7 @@ export function createPerfRunner(deps: PerfRunnerDeps = {}) {
         const normalizedSampleInterval = Math.max(1, Math.floor(sampleInterval));
         const totalTicks = Math.max(1, Math.floor(profile?.tickCount ?? 32));
         const deltaFieldKinds = getDeltaFieldKindsForProfile(profile);
-        let controllerState = createControllerState(WorldSimController, profile, level, terrainParams);
+        let controllerState = createControllerState(WorldSimControllerConstructor, profile, level, terrainParams);
         let controller = controllerState.controller;
         let worldId = controllerState.worldId;
 
@@ -93,7 +98,7 @@ export function createPerfRunner(deps: PerfRunnerDeps = {}) {
             notifyWarning(`geometry mesh unavailable (${formatError(error)})`);
         }
 
-        let core = controllerState.core;
+        let core: CoreBuffers = controllerState.core;
         const recorder = createTickPerfRecorder();
         const tickStart = Math.floor(controller.get_metrics(worldId)?.tick ?? 0);
         const wallStartedAt = nowMs();
@@ -117,9 +122,9 @@ export function createPerfRunner(deps: PerfRunnerDeps = {}) {
             if (shouldSampleBreakdown) {
                 diagnostics.profile_attempt_count += 1;
                 try {
-                    const profiled = typeof controller.exec_world_profiled_detail === "function"
-                        ? controller.exec_world_profiled_detail(worldId, 1)
-                        : controller.exec_world_profiled(worldId, 1);
+                    const profiled = (controller as any).exec_world_profiled_detail
+                        ? (controller as any).exec_world_profiled_detail(worldId, 1)
+                        : (controller as any).exec_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
                     recordProfiledStepSuccess(diagnostics, profiled);
@@ -130,7 +135,7 @@ export function createPerfRunner(deps: PerfRunnerDeps = {}) {
                     try {
                         const replayStart = nowMs();
                         controllerState = rebuildControllerState(
-                            WorldSimController,
+                            WorldSimControllerConstructor,
                             profile,
                             level,
                             terrainParams,
@@ -191,9 +196,9 @@ export function createPerfRunner(deps: PerfRunnerDeps = {}) {
             if (shouldRunGeometry) {
                 const geometryStart = nowMs();
                 try {
-                    build_render_positions!({
-                        base_positions: basePositions,
-                        height_data: core.heightData,
+                    build_render_positions({
+                        base_positions: basePositions!,
+                        height_data: core.heightData as Float32Array,
                         surface_mode: profile?.surfaceMode ?? "globe",
                     });
                 } catch (error) {

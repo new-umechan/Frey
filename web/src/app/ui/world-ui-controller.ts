@@ -1,4 +1,42 @@
-export function createWorldUiController(options: any = {}) {
+import { type AppState } from "../core/app-state";
+import { type RuntimeState } from "../runtime/state";
+import { type EraMetrics, type EraScalePreset, type EraScaleWeightFields } from "../core/era-presets";
+import { type PlateHoverController } from "../input/plate-hover";
+
+export interface WorldUiController {
+    setSurfaceMode: (nextMode: string) => void;
+    setDebugModeEnabled: (nextEnabled: boolean) => void;
+    setEraScale: (nextEraScale: string, metrics?: EraMetrics | null) => void;
+}
+
+export interface WorldUiControllerOptions {
+    cameraController: any;
+    terrainRenderer: any;
+    wireframe: any;
+    plateHover: PlateHoverController;
+    debugToggleInput: HTMLInputElement;
+    statusEraLabel: HTMLElement;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    getEraScalePreset: (era: string) => EraScalePreset;
+    createEraMetrics: (era: string) => EraMetrics;
+    renderEraScaleControls: (
+        select: HTMLSelectElement,
+        label: HTMLElement,
+        fields: EraScaleWeightFields,
+        era: string,
+        metrics: EraMetrics,
+    ) => void;
+    worldState: RuntimeState;
+    defaultEraScale: string;
+    getState: () => AppState;
+    setState: (patch: Partial<AppState>) => void;
+    setStatus: (msg: string) => void;
+    appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
+}
+
+export function createWorldUiController(options: WorldUiControllerOptions): WorldUiController {
     const {
         cameraController,
         terrainRenderer,
@@ -20,7 +58,7 @@ export function createWorldUiController(options: any = {}) {
         appendPlaybackEvent,
     } = options;
 
-    const setSurfaceMode = (nextMode) => {
+    const setSurfaceMode = (nextMode: string) => {
         const state = getState();
         const normalizedMode = nextMode === "map" ? "map" : "globe";
         if (state.currentSurfaceMode === normalizedMode && state.currentTerrainData) {
@@ -36,7 +74,7 @@ export function createWorldUiController(options: any = {}) {
         plateHover.hidePopup();
     };
 
-    const setDebugModeEnabled = (nextEnabled) => {
+    const setDebugModeEnabled = (nextEnabled: boolean) => {
         const state = getState();
         const debugEnabled = Boolean(nextEnabled);
         setState({ debugEnabled });
@@ -50,7 +88,7 @@ export function createWorldUiController(options: any = {}) {
         plateHover.syncDebugMode();
     };
 
-    const setEraScale = (nextEraScale, metrics = null) => {
+    const setEraScale = (nextEraScale: string, metrics: EraMetrics | null = null) => {
         const state = getState();
         const previousEra = state.currentEraScale;
         const currentEraScale = getEraScalePreset(nextEraScale).key ?? defaultEraScale;

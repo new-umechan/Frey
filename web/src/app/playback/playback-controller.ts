@@ -8,10 +8,31 @@ import {
     resolveStepTick,
     sanitizeTick,
 } from "./tick-utils";
+import { type PlaybackControlsElements } from "../../ui/dom";
+import { type PlaybackState, type RuntimeState } from "../runtime/state";
+import { type WorldSimController } from "../../interface/wasm";
+import { type CoreBuffers } from "../world-sync/types";
 
 const PLAYBACK_OVERLAY_IDLE_MS = 3600;
 const PLAY_ICON = '<svg class="glyph-icon glyph-icon-play" viewBox="0 0 16 18" aria-hidden="true"><path d="M8.78626e-08 2.00059C-0.000104208 1.64868 0.0926453 1.30298 0.268884 0.998383C0.445122 0.693786 0.69861 0.441083 1.00375 0.265789C1.30889 0.090495 1.65488 -0.00118309 2.00679 1.15272e-05C2.3587 0.00120614 2.70406 0.0952313 3.008 0.272593L15.005 7.27059C15.3078 7.44627 15.5591 7.69834 15.7339 8.0016C15.9088 8.30486 16.0009 8.64869 16.0012 8.99873C16.0015 9.34877 15.91 9.69276 15.7357 9.99633C15.5614 10.2999 15.3105 10.5524 15.008 10.7286L3.008 17.7286C2.70406 17.906 2.3587 18 2.00679 18.0012C1.65488 18.0024 1.30889 17.9107 1.00375 17.7354C0.69861 17.5601 0.445122 17.3074 0.268884 17.0028C0.0926453 16.6982 -0.000104208 16.3525 8.78626e-08 16.0006V2.00059Z" /></svg>';
 const PAUSE_ICON = '<svg class="glyph-icon glyph-icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 3H15C14.4477 3 14 3.44772 14 4V20C14 20.5523 14.4477 21 15 21H18C18.5523 21 19 20.5523 19 20V4C19 3.44772 18.5523 3 18 3Z" /><path d="M9 3H6C5.44772 3 5 3.44772 5 4V20C5 20.5523 5.44772 21 6 21H9C9.55228 21 10 20.5523 10 20V4C10 3.44772 9.55228 3 9 3Z" /></svg>';
+
+export interface PlaybackController {
+    appendPlaybackEvent: (type: string, label: string, detail?: any, tick?: number) => void;
+    bindOverlayActivityEvents: (element: HTMLElement) => () => void;
+    handleHistoryJump: (tickText: string) => void;
+    handleHistorySeek: (indexText: string) => void;
+    handleHistoryStepDirection: (direction: number) => void;
+    handleRewind: () => void;
+    handleStepForward: () => void;
+    handleTogglePlay: () => void;
+    notePlaybackOverlayActivity: () => void;
+    refreshHistoryTicks: () => void;
+    setPlaybackRunning: (nextPlaying: boolean) => void;
+    syncAfterWorldStep: (stepInfo?: { previousTick?: number; nextTick?: number }) => void;
+    syncAfterWorldSync: () => void;
+    syncPlaybackUi: () => void;
+}
 
 export function createPlaybackController({
     playbackControls,
@@ -25,7 +46,19 @@ export function createPlaybackController({
     syncWorldFromActiveController,
     stepWorldTick,
     setStatus,
-}) {
+}: {
+    playbackControls: PlaybackControlsElements;
+    eventLogList: HTMLUListElement;
+    playbackState: PlaybackState;
+    worldState: RuntimeState;
+    worldSimController: WorldSimController;
+    getActiveWorldId: () => string | null;
+    getCurrentTerrainData: () => CoreBuffers | null;
+    getWorldTick: () => number;
+    syncWorldFromActiveController: () => void;
+    stepWorldTick: () => void;
+    setStatus: (msg: string) => void;
+}): PlaybackController {
     const overlayController = createPlaybackOverlayController({
         overlay: playbackControls.overlay,
         idleMs: PLAYBACK_OVERLAY_IDLE_MS,
@@ -35,11 +68,11 @@ export function createPlaybackController({
         return Array.isArray(playbackState.availableTicks) ? playbackState.availableTicks : [];
     }
 
-    function getPreviousHistoryTick(baseTick) {
+    function getPreviousHistoryTick(baseTick: number) {
         return resolveStepTick(getAvailableTicks(), baseTick, -1, playbackState.historyInterval);
     }
 
-    function getNextHistoryTick(baseTick) {
+    function getNextHistoryTick(baseTick: number) {
         return resolveStepTick(getAvailableTicks(), baseTick, 1, playbackState.historyInterval);
     }
 
@@ -80,7 +113,7 @@ export function createPlaybackController({
         }
 
         const fallbackTick = ticks[ticks.length - 1];
-        const selectedTick = ticks.includes(playbackState.selectedTick)
+        const selectedTick = playbackState.selectedTick !== null && ticks.includes(playbackState.selectedTick)
             ? playbackState.selectedTick
             : fallbackTick;
         playbackState.selectedTick = selectedTick;
@@ -150,7 +183,7 @@ export function createPlaybackController({
         updateSeekSliderFill();
     }
 
-    function setPlaybackRunning(nextPlaying) {
+    function setPlaybackRunning(nextPlaying: boolean) {
         const normalized = Boolean(nextPlaying);
         if (playbackState.isPlaying === normalized) {
             return;
@@ -181,7 +214,7 @@ export function createPlaybackController({
             playbackState.historyInterval = interval;
         }
 
-        if (!normalized.includes(playbackState.selectedTick)) {
+        if (playbackState.selectedTick === null || !normalized.includes(playbackState.selectedTick)) {
             const candidates = normalized.filter((tick) => tick <= getWorldTick());
             playbackState.selectedTick = candidates.length > 0
                 ? candidates[candidates.length - 1]
@@ -193,7 +226,7 @@ export function createPlaybackController({
         updateMaxTickLabel();
     }
 
-    function restoreWorldToTick(targetTick) {
+    function restoreWorldToTick(targetTick: number | null) {
         const activeWorldId = getActiveWorldId();
         if (!activeWorldId || worldState.sliceBusy) {
             return;
@@ -217,7 +250,7 @@ export function createPlaybackController({
         }
     }
 
-    function appendPlaybackEvent(type, label, detail = "", tick = getWorldTick()) {
+    function appendPlaybackEvent(type: string, label: string, detail: any = "", tick: number = getWorldTick()) {
         const safeTick = sanitizeTick(tick);
         if (safeTick === null) {
             return;
@@ -260,7 +293,7 @@ export function createPlaybackController({
         stepWorldTick();
     }
 
-    function withHistoryRestore(callback) {
+    function withHistoryRestore(callback: () => void) {
         if (!getActiveWorldId()) {
             return;
         }
@@ -275,7 +308,7 @@ export function createPlaybackController({
         });
     }
 
-    function handleHistoryJump(tickText) {
+    function handleHistoryJump(tickText: string) {
         withHistoryRestore(() => {
             const targetTick = sanitizeTick(tickText);
             if (targetTick === null) {
@@ -285,7 +318,7 @@ export function createPlaybackController({
         });
     }
 
-    function handleHistorySeek(indexText) {
+    function handleHistorySeek(indexText: string) {
         withHistoryRestore(() => {
             const historyIndex = sanitizeTick(indexText);
             if (historyIndex === null) {
@@ -305,7 +338,7 @@ export function createPlaybackController({
         });
     }
 
-    function handleHistoryStepDirection(direction) {
+    function handleHistoryStepDirection(direction: number) {
         withHistoryRestore(() => {
             const normalizedDirection = direction >= 0 ? 1 : -1;
             const targetTick = normalizedDirection < 0
@@ -318,7 +351,7 @@ export function createPlaybackController({
         });
     }
 
-    function shouldRefreshHistoryOnAdvance(previousTick, nextTick) {
+    function shouldRefreshHistoryOnAdvance(previousTick: number | undefined, nextTick: number | undefined) {
         const safePrevTick = sanitizeTick(previousTick);
         const safeNextTick = sanitizeTick(nextTick);
         const interval = Math.max(1, sanitizeTick(playbackState.historyInterval) ?? 1);
@@ -332,7 +365,7 @@ export function createPlaybackController({
         return Math.floor(safePrevTick / interval) < Math.floor(safeNextTick / interval);
     }
 
-    function syncAfterWorldStep(stepInfo: any = {}) {
+    function syncAfterWorldStep(stepInfo: { previousTick?: number; nextTick?: number } = {}) {
         const worldTick = getWorldTick();
         const previousTick = stepInfo?.previousTick;
         const nextTick = stepInfo?.nextTick ?? worldTick;

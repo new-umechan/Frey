@@ -1,15 +1,38 @@
 import * as THREE from "three";
 import { type TickPerfRecorder } from "../perf/recorder";
+import { type CoreBuffers } from "../world-sync/types";
+import { type WorldChangeset } from "../world-sync/constants";
 
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;
-    terrainMaterial: any;
+    terrainMaterial: any; // TODO: improve this type if possible, likely a custom ShaderMaterial
     basePositions: Float32Array;
-    buildRenderPositions: (base: Float32Array, height: any, mode: string) => Float32Array;
-    buildRiverMaskTexture: (base: Float32Array, next: any, flux: any) => THREE.Texture;
+    buildRenderPositions: (base: Float32Array, height: Float32Array, mode: string) => Float32Array;
+    buildRiverMaskTexture: (base: Float32Array, next: Int32Array, flux: Float32Array) => THREE.Texture;
 }
 
-export function createTerrainRenderer(options: TerrainRendererOptions) {
+export interface TerrainRenderer {
+    initializeTerrain: (currentTerrainData: CoreBuffers, currentSurfaceMode: string) => void;
+    applyCoreChanges: (
+        currentTerrainData: CoreBuffers,
+        changes: WorldChangeset,
+        currentSurfaceMode: string,
+        tick: number,
+        perfRecorder?: TickPerfRecorder | null,
+    ) => void;
+    updateGeometryPositions: (
+        currentTerrainData: CoreBuffers,
+        currentSurfaceMode: string,
+        options?: { force?: boolean; heightChanged?: boolean; tick?: number },
+    ) => void;
+    applyTerrainMaterialState: (
+        currentViewMode: string,
+        debugEnabled: boolean,
+        currentCellMetric: string,
+    ) => void;
+}
+
+export function createTerrainRenderer(options: TerrainRendererOptions): TerrainRenderer {
     const {
         geometry,
         terrainMaterial,
@@ -33,42 +56,42 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         metric: ["terrainMetric"],
     };
 
-    function resolveMetricArray(currentTerrainData: any, metricKey: string): any {
+    function resolveMetricArray(currentTerrainData: CoreBuffers, metricKey: string): Float32Array | Int32Array | Uint32Array {
         switch (metricKey) {
         case "mantle_heat":
-            return currentTerrainData.mantleHeat;
+            return currentTerrainData.mantleHeat as Float32Array;
         case "erosion_rate":
-            return currentTerrainData.erosionRate;
+            return currentTerrainData.erosionRate as Float32Array;
         case "deposition_rate":
-            return currentTerrainData.depositionRate;
+            return currentTerrainData.depositionRate as Float32Array;
         case "temperature":
-            return currentTerrainData.temperature;
+            return currentTerrainData.temperature as Float32Array;
         case "precipitation":
-            return currentTerrainData.precipitation;
+            return currentTerrainData.precipitation as Float32Array;
         case "evapotranspiration":
-            return currentTerrainData.evapotranspiration;
+            return currentTerrainData.evapotranspiration as Float32Array;
         case "aridity":
-            return currentTerrainData.aridity;
+            return currentTerrainData.aridity as Float32Array;
         case "ocean_temperature":
-            return currentTerrainData.oceanTemperature;
+            return currentTerrainData.oceanTemperature as Float32Array;
         case "river_flux":
-            return currentTerrainData.riverFlux;
+            return currentTerrainData.riverFlux as Float32Array;
         case "runoff":
-            return currentTerrainData.runoff;
+            return currentTerrainData.runoff as Float32Array;
         case "river_transport_cost":
-            return currentTerrainData.riverTransportCost;
+            return currentTerrainData.riverTransportCost as Float32Array;
         case "height":
         default:
-            return currentTerrainData.heightData;
+            return currentTerrainData.heightData as Float32Array;
         }
     }
 
-    function updateMetricAttribute(currentTerrainData: any) {
+    function updateMetricAttribute(currentTerrainData: CoreBuffers) {
         const source = resolveMetricArray(currentTerrainData, currentMetricKey);
         if (!metricBuffer || metricBuffer.length !== source.length) {
             metricBuffer = new Float32Array(source.length);
         }
-        metricBuffer.set(source);
+        metricBuffer.set(source as any); // Use any for set to handle TypedArray types
         const metricAttr = ensureAttribute("terrainMetric", metricBuffer, 1);
         metricAttr.needsUpdate = true;
     }
@@ -83,7 +106,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         return attribute;
     }
 
-    function ensureTerrainAttributes(currentTerrainData: any) {
+    function ensureTerrainAttributes(currentTerrainData: CoreBuffers) {
         ensureAttribute("terrainHeight", currentTerrainData.heightData, 1);
         updateMetricAttribute(currentTerrainData);
         if (currentTerrainData.lakeDepth) {
@@ -108,9 +131,9 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         }
     }
 
-    function markTerrainChanges(changes: any) {
+    function markTerrainChanges(changes: WorldChangeset) {
         for (const [changeKey, attributeNames] of Object.entries(CORE_ATTRIBUTE_MAP)) {
-            if (!changes?.[changeKey]) {
+            if (!(changes as any)[changeKey]) {
                 continue;
             }
             for (const attributeName of attributeNames) {
@@ -119,7 +142,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         }
     }
 
-    function updateGeometryPositions(currentTerrainData: any, currentSurfaceMode: string, options: any = {}) {
+    function updateGeometryPositions(currentTerrainData: CoreBuffers, currentSurfaceMode: string, options: { force?: boolean; heightChanged?: boolean; tick?: number } = {}) {
         if (!currentTerrainData) {
             return;
         }
@@ -130,7 +153,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         }
         const positions = buildRenderPositions(
             basePositions,
-            currentTerrainData.heightData,
+            currentTerrainData.heightData as Float32Array,
             currentSurfaceMode,
         );
         if (!positionBuffer || positionBuffer.length !== positions.length) {
@@ -139,7 +162,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         positionBuffer.set(positions);
         const positionAttribute = ensureAttribute("position", positionBuffer, 3);
         positionAttribute.needsUpdate = true;
-        const currentTick = Number.isFinite(options.tick) ? options.tick : -1;
+        const currentTick = options.tick !== undefined && Number.isFinite(options.tick) ? options.tick : -1;
         const shouldRefreshNormals = options.force
             || surfaceModeChanged
             || (options.heightChanged && (currentTick - lastNormalRefreshTick >= NORMAL_REFRESH_INTERVAL_TICKS));
@@ -157,14 +180,14 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         lastSurfaceMode = currentSurfaceMode;
     }
 
-    function updateRiverMaskTexture(currentTerrainData: any) {
+    function updateRiverMaskTexture(currentTerrainData: CoreBuffers) {
         if (!currentTerrainData) {
             return;
         }
         const nextTexture = buildRiverMaskTexture(
             basePositions,
-            currentTerrainData.riverNext,
-            currentTerrainData.riverFlux,
+            currentTerrainData.riverNext as Int32Array,
+            currentTerrainData.riverFlux as Float32Array,
         );
         if (currentRiverMaskTexture) {
             currentRiverMaskTexture.dispose();
@@ -173,7 +196,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
         terrainMaterial.setRiverMaskTexture(nextTexture);
     }
 
-    function initializeTerrain(currentTerrainData: any, currentSurfaceMode: string) {
+    function initializeTerrain(currentTerrainData: CoreBuffers, currentSurfaceMode: string) {
         ensureTerrainAttributes(currentTerrainData);
         updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
             force: true,
@@ -184,8 +207,8 @@ export function createTerrainRenderer(options: TerrainRendererOptions) {
     }
 
     function applyCoreChanges(
-        currentTerrainData: any,
-        changes: any,
+        currentTerrainData: CoreBuffers,
+        changes: WorldChangeset,
         currentSurfaceMode: string,
         tick: number,
         perfRecorder: TickPerfRecorder | null = null,
