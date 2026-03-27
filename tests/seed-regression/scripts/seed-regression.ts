@@ -54,6 +54,9 @@ function parseArgs(argv) {
     for (let i = 0; i < argv.length; i += 1) {
         const token = argv[i];
         const next = argv[i + 1];
+        if (token === "--") {
+            continue;
+        }
 
         if (token.startsWith("--threshold-") && token !== "--threshold") {
             const suffix = token.slice("--threshold-".length);

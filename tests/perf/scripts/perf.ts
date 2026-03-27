@@ -43,6 +43,9 @@ function parseArgs(argv) {
     for (let i = 0; i < argv.length; i += 1) {
         const token = argv[i];
         const next = argv[i + 1];
+        if (token === "--") {
+            continue;
+        }
         switch (token) {
         case "--ticks":
             args.ticks = Math.max(1, Math.floor(parseNumber(next, "--ticks")));
