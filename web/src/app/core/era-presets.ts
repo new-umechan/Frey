@@ -6,6 +6,8 @@ import {
     type WorldSubsystemKey,
 } from "../../core/constants.js";
 
+export type { EraScaleConfig, WorldSubsystemKey };
+
 export interface EraMetrics {
     key: string;
     tickLabel: string;

@@ -32,10 +32,12 @@ import { createPlaybackController } from "../../playback/playback-controller.js"
 import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown.js";
 import { resetWorldProgress } from "../../sim/world-loop.js";
 import { createPerfRuntime } from "../perf-runtime.js";
+import { type RuntimeContext } from "./create-controller-runtime.js";
+import { type CoreBuffers } from "../../world-sync/types.js";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 
-function createWorldUiRuntime(context, playbackControllerRef) {
+function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: { current: any }) {
     const worldUiController = createWorldUiController({
         cameraController: context.cameraController,
         terrainRenderer: context.terrainRenderer,
@@ -54,7 +56,7 @@ function createWorldUiRuntime(context, playbackControllerRef) {
         getState: context.getState,
         setState: context.setState,
         setStatus: context.setStatus,
-        appendPlaybackEvent: (...args) => {
+        appendPlaybackEvent: (...args: any[]) => {
             playbackControllerRef.current?.appendPlaybackEvent(...args);
         },
     });
@@ -68,14 +70,14 @@ function createWorldUiRuntime(context, playbackControllerRef) {
     return {
         setDebugModeEnabled,
         setEraScale,
-        setSurfaceModeWithPinchReset: (nextMode) => {
+        setSurfaceModeWithPinchReset: (nextMode: string) => {
             context.globePinchFocusController.reset();
             setSurfaceMode(nextMode);
         },
     };
 }
 
-function createWorldSessionRuntime(context, playbackControllerRef, setEraScale) {
+function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void) {
     return createWorldSessionController({
         worldSimController: context.worldSimController,
         world: context.world,
@@ -85,7 +87,7 @@ function createWorldSessionRuntime(context, playbackControllerRef, setEraScale) 
         setEraScale,
         syncWorldFromController,
         refreshWorldStatsFromController,
-        setCurrentTerrainData: (core) => {
+        setCurrentTerrainData: (core: CoreBuffers) => {
             context.setState({ currentTerrainData: core });
         },
         syncClimateUi: context.syncClimateUi,
@@ -103,7 +105,7 @@ function createWorldSessionRuntime(context, playbackControllerRef, setEraScale) 
     });
 }
 
-function createWorldStepperRuntime(context, playbackControllerRef, setEraScale, refreshWorldStats) {
+function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void, refreshWorldStats: () => boolean) {
     return createWorldStepper({
         worldSimController: context.worldSimController,
         world: context.world,
@@ -127,7 +129,7 @@ function createWorldStepperRuntime(context, playbackControllerRef, setEraScale, 
     });
 }
 
-function createViewModeRuntime(context, syncVisibleFieldsForCurrentView) {
+function createViewModeRuntime(context: RuntimeContext, syncVisibleFieldsForCurrentView: () => void) {
     return createViewModeController({
         viewModeInputs: context.viewModeInputs,
         normalizeCellMetric,
@@ -138,16 +140,16 @@ function createViewModeRuntime(context, syncVisibleFieldsForCurrentView) {
         getCurrentViewMode: () => context.getState().currentViewMode,
         getCurrentCellMetric: () => context.getState().currentCellMetric,
         getDebugEnabled: () => context.getState().debugEnabled,
-        setCurrentViewMode: (nextMode) => {
+        setCurrentViewMode: (nextMode: string) => {
             context.setState({ currentViewMode: nextMode });
         },
-        setCurrentCellMetric: (nextMetric) => {
+        setCurrentCellMetric: (nextMetric: string) => {
             context.setState({ currentCellMetric: nextMetric });
         },
     });
 }
 
-function createTerrainGenerationRuntime(context, playbackControllerRef, syncWorldFromActiveController) {
+function createTerrainGenerationRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, syncWorldFromActiveController: () => any) {
     return createTerrainGenerationController({
         seedForm: context.seedForm,
         seedInput: context.seedInput,
@@ -166,10 +168,10 @@ function createTerrainGenerationRuntime(context, playbackControllerRef, syncWorl
         getCurrentEraScale: () => context.getState().currentEraScale,
         getCurrentSeed: () => context.getState().currentSeed,
         setCurrentState: context.setState,
-        setPlaybackRunning: (isPlaying) => {
+        setPlaybackRunning: (isPlaying: boolean) => {
             playbackControllerRef.current?.setPlaybackRunning(isPlaying);
         },
-        appendPlaybackEvent: (...args) => {
+        appendPlaybackEvent: (...args: any[]) => {
             playbackControllerRef.current?.appendPlaybackEvent(...args);
         },
         onInitWorldStart: async () => {
@@ -184,7 +186,7 @@ function createTerrainGenerationRuntime(context, playbackControllerRef, syncWorl
     });
 }
 
-function createPlaybackRuntime(context, syncWorldFromActiveController, stepWorldTick) {
+function createPlaybackRuntime(context: RuntimeContext, syncWorldFromActiveController: () => any, stepWorldTick: (perfRecorder?: any) => any) {
     return createPlaybackController({
         playbackControls: context.playbackControls,
         eventLogList: context.eventLogList,
@@ -200,7 +202,7 @@ function createPlaybackRuntime(context, syncWorldFromActiveController, stepWorld
     });
 }
 
-function createPerfControllers(context, playbackControllerRef) {
+function createPerfControllers(context: RuntimeContext, playbackControllerRef: { current: any }) {
     const { perfUiEnabled, perfBenchmarkController } = createPerfRuntime({
         isPerfEnabled: context.isPerfEnabled,
         perfControls: context.perfControls,
@@ -219,7 +221,7 @@ function createPerfControllers(context, playbackControllerRef) {
             const state = context.getState();
             return Boolean(state.activeWorldId && state.currentTerrainData);
         },
-        setPlaybackRunning: (nextPlaying) => {
+        setPlaybackRunning: (nextPlaying: boolean) => {
             const wasPlaying = context.worldState.playback.isPlaying;
             playbackControllerRef.current?.setPlaybackRunning(nextPlaying);
             return wasPlaying;
@@ -237,8 +239,8 @@ function createPerfControllers(context, playbackControllerRef) {
     };
 }
 
-export function createRuntimeControllers(context) {
-    const playbackControllerRef = { current: null };
+export function createRuntimeControllers(context: RuntimeContext) {
+    const playbackControllerRef: { current: any } = { current: null };
     const {
         setDebugModeEnabled,
         setEraScale,

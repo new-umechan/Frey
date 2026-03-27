@@ -2,8 +2,50 @@ import { WorldSimController } from "../../../interface/wasm.js";
 import { createRuntimeControllers } from "./controller-factories.js";
 import { DEFAULT_ERA_SCALE } from "../../../core/constants.js";
 import { runInitialWorldAndUiSync } from "../post-init-sync.js";
+import { type AppElements, type StatFields } from "../../../ui/dom.js";
+import { type AppState, type WorldState } from "../../core/app-state.js";
+import { type EraMetrics } from "../../core/era-presets.js";
+import { type RuntimeState } from "../../runtime/state.js";
 
-function createRuntimeContext(options = {}) {
+export interface ControllerDeps {
+    elements: AppElements;
+    isPerfEnabled: boolean;
+    setStatus: (msg: string) => void;
+    world: WorldState;
+    worldState: RuntimeState;
+    getState: () => AppState;
+    setState: (patch: Partial<AppState>) => void;
+    getCurrentEraMetrics: () => EraMetrics;
+    cameraController: any;
+    terrainRenderer: any;
+    wireframe: any;
+    plateHover: any;
+    globePinchFocusController: any;
+    loadingOverlayController: any;
+    syncClimateUi: () => void;
+    renderFrame: () => void;
+    renderInitializationFrames: any;
+}
+
+export interface RuntimeContext extends ControllerDeps {
+    seedForm: HTMLFormElement;
+    seedInput: HTMLInputElement;
+    debugToggleInput: HTMLInputElement;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: HTMLElement;
+    viewModeInputs: NodeListOf<HTMLInputElement>;
+    statFields: StatFields;
+    statusEraLabel: HTMLElement;
+    playbackControls: any;
+    eventLogList: HTMLElement;
+    perfControls: any;
+    perfStatFields: StatFields;
+    viewportPanel: HTMLElement;
+    worldSimController: WorldSimController;
+}
+
+function createRuntimeContext(options: ControllerDeps): RuntimeContext {
     const {
         elements,
         isPerfEnabled,
@@ -73,10 +115,11 @@ function createRuntimeContext(options = {}) {
         perfControls,
         perfStatFields,
         viewportPanel,
+        worldSimController: null as any, // Initialized later
     };
 }
 
-async function runInitialSync(context, runtimeControllers) {
+async function runInitialSync(context: RuntimeContext, runtimeControllers: any) {
     await runInitialWorldAndUiSync({
         updateTerrain: runtimeControllers.updateTerrain,
         defaultTerrainSeed: context.getState().currentSeed,
@@ -97,12 +140,12 @@ async function runInitialSync(context, runtimeControllers) {
     });
 }
 
-function shouldAdvanceWorld(context) {
+function shouldAdvanceWorld(context: RuntimeContext) {
     const state = context.getState();
     return context.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
 }
 
-export function createControllerRuntime(options = {}) {
+export function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
     context.worldSimController = new WorldSimController();
 

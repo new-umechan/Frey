@@ -1,16 +1,16 @@
 import * as THREE from "three";
 
-function srgbHexToLinearRgb(hex) {
+function srgbHexToLinearRgb(hex: string): THREE.Vector3 {
     const color = new THREE.Color(hex);
     return new THREE.Vector3(color.r, color.g, color.b);
 }
 
-function viewModeToNumber(mode) {
+function viewModeToNumber(mode: string): number {
     return mode === "normal" ? 0 : 1;
 }
 
-function metricKeyToNumber(metricKey) {
-    const kindByKey = {
+function metricKeyToNumber(metricKey: string): number {
+    const kindByKey: Record<string, number> = {
         height: 0,
         mantle_heat: 1,
         erosion_rate: 2,
@@ -27,7 +27,16 @@ function metricKeyToNumber(metricKey) {
     return kindByKey[metricKey] ?? 0;
 }
 
-export function createTerrainMaterial() {
+export interface TerrainMaterialController {
+    material: THREE.MeshStandardMaterial;
+    setViewMode(mode: string): void;
+    setCellMetric(metricKey: string): void;
+    setDebugEnabled(enabled: boolean): void;
+    setRiverMaskTexture(texture: THREE.Texture): void;
+    dispose(): void;
+}
+
+export function createTerrainMaterial(): TerrainMaterialController {
     const emptyRiverMask = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
     emptyRiverMask.wrapS = THREE.RepeatWrapping;
     emptyRiverMask.wrapT = THREE.ClampToEdgeWrapping;
@@ -253,7 +262,7 @@ diffuseColor.rgb = terrainColor;`,
 
     material.customProgramCacheKey = () => "frey-terrain-standard-v5";
 
-    const controller = {
+    const controller: TerrainMaterialController = {
         material,
         setViewMode(mode) {
             uniforms.uViewMode.value = viewModeToNumber(mode);

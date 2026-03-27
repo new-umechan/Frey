@@ -1,13 +1,13 @@
 const PERF_LABEL = "perf-32";
 
-function roundMetric(value) {
+function roundMetric(value: number): number {
     if (!Number.isFinite(value)) {
         return 0;
     }
     return Math.round(value * 1000) / 1000;
 }
 
-function percentile(sortedValues, ratio) {
+function percentile(sortedValues: number[], ratio: number): number {
     if (sortedValues.length === 0) {
         return 0;
     }
@@ -19,7 +19,17 @@ function percentile(sortedValues, ratio) {
     return sortedValues[index];
 }
 
-function summarizeSamples(samples) {
+export interface MetricStats {
+    count: number;
+    mean: number;
+    min: number;
+    max: number;
+    p50: number;
+    p95: number;
+    p99: number;
+}
+
+function summarizeSamples(samples: number[]): MetricStats {
     const values = Array.isArray(samples) ? samples.filter((value) => Number.isFinite(value)) : [];
     const sorted = values.slice().sort((a, b) => a - b);
     const count = sorted.length;
@@ -38,17 +48,23 @@ function summarizeSamples(samples) {
     };
 }
 
-export function createTickPerfRecorder() {
-    const sampleBuckets = new Map();
+export interface TickPerfRecorder {
+    measure: <T>(name: string, callback: () => T) => T;
+    pushSample: (name: string, valueMs: number) => void;
+    buildSummary: () => Record<string, MetricStats>;
+}
 
-    function pushSample(name, valueMs) {
+export function createTickPerfRecorder(): TickPerfRecorder {
+    const sampleBuckets = new Map<string, number[]>();
+
+    function pushSample(name: string, valueMs: number) {
         if (!sampleBuckets.has(name)) {
             sampleBuckets.set(name, []);
         }
-        sampleBuckets.get(name).push(valueMs);
+        sampleBuckets.get(name)!.push(valueMs);
     }
 
-    function measure(name, callback) {
+    function measure<T>(name: string, callback: () => T): T {
         const start = performance.now();
         const result = callback();
         pushSample(name, performance.now() - start);
@@ -59,7 +75,7 @@ export function createTickPerfRecorder() {
         measure,
         pushSample,
         buildSummary() {
-            const summary = {};
+            const summary: Record<string, MetricStats> = {};
             for (const [name, samples] of sampleBuckets.entries()) {
                 summary[name] = summarizeSamples(samples);
             }
@@ -79,11 +95,11 @@ export function createPerfProfile(overrides = {}) {
     };
 }
 
-export function createPerfConsoleTable(result) {
+export function createPerfConsoleTable(result: any) {
     if (!result?.metrics) {
         return [];
     }
-    return Object.entries(result.metrics).map(([name, stats]) => ({
+    return Object.entries(result.metrics).map(([name, stats]: [string, any]) => ({
         metric: name,
         count: stats.count,
         mean_ms: stats.mean,
@@ -95,7 +111,7 @@ export function createPerfConsoleTable(result) {
     }));
 }
 
-export function formatPerfSummaryLine(result) {
+export function formatPerfSummaryLine(result: any) {
     if (!result?.metrics?.tick_total) {
         return "No performance data.";
     }

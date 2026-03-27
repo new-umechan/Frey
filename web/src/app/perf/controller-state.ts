@@ -1,6 +1,17 @@
-import { buildCoreBuffers } from "./world-core.js";
+import { buildCoreBuffers, type CoreBuffers } from "./world-core.js";
 
-export function createControllerState(WorldSimController, profile, level, terrainParams) {
+export interface ControllerState {
+    controller: any;
+    worldId: string;
+    core: CoreBuffers;
+}
+
+export function createControllerState(
+    WorldSimController: any,
+    profile: any,
+    level: number,
+    terrainParams: any
+): ControllerState {
     const controller = new WorldSimController();
     const initResult = controller.init_world(profile.seed ?? "alpha", level, {
         geology_params: terrainParams,
@@ -17,13 +28,13 @@ export function createControllerState(WorldSimController, profile, level, terrai
 }
 
 export function rebuildControllerState(
-    WorldSimController,
-    profile,
-    level,
-    terrainParams,
-    completedTicks,
-    deltaFieldKinds,
-) {
+    WorldSimController: any,
+    profile: any,
+    level: number,
+    terrainParams: any,
+    completedTicks: number,
+    deltaFieldKinds: string[]
+): ControllerState {
     const state = createControllerState(WorldSimController, profile, level, terrainParams);
     if (completedTicks > 0) {
         state.controller.exec_world(state.worldId, completedTicks);

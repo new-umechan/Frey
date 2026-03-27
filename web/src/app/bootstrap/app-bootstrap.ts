@@ -1,20 +1,18 @@
 import { bindAppUiControls } from "../ui/ui-bindings.js";
 import { createEraMetrics } from "../core/era-presets.js";
-import { createRuntimeStore } from "./runtime-store.js";
-import { createSceneRuntime } from "./scene-runtime.js";
-import { createControllerRuntime } from "./controller-runtime/create-controller-runtime.js";
+import { createRuntimeStore, type RuntimeStore } from "./runtime-store.js";
+import { createSceneRuntime, type SceneRuntime } from "./scene-runtime.js";
+import { createControllerRuntime, type ControllerDeps } from "./controller-runtime/create-controller-runtime.js";
 import { renderInitializationFrames } from "./initialization-frames.js";
 import { type AppElements } from "../../ui/dom.js";
 
-interface ControllerDepsOptions {
+function createControllerDeps(options: {
     elements: AppElements;
     isPerfEnabled: boolean;
     setStatus: (msg: string) => void;
-    runtimeStore: any;
-    sceneRuntime: any;
-}
-
-function createControllerDeps(options: ControllerDepsOptions) {
+    runtimeStore: RuntimeStore;
+    sceneRuntime: SceneRuntime;
+}): ControllerDeps {
     const {
         elements,
         isPerfEnabled,
@@ -46,7 +44,7 @@ function createControllerDeps(options: ControllerDepsOptions) {
 
 interface BindRuntimeUiOptions {
     elements: AppElements;
-    sceneRuntime: any;
+    sceneRuntime: SceneRuntime;
     controllerRuntime: any;
     getState: () => any;
     setStatus: (msg: string) => void;

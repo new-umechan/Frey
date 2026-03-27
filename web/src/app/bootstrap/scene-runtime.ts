@@ -1,4 +1,4 @@
-import { resizeViewport, createGlobeScene } from "../../gfx/scene.js";
+import { resizeViewport, createGlobeScene, type GlobeScene } from "../../gfx/scene.js";
 import { buildRiverMaskTexture } from "../../gfx/materials/river-mask.js";
 import { createCameraController } from "../../gfx/views/camera-controller.js";
 import { createGlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller.js";
@@ -9,8 +9,29 @@ import { createClimateUiController } from "../ui/climate-ui-controller.js";
 import { createPlateHover } from "../input/plate-hover.js";
 import { createTerrainRenderer } from "../rendering/terrain-renderer.js";
 import { DEFAULT_VIEW_MODE } from "../../core/constants.js";
+import { type AppElements } from "../../ui/dom.js";
+import { type AppState } from "../core/app-state.js";
 
-export function createSceneRuntime(options = {}) {
+export interface SceneRuntimeOptions {
+    elements: AppElements;
+    indices: Uint32Array;
+    basePositions: Float32Array;
+    getState: () => AppState;
+}
+
+export interface SceneRuntime {
+    cameraController: any;
+    terrainRenderer: any;
+    wireframe: any;
+    plateHover: any;
+    globePinchFocusController: any;
+    loadingOverlayController: any;
+    syncClimateUi: () => void;
+    renderFrame: () => void;
+    onResize: () => void;
+}
+
+export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     const {
         elements,
         indices,
@@ -37,7 +58,7 @@ export function createSceneRuntime(options = {}) {
         wireframe,
         halo,
         terrainMaterial,
-    } = createGlobeScene(canvas, indices);
+    }: GlobeScene = createGlobeScene(canvas, indices);
 
     const cameraController = createCameraController({
         globeCamera,

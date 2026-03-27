@@ -9,9 +9,16 @@ import {
     pushStepBreakdownSamples,
     roundMs,
 } from "./helpers.js";
-import { applyWorldDeltaToCore, estimateRiverMaskUpdate } from "./world-core.js";
+import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset } from "./world-core.js";
 
-export function createPerfRunner(deps = {}) {
+export interface PerfRunnerDeps {
+    WorldSimController?: any;
+    build_render_positions?: (options: any) => void;
+    generate_mesh?: (level: number) => any;
+    nowMs?: () => number;
+}
+
+export function createPerfRunner(deps: PerfRunnerDeps = {}) {
     const {
         WorldSimController,
         build_render_positions,
@@ -29,7 +36,7 @@ export function createPerfRunner(deps = {}) {
         throw new Error("generate_mesh is required");
     }
 
-    async function runBenchmark(options = {}) {
+    async function runBenchmark(options: any = {}) {
         const {
             runId = "bench",
             profile = {},
@@ -45,7 +52,7 @@ export function createPerfRunner(deps = {}) {
         } = options;
 
         let warningEmitted = false;
-        const notifyWarning = (message) => {
+        const notifyWarning = (message: string) => {
             if (warningEmitted) {
                 return;
             }
@@ -55,7 +62,7 @@ export function createPerfRunner(deps = {}) {
             }
         };
 
-        const postProgress = (payload = {}) => {
+        const postProgress = (payload: any = {}) => {
             if (typeof onProgress !== "function") {
                 return;
             }
@@ -78,7 +85,7 @@ export function createPerfRunner(deps = {}) {
         let controller = controllerState.controller;
         let worldId = controllerState.worldId;
 
-        let basePositions = null;
+        let basePositions: Float32Array | null = null;
         try {
             const baseMesh = generate_mesh(level);
             basePositions = new Float32Array(baseMesh?.positions ?? []);
@@ -156,12 +163,12 @@ export function createPerfRunner(deps = {}) {
             recorder.pushSample("exec_world", stepElapsedMs);
 
             const deltaStart = nowMs();
-            let changes = {
+            let changes: WorldChangeset = {
                 height: false,
                 heightChangedCount: 0,
                 river: false,
                 mantleHeat: false,
-                climate: false,
+                metric: false,
             };
             try {
                 const worldDelta = controller.get_world_delta(worldId, {
@@ -184,7 +191,7 @@ export function createPerfRunner(deps = {}) {
             if (shouldRunGeometry) {
                 const geometryStart = nowMs();
                 try {
-                    build_render_positions({
+                    build_render_positions!({
                         base_positions: basePositions,
                         height_data: core.heightData,
                         surface_mode: profile?.surfaceMode ?? "globe",

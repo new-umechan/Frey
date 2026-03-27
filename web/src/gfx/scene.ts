@@ -1,12 +1,26 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
-import { createTerrainMaterial } from "./materials/terrain.js";
+import { createTerrainMaterial, type TerrainMaterialController } from "./materials/terrain.js";
 
 const PLANET_CENTER_X = 0.16;
 const INITIAL_GLOBE_CAMERA_DISTANCE = 3.2;
 
-export function createGlobeScene(canvas, indices) {
+export interface GlobeScene {
+    scene: THREE.Scene;
+    globeCamera: THREE.PerspectiveCamera;
+    mapCamera: THREE.OrthographicCamera;
+    renderer: THREE.WebGLRenderer;
+    globeControls: TrackballControls;
+    mapControls: OrbitControls;
+    geometry: THREE.BufferGeometry;
+    sphere: THREE.Mesh;
+    wireframe: THREE.Mesh;
+    halo: THREE.Mesh;
+    terrainMaterial: TerrainMaterialController;
+}
+
+export function createGlobeScene(canvas: HTMLCanvasElement, indices: Uint32Array): GlobeScene {
     const scene = new THREE.Scene();
     scene.background = null;
 
@@ -105,7 +119,12 @@ export function createGlobeScene(canvas, indices) {
     };
 }
 
-export function resizeViewport(viewportPanel, globeCamera, mapCamera, renderer) {
+export function resizeViewport(
+    viewportPanel: HTMLElement,
+    globeCamera: THREE.PerspectiveCamera,
+    mapCamera: THREE.OrthographicCamera,
+    renderer: THREE.WebGLRenderer
+): void {
     const width = viewportPanel.clientWidth;
     const height = viewportPanel.clientHeight;
     if (width <= 0 || height <= 0) {

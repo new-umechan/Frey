@@ -5,35 +5,35 @@ import {
     STEP_BREAKDOWN_METRIC_NAMES,
 } from "./constants.js";
 
-export function defaultNowMs() {
+export function defaultNowMs(): number {
     if (globalThis.performance && typeof globalThis.performance.now === "function") {
         return globalThis.performance.now();
     }
     return Date.now();
 }
 
-export function roundMs(value) {
+export function roundMs(value: number): number {
     if (!Number.isFinite(value)) {
         return 0;
     }
     return Math.round(value * 1000) / 1000;
 }
 
-export function roundRatio(value) {
+export function roundRatio(value: number): number {
     if (!Number.isFinite(value)) {
         return 0;
     }
     return Math.round(value * 1000000) / 1000000;
 }
 
-export function formatError(error) {
+export function formatError(error: any): string {
     if (error instanceof Error) {
         return `${error.name}: ${error.message}`;
     }
     return String(error);
 }
 
-export function getDeltaFieldKindsForProfile(profile) {
+export function getDeltaFieldKindsForProfile(profile: any): string[] {
     if (profile?.viewMode === "metric") {
         const metricField = FIELD_KIND_BY_CELL_METRIC[profile?.cellMetric] ?? "height";
         return ["height", "river_flux", "river_next", metricField];
@@ -41,13 +41,13 @@ export function getDeltaFieldKindsForProfile(profile) {
     return DELTA_FIELD_KIND_BY_VIEW[profile?.viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }
 
-export function pushStepBreakdownSamples(recorder, profiledResult) {
+export function pushStepBreakdownSamples(recorder: any, profiledResult: any): void {
     if (!profiledResult) {
         return;
     }
     const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
     for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = profiledResult[`${metricName}_ms`];
+        const rawValue = (profiledResult as any)[`${metricName}_ms`];
         if (!Number.isFinite(rawValue)) {
             continue;
         }
@@ -55,13 +55,13 @@ export function pushStepBreakdownSamples(recorder, profiledResult) {
     }
 }
 
-export function pushRiverBreakdownSamples(recorder, profiledResult) {
+export function pushRiverBreakdownSamples(recorder: any, profiledResult: any): void {
     if (!profiledResult) {
         return;
     }
     const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
     for (const metricName of RIVER_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = profiledResult[`${metricName}_ms`];
+        const rawValue = (profiledResult as any)[`${metricName}_ms`];
         if (!Number.isFinite(rawValue)) {
             continue;
         }

@@ -1,10 +1,11 @@
 import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants.js";
+import { type CoreBuffers } from "../world-sync/types.js";
 
 export interface PlaybackState {
     isPlaying: boolean;
     historyInterval: number;
     selectedTick: number | null;
-    availableTicks: any[];
+    availableTicks: number[];
     eventLog: any[];
     nextLogId: number;
 }
@@ -20,7 +21,7 @@ function createInitialPlaybackState(): PlaybackState {
     };
 }
 
-export function createEmptyCore(): any {
+export function createEmptyCore(): CoreBuffers | null {
     return null;
 }
 

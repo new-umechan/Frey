@@ -9,7 +9,7 @@ export const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_sync_erosion",
     "step_observe_world_change",
     "step_history_snapshot",
-];
+] as const;
 
 export const RIVER_BREAKDOWN_METRIC_NAMES = [
     "step_geology_river_prepare",
@@ -20,9 +20,9 @@ export const RIVER_BREAKDOWN_METRIC_NAMES = [
     "step_geology_river_network",
     "step_geology_river_sync",
     "step_geology_river_fallback",
-];
+] as const;
 
-export const FLOAT32_FIELDS = new Set([
+export const FLOAT32_FIELDS = new Set<string>([
     "height",
     "river_flux",
     "mantle_heat",
@@ -41,12 +41,12 @@ export const FLOAT32_FIELDS = new Set([
     "river_transport_cost",
 ]);
 
-export const DELTA_FIELD_KIND_BY_VIEW = Object.freeze({
+export const DELTA_FIELD_KIND_BY_VIEW: Record<string, string[]> = Object.freeze({
     normal: ["height", "river_flux", "river_next"],
     metric: ["height", "river_flux", "river_next"],
 });
 
-export const FIELD_KIND_BY_CELL_METRIC = Object.freeze({
+export const FIELD_KIND_BY_CELL_METRIC: Record<string, string> = Object.freeze({
     height: "height",
     mantle_heat: "mantle_heat",
     erosion_rate: "erosion_rate",

@@ -1,4 +1,29 @@
-export function createWorldStepper(options = {}) {
+import { type WorldState, type AppState } from "../core/app-state.js";
+import { type RuntimeState } from "../runtime/state.js";
+import { type EraMetrics, type EraScaleConfig } from "../core/era-presets.js";
+import { type TickPerfRecorder } from "../perf/recorder.js";
+
+export interface WorldStepperOptions {
+    worldSimController: any;
+    world: WorldState;
+    worldState: RuntimeState;
+    terrainRenderer: any;
+    createEraMetrics: (era: string) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    setEraScale: (era: string) => void;
+    syncWorldDeltaFromController: (options: any) => any;
+    syncVisibleCoreFieldsFromController: (options: any) => any;
+    getDeltaFieldKindsForView: (options: any) => string[];
+    refreshWorldStats: (options: any) => any;
+    syncClimateUi: () => void;
+    syncAfterWorldStep: (options: any) => void;
+    setStatus: (msg: string) => void;
+    getCurrentState: () => AppState;
+    pushStepBreakdownSamples: (recorder: TickPerfRecorder, profiled: any) => void;
+    getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
+}
+
+export function createWorldStepper(options: WorldStepperOptions) {
     const {
         worldSimController,
         world,
@@ -19,7 +44,7 @@ export function createWorldStepper(options = {}) {
         getEraScalePreset,
     } = options;
 
-    const shouldRefreshStatsForAdvance = (previousTick, nextTick) => {
+    const shouldRefreshStatsForAdvance = (previousTick: number | undefined, nextTick: number | undefined): boolean => {
         const safePrev = Math.max(0, Math.floor(previousTick ?? 0));
         const safeNext = Math.max(safePrev, Math.floor(nextTick ?? safePrev));
         if (safeNext <= safePrev) {
@@ -50,7 +75,7 @@ export function createWorldStepper(options = {}) {
         terrainRenderer.applyCoreChanges(state.currentTerrainData, changes, state.currentSurfaceMode, world.tick);
     };
 
-    const syncCompletedWorldStep = (tickOptions = {}, perfRecorder = null) => {
+    const syncCompletedWorldStep = (tickOptions: any = {}, perfRecorder: TickPerfRecorder | null = null) => {
         const liveState = getCurrentState();
         const benchmarkMode = tickOptions?.benchmarkMode === true;
         const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
@@ -92,7 +117,7 @@ export function createWorldStepper(options = {}) {
         return true;
     };
 
-    const stepWorldTick = (perfRecorder = null, tickOptions = {}) => {
+    const stepWorldTick = (perfRecorder: TickPerfRecorder | null = null, tickOptions: any = {}) => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             return false;

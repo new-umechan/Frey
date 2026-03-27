@@ -1,15 +1,50 @@
 import { getMetricCategories } from "../../app/rendering/cell-metric.js";
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
-export function createViewCuiController({
-    viewModeInputs,
-    getCurrentCellMetric,
-    onViewModeChange,
-    onCellMetricChange,
-}) {
+export interface ViewCuiController {
+    moveViewCursor: (delta: number) => void;
+    commitViewSelection: (index?: number) => void;
+    backViewMenu: () => boolean;
+    handleDigitSelect: (key: string) => boolean;
+}
+
+interface ViewMenuEntryBase {
+    label: string;
+}
+
+interface ViewMenuModeEntry extends ViewMenuEntryBase {
+    type: "mode";
+    value: string;
+}
+
+interface ViewMenuNextEntry extends ViewMenuEntryBase {
+    type: "next";
+    next: string;
+}
+
+interface ViewMenuMetricEntry extends ViewMenuEntryBase {
+    type: "metric";
+    value: string;
+}
+
+type ViewMenuEntry = ViewMenuModeEntry | ViewMenuNextEntry | ViewMenuMetricEntry;
+
+export function createViewCuiController(options: {
+    viewModeInputs: HTMLInputElement[];
+    getCurrentCellMetric: () => string;
+    onViewModeChange: (mode: string) => void;
+    onCellMetricChange: (metric: string) => void;
+}): ViewCuiController {
+    const {
+        viewModeInputs,
+        getCurrentCellMetric,
+        onViewModeChange,
+        onCellMetricChange,
+    } = options;
+
     const viewCuiContext = document.getElementById("view-cui-context");
     const viewCuiOptions = document.getElementById("view-cui-options");
     const categories = getMetricCategories();
@@ -26,15 +61,15 @@ export function createViewCuiController({
         return getCurrentCellMetric?.() ?? "height";
     }
 
-    function appendCurrentSuffix(label, isCurrent) {
+    function appendCurrentSuffix(label: string, isCurrent: boolean) {
         return isCurrent ? `${label}（現在）` : label;
     }
 
-    function getCategoryByMenuKey(menuKey) {
+    function getCategoryByMenuKey(menuKey: string) {
         return categories.find((category) => category.key === menuKey) ?? null;
     }
 
-    function getViewMenuEntries(menuKey) {
+    function getViewMenuEntries(menuKey: string): ViewMenuEntry[] {
         const checkedMode = getCheckedViewMode();
         const checkedMetric = getCheckedMetric();
         if (menuKey === "root") {
@@ -47,11 +82,11 @@ export function createViewCuiController({
                 ...categories.map((category, index) => ({
                     label: appendCurrentSuffix(
                         `${index + 2}: ${category.label}`,
-                        checkedMode === "metric"
-                            && category.metrics.some((metric) => metric.key === checkedMetric),
+                        checkedMode === "metric" &&
+                            category.metrics.some((metric: any) => metric.key === checkedMetric)
                     ),
                     next: category.key,
-                    type: "next",
+                    type: "next" as const,
                 })),
             ];
         }
@@ -60,14 +95,17 @@ export function createViewCuiController({
         if (!category) {
             return [];
         }
-        return category.metrics.map((metric, index) => ({
-            label: appendCurrentSuffix(`${index + 1}: ${metric.label}`, checkedMode === "metric" && checkedMetric === metric.key),
+        return category.metrics.map((metric: any, index: number) => ({
+            label: appendCurrentSuffix(
+                `${index + 1}: ${metric.label}`,
+                checkedMode === "metric" && checkedMetric === metric.key
+            ),
             value: metric.key,
-            type: "metric",
+            type: "metric" as const,
         }));
     }
 
-    function getViewMenuContext(menuKey) {
+    function getViewMenuContext(menuKey: string) {
         if (menuKey === "root") {
             return "";
         }
@@ -78,7 +116,7 @@ export function createViewCuiController({
         return ` / ${category.label}`;
     }
 
-    function getParentMenuIndex(menuKey) {
+    function getParentMenuIndex(menuKey: string) {
         if (menuKey === "root") {
             return 0;
         }
@@ -100,13 +138,13 @@ export function createViewCuiController({
             }
             const checkedMetric = getCheckedMetric();
             const selectedCategoryIndex = categories.findIndex((category) => {
-                return category.metrics.some((metric) => metric.key === checkedMetric);
+                return category.metrics.some((metric: any) => metric.key === checkedMetric);
             });
             viewCursorIndex = selectedCategoryIndex >= 0 ? selectedCategoryIndex + 1 : 0;
             return;
         }
         const checkedMetric = getCheckedMetric();
-        const metricIndex = entries.findIndex((entry) => entry.value === checkedMetric);
+        const metricIndex = entries.findIndex((entry) => "value" in entry && entry.value === checkedMetric);
         viewCursorIndex = metricIndex >= 0 ? metricIndex : 0;
     }
 
@@ -152,7 +190,7 @@ export function createViewCuiController({
         }
     }
 
-    function moveViewCursor(delta) {
+    function moveViewCursor(delta: number) {
         const entries = getViewMenuEntries(viewMenuKey);
         if (entries.length === 0) {
             return;
@@ -167,18 +205,18 @@ export function createViewCuiController({
             return;
         }
         const entry = entries[index];
-        if (entry.type === "next" && entry.next) {
+        if (entry.type === "next" && "next" in entry) {
             viewMenuKey = entry.next;
             syncViewCursorToSelection();
             renderViewCui(false);
             return;
         }
-        if (entry.type === "mode") {
+        if (entry.type === "mode" && "value" in entry) {
             onViewModeChange(entry.value);
             renderViewCui(true);
             return;
         }
-        if (entry.type === "metric") {
+        if (entry.type === "metric" && "value" in entry) {
             onCellMetricChange(entry.value);
             onViewModeChange("metric");
             renderViewCui(true);
@@ -196,7 +234,7 @@ export function createViewCuiController({
         return true;
     }
 
-    function handleDigitSelect(key) {
+    function handleDigitSelect(key: string) {
         if (!/^[1-9]$/.test(key)) {
             return false;
         }

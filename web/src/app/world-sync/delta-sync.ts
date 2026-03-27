@@ -2,20 +2,42 @@ import {
     CORE_KEY_BY_FIELD_KIND,
     createWorldChangeset,
     markFieldChange,
+    type FieldKind,
 } from "./constants.js";
 
-function applyNumericDelta(target, fieldDelta) {
+type NumericArray = Float32Array | Int32Array | number[];
+
+interface DeltaRange {
+    start: number;
+    end: number;
+}
+
+interface FieldDelta {
+    mode?: "full" | "range";
+    field_kind?: FieldKind;
+    ranges?: DeltaRange[];
+    f32_data?: Float32Array;
+    i32_data?: Int32Array;
+}
+
+function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
     const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? [];
-    const canFastCopy = typeof target?.set === "function" && ArrayBuffer.isView(values);
+    const canFastCopy =
+        (target instanceof Float32Array || target instanceof Int32Array) &&
+        (values instanceof Float32Array || values instanceof Int32Array);
+
     if (fieldDelta?.mode === "full") {
         const copyLength = Math.min(target.length, values.length);
         if (canFastCopy) {
-            target.set(values.subarray(0, copyLength), 0);
+            (target as Float32Array | Int32Array).set(
+                (values as Float32Array | Int32Array).subarray(0, copyLength),
+                0
+            );
             return copyLength > 0;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            target[i] = values[i];
+            (target as any)[i] = (values as any)[i];
         }
         return copyLength > 0;
     }
@@ -30,22 +52,28 @@ function applyNumericDelta(target, fieldDelta) {
         const rangeLength = end - start;
         const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
         if (canFastCopy && copyLength > 0) {
-            target.set(values.subarray(offset, offset + copyLength), start);
+            (target as Float32Array | Int32Array).set(
+                (values as Float32Array | Int32Array).subarray(offset, offset + copyLength),
+                start
+            );
             offset += rangeLength;
             continue;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            target[start + i] = values[offset + i];
+            (target as any)[start + i] = (values as any)[offset + i];
         }
         offset += rangeLength;
     }
     return ranges.length > 0;
 }
 
-export function applyWorldDeltaToCore(core, worldDelta) {
+export function applyWorldDeltaToCore(core: Record<string, NumericArray>, worldDelta: { deltas?: FieldDelta[] }) {
     const changes = createWorldChangeset();
     for (const delta of worldDelta?.deltas ?? []) {
         const fieldKind = delta?.field_kind;
+        if (!fieldKind) {
+            continue;
+        }
         const coreKey = CORE_KEY_BY_FIELD_KIND[fieldKind];
         if (!coreKey || !(coreKey in core)) {
             continue;

@@ -1,6 +1,15 @@
-import { DEFAULT_ERA_SCALE } from "../../core/constants.js";
+import { DEFAULT_ERA_SCALE, type WorldSubsystemKey } from "../../core/constants.js";
+import { type WorldState } from "../core/app-state.js";
+import { type RuntimeState } from "../runtime/state.js";
+import { type EraMetrics } from "../core/era-presets.js";
 
-export function resetWorldProgress(world, worldState, createEmptyLayers, createInitialBudgets, createEraMetrics) {
+export function resetWorldProgress(
+    world: WorldState,
+    worldState: RuntimeState,
+    createEmptyLayers: () => Record<string, any>,
+    createInitialBudgets: () => Record<WorldSubsystemKey, number>,
+    createEraMetrics: (era: string) => EraMetrics
+): EraMetrics {
     world.tick = 0;
     world.era = DEFAULT_ERA_SCALE;
     world.layers = createEmptyLayers();
@@ -16,14 +25,15 @@ export function resetWorldProgress(world, worldState, createEmptyLayers, createI
     worldState.latestActivity.climate = 0;
     worldState.latestActivity.ecology = 0;
     worldState.latestActivity.civilization = 0;
-    for (const key of Object.keys(worldState.carry)) {
+    for (const key of Object.keys(worldState.carry) as WorldSubsystemKey[]) {
         worldState.carry[key] = 0;
     }
-    for (const key of Object.keys(worldState.executedSteps)) {
+    for (const key of Object.keys(worldState.executedSteps) as WorldSubsystemKey[]) {
         worldState.executedSteps[key] = 0;
     }
     if (worldState.playback) {
-        worldState.playback.isPlaying = true;
+...
+
         worldState.playback.historyInterval = 32;
         worldState.playback.selectedTick = null;
         worldState.playback.availableTicks = [];
@@ -34,7 +44,12 @@ export function resetWorldProgress(world, worldState, createEmptyLayers, createI
     return createEraMetrics(DEFAULT_ERA_SCALE);
 }
 
-export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldPlayback) {
+export function advanceWorldLoop(
+    nowMs: number,
+    worldState: RuntimeState,
+    canRunTick: () => boolean,
+    stepWorldPlayback: () => { processedTicks: number } | undefined
+): void {
     if (!Number.isFinite(nowMs)) {
         return;
     }
@@ -60,7 +75,7 @@ export function advanceWorldLoop(nowMs, worldState, canRunTick, stepWorldPlaybac
     }
 
     const result = stepWorldPlayback();
-    if (result?.processedTicks > 0) {
+    if (result && result.processedTicks > 0) {
         worldState.accumulatorMs = Math.max(
             0,
             worldState.accumulatorMs - (worldState.runtimeTickMs * result.processedTicks),

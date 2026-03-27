@@ -1,28 +1,40 @@
 import * as THREE from "three";
+import { type CoreBuffers, type WorldChangeset } from "../perf/world-core.js";
+import { type TickPerfRecorder } from "../perf/recorder.js";
 
-export function createTerrainRenderer({
-    geometry,
-    terrainMaterial,
-    basePositions,
-    buildRenderPositions,
-    buildRiverMaskTexture,
-}) {
+export interface TerrainRendererOptions {
+    geometry: THREE.BufferGeometry;
+    terrainMaterial: any;
+    basePositions: Float32Array;
+    buildRenderPositions: (base: Float32Array, height: any, mode: string) => Float32Array;
+    buildRiverMaskTexture: (base: Float32Array, next: any, flux: any) => THREE.Texture;
+}
+
+export function createTerrainRenderer(options: TerrainRendererOptions) {
+    const {
+        geometry,
+        terrainMaterial,
+        basePositions,
+        buildRenderPositions,
+        buildRiverMaskTexture,
+    } = options;
+
     const NORMAL_REFRESH_INTERVAL_TICKS = 4;
     const BOUNDING_SPHERE_REFRESH_INTERVAL_TICKS = 8;
 
-    let currentRiverMaskTexture = null;
-    let positionBuffer = null;
-    let metricBuffer = null;
+    let currentRiverMaskTexture: THREE.Texture | null = null;
+    let positionBuffer: Float32Array | null = null;
+    let metricBuffer: Float32Array | null = null;
     let currentMetricKey = "height";
-    let lastSurfaceMode = null;
+    let lastSurfaceMode: string | null = null;
     let lastNormalRefreshTick = -1;
 
-    const CORE_ATTRIBUTE_MAP = {
+    const CORE_ATTRIBUTE_MAP: Record<string, string[]> = {
         height: ["terrainHeight"],
         metric: ["terrainMetric"],
     };
 
-    function resolveMetricArray(currentTerrainData, metricKey) {
+    function resolveMetricArray(currentTerrainData: any, metricKey: string): any {
         switch (metricKey) {
         case "mantle_heat":
             return currentTerrainData.mantleHeat;
@@ -52,7 +64,7 @@ export function createTerrainRenderer({
         }
     }
 
-    function updateMetricAttribute(currentTerrainData) {
+    function updateMetricAttribute(currentTerrainData: any) {
         const source = resolveMetricArray(currentTerrainData, currentMetricKey);
         if (!metricBuffer || metricBuffer.length !== source.length) {
             metricBuffer = new Float32Array(source.length);
@@ -62,38 +74,42 @@ export function createTerrainRenderer({
         metricAttr.needsUpdate = true;
     }
 
-    function ensureAttribute(name, array, itemSize) {
+    function ensureAttribute(name: string, array: any, itemSize: number): THREE.BufferAttribute {
         const current = geometry.getAttribute(name);
         if (current?.array === array) {
-            return current;
+            return current as THREE.BufferAttribute;
         }
         const attribute = new THREE.BufferAttribute(array, itemSize);
         geometry.setAttribute(name, attribute);
         return attribute;
     }
 
-    function ensureTerrainAttributes(currentTerrainData) {
+    function ensureTerrainAttributes(currentTerrainData: any) {
         ensureAttribute("terrainHeight", currentTerrainData.heightData, 1);
         updateMetricAttribute(currentTerrainData);
-        ensureAttribute("terrainLakeDepth", currentTerrainData.lakeDepth, 1);
-        ensureAttribute("terrainDebugTrench", currentTerrainData.tectonicDebug.trench, 1);
-        ensureAttribute("terrainDebugArc", currentTerrainData.tectonicDebug.arc, 1);
-        ensureAttribute("terrainDebugBackarc", currentTerrainData.tectonicDebug.backarc, 1);
-        ensureAttribute(
-            "terrainDebugOceanOceanArc",
-            currentTerrainData.tectonicDebug.oceanOceanArc,
-            1,
-        );
+        if (currentTerrainData.lakeDepth) {
+            ensureAttribute("terrainLakeDepth", currentTerrainData.lakeDepth, 1);
+        }
+        if (currentTerrainData.tectonicDebug) {
+            ensureAttribute("terrainDebugTrench", currentTerrainData.tectonicDebug.trench, 1);
+            ensureAttribute("terrainDebugArc", currentTerrainData.tectonicDebug.arc, 1);
+            ensureAttribute("terrainDebugBackarc", currentTerrainData.tectonicDebug.backarc, 1);
+            ensureAttribute(
+                "terrainDebugOceanOceanArc",
+                currentTerrainData.tectonicDebug.oceanOceanArc,
+                1,
+            );
+        }
     }
 
-    function markAttributeNeedsUpdate(name) {
+    function markAttributeNeedsUpdate(name: string) {
         const attribute = geometry.getAttribute(name);
         if (attribute) {
             attribute.needsUpdate = true;
         }
     }
 
-    function markTerrainChanges(changes) {
+    function markTerrainChanges(changes: any) {
         for (const [changeKey, attributeNames] of Object.entries(CORE_ATTRIBUTE_MAP)) {
             if (!changes?.[changeKey]) {
                 continue;
@@ -104,7 +120,7 @@ export function createTerrainRenderer({
         }
     }
 
-    function updateGeometryPositions(currentTerrainData, currentSurfaceMode, options = {}) {
+    function updateGeometryPositions(currentTerrainData: any, currentSurfaceMode: string, options: any = {}) {
         if (!currentTerrainData) {
             return;
         }
@@ -142,7 +158,7 @@ export function createTerrainRenderer({
         lastSurfaceMode = currentSurfaceMode;
     }
 
-    function updateRiverMaskTexture(currentTerrainData) {
+    function updateRiverMaskTexture(currentTerrainData: any) {
         if (!currentTerrainData) {
             return;
         }
@@ -158,7 +174,7 @@ export function createTerrainRenderer({
         terrainMaterial.setRiverMaskTexture(nextTexture);
     }
 
-    function initializeTerrain(currentTerrainData, currentSurfaceMode) {
+    function initializeTerrain(currentTerrainData: any, currentSurfaceMode: string) {
         ensureTerrainAttributes(currentTerrainData);
         updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
             force: true,
@@ -169,11 +185,11 @@ export function createTerrainRenderer({
     }
 
     function applyCoreChanges(
-        currentTerrainData,
-        changes,
-        currentSurfaceMode,
-        tick,
-        perfRecorder = null,
+        currentTerrainData: any,
+        changes: any,
+        currentSurfaceMode: string,
+        tick: number,
+        perfRecorder: TickPerfRecorder | null = null,
     ) {
         if (!currentTerrainData) {
             return;
@@ -204,7 +220,7 @@ export function createTerrainRenderer({
         });
     }
 
-    function applyTerrainMaterialState(currentViewMode, debugEnabled, currentCellMetric) {
+    function applyTerrainMaterialState(currentViewMode: string, debugEnabled: boolean, currentCellMetric: string) {
         currentMetricKey = currentCellMetric;
         terrainMaterial.setViewMode(currentViewMode);
         terrainMaterial.setDebugEnabled(debugEnabled);

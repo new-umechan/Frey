@@ -1,4 +1,15 @@
-const CELL_METRIC_DEFS = Object.freeze([
+export interface CellMetricDef {
+    key: string;
+    fieldKind: string;
+    dataKey: string;
+    label: string;
+    unit: string;
+    category: string;
+    palette: string;
+    formatter: (value: number) => string;
+}
+
+const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
     {
         key: "height",
         fieldKind: "height",
@@ -121,7 +132,12 @@ const CELL_METRIC_DEFS = Object.freeze([
     },
 ]);
 
-const CATEGORY_META = Object.freeze({
+export interface CategoryMeta {
+    key: string;
+    label: string;
+}
+
+const CATEGORY_META: Record<string, CategoryMeta> = Object.freeze({
     terrain: {
         key: "terrain",
         label: "地形",
@@ -136,19 +152,23 @@ const CATEGORY_META = Object.freeze({
     },
 });
 
-const METRIC_BY_KEY = new Map(CELL_METRIC_DEFS.map((metric) => [metric.key, metric]));
+const METRIC_BY_KEY = new Map<string, CellMetricDef>(CELL_METRIC_DEFS.map((metric) => [metric.key, metric]));
 
 const DEFAULT_CELL_METRIC = "height";
 
-export function normalizeCellMetric(metricKey) {
+export function normalizeCellMetric(metricKey: string): string {
     return METRIC_BY_KEY.has(metricKey) ? metricKey : DEFAULT_CELL_METRIC;
 }
 
-export function getCellMetricMeta(metricKey) {
+export function getCellMetricMeta(metricKey: string): CellMetricDef {
     return METRIC_BY_KEY.get(normalizeCellMetric(metricKey)) ?? CELL_METRIC_DEFS[0];
 }
 
-export function getMetricCategories() {
+export interface MetricCategory extends CategoryMeta {
+    metrics: CellMetricDef[];
+}
+
+export function getMetricCategories(): MetricCategory[] {
     return [
         {
             ...CATEGORY_META.terrain,

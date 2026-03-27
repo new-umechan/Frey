@@ -1,4 +1,28 @@
-export function createWorldSessionController(options = {}) {
+import { type WorldState } from "../core/app-state.js";
+import { type EraMetrics } from "../core/era-presets.js";
+import { type StatFields } from "../../ui/dom.js";
+
+export interface WorldSessionControllerOptions {
+    worldSimController: any;
+    world: WorldState;
+    terrainRenderer: any;
+    createEraMetrics: (era: string) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    setEraScale: (era: string) => void;
+    syncWorldFromController: (options: any) => any;
+    refreshWorldStatsFromController: (options: any) => any;
+    setCurrentTerrainData: (data: any) => void;
+    syncClimateUi: () => void;
+    hidePlateHover: () => void;
+    syncAfterWorldSync: () => void;
+    getCurrentSeed: () => string;
+    getCurrentSurfaceMode: () => string;
+    getActiveWorldId: () => string | null;
+    statFields: StatFields;
+    level: number;
+}
+
+export function createWorldSessionController(options: WorldSessionControllerOptions) {
     const {
         worldSimController,
         world,
@@ -45,9 +69,13 @@ export function createWorldSessionController(options = {}) {
     };
 
     const refreshActiveWorldStats = () => {
+        const worldId = getActiveWorldId();
+        if (!worldId) {
+            return null;
+        }
         return refreshWorldStatsFromController({
             worldSimController,
-            worldId: getActiveWorldId(),
+            worldId,
             world,
             currentSeed: getCurrentSeed(),
             statFields,

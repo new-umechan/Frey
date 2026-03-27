@@ -1,4 +1,23 @@
-export const FLOAT32_FIELDS = new Set([
+export type FieldKind =
+    | "height"
+    | "river_flux"
+    | "river_next"
+    | "mantle_heat"
+    | "erosion_rate"
+    | "deposition_rate"
+    | "temperature"
+    | "precipitation"
+    | "evapotranspiration"
+    | "aridity"
+    | "runoff"
+    | "ocean_temperature"
+    | "wind_u"
+    | "wind_v"
+    | "moisture_flux_u"
+    | "moisture_flux_v"
+    | "river_transport_cost";
+
+export const FLOAT32_FIELDS = new Set<FieldKind>([
     "height",
     "river_flux",
     "mantle_heat",
@@ -17,7 +36,7 @@ export const FLOAT32_FIELDS = new Set([
     "river_transport_cost",
 ]);
 
-export const OPTIONAL_FIELD_KINDS = new Set([
+export const OPTIONAL_FIELD_KINDS = new Set<FieldKind>([
     "erosion_rate",
     "deposition_rate",
     "evapotranspiration",
@@ -31,19 +50,26 @@ export const OPTIONAL_FIELD_KINDS = new Set([
     "moisture_flux_v",
 ]);
 
-export const WORLD_CHANGESET = Object.freeze({
+export interface WorldChangeset {
+    height: boolean;
+    river: boolean;
+    mantleHeat: boolean;
+    metric: boolean;
+}
+
+export const WORLD_CHANGESET: WorldChangeset = Object.freeze({
     height: false,
     river: false,
     mantleHeat: false,
     metric: false,
 });
 
-export const DELTA_FIELD_KIND_BY_VIEW = Object.freeze({
+export const DELTA_FIELD_KIND_BY_VIEW: Record<string, FieldKind[]> = Object.freeze({
     normal: ["height", "river_flux", "river_next"],
     metric: ["height", "river_flux", "river_next"],
 });
 
-export const CORE_KEY_BY_FIELD_KIND = Object.freeze({
+export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     height: "heightData",
     river_flux: "riverFlux",
     river_next: "riverNext",
@@ -63,7 +89,7 @@ export const CORE_KEY_BY_FIELD_KIND = Object.freeze({
     river_transport_cost: "riverTransportCost",
 });
 
-const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
+const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Object.freeze({
     height: "height",
     river_flux: "river",
     river_next: "river",
@@ -83,11 +109,11 @@ const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
     river_transport_cost: "metric",
 });
 
-export function createWorldChangeset() {
+export function createWorldChangeset(): WorldChangeset {
     return { ...WORLD_CHANGESET };
 }
 
-export function markFieldChange(changes, fieldKind) {
+export function markFieldChange(changes: WorldChangeset, fieldKind: FieldKind) {
     const changeKey = CHANGE_KIND_BY_FIELD_KIND[fieldKind];
     if (changeKey) {
         changes[changeKey] = true;

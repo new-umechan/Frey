@@ -1,6 +1,25 @@
 import { roundMs, roundRatio } from "./helpers.js";
 
-export function createDiagnostics() {
+export interface Diagnostics {
+    profile_attempt_count: number;
+    profile_success_count: number;
+    profile_fallback_count: number;
+    replay_ticks_total: number;
+    replay_time_ms_total: number;
+    exec_world_time_ms_total: number;
+    exec_world_profiled_time_ms_total: number;
+    step_geology_river_time_ms_total: number;
+    tick_total_time_ms_total: number;
+    river_network_rebuild_count_total: number;
+    river_fallback_count_total: number;
+    geometry_update_skipped_count: number;
+    sink_rebuild_full_count_total: number;
+    sink_rebuild_partial_count_total: number;
+    sink_rebuild_skipped_count_total: number;
+    sink_rebuild_fallback_full_count_total: number;
+}
+
+export function createDiagnostics(): Diagnostics {
     return {
         profile_attempt_count: 0,
         profile_success_count: 0,
@@ -21,7 +40,7 @@ export function createDiagnostics() {
     };
 }
 
-function accumulateProfiledDiagnostics(diagnostics, profiled) {
+function accumulateProfiledDiagnostics(diagnostics: Diagnostics, profiled: any) {
     diagnostics.step_geology_river_time_ms_total += Number(profiled?.exec_hydrology_ms) || 0;
     diagnostics.river_network_rebuild_count_total += Math.max(
         0,
@@ -49,12 +68,12 @@ function accumulateProfiledDiagnostics(diagnostics, profiled) {
     );
 }
 
-export function recordProfiledStepSuccess(diagnostics, profiled) {
+export function recordProfiledStepSuccess(diagnostics: Diagnostics, profiled: any) {
     accumulateProfiledDiagnostics(diagnostics, profiled);
     diagnostics.profile_success_count += 1;
 }
 
-export function buildDiagnosticsSummary(diagnostics, totalTicks, wallTimeMs) {
+export function buildDiagnosticsSummary(diagnostics: Diagnostics, totalTicks: number, wallTimeMs: number) {
     const replayShareOfWall = wallTimeMs > 0
         ? diagnostics.replay_time_ms_total / wallTimeMs
         : 0;
