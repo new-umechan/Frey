@@ -20,6 +20,7 @@ const MOISTURE_SOURCE_BASE: f32 = 240.0;
 const MOISTURE_SOURCE_OCEAN_GAIN: f32 = 1_250.0;
 const MOISTURE_SOURCE_DISTANCE_KM: f32 = 1_200.0;
 const MOISTURE_FLUX_GAIN: f32 = 0.95;
+const DOWNWIND_DEPLETION_PASSES: usize = 2;
 
 #[derive(Debug, Clone, Copy, Default)]
 struct OrographicSignal {
@@ -130,7 +131,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
 
-    apply_downwind_moisture_depletion(
+    apply_downwind_moisture_depletion_iterative(
         world,
         &wind_vectors,
         &target_moisture_source,
@@ -497,15 +498,15 @@ fn apply_downwind_moisture_depletion(
     world: &World,
     wind_vectors: &[[f32; 3]],
     moisture_source: &[f32],
-    precipitation: &mut [f32],
+    precipitation: &[f32],
     params: &ClimateParams,
-) {
+) -> Vec<f32> {
     let cell_count = world.state.geology.height.len();
     if wind_vectors.len() != cell_count
         || moisture_source.len() != cell_count
         || precipitation.len() != cell_count
     {
-        return;
+        return vec![0.0_f32; cell_count];
     }
     let mut depletion = vec![0.0_f32; cell_count];
     let step_count = params.downwind_depletion_steps.max(1);
@@ -553,17 +554,44 @@ fn apply_downwind_moisture_depletion(
             current = next;
         }
     }
+    depletion
+}
 
-    for i in 0..cell_count {
-        if world.state.geology.height[i] <= 0.0 {
-            continue;
+fn apply_downwind_moisture_depletion_iterative(
+    world: &World,
+    wind_vectors: &[[f32; 3]],
+    moisture_source: &[f32],
+    precipitation: &mut [f32],
+    params: &ClimateParams,
+) {
+    let cell_count = world.state.geology.height.len();
+    if precipitation.len() != cell_count || moisture_source.len() != cell_count {
+        return;
+    }
+
+    for _ in 0..DOWNWIND_DEPLETION_PASSES {
+        let depletion =
+            apply_downwind_moisture_depletion(
+                world,
+                wind_vectors,
+                moisture_source,
+                precipitation,
+                params,
+            );
+
+        for i in 0..cell_count {
+            if world.state.geology.height[i] <= 0.0 {
+                continue;
+            }
+            let reduction = depletion[i].clamp(0.0, params.downwind_depletion_max.clamp(0.0, 0.95));
+            if reduction > 0.0 {
+                precipitation[i] *= 1.0 - reduction;
+            }
+            let moisture_cap = params.precip_cap_from_moisture * moisture_source[i].max(0.0);
+            precipitation[i] = precipitation[i]
+                .min(moisture_cap.max(params.precip_min_mm))
+                .clamp(params.precip_min_mm, params.precip_max_mm);
         }
-        let reduction = depletion[i].clamp(0.0, params.downwind_depletion_max.clamp(0.0, 0.95));
-        if reduction <= 0.0 {
-            continue;
-        }
-        precipitation[i] *= 1.0 - reduction;
-        precipitation[i] = precipitation[i].clamp(params.precip_min_mm, params.precip_max_mm);
     }
 }
 

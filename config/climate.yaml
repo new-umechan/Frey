@@ -22,8 +22,8 @@ orography:
   rain_shadow_gain: 1.5
   rain_shadow_scale_m: 1400.0
   rain_shadow_distance_km: 260.0
-  downwind_depletion_gain: 0.26
-  downwind_depletion_max: 0.25
+  downwind_depletion_gain: 0.14
+  downwind_depletion_max: 0.15
   downwind_depletion_steps: 3
   downwind_depletion_decay: 0.72
   downwind_alignment_min: 0.20
