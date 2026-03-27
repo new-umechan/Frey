@@ -32,8 +32,6 @@ export function resetWorldProgress(
         worldState.executedSteps[key] = 0;
     }
     if (worldState.playback) {
-...
-
         worldState.playback.historyInterval = 32;
         worldState.playback.selectedTick = null;
         worldState.playback.availableTicks = [];

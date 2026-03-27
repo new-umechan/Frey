@@ -11,6 +11,7 @@ export interface TectonicDebugBuffers {
 }
 
 export interface CoreBuffers {
+    [key: string]: TypedArray | TectonicDebugBuffers | undefined;
     heightData: TypedArray;
     lakeDepth?: TypedArray;
     riverFlux: TypedArray;
@@ -51,6 +52,7 @@ export interface SyncDeltaOptions {
     worldSimController: WorldSimController;
     worldId: string;
     world: any;
+    core: CoreBuffers;
     currentSurfaceMode: string;
     terrainRenderer: any;
     createEraMetrics: (era: string) => any;

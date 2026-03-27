@@ -12,8 +12,8 @@ import {
 } from "../../runtime/state.js";
 import { getDeltaFieldKindsForView } from "../../world-sync/view-mode.js";
 import { refreshWorldStatsFromController } from "../../world-sync/stats-sync.js";
-import { syncVisibleCoreFieldsFromController } from "../../world-sync/field-io.js";
 import {
+    syncVisibleCoreFieldsFromController,
     syncWorldDeltaFromController,
     syncWorldFromController,
 } from "../../world-sync/world-state-sync.js";

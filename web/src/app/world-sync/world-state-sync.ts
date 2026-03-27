@@ -50,6 +50,7 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
         worldSimController,
         worldId,
         world,
+        core,
         currentSurfaceMode,
         terrainRenderer,
         buildEraMetricsFromRuntime,
@@ -69,7 +70,7 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
         worldDelta = worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
     }
 
-    const changes = applyWorldDeltaToCore(world.mesh, worldDelta);
+    const changes = applyWorldDeltaToCore(core, worldDelta);
 
     let eraMetrics = null;
     let statsRefreshed = false;
@@ -83,7 +84,7 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
         }
     }
 
-    terrainRenderer.applyCoreChanges(world.mesh, changes, currentSurfaceMode, world.tick, perfRecorder);
+    terrainRenderer.applyCoreChanges(core, changes, currentSurfaceMode, world.tick, perfRecorder);
 
     return {
         changes,

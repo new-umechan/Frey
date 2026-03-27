@@ -5,7 +5,7 @@ import {
     type FieldKind,
 } from "./constants.js";
 
-type NumericArray = Float32Array | Int32Array | number[];
+type NumericArray = Float32Array | Int32Array | Uint32Array | number[];
 
 interface DeltaRange {
     start: number;
@@ -18,20 +18,21 @@ interface FieldDelta {
     ranges?: DeltaRange[];
     f32_data?: Float32Array;
     i32_data?: Int32Array;
+    u32_data?: Uint32Array;
 }
 
 function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
-    const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? [];
+    const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
     const canFastCopy =
-        (target instanceof Float32Array || target instanceof Int32Array) &&
-        (values instanceof Float32Array || values instanceof Int32Array);
+        (target instanceof Float32Array || target instanceof Int32Array || target instanceof Uint32Array) &&
+        (values instanceof Float32Array || values instanceof Int32Array || values instanceof Uint32Array);
 
     if (fieldDelta?.mode === "full") {
         const copyLength = Math.min(target.length, values.length);
         if (canFastCopy) {
-            (target as Float32Array | Int32Array).set(
-                (values as Float32Array | Int32Array).subarray(0, copyLength),
+            (target as Float32Array | Int32Array | Uint32Array).set(
+                (values as Float32Array | Int32Array | Uint32Array).subarray(0, copyLength),
                 0
             );
             return copyLength > 0;
@@ -50,10 +51,10 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
             continue;
         }
         const rangeLength = end - start;
-        const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
+        const copyLength = Math.max(0, Math.min(rangeLength, (values as any).length - offset));
         if (canFastCopy && copyLength > 0) {
-            (target as Float32Array | Int32Array).set(
-                (values as Float32Array | Int32Array).subarray(offset, offset + copyLength),
+            (target as Float32Array | Int32Array | Uint32Array).set(
+                (values as Float32Array | Int32Array | Uint32Array).subarray(offset, offset + copyLength),
                 start
             );
             offset += rangeLength;
@@ -67,7 +68,7 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
     return ranges.length > 0;
 }
 
-export function applyWorldDeltaToCore(core: Record<string, NumericArray>, worldDelta: { deltas?: FieldDelta[] }) {
+export function applyWorldDeltaToCore(core: any, worldDelta: { deltas?: FieldDelta[] }) {
     const changes = createWorldChangeset();
     for (const delta of worldDelta?.deltas ?? []) {
         const fieldKind = delta?.field_kind;

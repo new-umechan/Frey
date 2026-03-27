@@ -2,7 +2,12 @@ import { WorldSimController } from "../../../interface/wasm.js";
 import { createRuntimeControllers } from "./controller-factories.js";
 import { DEFAULT_ERA_SCALE } from "../../../core/constants.js";
 import { runInitialWorldAndUiSync } from "../post-init-sync.js";
-import { type AppElements, type StatFields } from "../../../ui/dom.js";
+import {
+    type AppElements,
+    type StatFields,
+    type EraScaleWeightFields,
+    type PerfStatFields,
+} from "../../../ui/dom.js";
 import { type AppState, type WorldState } from "../../core/app-state.js";
 import { type EraMetrics } from "../../core/era-presets.js";
 import { type RuntimeState } from "../../runtime/state.js";
@@ -33,14 +38,14 @@ export interface RuntimeContext extends ControllerDeps {
     debugToggleInput: HTMLInputElement;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
-    eraScaleWeightFields: HTMLElement;
-    viewModeInputs: NodeListOf<HTMLInputElement>;
+    eraScaleWeightFields: EraScaleWeightFields;
+    viewModeInputs: HTMLInputElement[];
     statFields: StatFields;
     statusEraLabel: HTMLElement;
     playbackControls: any;
     eventLogList: HTMLElement;
     perfControls: any;
-    perfStatFields: StatFields;
+    perfStatFields: PerfStatFields | null;
     viewportPanel: HTMLElement;
     worldSimController: WorldSimController;
 }

@@ -86,6 +86,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             worldSimController,
             worldId: liveState.activeWorldId,
             world,
+            core: liveState.currentTerrainData,
             currentSurfaceMode: liveState.currentSurfaceMode,
             terrainRenderer,
             createEraMetrics,

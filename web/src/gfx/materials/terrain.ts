@@ -48,7 +48,7 @@ export function createTerrainMaterial(): TerrainMaterialController {
         uViewMode: { value: 0.0 },
         uMetricKind: { value: 0.0 },
         uDebugEnabled: { value: 0.0 },
-        uRiverMask: { value: emptyRiverMask },
+        uRiverMask: { value: emptyRiverMask as THREE.Texture },
         uSeaColor: { value: srgbHexToLinearRgb("#12406a") },
         uLakeColor: { value: srgbHexToLinearRgb("#2f82c7") },
         uRiverColor: { value: srgbHexToLinearRgb("#4ca3dd") },
