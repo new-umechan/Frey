@@ -97,6 +97,14 @@ P = (P_bg(lat) + P_conv + P_orog) * F_shadow * F_continental * F_depletion
 ただし `climate_solo` の主指標で、`precipitation rho` が既存モデルを下回ったため不採用とした。
 このため、現行の本書は既存モデル（`F_depletion` を含む合成モデル）を正とし、再設計案は採用しない。
 
+同日、海岸から内陸への経路積算減衰も試行した。
+実装とチューニングを実施したが、`climate_solo` で `precipitation rho` の有意改善が得られず、
+副指標の悪化ケースも確認されたため不採用とした。
+
+同日、年平均の陸海温度差にもとづくモンスーン風向バイアスも試行した。
+`monsoon_gain` / `monsoon_distance_km` / `monsoon_lat_center_deg` の 12 ケースを評価したが、
+採否基準（`precipitation rho>=0.48` ほか）を満たす候補は得られなかったため不採用とした。
+
 ### 蒸発散と流出
 
 潜在蒸発散量はThornthwaite式を使う。
