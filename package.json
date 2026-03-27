@@ -39,6 +39,8 @@
         "bench:resample:hydro-input": "python3 bench/scripts/resample.py --module hydro-input --centroids bench/data/cell_centroids.csv --output bench/data/hydro_input.bin",
         "bench:resample:hydro-ref": "python3 bench/scripts/resample.py --module hydro-ref --centroids bench/data/cell_centroids.csv --output bench/data/hydro_ref.bin",
         "bench:resample:terrain": "python3 bench/scripts/resample.py --module terrain --centroids bench/data/cell_centroids.csv --output bench/data/terrain_ref.bin",
+        "bench:raw:prune:recoverable:dry-run": "bash bench/scripts/prune-recoverable-raw.sh",
+        "bench:raw:prune:recoverable": "bash bench/scripts/prune-recoverable-raw.sh --apply",
         "wasm:build": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
         "wasm:build:dev": "npm run terrain:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
