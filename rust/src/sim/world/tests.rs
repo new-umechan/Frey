@@ -4,6 +4,8 @@ use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
 use crate::GeologyParams;
 
+const EPSILON: f32 = 1e-5;
+
 fn build_world() -> World {
     World::new(
         WorldMesh {
@@ -22,6 +24,190 @@ fn build_world() -> World {
             boundary_condition: vec![0.0; 4],
         },
     )
+}
+
+fn build_generated_world(seed: &str, params: GeologyParams) -> World {
+    let level = params.level;
+    let terrain = crate::sim::build_geology(seed, params);
+    let (positions, indices) = generate_icosphere(level);
+    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+    let plate_id = terrain
+        .plate_id
+        .iter()
+        .map(|&v| PlateId(v))
+        .collect::<Vec<_>>();
+    let mut world = World::new(
+        WorldMesh {
+            positions,
+            nbr_offsets,
+            nbrs,
+        },
+        GeologyState {
+            height: terrain.height,
+            plate_id,
+            erosion_rate: vec![0.0; terrain.river_flux.len()],
+            deposition_rate: vec![0.0; terrain.river_flux.len()],
+            volcanism: vec![0.0; terrain.river_flux.len()],
+            vertex_buoyancy: vec![0.0; terrain.river_flux.len()],
+            geology_internal: vec![super::GeologyInternal::default(); terrain.river_flux.len()],
+            boundary_condition: vec![0.0; terrain.river_flux.len()],
+        },
+    );
+    world.state.hydrology.river_flow = terrain.river_flux;
+    world.state.hydrology.river_next = terrain.river_next;
+    world
+}
+
+fn assert_vec_f32_close(name: &str, lhs: &[f32], rhs: &[f32], eps: f32) {
+    assert_eq!(lhs.len(), rhs.len(), "{name} length mismatch");
+    for (i, (&a, &b)) in lhs.iter().zip(rhs.iter()).enumerate() {
+        assert!(
+            (a - b).abs() <= eps,
+            "{name}[{i}] mismatch: lhs={a}, rhs={b}, eps={eps}"
+        );
+    }
+}
+
+fn assert_geology_runtime_close(lhs: &World, rhs: &World, eps: f32) {
+    assert_eq!(lhs.state.geology.plate_id, rhs.state.geology.plate_id);
+    assert_eq!(lhs.state.hydrology.river_next, rhs.state.hydrology.river_next);
+    assert_vec_f32_close(
+        "state.geology.height",
+        &lhs.state.geology.height,
+        &rhs.state.geology.height,
+        eps,
+    );
+    assert_vec_f32_close(
+        "state.hydrology.river_flow",
+        &lhs.state.hydrology.river_flow,
+        &rhs.state.hydrology.river_flow,
+        eps,
+    );
+    assert_vec_f32_close(
+        "state.geology.volcanism",
+        &lhs.state.geology.volcanism,
+        &rhs.state.geology.volcanism,
+        eps,
+    );
+    assert_vec_f32_close(
+        "state.geology.vertex_buoyancy",
+        &lhs.state.geology.vertex_buoyancy,
+        &rhs.state.geology.vertex_buoyancy,
+        eps,
+    );
+
+    let lhs_runtime = lhs
+        .runtime
+        .geology_dynamics
+        .as_ref()
+        .expect("lhs geology runtime is missing");
+    let rhs_runtime = rhs
+        .runtime
+        .geology_dynamics
+        .as_ref()
+        .expect("rhs geology runtime is missing");
+
+    assert_eq!(lhs_runtime.vertex_states.len(), rhs_runtime.vertex_states.len());
+    assert_eq!(
+        lhs_runtime.boundary_state.dominant_type,
+        rhs_runtime.boundary_state.dominant_type
+    );
+    assert_eq!(lhs_runtime.boundary_state.edge_pairs, rhs_runtime.boundary_state.edge_pairs);
+
+    for (i, (a, b)) in lhs_runtime
+        .vertex_states
+        .iter()
+        .zip(rhs_runtime.vertex_states.iter())
+        .enumerate()
+    {
+        assert_eq!(
+            a.crust_type, b.crust_type,
+            "vertex_states[{i}].crust_type mismatch"
+        );
+        assert_vec_f32_close(
+            &format!("vertex_states[{i}]"),
+            &[
+                a.thickness,
+                a.density,
+                a.age,
+                a.stress,
+                a.temperature,
+                a.rigidity,
+                a.arc_volcanism,
+                a.ridge_volcanism,
+                a.hotspot_volcanism,
+                a.backarc_volcanism,
+                a.stress_tensor.xx,
+                a.stress_tensor.yy,
+                a.stress_tensor.xy,
+            ],
+            &[
+                b.thickness,
+                b.density,
+                b.age,
+                b.stress,
+                b.temperature,
+                b.rigidity,
+                b.arc_volcanism,
+                b.ridge_volcanism,
+                b.hotspot_volcanism,
+                b.backarc_volcanism,
+                b.stress_tensor.xx,
+                b.stress_tensor.yy,
+                b.stress_tensor.xy,
+            ],
+            eps,
+        );
+    }
+
+    assert_vec_f32_close(
+        "runtime.mantle_heat",
+        &lhs_runtime.mantle_heat,
+        &rhs_runtime.mantle_heat,
+        eps,
+    );
+    assert_vec_f32_close(
+        "runtime.boundary_state.activity",
+        &lhs_runtime.boundary_state.activity,
+        &rhs_runtime.boundary_state.activity,
+        eps,
+    );
+    assert_vec_f32_close(
+        "runtime.boundary_state.rollback_fraction",
+        &lhs_runtime.boundary_state.rollback_fraction,
+        &rhs_runtime.boundary_state.rollback_fraction,
+        eps,
+    );
+    assert_vec_f32_close(
+        "runtime.boundary_state.slab_convergence_component",
+        &lhs_runtime.boundary_state.slab_convergence_component,
+        &rhs_runtime.boundary_state.slab_convergence_component,
+        eps,
+    );
+    assert_vec_f32_close(
+        "runtime.boundary_state.slab_rollback_component",
+        &lhs_runtime.boundary_state.slab_rollback_component,
+        &rhs_runtime.boundary_state.slab_rollback_component,
+        eps,
+    );
+    assert_eq!(
+        lhs_runtime.boundary_state.edge_internal.len(),
+        rhs_runtime.boundary_state.edge_internal.len()
+    );
+    for (i, (a, b)) in lhs_runtime
+        .boundary_state
+        .edge_internal
+        .iter()
+        .zip(rhs_runtime.boundary_state.edge_internal.iter())
+        .enumerate()
+    {
+        assert!(
+            (a.convergence_memory - b.convergence_memory).abs() <= eps,
+            "edge_internal[{i}].convergence_memory mismatch: lhs={}, rhs={}",
+            a.convergence_memory,
+            b.convergence_memory
+        );
+    }
 }
 
 #[test]
@@ -338,4 +524,62 @@ fn river_network_persists_without_early_collapse() {
     assert!(metrics_t28.river_ocean_reach_ratio > 0.05);
     assert!(metrics_t2.river_fragmentation_ratio < 0.95);
     assert!(metrics_t28.river_fragmentation_ratio < 0.98);
+}
+
+#[test]
+fn geology_runtime_is_deterministic_for_fixed_seed_and_schedule() {
+    let params = GeologyParams {
+        level: 2,
+        ..Default::default()
+    };
+    let mut world_a = build_generated_world("geology-runtime-determinism", params.clone());
+    let mut world_b = build_generated_world("geology-runtime-determinism", params);
+
+    for _ in 0..12 {
+        exec_world(&mut world_a);
+        exec_world(&mut world_b);
+    }
+
+    assert_geology_runtime_close(&world_a, &world_b, EPSILON);
+}
+
+#[test]
+fn world_json_roundtrip_preserves_geology_snapshot_state() {
+    let params = GeologyParams {
+        level: 2,
+        ..Default::default()
+    };
+    let mut world = build_generated_world("geology-runtime-snapshot", params);
+
+    for _ in 0..6 {
+        exec_world(&mut world);
+    }
+
+    let snapshot = serde_json::to_string(&world).expect("world snapshot serialize failed");
+    let restored: World =
+        serde_json::from_str(&snapshot).expect("world snapshot deserialize failed");
+
+    assert_geology_runtime_close(&world, &restored, EPSILON);
+}
+
+#[test]
+fn world_json_roundtrip_preserves_next_step_geology_evolution() {
+    let params = GeologyParams {
+        level: 2,
+        ..Default::default()
+    };
+    let mut continuous = build_generated_world("geology-runtime-step", params);
+
+    for _ in 0..5 {
+        exec_world(&mut continuous);
+    }
+
+    let snapshot = serde_json::to_string(&continuous).expect("world snapshot serialize failed");
+    let mut restored: World =
+        serde_json::from_str(&snapshot).expect("world snapshot deserialize failed");
+
+    exec_world(&mut continuous);
+    exec_world(&mut restored);
+
+    assert_geology_runtime_close(&continuous, &restored, EPSILON);
 }
