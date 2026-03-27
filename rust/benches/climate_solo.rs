@@ -378,6 +378,7 @@ fn main() {
                     "-- Main Evaluation Summary: metrics_reported={} --",
                     results.len()
                 );
+                print_precipitation_process_diagnostics();
                 print_precipitation_diagnostics(&sim_world, &reference);
                 Phase2State::Ready {
                     reference_path: path,
@@ -939,6 +940,24 @@ fn print_precipitation_diagnostics(world: &world::World, reference: &ClimateRef)
             abs_err
         );
     }
+    println!();
+}
+
+fn print_precipitation_process_diagnostics() {
+    let summary = sim::climate::surface::last_precip_diagnostics_summary();
+    println!("-- Main Diagnostics: Precipitation Process (land aggregate) --");
+    println!(
+        "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%  cold_coast_reduction={:.1}%",
+        summary.continental_reduction_ratio * 100.0,
+        summary.cap_reduction_ratio * 100.0,
+        summary.depletion_reduction_ratio * 100.0,
+        summary.cold_coast_reduction_ratio * 100.0
+    );
+    println!(
+        "cap_hit_ratio={:.1}%  mean_monsoon_boost_mm={:.1}",
+        summary.cap_hit_ratio * 100.0,
+        summary.mean_monsoon_boost_mm
+    );
     println!();
 }
 

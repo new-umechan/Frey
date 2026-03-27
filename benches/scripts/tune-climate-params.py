@@ -3,7 +3,7 @@
 Climate parameter tuner for climate_solo benchmark.
 
 This script performs exhaustive search over a finite parameter grid and reports
-the best precipitation rho under constraints.
+the best objective score under constraints.
 
 By design, "theoretical maximum" means the maximum within the explicitly
 defined discrete search space.
@@ -25,6 +25,10 @@ from typing import Dict, List, Tuple
 
 
 RHO_PATTERN = re.compile(r"^\s*([a-z_]+):\s+rho=([-+]?\d+(?:\.\d+)?)\s*$", re.MULTILINE)
+BAND_RHO_PATTERN = re.compile(
+    r"^\s*\[([a-z_]+)\s+[-+]?\d+(?:\.\d+)?-[-+]?\d+(?:\.\d+)?\]\s+rho=([-+]?\d+(?:\.\d+)?)\s*$",
+    re.MULTILINE,
+)
 
 DEFAULT_GRID = {
     "precipitation.hadley_anomaly_gain": [0.35, 0.45, 0.55],
@@ -61,10 +65,13 @@ def parse_metrics(stdout: str) -> Dict[str, float]:
     found = {}
     for name, value in RHO_PATTERN.findall(stdout):
         found[name] = float(value)
+    for band, value in BAND_RHO_PATTERN.findall(stdout):
+        found[f"{band}_precipitation_band"] = float(value)
     required = {"temperature", "precipitation", "aridity", "evapotranspiration", "runoff"}
     missing = required - set(found.keys())
     if missing:
         raise RuntimeError(f"failed to parse rho metrics, missing={sorted(missing)}")
+    found.setdefault("subtropics_precipitation_band", float("nan"))
     return found
 
 
@@ -92,7 +99,7 @@ def sync_climate_params(repo: Path) -> None:
 
 
 def run_bench(repo: Path) -> Dict[str, float]:
-    completed = run(["pnpm", "run", "bench", "--", "--suite", "climate_solo"], repo)
+    completed = run(["pnpm", "run", "bench", "--suite", "climate_solo"], repo)
     output = f"{completed.stdout}\n{completed.stderr}"
     return parse_metrics(output)
 
@@ -112,7 +119,9 @@ def objective_score(
     )
     if not feasible:
         return False, -math.inf
-    return True, metrics["precipitation"]
+    subtropics = metrics.get("subtropics_precipitation_band", float("nan"))
+    subtropics_term = 0.0 if math.isnan(subtropics) else subtropics
+    return True, 0.75 * metrics["precipitation"] + 0.25 * subtropics_term
 
 
 def trial_grid(grid: Dict[str, List[float]]) -> List[Dict[str, float]]:
@@ -131,7 +140,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--config-path", default="config/climate.yaml")
-    parser.add_argument("--output", default="benches/results/climate_tuning_runs.jsonl")
+    parser.add_argument(
+        "--output",
+        default="benches/results/climate_tuning/runs/climate_tuning_runs.jsonl",
+    )
     parser.add_argument("--min-aridity", type=float, default=0.34)
     parser.add_argument("--max-temp-drop", type=float, default=0.01)
     parser.add_argument("--max-runoff-drop", type=float, default=0.01)
@@ -211,7 +223,7 @@ def main() -> int:
                     "values": values,
                     "metrics": metrics,
                     "feasible": feasible,
-                    "objective_precipitation": score,
+                    "objective_score": score,
                     "elapsed_sec": elapsed,
                 },
             )
@@ -240,7 +252,7 @@ def main() -> int:
             "trial": best.index,
             "values": best.values,
             "metrics": best.metrics,
-            "objective_precipitation": best.objective,
+            "objective_score": best.objective,
         },
         "output_jsonl": str(output_path),
     }
