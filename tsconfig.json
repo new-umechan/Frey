@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* JS Support */
+    "allowJs": true,
+    "checkJs": true, // JSファイル内のエラーを検知
+    "maxNodeModuleJsDepth": 1,
+
+    /* Linting */
+    "strict": false, // 最初は緩めに設定
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Path Aliases (if needed) */
+    "baseUrl": ".",
+    "paths": {
+      "@wasm/*": ["generated/wasm/web/*"]
+    }
+  },
+  "include": ["web/src", "tools", "benches/scripts", "generated/wasm/web/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}
