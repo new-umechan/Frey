@@ -69,8 +69,8 @@ function bindRuntimeUi(options) {
         setCellMetric: controllerRuntime.setCellMetric,
         setSurfaceMode: controllerRuntime.setSurfaceModeWithPinchReset,
         playbackController: controllerRuntime.playbackController,
-        runPerfBenchmark: controllerRuntime.runPerfBenchmark,
-        copyPerfBenchmarkResult: controllerRuntime.copyPerfBenchmarkResult,
+        runPerf: controllerRuntime.runPerf,
+        copyPerfResult: controllerRuntime.copyPerfResult,
         getDebugEnabled: () => getState().debugEnabled,
         getCurrentSurfaceMode: () => getState().currentSurfaceMode,
         getCurrentViewMode: () => getState().currentViewMode,
@@ -126,6 +126,6 @@ export function bootstrapAppRuntime(options = {}) {
         stepWorldPlayback: controllerRuntime.stepWorldPlayback,
         runInitialSync: controllerRuntime.runInitialSync,
         shouldAdvanceWorld: controllerRuntime.shouldAdvanceWorld,
-        getLastPerfBenchmarkResult: controllerRuntime.getLastPerfBenchmarkResult,
+        getLastPerfResult: controllerRuntime.getLastPerfResult,
     };
 }

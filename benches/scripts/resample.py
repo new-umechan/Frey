@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--centroids",
-        default="bench/data/cell_centroids.csv",
+        default="benches/data/cell_centroids.csv",
         help="Path to centroid CSV (cell_id,latitude,longitude).",
     )
     parser.add_argument(
@@ -906,15 +906,15 @@ def main() -> None:
     centroids_path = Path(args.centroids)
     if args.output is None:
         if args.module == "climate":
-            output_path = Path("bench/data/climate_ref.bin")
+            output_path = Path("benches/data/climate_ref.bin")
         elif args.module == "hydro-input":
-            output_path = Path("bench/data/hydro_input.bin")
+            output_path = Path("benches/data/hydro_input.bin")
         elif args.module == "hydro-ref":
-            output_path = Path("bench/data/hydro_ref.bin")
+            output_path = Path("benches/data/hydro_ref.bin")
         elif args.module == "ecology-ref":
-            output_path = Path("bench/data/ecology_ref.bin")
+            output_path = Path("benches/data/ecology_ref.bin")
         else:
-            output_path = Path("bench/data/terrain_ref.bin")
+            output_path = Path("benches/data/terrain_ref.bin")
     else:
         output_path = Path(args.output)
     centroid_lat, centroid_lon = load_centroids(centroids_path)

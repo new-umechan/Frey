@@ -5,10 +5,10 @@ import initWasm, {
     WorldSimController,
     build_render_positions,
     generate_mesh,
-} from "../../generated/wasm/web/frey_wasm.js";
-import { createBenchmarkProfile } from "../../web/src/app/perf-benchmark/perf-benchmark.js";
-import { createPerfBenchmarkRunner } from "../../web/src/app/perf-benchmark/perf-benchmark-runner.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../web/src/interface/params/terrain.js";
+} from "../../../generated/wasm/web/frey_wasm.js";
+import { createPerfProfile } from "../../../web/src/app/perf/recorder.js";
+import { createPerfRunner } from "../../../web/src/app/perf/runner.js";
+import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain.js";
 
 const DEFAULT_THRESHOLD = 0.10;
 
@@ -121,7 +121,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-    console.error("Usage: node bench/scripts/bench.mjs [options]");
+    console.error("Usage: node tests/perf/scripts/perf.mjs [options]");
     console.error("  --ticks <n>");
     console.error("  --seed <seed>");
     console.error("  --surface-mode <globe|plane>");
@@ -215,7 +215,7 @@ function evaluateRegression(current, baseline, args) {
 }
 
 async function initWasmForNode() {
-    const wasmPath = new URL("../../generated/wasm/web/frey_wasm_bg.wasm", import.meta.url);
+    const wasmPath = new URL("../../../generated/wasm/web/frey_wasm_bg.wasm", import.meta.url);
     const wasmBytes = await readFile(wasmPath);
     try {
         await initWasm({ module_or_path: wasmBytes });
@@ -229,13 +229,13 @@ async function main() {
 
     await initWasmForNode();
 
-    const runner = createPerfBenchmarkRunner({
+    const runner = createPerfRunner({
         WorldSimController,
         build_render_positions,
         generate_mesh,
     });
 
-    const profile = createBenchmarkProfile({
+    const profile = createPerfProfile({
         tickCount: args.ticks,
         seed: args.seed,
         surfaceMode: args.surfaceMode,

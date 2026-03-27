@@ -1,4 +1,4 @@
-import { createTickPerfRecorder } from "./perf-benchmark.js";
+import { createTickPerfRecorder } from "./recorder.js";
 import { createControllerState, rebuildControllerState } from "./controller-state.js";
 import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./diagnostics.js";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./helpers.js";
 import { applyWorldDeltaToCore, estimateRiverMaskUpdate } from "./world-core.js";
 
-export function createPerfBenchmarkRunner(deps = {}) {
+export function createPerfRunner(deps = {}) {
     const {
         WorldSimController,
         build_render_positions,
@@ -223,7 +223,7 @@ export function createPerfBenchmarkRunner(deps = {}) {
         return {
             meta: {
                 generated_at: new Date().toISOString(),
-                user_agent: meta?.user_agent ?? "benchmark-runner",
+                user_agent: meta?.user_agent ?? "perf",
                 timezone: meta?.timezone ?? "unknown",
             },
             profile: {

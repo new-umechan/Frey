@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
     cat <<'EOF'
 Usage:
-    bench/scripts/prune-recoverable-raw.sh [--apply]
+    benches/scripts/prune-recoverable-raw.sh [--apply]
 
 Options:
     --apply   Actually delete targets. Without this option, runs in dry-run mode.
@@ -46,12 +46,12 @@ main() {
     done
 
     local targets=(
-        "bench/raw/archive"
-        "bench/raw/climate/era5_land_monthly_1970_2000.zip"
-        "bench/raw/climate/era5_land_annual_1970_2000.nc"
-        "bench/raw/hydrology/glofas_raw"
-        "bench/raw/hydrology/glofas_era5_annual_mean.nc"
-        "bench/raw/ecology/soilgrids"
+        "benches/raw/archive"
+        "benches/raw/climate/era5_land_monthly_1970_2000.zip"
+        "benches/raw/climate/era5_land_annual_1970_2000.nc"
+        "benches/raw/hydrology/glofas_raw"
+        "benches/raw/hydrology/glofas_era5_annual_mean.nc"
+        "benches/raw/ecology/soilgrids"
     )
 
     local found_any="false"

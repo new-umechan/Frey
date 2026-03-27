@@ -1,8 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import initWasm, { WorldSimController } from "../../generated/wasm/web/frey_wasm.js";
-import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../web/src/interface/params/terrain.js";
+import initWasm, { WorldSimController } from "../../../generated/wasm/web/frey_wasm.js";
+import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain.js";
 
 const DEFAULT_TICKS = 32;
 const DEFAULT_THRESHOLD = 0.005;
@@ -116,7 +116,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-    console.error("Usage: node bench/scripts/seed-regression.mjs [options]");
+    console.error("Usage: node tests/seed-regression/scripts/seed-regression.mjs [options]");
     console.error("  --seeds <csv>");
     console.error("  --ticks <n>");
     console.error("  --level <n>");
@@ -130,7 +130,7 @@ function printHelp() {
 }
 
 async function initWasmForNode() {
-    const wasmPath = new URL("../../generated/wasm/web/frey_wasm_bg.wasm", import.meta.url);
+    const wasmPath = new URL("../../../generated/wasm/web/frey_wasm_bg.wasm", import.meta.url);
     const wasmBytes = await readFile(wasmPath);
     try {
         await initWasm({ module_or_path: wasmBytes });

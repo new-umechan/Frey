@@ -49,8 +49,8 @@ function createUiHandlers(options = {}) {
         setCellMetric,
         setSurfaceMode,
         playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
+        runPerf,
+        copyPerfResult,
         updateTerrain,
     } = options;
 
@@ -73,8 +73,8 @@ function createUiHandlers(options = {}) {
         onHistorySeek: playbackController.handleHistorySeek,
         onHistoryStepDirection: playbackController.handleHistoryStepDirection,
         onEventLogJump: playbackController.handleHistoryJump,
-        onRunPerfBenchmark: runPerfBenchmark,
-        onCopyPerfBenchmark: copyPerfBenchmarkResult,
+        onRunPerfBenchmark: runPerf,
+        onCopyPerfBenchmark: copyPerfResult,
         onSubmitSeed: updateTerrain,
     };
 }
@@ -105,8 +105,8 @@ export function bindAppUiControls(options = {}) {
         setCellMetric,
         setSurfaceMode,
         playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
+        runPerf,
+        copyPerfResult,
         getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentViewMode,
@@ -130,8 +130,8 @@ export function bindAppUiControls(options = {}) {
         setCellMetric,
         setSurfaceMode,
         playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
+        runPerf,
+        copyPerfResult,
         updateTerrain,
     });
 

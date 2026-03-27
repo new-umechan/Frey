@@ -10,6 +10,6 @@ __pycache__/
 *.pyc
 
 # Benchmark data artifacts
-bench/raw/
-bench/data/
-bench/results/
+benches/raw/
+benches/data/
+benches/results/

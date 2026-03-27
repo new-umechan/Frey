@@ -24,7 +24,7 @@ function createPerfStatsRenderer(perfStatFields) {
     };
 }
 
-export function createPerfBenchmarkController(options = {}) {
+export function createPerfController(options = {}) {
     const {
         enabled,
         controls,
@@ -32,9 +32,9 @@ export function createPerfBenchmarkController(options = {}) {
         workerUrl,
         terrainParams,
         level,
-        createBenchmarkProfile,
-        createBenchmarkConsoleTable,
-        formatBenchmarkSummaryLine,
+        createPerfProfile,
+        createPerfConsoleTable,
+        formatPerfSummaryLine,
         getRuntimeMeta,
         canRunBenchmark,
         setPlaybackRunning,
@@ -104,7 +104,7 @@ export function createPerfBenchmarkController(options = {}) {
                     const done = Math.max(0, Math.floor(message.done ?? 0));
                     const total = Math.max(1, Math.floor(message.total ?? profile.tickCount));
                     const percent = Math.max(0, Math.min(100, Math.floor(message.percent ?? 0)));
-                    const status = typeof message.status === "string"
+            const status = typeof message.status === "string"
                         ? message.status
                         : `Running ${done}/${total} ticks... (${percent}%)`;
                     setProgress(done, total);
@@ -118,13 +118,13 @@ export function createPerfBenchmarkController(options = {}) {
                 }
                 if (message.type === "error") {
                     cleanup();
-                    reject(new Error(message.message || "Worker benchmark failed"));
+                    reject(new Error(message.message || "Worker performance run failed"));
                 }
             };
 
             const handleError = (event) => {
                 cleanup();
-                reject(new Error(event?.message || "Worker crashed during benchmark"));
+                reject(new Error(event?.message || "Worker crashed during performance run"));
             };
 
             const cleanup = () => {
@@ -155,13 +155,13 @@ export function createPerfBenchmarkController(options = {}) {
         try {
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(payload);
-                setStatus("Copied benchmark JSON.");
+                setStatus("Copied performance JSON.");
                 return;
             }
         } catch (error) {
             console.warn("clipboard write failed", error);
         }
-        console.log("[perf-bench][json]", payload);
+        console.log("[perf][json]", payload);
         setStatus("Clipboard unavailable. JSON logged to console.");
     };
 
@@ -170,10 +170,10 @@ export function createPerfBenchmarkController(options = {}) {
             return;
         }
 
-        const profile = createBenchmarkProfile();
+        const profile = createPerfProfile();
         isRunning = true;
         setControlsDisabled(true);
-        setStatus("Preparing benchmark profile...");
+        setStatus("Preparing performance profile...");
         const wasPlaying = setPlaybackRunning(false);
 
         try {
@@ -186,17 +186,17 @@ export function createPerfBenchmarkController(options = {}) {
                 const errorText = String(error?.message ?? error);
                 const looksLikeWasmTrap = /unreachable|wasm|worker crashed/i.test(errorText);
                 if (!looksLikeWasmTrap) {
-                    setStatus(`Benchmark failed: ${errorText}`);
+                    setStatus(`Performance run failed: ${errorText}`);
                     console.error(error);
                     return;
                 }
-                console.warn("[perf-bench] worker trap detected. restarting worker and retrying once.", error);
+                console.warn("[perf] worker trap detected. restarting worker and retrying once.", error);
                 resetWorker();
-                setStatus("Worker trapped. Restarting benchmark worker and retrying once...");
+                setStatus("Worker trapped. Restarting perf worker and retrying once...");
                 try {
                     result = await runOnWorker(profile);
                 } catch (retryError) {
-                    setStatus(`Benchmark failed: ${String(retryError?.message ?? retryError)}`);
+                    setStatus(`Performance run failed: ${String(retryError?.message ?? retryError)}`);
                     console.error(retryError);
                     return;
                 }
@@ -204,12 +204,12 @@ export function createPerfBenchmarkController(options = {}) {
 
             lastResult = result;
             renderPerfStats(result);
-            const summaryLine = formatBenchmarkSummaryLine(result);
+            const summaryLine = formatPerfSummaryLine(result);
             setStatus(`Done: ${summaryLine}`);
             setProgress(profile.tickCount, profile.tickCount);
-            console.group(`[perf-bench] ${profile.tickCount} tick benchmark`);
+            console.group(`[perf] ${profile.tickCount} tick performance run`);
             console.log("result", result);
-            console.table(createBenchmarkConsoleTable(result));
+            console.table(createPerfConsoleTable(result));
             console.groupEnd();
         } finally {
             syncPlaybackUi();

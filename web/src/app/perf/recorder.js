@@ -1,4 +1,4 @@
-const BENCHMARK_LABEL = "perf-bench-32";
+const PERF_LABEL = "perf-32";
 
 function roundMetric(value) {
     if (!Number.isFinite(value)) {
@@ -68,9 +68,9 @@ export function createTickPerfRecorder() {
     };
 }
 
-export function createBenchmarkProfile(overrides = {}) {
+export function createPerfProfile(overrides = {}) {
     return {
-        label: BENCHMARK_LABEL,
+        label: PERF_LABEL,
         tickCount: 32,
         seed: "alpha",
         surfaceMode: "globe",
@@ -79,7 +79,7 @@ export function createBenchmarkProfile(overrides = {}) {
     };
 }
 
-export function createBenchmarkConsoleTable(result) {
+export function createPerfConsoleTable(result) {
     if (!result?.metrics) {
         return [];
     }
@@ -95,9 +95,9 @@ export function createBenchmarkConsoleTable(result) {
     }));
 }
 
-export function formatBenchmarkSummaryLine(result) {
+export function formatPerfSummaryLine(result) {
     if (!result?.metrics?.tick_total) {
-        return "No benchmark data.";
+        return "No performance data.";
     }
     const tickTotal = result.metrics.tick_total;
     const step = result.metrics.exec_world;

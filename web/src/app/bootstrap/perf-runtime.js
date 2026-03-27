@@ -1,4 +1,4 @@
-import { createPerfBenchmarkController } from "../perf-benchmark/perf-benchmark-controller.js";
+import { createPerfController } from "../perf/controller.js";
 
 export function createPerfRuntime(options = {}) {
     const {
@@ -8,9 +8,9 @@ export function createPerfRuntime(options = {}) {
         workerUrl,
         terrainParams,
         level,
-        createBenchmarkProfile,
-        createBenchmarkConsoleTable,
-        formatBenchmarkSummaryLine,
+        createPerfProfile,
+        createPerfConsoleTable,
+        formatPerfSummaryLine,
         getRuntimeMeta,
         canRunBenchmark,
         setPlaybackRunning,
@@ -18,16 +18,16 @@ export function createPerfRuntime(options = {}) {
     } = options;
 
     const perfUiEnabled = isPerfEnabled && Boolean(perfControls);
-    const perfBenchmarkController = createPerfBenchmarkController({
+    const perfBenchmarkController = createPerfController({
         enabled: perfUiEnabled,
         controls: perfControls,
         perfStatFields,
         workerUrl,
         terrainParams,
         level,
-        createBenchmarkProfile,
-        createBenchmarkConsoleTable,
-        formatBenchmarkSummaryLine,
+        createPerfProfile,
+        createPerfConsoleTable,
+        formatPerfSummaryLine,
         getRuntimeMeta,
         canRunBenchmark,
         setPlaybackRunning,

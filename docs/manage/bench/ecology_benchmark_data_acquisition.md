@@ -24,7 +24,7 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 
 ### 1. 地形
 
-- 保存先: `bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
+- 保存先: `benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
 - 用途: `terrain_ref.bin` の生成、Ecology benchmark の `height` 入力
 
 取得元:
@@ -37,9 +37,9 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 ### 2. 気候
 
 - 保存先:
-  - `bench/raw/climate/worldclim_tavg_annual_c.tif`
-  - `bench/raw/climate/worldclim_prec_annual_mm.tif`
-  - `bench/raw/climate/era5_land_annual_1970_2000.nc`
+  - `benches/raw/climate/worldclim_tavg_annual_c.tif`
+  - `benches/raw/climate/worldclim_prec_annual_mm.tif`
+  - `benches/raw/climate/era5_land_annual_1970_2000.nc`
 - 用途:
   - `climate_ref.bin` の生成
   - Ecology benchmark の `temperature` / `precipitation` 入力
@@ -49,14 +49,14 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 - ERA5-Land monthly means: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-monthly-means?tab=download
 
 運用:
-- WorldClim の月次 tif 群が `bench/raw/climate/` にあれば、`npm run bench:prepare:worldclim` で年平均・年積算を再生成できる
+- WorldClim の月次 tif 群が `benches/raw/climate/` にあれば、`npm run bench:prepare:worldclim` で年平均・年積算を再生成できる
 - ERA5-Land は既存の `npm run bench:fetch:era5` / `npm run bench:prepare:era5` を使う
 
 ### 3. 水文
 
 - 保存先:
-  - `bench/raw/hydrology/glofas_era5_annual_mean.nc`
-  - `bench/raw/hydrology/HydroLAKES_polys_v10.shp`
+  - `benches/raw/hydrology/glofas_era5_annual_mean.nc`
+  - `benches/raw/hydrology/HydroLAKES_polys_v10.shp`
 - 用途:
   - `hydro_ref.bin` の生成
   - Ecology benchmark の `river_flow` 入力
@@ -71,7 +71,7 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 
 ## 新規に取得するもの
 
-Ecology benchmark の参照正解生成に必要だが、現在の `bench/raw` には入っていないもの。
+Ecology benchmark の参照正解生成に必要だが、現在の `benches/raw` には入っていないもの。
 
 ### 4. MOD44B Vegetation Continuous Fields
 
@@ -96,11 +96,11 @@ Ecology benchmark の参照正解生成に必要だが、現在の `bench/raw` �
   - Percent NonVegetated
 
 保存方針:
-- 生データ置き場: `bench/raw/ecology/MOD44B/`
+- 生データ置き場: `benches/raw/ecology/MOD44B/`
 - canonical 変換後:
-  - `bench/raw/ecology/mod44b_tree_cover.tif`
-  - `bench/raw/ecology/mod44b_non_tree_cover.tif`
-  - `bench/raw/ecology/mod44b_non_vegetated.tif`
+  - `benches/raw/ecology/mod44b_tree_cover.tif`
+  - `benches/raw/ecology/mod44b_non_tree_cover.tif`
+  - `benches/raw/ecology/mod44b_non_vegetated.tif`
 
 実務手順:
 1. Earthdata Search で `MOD44B` を検索する
@@ -134,10 +134,10 @@ Ecology benchmark の参照正解生成に必要だが、現在の `bench/raw` �
   - `LC_Prop2`
 
 保存方針:
-- 生データ置き場: `bench/raw/ecology/MCD12Q1/`
+- 生データ置き場: `benches/raw/ecology/MCD12Q1/`
 - canonical 変換後:
-  - `bench/raw/ecology/mcd12q1_lc_type1.tif`
-  - `bench/raw/ecology/mcd12q1_lc_prop2.tif`
+  - `benches/raw/ecology/mcd12q1_lc_type1.tif`
+  - `benches/raw/ecology/mcd12q1_lc_prop2.tif`
 
 実務手順:
 1. Earthdata Search で `MCD12Q1` を検索する
@@ -157,11 +157,11 @@ npm run bench:prepare:ecology-modis
 
 生成されるファイル:
 
-- `bench/raw/ecology/mod44b_tree_cover.tif`
-- `bench/raw/ecology/mod44b_non_tree_cover.tif`
-- `bench/raw/ecology/mod44b_non_vegetated.tif`
-- `bench/raw/ecology/mcd12q1_lc_type1.tif`
-- `bench/raw/ecology/mcd12q1_lc_prop2.tif`
+- `benches/raw/ecology/mod44b_tree_cover.tif`
+- `benches/raw/ecology/mod44b_non_tree_cover.tif`
+- `benches/raw/ecology/mod44b_non_vegetated.tif`
+- `benches/raw/ecology/mcd12q1_lc_type1.tif`
+- `benches/raw/ecology/mcd12q1_lc_prop2.tif`
 
 ### 6. SoilGrids
 
@@ -187,7 +187,7 @@ npm run bench:prepare:ecology-modis
   - Bulk density（`bdod`）: 0-5cm, 5-15cm, 15-30cm
 
 保存方針:
-- `bench/raw/ecology/soilgrids/`
+- `benches/raw/ecology/soilgrids/`
 
 推奨ファイル構成:
 - canonical（0.1度で再投影済み、12ファイル）
@@ -211,7 +211,7 @@ npm run bench:prepare:ecology-modis
 npm run bench:prepare:soilgrids:0p1deg
 ```
 
-2. 出力先は`bench/raw/ecology/soilgrids/`で固定
+2. 出力先は`benches/raw/ecology/soilgrids/`で固定
 3. `npm run bench:resample:ecology-ref:with-soil`で、12ファイルを入力に重み付き0-30cmを内部合成して`ecology_ref.bin`を再生成する
 固定運用の深さ重みは `0-5 : 5-15 : 15-30 = 5 : 3.5 : 1.5` とする。
 これは厳密な層厚比ではなく、生物利用しやすさを優先した benchmark 運用値である。
@@ -219,14 +219,14 @@ npm run bench:prepare:soilgrids:0p1deg
 最小検証コマンド:
 
 ```sh
-gdalinfo bench/raw/ecology/soilgrids/soc_0_5cm_mean_0p1deg.tif
-gdalinfo bench/raw/ecology/soilgrids/soc_5_15cm_mean_0p1deg.tif
-gdalinfo bench/raw/ecology/soilgrids/soc_15_30cm_mean_0p1deg.tif
+gdalinfo benches/raw/ecology/soilgrids/soc_0_5cm_mean_0p1deg.tif
+gdalinfo benches/raw/ecology/soilgrids/soc_5_15cm_mean_0p1deg.tif
+gdalinfo benches/raw/ecology/soilgrids/soc_15_30cm_mean_0p1deg.tif
 ```
 
 補足:
-- `bench/scripts/prepare-soilgrids.py`はSoilGridsのremote VRTを`/vsicurl/`経由で読み、ローカル保存する
-- `bench/scripts/resample.py`は`--soil-dir`入力時に、3深さを重み付きで内部合成して`soil_fertility`を計算する
+- `benches/scripts/prepare-soilgrids.py`はSoilGridsのremote VRTを`/vsicurl/`経由で読み、ローカル保存する
+- `benches/scripts/resample.py`は`--soil-dir`入力時に、3深さを重み付きで内部合成して`soil_fertility`を計算する
 - どれか欠けると`soil_fertility`はNaNで保存される
 - 深さ重みは`--soil-w-0-5`/`--soil-w-5-15`/`--soil-w-15-30`で調整できるが、固定運用値は`5/3.5/1.5`とする
 
@@ -235,21 +235,21 @@ gdalinfo bench/raw/ecology/soilgrids/soc_15_30cm_mean_0p1deg.tif
 最終的に benchmark 実装が期待する raw ファイルは次のとおり。
 
 ```text
-bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 
-bench/raw/climate/worldclim_tavg_annual_c.tif
-bench/raw/climate/worldclim_prec_annual_mm.tif
-bench/raw/climate/era5_land_annual_1970_2000.nc
+benches/raw/climate/worldclim_tavg_annual_c.tif
+benches/raw/climate/worldclim_prec_annual_mm.tif
+benches/raw/climate/era5_land_annual_1970_2000.nc
 
-bench/raw/hydrology/glofas_era5_annual_mean.nc
-bench/raw/hydrology/HydroLAKES_polys_v10.shp
+benches/raw/hydrology/glofas_era5_annual_mean.nc
+benches/raw/hydrology/HydroLAKES_polys_v10.shp
 
-bench/raw/ecology/mod44b_tree_cover.tif
-bench/raw/ecology/mod44b_non_tree_cover.tif
-bench/raw/ecology/mod44b_non_vegetated.tif
-bench/raw/ecology/mcd12q1_lc_type1.tif
-bench/raw/ecology/mcd12q1_lc_prop2.tif
-bench/raw/ecology/soilgrids/
+benches/raw/ecology/mod44b_tree_cover.tif
+benches/raw/ecology/mod44b_non_tree_cover.tif
+benches/raw/ecology/mod44b_non_vegetated.tif
+benches/raw/ecology/mcd12q1_lc_type1.tif
+benches/raw/ecology/mcd12q1_lc_prop2.tif
+benches/raw/ecology/soilgrids/
 ```
 
 ## 既存スクリプトで取得できるもの
@@ -274,6 +274,6 @@ bench/raw/ecology/soilgrids/
 
 取得手順をこの文書で固定したので、次の実装単位は次の順がよい。
 
-1. `bench/scripts/resample.py` に `ecology-ref` モジュールを追加する
+1. `benches/scripts/resample.py` に `ecology-ref` モジュールを追加する
 2. MOD44B / MCD12Q1 / SoilGrids の raw から canonical ファイルを作る補助スクリプトを足す
 3. `rust/benches/ecology_solo.rs` を追加する

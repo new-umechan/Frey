@@ -7,7 +7,7 @@ export function createControllerState(WorldSimController, profile, level, terrai
     });
     const worldId = initResult?.world_id;
     if (!worldId) {
-        throw new Error("benchmark failed: missing world id");
+        throw new Error("performance run failed: missing world id");
     }
     return {
         controller,

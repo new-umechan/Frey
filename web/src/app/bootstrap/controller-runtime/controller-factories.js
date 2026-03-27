@@ -21,19 +21,19 @@ import { createWorldUiController } from "../../ui/world-ui-controller.js";
 import { createWorldSessionController } from "../../sim/world-session-controller.js";
 import { createWorldStepper } from "../../sim/world-stepper.js";
 import {
-    createBenchmarkConsoleTable,
-    createBenchmarkProfile,
-    formatBenchmarkSummaryLine,
-} from "../../perf-benchmark/perf-benchmark.js";
+    createPerfConsoleTable,
+    createPerfProfile,
+    formatPerfSummaryLine,
+} from "../../perf/recorder.js";
 import { createViewModeController } from "../../ui/view-mode-controller.js";
 import { normalizeCellMetric } from "../../rendering/cell-metric.js";
 import { createTerrainGenerationController } from "../../ui/terrain-generation-controller.js";
 import { createPlaybackController } from "../../playback/playback-controller.js";
-import { pushStepBreakdownSamples } from "../../perf-benchmark/perf-step-breakdown.js";
+import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown.js";
 import { resetWorldProgress } from "../../sim/world-loop.js";
 import { createPerfRuntime } from "../perf-runtime.js";
 
-const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-benchmark-worker.js", import.meta.url);
+const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 
 function createWorldUiRuntime(context, playbackControllerRef) {
     const worldUiController = createWorldUiController({
@@ -208,9 +208,9 @@ function createPerfControllers(context, playbackControllerRef) {
         workerUrl: PERF_BENCH_WORKER_URL,
         terrainParams: TERRAIN_PARAMS,
         level: LEVEL,
-        createBenchmarkProfile,
-        createBenchmarkConsoleTable,
-        formatBenchmarkSummaryLine,
+        createPerfProfile,
+        createPerfConsoleTable,
+        formatPerfSummaryLine,
         getRuntimeMeta: () => ({
             user_agent: navigator.userAgent,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -231,9 +231,9 @@ function createPerfControllers(context, playbackControllerRef) {
 
     return {
         perfUiEnabled,
-        runPerfBenchmark: perfBenchmarkController.runBenchmark,
-        copyPerfBenchmarkResult: perfBenchmarkController.copyResult,
-        getLastPerfBenchmarkResult: () => perfBenchmarkController.getLastResult(),
+        runPerf: perfBenchmarkController.runBenchmark,
+        copyPerfResult: perfBenchmarkController.copyResult,
+        getLastPerfResult: () => perfBenchmarkController.getLastResult(),
     };
 }
 
@@ -269,9 +269,9 @@ export function createRuntimeControllers(context) {
 
     const {
         perfUiEnabled,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
-        getLastPerfBenchmarkResult,
+        runPerf,
+        copyPerfResult,
+        getLastPerfResult,
     } = createPerfControllers(context, playbackControllerRef);
 
     return {
@@ -285,8 +285,8 @@ export function createRuntimeControllers(context) {
         stepWorldPlayback,
         updateTerrain,
         playbackController,
-        runPerfBenchmark,
-        copyPerfBenchmarkResult,
-        getLastPerfBenchmarkResult,
+        runPerf,
+        copyPerfResult,
+        getLastPerfResult,
     };
 }

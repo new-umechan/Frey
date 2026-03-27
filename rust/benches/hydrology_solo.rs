@@ -178,10 +178,10 @@ fn main() {
         None => {
             println!("=== Hydrology Solo Bench ===");
             println!();
-            println!("-- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --");
+            println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --");
             println!("To generate:");
             println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -211,7 +211,7 @@ fn main() {
         None => {
             println!("=== Hydrology Solo Bench ===");
             println!();
-            println!("-- Hydro Input: SKIPPED (bench/data/hydro_input.bin not found) --");
+            println!("-- Hydro Input: SKIPPED (benches/data/hydro_input.bin not found) --");
             println!("To generate:");
             println!("  npm run bench:resample:hydro-input -- --runoff <path>");
             return;
@@ -302,7 +302,7 @@ fn main() {
             }
         },
         None => {
-            println!("SKIPPED  (bench/data/hydro_ref.bin not found)");
+            println!("SKIPPED  (benches/data/hydro_ref.bin not found)");
             println!("To generate:");
             println!("  npm run bench:resample:hydro-ref -- --river-flow <path> --lakes <path>");
             println!();
@@ -579,8 +579,8 @@ fn percentile_sorted(values: &[f32], quantile: f32) -> f32 {
 
 fn find_terrain_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
-        Path::new("bench/data/terrain_ref.bin"),
-        Path::new("../bench/data/terrain_ref.bin"),
+        Path::new("benches/data/terrain_ref.bin"),
+        Path::new("../benches/data/terrain_ref.bin"),
     ];
     candidates
         .iter()
@@ -590,8 +590,8 @@ fn find_terrain_ref_cache_path() -> Option<PathBuf> {
 
 fn find_hydro_input_cache_path() -> Option<PathBuf> {
     let candidates = [
-        Path::new("bench/data/hydro_input.bin"),
-        Path::new("../bench/data/hydro_input.bin"),
+        Path::new("benches/data/hydro_input.bin"),
+        Path::new("../benches/data/hydro_input.bin"),
     ];
     candidates
         .iter()
@@ -601,8 +601,8 @@ fn find_hydro_input_cache_path() -> Option<PathBuf> {
 
 fn find_hydro_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
-        Path::new("bench/data/hydro_ref.bin"),
-        Path::new("../bench/data/hydro_ref.bin"),
+        Path::new("benches/data/hydro_ref.bin"),
+        Path::new("../benches/data/hydro_ref.bin"),
     ];
     candidates
         .iter()
@@ -824,8 +824,8 @@ fn summarize_diagnostics(outcomes: &[AssertionOutcome]) -> DiagnosticSummary {
 
 fn score_output_path() -> PathBuf {
     let candidates = [
-        Path::new("bench/results/hydrology_main_scores.jsonl"),
-        Path::new("../bench/results/hydrology_main_scores.jsonl"),
+        Path::new("benches/results/hydrology_main_scores.jsonl"),
+        Path::new("../benches/results/hydrology_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {

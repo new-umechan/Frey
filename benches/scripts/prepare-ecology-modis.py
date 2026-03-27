@@ -17,12 +17,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mod44b-dir",
-        default="bench/raw/ecology/MOD44B",
+        default="benches/raw/ecology/MOD44B",
         help="Directory containing MOD44B HDF tiles.",
     )
     parser.add_argument(
         "--mcd12q1-dir",
-        default="bench/raw/ecology/MCD12Q1",
+        default="benches/raw/ecology/MCD12Q1",
         help="Directory containing MCD12Q1 HDF tiles.",
     )
     parser.add_argument(
@@ -33,27 +33,27 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out-tree-cover",
-        default="bench/raw/ecology/mod44b_tree_cover.tif",
+        default="benches/raw/ecology/mod44b_tree_cover.tif",
         help="Canonical output path for MOD44B Percent_Tree_Cover.",
     )
     parser.add_argument(
         "--out-non-tree-cover",
-        default="bench/raw/ecology/mod44b_non_tree_cover.tif",
+        default="benches/raw/ecology/mod44b_non_tree_cover.tif",
         help="Canonical output path for MOD44B Percent_NonTree_Vegetation.",
     )
     parser.add_argument(
         "--out-non-vegetated",
-        default="bench/raw/ecology/mod44b_non_vegetated.tif",
+        default="benches/raw/ecology/mod44b_non_vegetated.tif",
         help="Canonical output path for MOD44B Percent_NonVegetated.",
     )
     parser.add_argument(
         "--out-lc-type1",
-        default="bench/raw/ecology/mcd12q1_lc_type1.tif",
+        default="benches/raw/ecology/mcd12q1_lc_type1.tif",
         help="Canonical output path for MCD12Q1 LC_Type1.",
     )
     parser.add_argument(
         "--out-lc-prop2",
-        default="bench/raw/ecology/mcd12q1_lc_prop2.tif",
+        default="benches/raw/ecology/mcd12q1_lc_prop2.tif",
         help="Canonical output path for MCD12Q1 LC_Prop2.",
     )
     parser.add_argument(

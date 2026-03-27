@@ -226,7 +226,7 @@ fn main() {
         }
         None => {
             println!("=== Ecology Solo Bench ===");
-            println!("-- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found or decode failed) --");
+            println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found or decode failed) --");
             return;
         }
     };
@@ -238,7 +238,7 @@ fn main() {
             r
         }
         None => {
-            println!("-- Climate Input: SKIPPED (bench/data/climate_ref.bin not found or decode failed) --");
+            println!("-- Climate Input: SKIPPED (benches/data/climate_ref.bin not found or decode failed) --");
             return;
         }
     };
@@ -251,7 +251,7 @@ fn main() {
         }
         None => {
             println!(
-                "-- Hydro Input: SKIPPED (bench/data/hydro_ref.bin not found or decode failed) --"
+                "-- Hydro Input: SKIPPED (benches/data/hydro_ref.bin not found or decode failed) --"
             );
             return;
         }
@@ -264,7 +264,7 @@ fn main() {
             (path, r)
         }
         None => {
-            println!("-- Ecology Reference: SKIPPED (bench/data/ecology_ref.bin not found or decode failed) --");
+            println!("-- Ecology Reference: SKIPPED (benches/data/ecology_ref.bin not found or decode failed) --");
             return;
         }
     };
@@ -521,16 +521,16 @@ fn run_until_converged(world: &mut world::World) -> RunState {
 
 fn find_cache(name: &str) -> Option<PathBuf> {
     let candidates = [
-        PathBuf::from(format!("bench/data/{name}")),
-        PathBuf::from(format!("../bench/data/{name}")),
+        PathBuf::from(format!("benches/data/{name}")),
+        PathBuf::from(format!("../benches/data/{name}")),
     ];
     candidates.into_iter().find(|path| path.exists())
 }
 
 fn score_output_path() -> PathBuf {
     let candidates = [
-        Path::new("bench/results/ecology_main_scores.jsonl"),
-        Path::new("../bench/results/ecology_main_scores.jsonl"),
+        Path::new("benches/results/ecology_main_scores.jsonl"),
+        Path::new("../benches/results/ecology_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {

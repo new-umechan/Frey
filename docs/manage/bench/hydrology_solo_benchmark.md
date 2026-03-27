@@ -24,9 +24,9 @@ cargo bench --bench hydrology_solo
 
 ## 入力の準備
 
-このベンチは、実地形キャッシュ `bench/data/terrain_ref.bin` と、
-Hydrology単体ベンチ専用の入力キャッシュ `bench/data/hydro_input.bin`、
-評価用キャッシュ `bench/data/hydro_ref.bin` を使う。
+このベンチは、実地形キャッシュ `benches/data/terrain_ref.bin` と、
+Hydrology単体ベンチ専用の入力キャッシュ `benches/data/hydro_input.bin`、
+評価用キャッシュ `benches/data/hydro_ref.bin` を使う。
 
 - `hydro_input.bin`
   - `runoff`
@@ -37,21 +37,21 @@ Hydrology単体ベンチ専用の入力キャッシュ `bench/data/hydro_input.b
 現在の実運用では、リポジトリルートで次の順に準備する。
 
 1. `npm run bench:dump-centroids`（未実行の場合のみ）
-2. `npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
+2. `npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
 3. `npm run bench:prepare:era5`（未実行の場合のみ）
-4. `npm run bench:resample:hydro-input -- --runoff bench/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
-5. `npm run bench:resample:hydro-ref -- --river-flow bench/raw/hydrology/glofas_era5_annual_mean.nc --lakes bench/raw/hydrology/HydroLAKES_polys_v10.shp`
+4. `npm run bench:resample:hydro-input -- --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
+5. `npm run bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
 
-`bench:prepare:era5` の前提として、`bench/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
+`bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
 （`npm run bench:fetch:era5` で取得可）。
 
-GloFAS-ERA5 は `bench/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
+GloFAS-ERA5 は `benches/raw/hydrology/glofas_era5_annual_mean.nc` を参照する
 （Copernicus EWDS から取得: https://ewds.climate.copernicus.eu）。
 このファイルは、日次データをそのまま全件取得した年平均ではなく、
 複数年・複数月に対して7日刻み（既定: `01,08,15,22,29`）で取得した日次サンプルの平均から作る近似年平均でもよい。
 固定ベンチの比較用参照として年ごとの偏りを抑えることを優先する。
 
-HydroLAKES は `bench/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
+HydroLAKES は `benches/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
 （https://www.hydrosheds.org/products/hydrolakes）。
 
 | フィールド | 型 | 値 |
@@ -225,7 +225,7 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 ## キャッシュのバイナリ形式
 
-`bench/scripts/resample.py` / `rust/benches/hydrology_solo.rs` 実装。
+`benches/scripts/resample.py` / `rust/benches/hydrology_solo.rs` 実装。
 
 ### hydro_input.bin
 
@@ -293,9 +293,9 @@ ganges_delta:      river_flow=6800.0
 
 ## 実データ未整備時の暫定運用
 
-`bench/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
-`bench/data/hydro_input.bin` が存在しない場合、ベンチは実行せず終了する。
-`bench/data/hydro_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
+`benches/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
+`benches/data/hydro_input.bin` が存在しない場合、ベンチは実行せず終了する。
+`benches/data/hydro_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
 
 補助評価は実データ不要（代表セルのシミュレーション出力値同士を比較するだけ）のため、
 実データ整備前から即座に実行できる。
@@ -303,16 +303,16 @@ ganges_delta:      river_flow=6800.0
 ```
 === Hydrology Solo Bench ===
 
--- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --
+-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --
 To generate:
   1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
 === Hydrology Solo Bench ===
 
--- Hydro Input: SKIPPED (bench/data/hydro_input.bin not found) --
+-- Hydro Input: SKIPPED (benches/data/hydro_input.bin not found) --
 To generate:
   npm run bench:resample:hydro-input -- --runoff <path>
 ```
@@ -320,7 +320,7 @@ To generate:
 ```
 === Hydrology Solo Bench ===
 
--- Main Evaluation: SKIPPED (bench/data/hydro_ref.bin not found) --
+-- Main Evaluation: SKIPPED (benches/data/hydro_ref.bin not found) --
 To generate:
   npm run bench:resample:hydro-ref -- --river-flow <path> --lakes <path>
 
@@ -330,7 +330,7 @@ To generate:
 
 ---
 
-## リサンプリングツール（`bench/scripts/resample.py` への追加）
+## リサンプリングツール（`benches/scripts/resample.py` への追加）
 
 Climate単体ベンチで実装した `resample.py` に、Hydrology単体ベンチ向けの入力生成と評価データ生成を追加する。
 
@@ -339,32 +339,32 @@ CLI 契約は次の通りとする。
 - `--module hydro-input`
 - 必須引数は `--runoff`
 - 任意引数は `--var-name runoff=<name>`
-- 出力既定値は `bench/data/hydro_input.bin`
+- 出力既定値は `benches/data/hydro_input.bin`
 - `--module hydro-ref`
 - 必須引数は `--river-flow` と `--lakes`
-- 出力既定値は `bench/data/hydro_ref.bin`
+- 出力既定値は `benches/data/hydro_ref.bin`
 
 ```bash
-python bench/scripts/resample.py --module hydro-input \
-  --centroids bench/data/cell_centroids.csv \
-  --runoff bench/raw/climate/era5_land_annual_1970_2000.nc \
+python benches/scripts/resample.py --module hydro-input \
+  --centroids benches/data/cell_centroids.csv \
+  --runoff benches/raw/climate/era5_land_annual_1970_2000.nc \
   --var-name runoff=runoff_mm_yr \
-  --output bench/data/hydro_input.bin
+  --output benches/data/hydro_input.bin
 ```
 
 ```bash
-python bench/scripts/resample.py --module hydro-ref \
-  --centroids bench/data/cell_centroids.csv \
-  --river-flow bench/raw/hydrology/glofas_era5_annual_mean.nc \
-  --lakes bench/raw/hydrology/HydroLAKES_polys_v10.shp \
-  --output bench/data/hydro_ref.bin
+python benches/scripts/resample.py --module hydro-ref \
+  --centroids benches/data/cell_centroids.csv \
+  --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc \
+  --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp \
+  --output benches/data/hydro_ref.bin
 ```
 
 処理手順：
 
 1. `hydro-input`
 2. ERA5-Land NetCDF を読み、年平均runoffグリッドを取得する
-3. CellStore のセル重心座標一覧（`bench/data/cell_centroids.csv`）を読む
+3. CellStore のセル重心座標一覧（`benches/data/cell_centroids.csv`）を読む
 4. 各セルの重心座標でバイリニア補間し、`runoff` を `hydro_input.bin` に保存する
 5. `hydro-ref`
 6. GloFAS-ERA5 NetCDF を読み、近似複数年平均流量グリッドを取得する
@@ -385,7 +385,7 @@ python bench/scripts/resample.py --module hydro-ref \
 `cargo bench --manifest-path rust/Cargo.toml --bench hydrology_solo` 実行時に、
 補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
-- 保存先: `bench/results/hydrology_main_scores.jsonl`
+- 保存先: `benches/results/hydrology_main_scores.jsonl`
 - 1実行 = 1行（時刻、seed、mesh_level、cell_count、river_flow_rho、is_lake_precision/recall/f1、補助評価要約）
 
 ---

@@ -14,7 +14,7 @@ function parseNumber(value, name) {
 function parseArgs(argv) {
     const args = {
         level: 6,
-        out: "bench/data/cell_centroids.csv",
+        out: "benches/data/cell_centroids.csv",
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -42,7 +42,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-    console.error("Usage: node bench/scripts/dump-cell-centroids.mjs [options]");
+    console.error("Usage: node benches/scripts/dump-cell-centroids.mjs [options]");
     console.error("  --level <n>");
     console.error("  --out <path>");
 }

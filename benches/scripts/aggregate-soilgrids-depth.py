@@ -21,12 +21,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--in-dir",
-        default="bench/raw/ecology/soilgrids",
+        default="benches/raw/ecology/soilgrids",
         help="Directory containing 12 SoilGrids depth rasters.",
     )
     parser.add_argument(
         "--out-dir",
-        default="bench/raw/ecology/soilgrids",
+        default="benches/raw/ecology/soilgrids",
         help="Directory to write aggregated 0-30cm rasters.",
     )
     parser.add_argument(

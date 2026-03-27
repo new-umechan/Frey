@@ -282,10 +282,10 @@ fn main() {
         None => {
             println!("=== Climate Solo Bench ===");
             println!();
-            println!("-- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --");
+            println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --");
             println!("To generate:");
             println!("  1) npm run bench:dump-centroids");
-            println!("  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
+            println!("  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif");
             return;
         }
     };
@@ -360,7 +360,7 @@ fn main() {
             }
         },
         None => {
-            println!("SKIPPED  (bench/data/climate_ref.bin not found)");
+            println!("SKIPPED  (benches/data/climate_ref.bin not found)");
             println!("To generate:");
             println!("  1) npm run bench:dump-centroids");
             println!("  2) npm run bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>");
@@ -583,8 +583,8 @@ fn pearson_corr(a: &[f32], b: &[f32]) -> Option<f32> {
 
 fn find_climate_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
-        Path::new("bench/data/climate_ref.bin"),
-        Path::new("../bench/data/climate_ref.bin"),
+        Path::new("benches/data/climate_ref.bin"),
+        Path::new("../benches/data/climate_ref.bin"),
     ];
     candidates
         .iter()
@@ -594,8 +594,8 @@ fn find_climate_ref_cache_path() -> Option<PathBuf> {
 
 fn find_terrain_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
-        Path::new("bench/data/terrain_ref.bin"),
-        Path::new("../bench/data/terrain_ref.bin"),
+        Path::new("benches/data/terrain_ref.bin"),
+        Path::new("../benches/data/terrain_ref.bin"),
     ];
     candidates
         .iter()
@@ -820,8 +820,8 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
 
 fn score_output_path() -> PathBuf {
     let candidates = [
-        Path::new("bench/results/climate_main_scores.jsonl"),
-        Path::new("../bench/results/climate_main_scores.jsonl"),
+        Path::new("benches/results/climate_main_scores.jsonl"),
+        Path::new("../benches/results/climate_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {

@@ -12,7 +12,7 @@ const BENCHES = [
     {
         id: "climate_solo",
         title: "CLIMATE_SOLO",
-        jsonlPath: "bench/results/climate_main_scores.jsonl",
+        jsonlPath: "benches/results/climate_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "climate_solo"],
         summarize(record) {
             const phase2 = record?.phase2?.metrics ?? {};
@@ -41,7 +41,7 @@ const BENCHES = [
     {
         id: "hydrology_solo",
         title: "HYDROLOGY_SOLO",
-        jsonlPath: "bench/results/hydrology_main_scores.jsonl",
+        jsonlPath: "benches/results/hydrology_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "hydrology_solo"],
         summarize(record) {
             const main = record?.main_evaluation?.metrics ?? {};
@@ -63,7 +63,7 @@ const BENCHES = [
     {
         id: "ecology_solo",
         title: "ECOLOGY_SOLO",
-        jsonlPath: "bench/results/ecology_main_scores.jsonl",
+        jsonlPath: "benches/results/ecology_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "ecology_solo"],
         summarize(record) {
             const main = record?.main_evaluation?.metrics ?? {};

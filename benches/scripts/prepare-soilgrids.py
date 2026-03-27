@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out-dir",
-        default="bench/raw/ecology/soilgrids",
+        default="benches/raw/ecology/soilgrids",
         help="Output directory for projected GeoTIFF files.",
     )
     parser.add_argument(

@@ -73,6 +73,6 @@ export async function createApp() {
             );
             runtime.renderFrame();
         },
-        getLastPerfBenchmarkResult: runtime.getLastPerfBenchmarkResult,
+        getLastPerfResult: runtime.getLastPerfResult,
     };
 }

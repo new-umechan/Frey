@@ -21,7 +21,7 @@ cargo bench --bench climate_solo
 
 ### 入力の準備
 
-このベンチは、実地形キャッシュ `bench/data/terrain_ref.bin` と、以下5変数の気候キャッシュ `bench/data/climate_ref.bin` を使って比較する。
+このベンチは、実地形キャッシュ `benches/data/terrain_ref.bin` と、以下5変数の気候キャッシュ `benches/data/climate_ref.bin` を使って比較する。
 
 - `temperature`
 - `precipitation`
@@ -32,14 +32,14 @@ cargo bench --bench climate_solo
 現在の実運用では、リポジトリルートで次の順に準備する。
 
 1. `npm run bench:dump-centroids`
-2. `npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
+2. `npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
 3. `npm run bench:prepare:worldclim`
 4. `npm run bench:prepare:era5`
-5. `npm run bench:resample:climate -- --temperature bench/raw/climate/worldclim_tavg_annual_c.tif --precipitation bench/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration bench/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff bench/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity bench/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
+5. `npm run bench:resample:climate -- --temperature benches/raw/climate/worldclim_tavg_annual_c.tif --precipitation benches/raw/climate/worldclim_prec_annual_mm.tif --evapotranspiration benches/raw/climate/era5_land_annual_1970_2000.nc --var-name evapotranspiration=evapotranspiration_mm_yr --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr --aridity benches/raw/climate/ai_et0.tif --aridity-source precip_over_pet_x10000`
 
-`bench:prepare:worldclim` の前提として、`bench/raw/climate/` に `wc2.1_30s_tavg_01..12.tif` と `wc2.1_30s_prec_01..12.tif` を置く。
-`bench:prepare:era5` の前提として、`bench/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`npm run bench:fetch:era5` で取得可）。
-`aridity` は `bench/raw/climate/ai_et0.tif` を参照する。
+`bench:prepare:worldclim` の前提として、`benches/raw/climate/` に `wc2.1_30s_tavg_01..12.tif` と `wc2.1_30s_prec_01..12.tif` を置く。
+`bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する（`npm run bench:fetch:era5` で取得可）。
+`aridity` は `benches/raw/climate/ai_et0.tif` を参照する。
 `terrain` は海抜mのDEM（ETOPO 2022 **Ice Surface** 推奨）を指定し、内部標高単位（`height * 6000m`）へ変換して保存する。
 
 | フィールド | 型 | 値 |
@@ -120,11 +120,11 @@ CellStore（正二十面体分割の約4万セル）と実データグリッド�
 ```
 
 補間はバイリニアを基本とする（最近傍でも可。差は小さい）。
-この変換を実行するツールは `bench/scripts/resample.py` に実装する（後述）。
-変換結果はバイナリキャッシュ（`bench/data/climate_ref.bin`）に保存し、毎回再計算しない。
+この変換を実行するツールは `benches/scripts/resample.py` に実装する（後述）。
+変換結果はバイナリキャッシュ（`benches/data/climate_ref.bin`）に保存し、毎回再計算しない。
 
 ```
-bench/data/
+benches/data/
   climate_ref.bin   # リサンプリング済み実データ（変数ごとのVec<f32>を直列化）
   hydro_input.bin   # Hydrology入力用（別途）
   hydro_ref.bin     # Hydrology評価用（別途）
@@ -145,7 +145,7 @@ struct ClimateRef {
 
 欠損値（海セル等）は `f32::NAN` で格納し、Spearman計算時にペアごとに除外する。
 
-キャッシュの物理バイナリ形式（`bench/scripts/resample.py` / `rust/benches/climate_solo.rs` 実装）：
+キャッシュの物理バイナリ形式（`benches/scripts/resample.py` / `rust/benches/climate_solo.rs` 実装）：
 
 1. magic: `CLIMREF1`（8 bytes）
 2. version: `u32` little-endian（現行 `1`）
@@ -256,8 +256,8 @@ P-07  monsoon_india > arabia:     match  (792.0 vs 88.0)
 
 ### 実データ未整備時の暫定運用
 
-`bench/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
-`bench/data/climate_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
+`benches/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
+`benches/data/climate_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
 
 補助評価は実データ不要（代表セルのシミュレーション出力値同士を比較するだけ）のため、
 実データ整備前から即座に実行できる。
@@ -265,17 +265,17 @@ P-07  monsoon_india > arabia:     match  (792.0 vs 88.0)
 ```
 === Climate Solo Bench ===
 
--- Terrain Input: SKIPPED (bench/data/terrain_ref.bin not found) --
+-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --
 To generate:
   1) npm run bench:dump-centroids
-  2) npm run bench:resample:terrain -- --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
+  2) npm run bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif
 ```
 
 ```
 === Climate Solo Bench ===
 
 -- Main Evaluation: Spearman Correlation (land cells only) --
-SKIPPED  (bench/data/climate_ref.bin not found)
+SKIPPED  (benches/data/climate_ref.bin not found)
 To generate:
   npm run bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>
 
@@ -285,27 +285,27 @@ To generate:
 
 ---
 
-### リサンプリングツール（`bench/scripts/resample.py`）
+### リサンプリングツール（`benches/scripts/resample.py`）
 
 実データをCellStoreのセル単位に変換してキャッシュに保存するスクリプト。
 ベンチ本体（Rust）の外部ツールとして実装する。
 
 ```
-python bench/scripts/resample.py --module climate \
-  --centroids bench/data/cell_centroids.csv \
+python benches/scripts/resample.py --module climate \
+  --centroids benches/data/cell_centroids.csv \
   --temperature path/to/temperature.tif \
   --precipitation path/to/precipitation.tif \
   --evapotranspiration path/to/evapotranspiration.tif \
   --runoff path/to/runoff.tif \
   --aridity path/to/aridity.tif \
-  --output bench/data/climate_ref.bin
+  --output benches/data/climate_ref.bin
 ```
 
 ```bash
-python bench/scripts/resample.py --module terrain \
-  --centroids bench/data/cell_centroids.csv \
-  --height bench/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif \
-  --output bench/data/terrain_ref.bin
+python benches/scripts/resample.py --module terrain \
+  --centroids benches/data/cell_centroids.csv \
+  --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif \
+  --output benches/data/terrain_ref.bin
 ```
 
 事前に重心CSVが必要な場合は以下を実行する。
@@ -317,7 +317,7 @@ npm run bench:dump-centroids
 処理手順：
 
 1. 変数ごとのGeoTIFF/NetCDFを読む
-2. CellStoreのセル重心座標一覧（`bench/data/cell_centroids.csv`）を読む
+2. CellStoreのセル重心座標一覧（`benches/data/cell_centroids.csv`）を読む
    - 形式：`cell_id,latitude,longitude`
    - このCSVはシミュレーション初期化時に一度だけ書き出す（`--dump-centroids` オプション等で）
 3. 各セルの重心座標でバイリニア補間
@@ -327,7 +327,7 @@ npm run bench:dump-centroids
 
 `cargo bench --manifest-path rust/Cargo.toml --bench climate_solo` 実行時に、補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
-- 保存先: `bench/results/climate_main_scores.jsonl`
+- 保存先: `benches/results/climate_main_scores.jsonl`
 - 1実行 = 1行（時刻、seed、mesh_level、cell_count、各指標のrho、補助評価要約）
 - 実行ごとの差分比較はこのJSONLを入力に行う
 
