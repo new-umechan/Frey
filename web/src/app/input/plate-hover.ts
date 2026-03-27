@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { PLATE_HOVER_POPUP_DELAY_MS } from "../../core/constants";
-import { getCellMetricMeta } from "../rendering/cell-metric";
+import { PLATE_HOVER_POPUP_DELAY_MS } from "../../shared/constants";
+import { getCellMetricMeta } from "../visualizers/cell-metric";
 
 export interface PlateHoverController {
     hidePopup: () => void;

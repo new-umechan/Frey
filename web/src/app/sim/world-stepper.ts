@@ -1,11 +1,11 @@
-import { type WorldState, type AppState } from "../core/app-state";
+import { type WorldState, type AppState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics, type EraScaleConfig } from "../core/era-presets";
+import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
 import { type WorldSimController } from "../../interface/wasm";
-import { type TerrainRenderer } from "../rendering/terrain-renderer";
-import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from "../world-sync/types";
-import { type FieldKind } from "../world-sync/constants";
+import { type TerrainRenderer } from "../visualizers/terrain-renderer";
+import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from "../sim/sync/types";
+import { type FieldKind } from "../sim/sync/constants";
 
 export interface WorldStepperOptions {
     worldSimController: WorldSimController;

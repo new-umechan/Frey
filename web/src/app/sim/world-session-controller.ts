@@ -1,9 +1,9 @@
-import { type WorldState } from "../core/app-state";
-import { type EraMetrics } from "../core/era-presets";
-import { type StatFields } from "../../ui/dom";
+import { type WorldState } from "../state/app-state";
+import { type EraMetrics } from "../state/era-presets";
+import { type StatFields } from "../../components/dom";
 import { type WorldSimController } from "../../interface/wasm";
-import { type TerrainRenderer } from "../rendering/terrain-renderer";
-import { type SyncOptions, type CoreBuffers } from "../world-sync/types";
+import { type TerrainRenderer } from "../visualizers/terrain-renderer";
+import { type SyncOptions, type CoreBuffers } from "../sim/sync/types";
 
 export interface WorldSessionControllerOptions {
     worldSimController: WorldSimController;

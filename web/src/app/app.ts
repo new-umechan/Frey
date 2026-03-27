@@ -1,7 +1,7 @@
 import initWasm, {
     generate_mesh,
 } from "../interface/wasm";
-import { collectAppElements, type AppElements } from "../ui/dom";
+import { collectAppElements, type AppElements } from "../components/dom";
 import {
     createStatusController,
     isPerfFeatureEnabled,
@@ -10,9 +10,9 @@ import {
 import {
     DEFAULT_TERRAIN_SEED,
     LEVEL,
-} from "../core/constants";
+} from "../shared/constants";
 import { advanceWorldLoop } from "./sim/world-loop";
-import { createMeshBuffers } from "./core/app-state";
+import { createMeshBuffers } from "./state/app-state";
 import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap";
 
 interface SidebarControllerOptions {

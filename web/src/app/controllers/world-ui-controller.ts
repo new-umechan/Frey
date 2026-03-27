@@ -1,6 +1,6 @@
-import { type AppState } from "../core/app-state";
+import { type AppState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics, type EraScalePreset, type EraScaleWeightFields } from "../core/era-presets";
+import { type EraMetrics, type EraScalePreset, type EraScaleWeightFields } from "../state/era-presets";
 import { type PlateHoverController } from "../input/plate-hover";
 
 export interface WorldUiController {

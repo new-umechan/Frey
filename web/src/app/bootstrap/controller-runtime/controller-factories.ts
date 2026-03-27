@@ -1,23 +1,23 @@
 import { TERRAIN_PARAMS } from "../../../interface/params/terrain";
-import { DEFAULT_ERA_SCALE, LEVEL } from "../../../core/constants";
+import { DEFAULT_ERA_SCALE, LEVEL } from "../../../shared/constants";
 import {
     createEraMetrics,
     buildEraMetricsFromRuntime,
     getEraScalePreset,
     renderEraScaleControls,
-} from "../../core/era-presets";
+} from "../../state/era-presets";
 import {
     createEmptyLayers,
     createInitialBudgets,
 } from "../../runtime/state";
-import { getDeltaFieldKindsForView } from "../../world-sync/view-mode";
-import { refreshWorldStatsFromController } from "../../world-sync/stats-sync";
+import { getDeltaFieldKindsForView } from "../../sim/sync/view-mode";
+import { refreshWorldStatsFromController } from "../../sim/sync/stats-sync";
 import {
     syncVisibleCoreFieldsFromController,
     syncWorldDeltaFromController,
     syncWorldFromController,
-} from "../../world-sync/world-state-sync";
-import { createWorldUiController } from "../../ui/world-ui-controller";
+} from "../../sim/sync/world-state-sync";
+import { createWorldUiController } from "../../controllers/world-ui-controller";
 import { createWorldSessionController } from "../../sim/world-session-controller";
 import { createWorldStepper } from "../../sim/world-stepper";
 import {
@@ -25,15 +25,15 @@ import {
     createPerfProfile,
     formatPerfSummaryLine,
 } from "../../perf/recorder";
-import { createViewModeController } from "../../ui/view-mode-controller";
-import { normalizeCellMetric } from "../../rendering/cell-metric";
-import { createTerrainGenerationController } from "../../ui/terrain-generation-controller";
+import { createViewModeController } from "../../controllers/view-mode-controller";
+import { normalizeCellMetric } from "../../visualizers/cell-metric";
+import { createTerrainGenerationController } from "../../controllers/terrain-generation-controller";
 import { createPlaybackController } from "../../playback/playback-controller";
 import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown";
 import { resetWorldProgress } from "../../sim/world-loop";
 import { createPerfRuntime } from "../perf-runtime";
 import { type RuntimeContext } from "./create-controller-runtime";
-import { type CoreBuffers } from "../../world-sync/types";
+import { type CoreBuffers } from "../../sim/sync/types";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 

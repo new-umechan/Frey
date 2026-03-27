@@ -4,7 +4,7 @@ import {
     formatRealYearsPerTick,
     type EraScaleConfig,
     type WorldSubsystemKey,
-} from "../../core/constants";
+} from "../../shared/constants";
 
 export type { EraScaleConfig, WorldSubsystemKey };
 

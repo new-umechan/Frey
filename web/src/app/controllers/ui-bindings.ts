@@ -1,7 +1,7 @@
-import { setupUiControls, type PlaybackControlsElements, type PerfControlsElements } from "../../ui/controls";
-import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../core/era-presets";
+import { setupUiControls, type PlaybackControlsElements, type PerfControlsElements } from "../../components/controls";
+import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../state/era-presets";
 import { createCanvasInputHandlers } from "../input/canvas-input-handlers";
-import { formatStatusError } from "../core/status-error";
+import { formatStatusError } from "../state/status-error";
 import type { PlateHoverController } from "../input/plate-hover";
 import type { GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
 import type { PlaybackController } from "../playback/playback-controller";

@@ -1,7 +1,7 @@
 import { type WorldSimController } from "../interface/wasm";
-import { type WorldState } from "../core/app-state";
+import { type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics, type EraScalePreset } from "../core/era-presets";
+import { type EraMetrics, type EraScalePreset } from "../state/era-presets";
 
 export interface TerrainGenerationController {
     updateTerrain: (seed: string) => Promise<void>;

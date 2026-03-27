@@ -1,5 +1,5 @@
-import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants";
-import { type CoreBuffers } from "../world-sync/types";
+import { LAYER_KIND, type WorldSubsystemKey } from "../../shared/constants";
+import { type CoreBuffers } from "../sim/sync/types";
 
 export interface PlaybackEvent {
     id: number;

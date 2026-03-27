@@ -4,7 +4,7 @@ import {
     DEFAULT_SURFACE_MODE,
     DEFAULT_TERRAIN_SEED,
     DEFAULT_VIEW_MODE,
-} from "../../core/constants";
+} from "../../shared/constants";
 import {
     createEmptyCore,
     createEmptyLayers,

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { type TickPerfRecorder } from "../perf/recorder";
-import { type CoreBuffers } from "../world-sync/types";
-import { type WorldChangeset } from "../world-sync/constants";
+import { type CoreBuffers } from "../sim/sync/types";
+import { type WorldChangeset } from "../sim/sync/constants";
 
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;

@@ -1,7 +1,7 @@
-import { DEFAULT_ERA_SCALE, type WorldSubsystemKey } from "../../core/constants";
-import { type WorldState } from "../core/app-state";
+import { DEFAULT_ERA_SCALE, type WorldSubsystemKey } from "../../shared/constants";
+import { type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics } from "../core/era-presets";
+import { type EraMetrics } from "../state/era-presets";
 
 export function resetWorldProgress(
     world: WorldState,

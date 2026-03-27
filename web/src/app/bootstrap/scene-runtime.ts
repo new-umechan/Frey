@@ -5,12 +5,12 @@ import { createGlobePinchFocusController } from "../../gfx/views/globe-pinch-foc
 import { buildRenderPositions } from "../../gfx/views/terrain-visuals";
 import { createLoadingOverlayController } from "./loading-overlay";
 import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup";
-import { createClimateUiController } from "../ui/climate-ui-controller";
+import { createClimateUiController } from "../controllers/climate-ui-controller";
 import { createPlateHover } from "../input/plate-hover";
-import { createTerrainRenderer } from "../rendering/terrain-renderer";
-import { DEFAULT_VIEW_MODE } from "../../core/constants";
-import { type AppElements } from "../../ui/dom";
-import { type AppState } from "../core/app-state";
+import { createTerrainRenderer } from "../visualizers/terrain-renderer";
+import { DEFAULT_VIEW_MODE } from "../../shared/constants";
+import { type AppElements } from "../../components/dom";
+import { type AppState } from "../state/app-state";
 
 export interface SceneRuntimeOptions {
     elements: AppElements;

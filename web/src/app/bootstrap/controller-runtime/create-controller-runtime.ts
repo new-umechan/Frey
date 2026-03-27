@@ -1,15 +1,15 @@
 import { WorldSimController } from "../../../interface/wasm";
 import { createRuntimeControllers } from "./controller-factories";
-import { DEFAULT_ERA_SCALE } from "../../../core/constants";
+import { DEFAULT_ERA_SCALE } from "../../../shared/constants";
 import { runInitialWorldAndUiSync } from "../post-init-sync";
 import {
     type AppElements,
     type StatFields,
     type EraScaleWeightFields,
     type PerfStatFields,
-} from "../../../ui/dom";
-import { type AppState, type WorldState } from "../../core/app-state";
-import { type EraMetrics } from "../../core/era-presets";
+} from "../../../components/dom";
+import { type AppState, type WorldState } from "../../state/app-state";
+import { type EraMetrics } from "../../state/era-presets";
 import { type RuntimeState } from "../../runtime/state";
 
 export interface ControllerDeps {

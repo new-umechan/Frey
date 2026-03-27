@@ -1,4 +1,4 @@
-import { getMetricCategories, type CellMetricDef } from "../../app/rendering/cell-metric";
+import { getMetricCategories, type CellMetricDef } from "../../app/visualizers/cell-metric";
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));

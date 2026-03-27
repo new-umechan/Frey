@@ -1,6 +1,6 @@
-import { DEFAULT_ERA_SCALE } from "../../core/constants";
-import { createMutableStateStore, createWorldState, type WorldState } from "../core/app-state";
-import { type EraMetrics } from "../core/era-presets";
+import { DEFAULT_ERA_SCALE } from "../../shared/constants";
+import { createMutableStateStore, createWorldState, type WorldState } from "../state/app-state";
+import { type EraMetrics } from "../state/era-presets";
 import { type RuntimeState } from "../runtime/state";
 
 export interface RuntimeStoreOptions {
