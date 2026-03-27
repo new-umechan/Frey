@@ -1,17 +1,26 @@
-function requireElement(id, type) {
+function requireElement<T extends HTMLElement>(id: string, type: new () => T): T {
     const element = document.getElementById(id);
     if (!(element instanceof type)) {
         throw new Error(`required DOM element is missing: #${id}`);
     }
-    return element;
+    return element as T;
 }
 
-function optionalElement(id, type) {
+function optionalElement<T extends HTMLElement>(id: string, type: new () => T): T | null {
     const element = document.getElementById(id);
-    return element instanceof type ? element : null;
+    return element instanceof type ? (element as T) : null;
 }
 
-function collectClimateLegend() {
+export interface ClimateLegendElements {
+    panel: HTMLElement;
+    title: HTMLElement;
+    min: HTMLElement;
+    mid: HTMLElement;
+    max: HTMLElement;
+    hover: HTMLElement;
+}
+
+function collectClimateLegend(): ClimateLegendElements | null {
     const panel = optionalElement("climate-legend-panel", HTMLElement);
     if (!panel) {
         return null;
@@ -26,7 +35,19 @@ function collectClimateLegend() {
     };
 }
 
-function collectPlaybackControls() {
+export interface PlaybackControlsElements {
+    overlay: HTMLElement;
+    playToggleButton: HTMLButtonElement;
+    currentTick: HTMLElement;
+    maxTick: HTMLElement;
+    historySeekSlider: HTMLInputElement;
+    seekMinLabel: HTMLElement;
+    seekMaxLabel: HTMLElement;
+    seekBackwardButton: HTMLButtonElement;
+    seekForwardButton: HTMLButtonElement;
+}
+
+function collectPlaybackControls(): PlaybackControlsElements {
     return {
         overlay: requireElement("playback-overlay", HTMLElement),
         playToggleButton: requireElement("play-toggle-button", HTMLButtonElement),
@@ -40,7 +61,29 @@ function collectPlaybackControls() {
     };
 }
 
-function collectPerfElements(perfEnabled) {
+export interface PerfControlsElements {
+    runButton: HTMLButtonElement;
+    copyButton: HTMLButtonElement;
+    status: HTMLElement;
+    progress: HTMLProgressElement;
+}
+
+export interface PerfStatFields {
+    tickP50: HTMLElement;
+    tickP95: HTMLElement;
+    stepMean: HTMLElement;
+    deltaMean: HTMLElement;
+    geomMean: HTMLElement;
+    riverMean: HTMLElement;
+}
+
+export interface PerfElements {
+    perfPanel: HTMLElement | null;
+    perfControls: PerfControlsElements | null;
+    perfStatFields: PerfStatFields | null;
+}
+
+function collectPerfElements(perfEnabled: boolean): PerfElements {
     const perfPanel = optionalElement("perf-panel", HTMLElement);
     if (!perfEnabled || !perfPanel) {
         return {
@@ -69,7 +112,49 @@ function collectPerfElements(perfEnabled) {
     };
 }
 
-export function collectAppElements(options = {}) {
+export interface EraScaleWeightFields {
+    geology: HTMLElement;
+    climate: HTMLElement;
+    ecology: HTMLElement;
+    civilization: HTMLElement;
+}
+
+export interface StatFields {
+    level: HTMLElement;
+    seed: HTMLElement;
+    plates: HTMLElement;
+    land: HTMLElement;
+}
+
+export interface AppElements {
+    appShell: HTMLElement;
+    canvas: HTMLCanvasElement;
+    loadingOverlayCanvas: HTMLCanvasElement;
+    viewportPanel: HTMLDivElement;
+    seedForm: HTMLFormElement;
+    seedInput: HTMLInputElement;
+    sidebarToggle: HTMLButtonElement | null;
+    statusMessage: HTMLElement;
+    statusEraLabel: HTMLElement;
+    plateHoverPopup: HTMLDivElement;
+    debugToggleInput: HTMLInputElement;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    viewModeInputs: HTMLInputElement[];
+    climateLegend: ClimateLegendElements | null;
+    controlHelpModal: HTMLDivElement | null;
+    controlHelpCloseButton: HTMLButtonElement | null;
+    playbackControls: PlaybackControlsElements;
+    eventLogList: HTMLUListElement;
+    perfPanel: HTMLElement | null;
+    perfControls: PerfControlsElements | null;
+    perfStatFields: PerfStatFields | null;
+    statFields: StatFields;
+    setSidebarOpen?: (isOpen: boolean) => void;
+}
+
+export function collectAppElements(options: { perfEnabled?: boolean } = {}): AppElements {
     const perfEnabled = options.perfEnabled === true;
     const canvas = requireElement("mesh-canvas", HTMLCanvasElement);
     const loadingOverlayCanvas = requireElement("loading-overlay-canvas", HTMLCanvasElement);
@@ -90,7 +175,7 @@ export function collectAppElements(options = {}) {
     const eraScaleTickLabel = requireElement("era-scale-tick-label", HTMLElement);
 
     const viewModeInputs = Array.from(document.querySelectorAll('input[name="view-mode"]'))
-        .filter((input) => input instanceof HTMLInputElement);
+        .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
 
     const climateLegend = collectClimateLegend();
     const controlHelpModal = optionalElement("control-help-modal", HTMLDivElement);
@@ -100,14 +185,14 @@ export function collectAppElements(options = {}) {
 
     const { perfPanel, perfControls, perfStatFields } = collectPerfElements(perfEnabled);
 
-    const statFields = {
+    const statFields: StatFields = {
         level: requireElement("stat-level", HTMLElement),
         seed: requireElement("stat-seed", HTMLElement),
         plates: requireElement("stat-plates", HTMLElement),
         land: requireElement("stat-land", HTMLElement),
     };
 
-    const eraScaleWeightFields = {
+    const eraScaleWeightFields: EraScaleWeightFields = {
         geology: requireElement("era-weight-geology", HTMLElement),
         climate: requireElement("era-weight-climate", HTMLElement),
         ecology: requireElement("era-weight-ecology", HTMLElement),

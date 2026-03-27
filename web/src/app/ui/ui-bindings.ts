@@ -1,11 +1,16 @@
 import { setupUiControls } from "../../ui/controls.js";
-import { renderEraScaleControls } from "../core/era-presets.js";
+import { renderEraScaleControls, type EraMetrics, type EraScaleWeightFields } from "../core/era-presets.js";
 import { createCanvasInputHandlers } from "../input/canvas-input-handlers.js";
 import { formatStatusError } from "../core/status-error.js";
+import { type AppElements, type PlaybackControlsElements, type PerfControlsElements } from "../../ui/dom.js";
 
-function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
+function createSidebarToggleHandler(
+    sidebarToggle: HTMLButtonElement | null,
+    setSidebarOpen: ((isOpen: boolean) => void) | undefined,
+    onResize: () => void
+) {
     return () => {
-        if (!sidebarToggle) {
+        if (!sidebarToggle || !setSidebarOpen) {
             return;
         }
         const isOpen = sidebarToggle.getAttribute("aria-expanded") === "true";
@@ -14,18 +19,37 @@ function createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize) {
     };
 }
 
-function createEraScaleChangeHandler(setEraScale) {
-    return (value, isDisabled) => {
+interface EraScaleHandlerDeps {
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    setEraScale: (value: string) => void;
+    getCurrentEraScale: () => string;
+    getCurrentEraMetrics: () => EraMetrics;
+}
+
+function createEraScaleChangeHandler(deps: EraScaleHandlerDeps) {
+    return (value: string, isDisabled: boolean) => {
         if (isDisabled) {
-            renderEraScaleControls();
+            renderEraScaleControls(
+                deps.eraScaleSelect,
+                deps.eraScaleTickLabel,
+                deps.eraScaleWeightFields,
+                deps.getCurrentEraScale(),
+                deps.getCurrentEraMetrics()
+            );
             return;
         }
-        setEraScale(value);
+        deps.setEraScale(value);
     };
 }
 
-function createSubmitSeedErrorHandler(setStatus, seedInput, seedForm) {
-    return (error) => {
+function createSubmitSeedErrorHandler(
+    setStatus: (msg: string) => void,
+    seedInput: HTMLInputElement,
+    seedForm: HTMLFormElement
+) {
+    return (error: any) => {
         setStatus(formatStatusError("Generation", error));
         seedInput.removeAttribute("disabled");
         seedForm.querySelector("button")?.removeAttribute("disabled");
@@ -33,7 +57,32 @@ function createSubmitSeedErrorHandler(setStatus, seedInput, seedForm) {
     };
 }
 
-function createUiHandlers(options = {}) {
+interface CreateUiHandlersOptions {
+    sidebarToggle: HTMLButtonElement | null;
+    setSidebarOpen: ((isOpen: boolean) => void) | undefined;
+    onResize: () => void;
+    setEraScale: (value: string) => void;
+    setStatus: (msg: string) => void;
+    seedInput: HTMLInputElement;
+    seedForm: HTMLFormElement;
+    plateHover: any;
+    globePinchFocusController: any;
+    setDebugModeEnabled: (enabled: boolean) => void;
+    setViewMode: (mode: string) => void;
+    setCellMetric: (metric: string) => void;
+    setSurfaceMode: (mode: string) => void;
+    playbackController: any;
+    runPerf: () => void;
+    copyPerfResult: () => void;
+    updateTerrain: (seed: string) => void;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    getCurrentEraScale: () => string;
+    getCurrentEraMetrics: () => EraMetrics;
+}
+
+function createUiHandlers(options: CreateUiHandlersOptions) {
     const {
         sidebarToggle,
         setSidebarOpen,
@@ -52,11 +101,23 @@ function createUiHandlers(options = {}) {
         runPerf,
         copyPerfResult,
         updateTerrain,
+        eraScaleSelect,
+        eraScaleTickLabel,
+        eraScaleWeightFields,
+        getCurrentEraScale,
+        getCurrentEraMetrics,
     } = options;
 
     return {
         onSidebarToggle: createSidebarToggleHandler(sidebarToggle, setSidebarOpen, onResize),
-        onEraScaleChange: createEraScaleChangeHandler(setEraScale),
+        onEraScaleChange: createEraScaleChangeHandler({
+            eraScaleSelect,
+            eraScaleTickLabel,
+            eraScaleWeightFields,
+            setEraScale,
+            getCurrentEraScale,
+            getCurrentEraMetrics,
+        }),
         onSubmitSeedError: createSubmitSeedErrorHandler(setStatus, seedInput, seedForm),
         canvasInputHandlers: createCanvasInputHandlers({
             plateHover,
@@ -79,13 +140,53 @@ function createUiHandlers(options = {}) {
     };
 }
 
-export function bindAppUiControls(options = {}) {
+export interface BindAppUiControlsOptions {
+    canvas: HTMLCanvasElement;
+    viewportPanel: HTMLDivElement;
+    sidebarToggle: HTMLButtonElement | null;
+    debugToggleInput: HTMLInputElement;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    viewModeInputs: HTMLInputElement[];
+    controlHelpModal: HTMLDivElement | null;
+    controlHelpCloseButton: HTMLButtonElement | null;
+    playbackControls: PlaybackControlsElements;
+    eventLogList: HTMLUListElement;
+    perfEnabled: boolean;
+    perfControls: PerfControlsElements | null;
+    seedForm: HTMLFormElement;
+    seedInput: HTMLInputElement;
+    onResize: () => void;
+    setSidebarOpen: ((isOpen: boolean) => void) | undefined;
+    plateHover: any;
+    globePinchFocusController: any;
+    setDebugModeEnabled: (enabled: boolean) => void;
+    setEraScale: (value: string) => void;
+    setViewMode: (mode: string) => void;
+    setCellMetric: (metric: string) => void;
+    setSurfaceMode: (mode: string) => void;
+    playbackController: any;
+    runPerf: () => void;
+    copyPerfResult: () => void;
+    getDebugEnabled: () => boolean;
+    getCurrentSurfaceMode: () => string;
+    getCurrentCellMetric: () => string;
+    getCurrentEraScale: () => string;
+    getCurrentEraMetrics: () => EraMetrics;
+    updateTerrain: (seed: string) => void;
+    setStatus: (msg: string) => void;
+}
+
+export function bindAppUiControls(options: BindAppUiControlsOptions) {
     const {
         canvas,
         viewportPanel,
         sidebarToggle,
         debugToggleInput,
         eraScaleSelect,
+        eraScaleTickLabel,
+        eraScaleWeightFields,
         viewModeInputs,
         controlHelpModal,
         controlHelpCloseButton,
@@ -109,8 +210,9 @@ export function bindAppUiControls(options = {}) {
         copyPerfResult,
         getDebugEnabled,
         getCurrentSurfaceMode,
-        getCurrentViewMode,
         getCurrentCellMetric,
+        getCurrentEraScale,
+        getCurrentEraMetrics,
         updateTerrain,
         setStatus,
     } = options;
@@ -133,6 +235,11 @@ export function bindAppUiControls(options = {}) {
         runPerf,
         copyPerfResult,
         updateTerrain,
+        eraScaleSelect,
+        eraScaleTickLabel,
+        eraScaleWeightFields,
+        getCurrentEraScale,
+        getCurrentEraMetrics,
     });
 
     setupUiControls({
@@ -169,7 +276,6 @@ export function bindAppUiControls(options = {}) {
         onCopyPerfBenchmark: handlers.onCopyPerfBenchmark,
         getDebugEnabled,
         getCurrentSurfaceMode,
-        getCurrentViewMode,
         getCurrentCellMetric,
         onSubmitSeed: handlers.onSubmitSeed,
         onSubmitSeedError: handlers.onSubmitSeedError,

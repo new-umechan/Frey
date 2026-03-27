@@ -10,18 +10,41 @@ import {
     createEmptyLayers,
     createInitialBudgets,
     createInitialRuntimeState,
+    type RuntimeState,
 } from "../runtime/state.js";
+import { type EraMetrics } from "./era-presets.js";
 
-export function createMeshBuffers(mesh) {
+export interface Mesh {
+    positions: Float32Array;
+    indices: Uint32Array;
+    nbrOffsets: Int32Array | null;
+    nbrs: Int32Array | null;
+}
+
+export function createMeshBuffers(mesh: { positions: number[] | Float32Array; indices: number[] | Uint32Array }) {
     return {
         basePositions: new Float32Array(mesh.positions),
         indices: new Uint32Array(mesh.indices),
     };
 }
 
-export function createWorldState(options = {}) {
+export interface WorldState {
+    tick: number;
+    era: string;
+    mesh: Mesh;
+    core: any;
+    layers: Record<string, any>;
+    budgets: Record<string, number>;
+    runtime: RuntimeState;
+}
+
+export function createWorldState(options: {
+    basePositions: Float32Array;
+    indices: Uint32Array;
+    currentEraMetrics: EraMetrics;
+}): { world: WorldState; worldState: RuntimeState } {
     const { basePositions, indices, currentEraMetrics } = options;
-    const world = {
+    const world: WorldState = {
         tick: 0,
         era: DEFAULT_ERA_SCALE,
         mesh: {
@@ -41,11 +64,28 @@ export function createWorldState(options = {}) {
     };
 }
 
-export function createMutableStateStore(options = {}) {
+export interface AppState {
+    activeWorldId: string | null;
+    currentSeed: string;
+    currentTerrainData: any;
+    currentSurfaceMode: string;
+    currentViewMode: string;
+    currentCellMetric: string;
+    currentEraScale: string;
+    currentEraMetrics: EraMetrics;
+    debugEnabled: boolean;
+    worldTick: number;
+}
+
+export function createMutableStateStore(options: {
+    worldTick: () => number;
+    currentEraMetrics: EraMetrics;
+    debugEnabled?: boolean;
+}) {
     const { worldTick } = options;
-    let activeWorldId = null;
+    let activeWorldId: string | null = null;
     let currentSeed = DEFAULT_TERRAIN_SEED;
-    let currentTerrainData = null;
+    let currentTerrainData: any = null;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentCellMetric = DEFAULT_CELL_METRIC;
@@ -53,7 +93,7 @@ export function createMutableStateStore(options = {}) {
     let currentEraMetrics = options.currentEraMetrics;
     let debugEnabled = Boolean(options.debugEnabled);
 
-    const stateSetters = {
+    const stateSetters: Record<string, (value: any) => void> = {
         activeWorldId: (value) => {
             activeWorldId = value;
         },
@@ -83,7 +123,7 @@ export function createMutableStateStore(options = {}) {
         },
     };
 
-    const getState = () => {
+    const getState = (): AppState => {
         return {
             activeWorldId,
             currentSeed,
@@ -98,7 +138,7 @@ export function createMutableStateStore(options = {}) {
         };
     };
 
-    const setState = (patch = {}) => {
+    const setState = (patch: Partial<Omit<AppState, "worldTick">> = {}) => {
         for (const [key, value] of Object.entries(patch)) {
             stateSetters[key]?.(value);
         }

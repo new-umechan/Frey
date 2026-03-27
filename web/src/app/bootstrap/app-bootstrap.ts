@@ -4,8 +4,17 @@ import { createRuntimeStore } from "./runtime-store.js";
 import { createSceneRuntime } from "./scene-runtime.js";
 import { createControllerRuntime } from "./controller-runtime/create-controller-runtime.js";
 import { renderInitializationFrames } from "./initialization-frames.js";
+import { type AppElements } from "../../ui/dom.js";
 
-function createControllerDeps(options) {
+interface ControllerDepsOptions {
+    elements: AppElements;
+    isPerfEnabled: boolean;
+    setStatus: (msg: string) => void;
+    runtimeStore: any;
+    sceneRuntime: any;
+}
+
+function createControllerDeps(options: ControllerDepsOptions) {
     const {
         elements,
         isPerfEnabled,
@@ -35,7 +44,15 @@ function createControllerDeps(options) {
     };
 }
 
-function bindRuntimeUi(options) {
+interface BindRuntimeUiOptions {
+    elements: AppElements;
+    sceneRuntime: any;
+    controllerRuntime: any;
+    getState: () => any;
+    setStatus: (msg: string) => void;
+}
+
+function bindRuntimeUi(options: BindRuntimeUiOptions) {
     const {
         elements,
         sceneRuntime,
@@ -50,6 +67,8 @@ function bindRuntimeUi(options) {
         sidebarToggle: elements.sidebarToggle,
         debugToggleInput: elements.debugToggleInput,
         eraScaleSelect: elements.eraScaleSelect,
+        eraScaleTickLabel: elements.eraScaleTickLabel,
+        eraScaleWeightFields: elements.eraScaleWeightFields,
         viewModeInputs: elements.viewModeInputs,
         controlHelpModal: elements.controlHelpModal,
         controlHelpCloseButton: elements.controlHelpCloseButton,
@@ -73,14 +92,23 @@ function bindRuntimeUi(options) {
         copyPerfResult: controllerRuntime.copyPerfResult,
         getDebugEnabled: () => getState().debugEnabled,
         getCurrentSurfaceMode: () => getState().currentSurfaceMode,
-        getCurrentViewMode: () => getState().currentViewMode,
         getCurrentCellMetric: () => getState().currentCellMetric,
+        getCurrentEraScale: () => getState().currentEraScale,
+        getCurrentEraMetrics: () => getState().currentEraMetrics,
         updateTerrain: controllerRuntime.updateTerrain,
         setStatus,
     });
 }
 
-export function bootstrapAppRuntime(options = {}) {
+interface BootstrapAppRuntimeOptions {
+    elements: AppElements;
+    isPerfEnabled: boolean;
+    setStatus: (msg: string) => void;
+    basePositions: Float32Array;
+    indices: Uint32Array;
+}
+
+export function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
     const {
         elements,
         isPerfEnabled,

@@ -1,7 +1,7 @@
 import initWasm, {
     generate_mesh,
-} from "../interface/wasm";
-import { collectAppElements } from "../ui/dom.js";
+} from "../interface/wasm.js";
+import { collectAppElements, type AppElements } from "../ui/dom.js";
 import {
     createStatusController,
     isPerfFeatureEnabled,
@@ -15,9 +15,14 @@ import { advanceWorldLoop } from "./sim/world-loop.js";
 import { createMeshBuffers } from "./core/app-state.js";
 import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap.js";
 
-function createSidebarController(options = {}) {
+interface SidebarControllerOptions {
+    appShell: HTMLElement;
+    sidebarToggle: HTMLButtonElement | null;
+}
+
+function createSidebarController(options: SidebarControllerOptions) {
     const { appShell, sidebarToggle } = options;
-    function setSidebarOpen(isOpen) {
+    function setSidebarOpen(isOpen: boolean) {
         if (!sidebarToggle) {
             return;
         }
@@ -29,7 +34,7 @@ function createSidebarController(options = {}) {
 
 export async function createApp() {
     const isPerfEnabled = isPerfFeatureEnabled();
-    const elements = collectAppElements({ perfEnabled: isPerfEnabled });
+    const elements: AppElements = collectAppElements({ perfEnabled: isPerfEnabled });
     const {
         appShell,
         seedInput,
@@ -64,7 +69,7 @@ export async function createApp() {
     await runtime.runInitialSync();
 
     return {
-        tick(nowMs) {
+        tick(nowMs: number) {
             advanceWorldLoop(
                 nowMs,
                 runtime.worldState,

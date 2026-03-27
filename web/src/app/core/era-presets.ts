@@ -2,9 +2,18 @@ import {
     DEFAULT_ERA_SCALE,
     ERA_SCALE_PRESETS,
     formatRealYearsPerTick,
+    type EraScaleConfig,
+    type WorldSubsystemKey,
 } from "../../core/constants.js";
 
-export function getEraScalePreset(key) {
+export interface EraMetrics {
+    key: string;
+    tickLabel: string;
+    runtimeTickMs: number;
+    budgets: Record<WorldSubsystemKey, number>;
+}
+
+export function getEraScalePreset(key: string): EraScaleConfig & { key: string } {
     if (Object.hasOwn(ERA_SCALE_PRESETS, key)) {
         return {
             key,
@@ -17,7 +26,7 @@ export function getEraScalePreset(key) {
     };
 }
 
-export function createEraMetrics(key = DEFAULT_ERA_SCALE) {
+export function createEraMetrics(key = DEFAULT_ERA_SCALE): EraMetrics {
     const preset = getEraScalePreset(key);
     return {
         key,
@@ -32,7 +41,7 @@ export function createEraMetrics(key = DEFAULT_ERA_SCALE) {
     };
 }
 
-export function buildEraMetricsFromRuntime(era, metrics) {
+export function buildEraMetricsFromRuntime(era: string, metrics: any): EraMetrics {
     const fallback = createEraMetrics(era);
     return {
         key: Object.hasOwn(ERA_SCALE_PRESETS, era) ? era : DEFAULT_ERA_SCALE,
@@ -47,7 +56,20 @@ export function buildEraMetricsFromRuntime(era, metrics) {
     };
 }
 
-export function renderEraScaleControls(eraScaleSelect, eraScaleTickLabel, eraScaleWeightFields, currentEraScale, currentEraMetrics) {
+export interface EraScaleWeightFields {
+    geology: HTMLElement;
+    climate: HTMLElement;
+    ecology: HTMLElement;
+    civilization: HTMLElement;
+}
+
+export function renderEraScaleControls(
+    eraScaleSelect: HTMLSelectElement,
+    eraScaleTickLabel: HTMLElement,
+    eraScaleWeightFields: EraScaleWeightFields,
+    currentEraScale: string,
+    currentEraMetrics: EraMetrics
+): void {
     eraScaleSelect.value = currentEraScale;
     eraScaleTickLabel.textContent = `1Tick: ${currentEraMetrics.tickLabel}`;
     eraScaleWeightFields.geology.textContent = currentEraMetrics.budgets.geology.toFixed(2);

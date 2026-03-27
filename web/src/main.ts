@@ -1,10 +1,7 @@
 import { createApp } from "./app/app.js";
 import { formatStatusError } from "./app/core/status-error.js";
 
-/**
- * @param {Error} error
- */
-function showInitializationError(error) {
+function showInitializationError(error: unknown) {
     const statusMessage = document.getElementById("status-message");
     const statusEra = document.getElementById("status-era");
     const statusTick = document.getElementById("era-scale-tick-label");
@@ -22,13 +19,9 @@ function showInitializationError(error) {
 }
 
 async function main() {
-    /** @type {Awaited<ReturnType<typeof createApp>>} */
     const app = await createApp();
 
-    /**
-     * @param {number} nowMs
-     */
-    function frame(nowMs) {
+    function frame(nowMs: number) {
         app.tick(nowMs);
         requestAnimationFrame(frame);
     }

@@ -1,6 +1,15 @@
-import { LAYER_KIND } from "../../core/constants.js";
+import { LAYER_KIND, type WorldSubsystemKey } from "../../core/constants.js";
 
-function createInitialPlaybackState() {
+export interface PlaybackState {
+    isPlaying: boolean;
+    historyInterval: number;
+    selectedTick: number | null;
+    availableTicks: any[];
+    eventLog: any[];
+    nextLogId: number;
+}
+
+function createInitialPlaybackState(): PlaybackState {
     return {
         isPlaying: true,
         historyInterval: 32,
@@ -11,11 +20,11 @@ function createInitialPlaybackState() {
     };
 }
 
-export function createEmptyCore() {
+export function createEmptyCore(): any {
     return null;
 }
 
-export function createEmptyLayers() {
+export function createEmptyLayers(): Record<string, any> {
     return {
         [LAYER_KIND.CLIMATE]: null,
         [LAYER_KIND.ECOLOGY]: null,
@@ -23,7 +32,7 @@ export function createEmptyLayers() {
     };
 }
 
-export function createInitialBudgets() {
+export function createInitialBudgets(): Record<WorldSubsystemKey, number> {
     return {
         geology: 0,
         climate: 0,
@@ -32,7 +41,28 @@ export function createInitialBudgets() {
     };
 }
 
-export function createInitialRuntimeState(defaultRuntimeTickMs) {
+export interface RuntimeState {
+    isRunning: boolean;
+    accumulatorMs: number;
+    lastFrameTimeMs: number | null;
+    runtimeTickMs: number;
+    maxTicksPerFrame: number;
+    sliceWorkBudget: number;
+    sliceBusy: boolean;
+    slicePhase: string;
+    maxRiverStepsPerFrame: number;
+    erosionAutomatonState: any;
+    pendingRiverSteps: number;
+    terrainErosionDirty: boolean;
+    terrainCoreDirty: boolean;
+    terrainDynamics: any;
+    latestActivity: Record<WorldSubsystemKey, number>;
+    carry: Record<WorldSubsystemKey, number>;
+    executedSteps: Record<WorldSubsystemKey, number>;
+    playback: PlaybackState;
+}
+
+export function createInitialRuntimeState(defaultRuntimeTickMs: number): RuntimeState {
     return {
         isRunning: true,
         accumulatorMs: 0,
