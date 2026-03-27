@@ -889,18 +889,13 @@ fn print_precipitation_diagnostics(world: &world::World, reference: &ClimateRef)
 
     println!("-- Main Diagnostics: Precipitation by Latitude Band (land only) --");
     for band in PRECIP_LAT_BANDS {
-        let rho = spearman_on_land_with_filter(
-            model_precip,
-            ref_precip,
-            geology_height,
-            |idx| {
-                let lat = positions
-                    .get(idx)
-                    .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
-                    .unwrap_or(0.0);
-                lat >= band.lat_min && lat < band.lat_max
-            },
-        )
+        let rho = spearman_on_land_with_filter(model_precip, ref_precip, geology_height, |idx| {
+            let lat = positions
+                .get(idx)
+                .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
+                .unwrap_or(0.0);
+            lat >= band.lat_min && lat < band.lat_max
+        })
         .unwrap_or(f32::NAN);
         println!(
             "[{} {:>4.1}-{:<4.1}] rho={:.3}",

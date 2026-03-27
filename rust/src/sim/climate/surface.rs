@@ -570,14 +570,13 @@ fn apply_downwind_moisture_depletion_iterative(
 
     let pass_count = params.downwind_depletion_passes.max(1) as usize;
     for _ in 0..pass_count {
-        let depletion =
-            apply_downwind_moisture_depletion(
-                world,
-                wind_vectors,
-                moisture_source,
-                precipitation,
-                params,
-            );
+        let depletion = apply_downwind_moisture_depletion(
+            world,
+            wind_vectors,
+            moisture_source,
+            precipitation,
+            params,
+        );
 
         for i in 0..cell_count {
             if world.state.geology.height[i] <= 0.0 {

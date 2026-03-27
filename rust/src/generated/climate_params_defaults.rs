@@ -34,4 +34,3 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         cold_coast_gain: 0.80f32,
     }
 }
-
