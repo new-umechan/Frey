@@ -10,6 +10,10 @@ export const FLOAT32_FIELDS = new Set([
     "aridity",
     "runoff",
     "ocean_temperature",
+    "wind_u",
+    "wind_v",
+    "moisture_flux_u",
+    "moisture_flux_v",
     "river_transport_cost",
 ]);
 
@@ -21,6 +25,10 @@ export const OPTIONAL_FIELD_KINDS = new Set([
     "river_transport_cost",
     "runoff",
     "ocean_temperature",
+    "wind_u",
+    "wind_v",
+    "moisture_flux_u",
+    "moisture_flux_v",
 ]);
 
 export const WORLD_CHANGESET = Object.freeze({
@@ -48,6 +56,10 @@ export const CORE_KEY_BY_FIELD_KIND = Object.freeze({
     aridity: "aridity",
     runoff: "runoff",
     ocean_temperature: "oceanTemperature",
+    wind_u: "windU",
+    wind_v: "windV",
+    moisture_flux_u: "moistureFluxU",
+    moisture_flux_v: "moistureFluxV",
     river_transport_cost: "riverTransportCost",
 });
 
@@ -64,6 +76,10 @@ const CHANGE_KIND_BY_FIELD_KIND = Object.freeze({
     aridity: "metric",
     runoff: "metric",
     ocean_temperature: "metric",
+    wind_u: "metric",
+    wind_v: "metric",
+    moisture_flux_u: "metric",
+    moisture_flux_v: "metric",
     river_transport_cost: "metric",
 });
 

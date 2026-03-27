@@ -8,6 +8,10 @@ const OPTIONAL_FIELD_KINDS = new Set([
     "river_transport_cost",
     "runoff",
     "ocean_temperature",
+    "wind_u",
+    "wind_v",
+    "moisture_flux_u",
+    "moisture_flux_v",
 ]);
 
 function createFallbackFieldData(fieldKind, fallbackCellCount) {
@@ -56,6 +60,10 @@ export function buildCoreBuffers(controller, worldId) {
         aridity: getFieldData(controller, worldId, "aridity", cellCount),
         runoff: getFieldData(controller, worldId, "runoff", cellCount),
         oceanTemperature: getFieldData(controller, worldId, "ocean_temperature", cellCount),
+        windU: getFieldData(controller, worldId, "wind_u", cellCount),
+        windV: getFieldData(controller, worldId, "wind_v", cellCount),
+        moistureFluxU: getFieldData(controller, worldId, "moisture_flux_u", cellCount),
+        moistureFluxV: getFieldData(controller, worldId, "moisture_flux_v", cellCount),
         riverTransportCost: getFieldData(controller, worldId, "river_transport_cost", cellCount),
     };
 }
@@ -162,6 +170,18 @@ export function applyWorldDeltaToCore(core, worldDelta) {
             break;
         case "ocean_temperature":
             changes.metric = applyNumericDelta(core.oceanTemperature, delta) || changes.metric;
+            break;
+        case "wind_u":
+            changes.metric = applyNumericDelta(core.windU, delta) || changes.metric;
+            break;
+        case "wind_v":
+            changes.metric = applyNumericDelta(core.windV, delta) || changes.metric;
+            break;
+        case "moisture_flux_u":
+            changes.metric = applyNumericDelta(core.moistureFluxU, delta) || changes.metric;
+            break;
+        case "moisture_flux_v":
+            changes.metric = applyNumericDelta(core.moistureFluxV, delta) || changes.metric;
             break;
         case "river_transport_cost":
             changes.metric = applyNumericDelta(core.riverTransportCost, delta) || changes.metric;

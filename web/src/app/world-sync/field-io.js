@@ -54,6 +54,10 @@ export function fetchCoreFields(worldSimController, worldId) {
         aridity: getFieldData(worldSimController, worldId, "aridity", cellCount),
         runoff: getFieldData(worldSimController, worldId, "runoff", cellCount),
         oceanTemperature: getFieldData(worldSimController, worldId, "ocean_temperature", cellCount),
+        windU: getFieldData(worldSimController, worldId, "wind_u", cellCount),
+        windV: getFieldData(worldSimController, worldId, "wind_v", cellCount),
+        moistureFluxU: getFieldData(worldSimController, worldId, "moisture_flux_u", cellCount),
+        moistureFluxV: getFieldData(worldSimController, worldId, "moisture_flux_v", cellCount),
         riverTransportCost: getFieldData(worldSimController, worldId, "river_transport_cost", cellCount),
     };
 }

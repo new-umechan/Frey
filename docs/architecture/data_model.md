@@ -73,6 +73,10 @@ struct CellStore {
     runoff:               Vec<f32>,
     aridity:              Vec<f32>,
     ocean_temperature:    Vec<f32>,
+    wind_u:               Vec<f32>,
+    wind_v:               Vec<f32>,
+    moisture_flux_u:      Vec<f32>,
+    moisture_flux_v:      Vec<f32>,
 
     river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,

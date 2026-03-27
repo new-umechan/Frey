@@ -34,6 +34,10 @@ export const FLOAT32_FIELDS = new Set([
     "aridity",
     "runoff",
     "ocean_temperature",
+    "wind_u",
+    "wind_v",
+    "moisture_flux_u",
+    "moisture_flux_v",
     "river_transport_cost",
 ]);
 
@@ -52,6 +56,10 @@ export const FIELD_KIND_BY_CELL_METRIC = Object.freeze({
     evapotranspiration: "evapotranspiration",
     aridity: "aridity",
     ocean_temperature: "ocean_temperature",
+    wind_u: "wind_u",
+    wind_v: "wind_v",
+    moisture_flux_u: "moisture_flux_u",
+    moisture_flux_v: "moisture_flux_v",
     river_flux: "river_flux",
     runoff: "runoff",
     river_transport_cost: "river_transport_cost",

@@ -11,6 +11,10 @@
 ### 実行コマンド（現行）
 
 ```
+# repo root から npm wrapper で実行
+npm run bench -- --suite climate_solo
+
+# または cargo bench を直接実行
 # repo root から実行
 cargo bench --manifest-path rust/Cargo.toml --bench climate_solo
 

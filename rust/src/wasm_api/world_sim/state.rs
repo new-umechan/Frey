@@ -46,6 +46,10 @@ pub(super) struct WorldSyncState {
     pub aridity: F32FieldTracker,
     pub runoff: F32FieldTracker,
     pub ocean_temperature: F32FieldTracker,
+    pub wind_u: F32FieldTracker,
+    pub wind_v: F32FieldTracker,
+    pub moisture_flux_u: F32FieldTracker,
+    pub moisture_flux_v: F32FieldTracker,
     pub river_transport_cost: F32FieldTracker,
 }
 
@@ -308,6 +312,10 @@ impl WorldSyncState {
             aridity: F32FieldTracker::new(&world.state.climate.aridity),
             runoff: F32FieldTracker::new(&world.state.climate.runoff),
             ocean_temperature: F32FieldTracker::new(&world.state.climate.ocean_temperature),
+            wind_u: F32FieldTracker::new(&world.state.climate.wind_u),
+            wind_v: F32FieldTracker::new(&world.state.climate.wind_v),
+            moisture_flux_u: F32FieldTracker::new(&world.state.climate.moisture_flux_u),
+            moisture_flux_v: F32FieldTracker::new(&world.state.climate.moisture_flux_v),
             river_transport_cost: F32FieldTracker::new(&world.state.hydrology.river_transport_cost),
         }
     }
@@ -345,6 +353,12 @@ impl WorldSyncState {
         self.runoff.observe(&world.state.climate.runoff);
         self.ocean_temperature
             .observe(&world.state.climate.ocean_temperature);
+        self.wind_u.observe(&world.state.climate.wind_u);
+        self.wind_v.observe(&world.state.climate.wind_v);
+        self.moisture_flux_u
+            .observe(&world.state.climate.moisture_flux_u);
+        self.moisture_flux_v
+            .observe(&world.state.climate.moisture_flux_v);
         self.river_transport_cost
             .observe(&world.state.hydrology.river_transport_cost);
     }
@@ -452,6 +466,34 @@ impl WorldSyncState {
         } else {
             self.ocean_temperature.discard_pending();
         }
+        if include_field("wind_u") {
+            if let Some(delta) = self.wind_u.take_delta("wind_u") {
+                deltas.push(delta);
+            }
+        } else {
+            self.wind_u.discard_pending();
+        }
+        if include_field("wind_v") {
+            if let Some(delta) = self.wind_v.take_delta("wind_v") {
+                deltas.push(delta);
+            }
+        } else {
+            self.wind_v.discard_pending();
+        }
+        if include_field("moisture_flux_u") {
+            if let Some(delta) = self.moisture_flux_u.take_delta("moisture_flux_u") {
+                deltas.push(delta);
+            }
+        } else {
+            self.moisture_flux_u.discard_pending();
+        }
+        if include_field("moisture_flux_v") {
+            if let Some(delta) = self.moisture_flux_v.take_delta("moisture_flux_v") {
+                deltas.push(delta);
+            }
+        } else {
+            self.moisture_flux_v.discard_pending();
+        }
         if include_field("river_transport_cost") {
             if let Some(delta) = self.river_transport_cost.take_delta("river_transport_cost") {
                 deltas.push(delta);
@@ -545,6 +587,10 @@ mod tests {
             aridity: F32FieldTracker::new(&[1.0, 1.0]),
             runoff: F32FieldTracker::new(&[30.0, 30.0]),
             ocean_temperature: F32FieldTracker::new(&[10.0, 10.0]),
+            wind_u: F32FieldTracker::new(&[0.0, 0.0]),
+            wind_v: F32FieldTracker::new(&[0.0, 0.0]),
+            moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
+            moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
             river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
         };
 

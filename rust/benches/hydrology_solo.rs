@@ -367,9 +367,7 @@ fn main() {
     println!();
     println!(
         "-- Diagnostic Evaluation 2-A Summary: matched={}/{} coverage_ratio={:.3} --",
-        diagnostic_summary.matched,
-        diagnostic_summary.total,
-        diagnostic_summary.coverage_ratio
+        diagnostic_summary.matched, diagnostic_summary.total, diagnostic_summary.coverage_ratio
     );
 
     match &main_eval_state {

@@ -394,26 +394,21 @@ fn main() {
     println!("-- Diagnostic Evaluation: Assertions --");
     println!(
         "[biome]           matched={}/{} coverage_ratio={:.3}",
-        biome_summary.matched,
-        biome_summary.total,
-        biome_summary.coverage_ratio
+        biome_summary.matched, biome_summary.total, biome_summary.coverage_ratio
     );
     println!(
         "[tree_cover]      matched={}/{} coverage_ratio={:.3}",
-        tree_summary.matched,
-        tree_summary.total,
-        tree_summary.coverage_ratio
+        tree_summary.matched, tree_summary.total, tree_summary.coverage_ratio
     );
     println!(
         "[ground_cover]    matched={}/{} coverage_ratio={:.3}",
-        ground_summary.matched,
-        ground_summary.total,
-        ground_summary.coverage_ratio
+        ground_summary.matched, ground_summary.total, ground_summary.coverage_ratio
     );
 
-    let mean_coverage_ratio = (
-        biome_summary.coverage_ratio + tree_summary.coverage_ratio + ground_summary.coverage_ratio
-    ) / 3.0;
+    let mean_coverage_ratio = (biome_summary.coverage_ratio
+        + tree_summary.coverage_ratio
+        + ground_summary.coverage_ratio)
+        / 3.0;
     println!();
     println!("-- Main Evaluation Summary: metrics_reported=3 --");
     println!("-- Reference Evaluation Summary: metrics_reported=1 --");

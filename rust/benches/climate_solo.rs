@@ -417,11 +417,10 @@ fn main() {
     let aridity_summary = summarize_phase1_metric(&aridity_results);
 
     println!();
-    let mean_coverage_ratio = (
-        temperature_summary.coverage_ratio
-            + precipitation_summary.coverage_ratio
-            + aridity_summary.coverage_ratio
-    ) / 3.0;
+    let mean_coverage_ratio = (temperature_summary.coverage_ratio
+        + precipitation_summary.coverage_ratio
+        + aridity_summary.coverage_ratio)
+        / 3.0;
     println!(
         "-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio={:.3} (excl. known-hard) --",
         mean_coverage_ratio
@@ -810,10 +809,7 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
     } else {
         println!(
             "[{}] matched={}/{}  coverage_ratio={:.3}",
-            name,
-            summary.matched,
-            summary.total,
-            summary.coverage_ratio
+            name, summary.matched, summary.total, summary.coverage_ratio
         );
     }
 }

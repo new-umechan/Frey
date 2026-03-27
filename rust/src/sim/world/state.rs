@@ -361,6 +361,14 @@ pub struct ClimateState {
     pub runoff: Vec<f32>,
     pub aridity: Vec<f32>,
     pub ocean_temperature: Vec<f32>,
+    #[serde(default)]
+    pub wind_u: Vec<f32>,
+    #[serde(default)]
+    pub wind_v: Vec<f32>,
+    #[serde(default)]
+    pub moisture_flux_u: Vec<f32>,
+    #[serde(default)]
+    pub moisture_flux_v: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -483,6 +491,10 @@ pub struct CellStore<'a> {
     pub runoff: &'a [f32],
     pub aridity: &'a [f32],
     pub ocean_temperature: &'a [f32],
+    pub wind_u: &'a [f32],
+    pub wind_v: &'a [f32],
+    pub moisture_flux_u: &'a [f32],
+    pub moisture_flux_v: &'a [f32],
     pub river_downstream: &'a [SmallVec<[(u32, f32); 3]>],
     pub river_next: &'a [i32],
     pub river_flow: &'a [f32],
@@ -510,6 +522,10 @@ pub struct CellStoreMut<'a> {
     pub runoff: &'a mut Vec<f32>,
     pub aridity: &'a mut Vec<f32>,
     pub ocean_temperature: &'a mut Vec<f32>,
+    pub wind_u: &'a mut Vec<f32>,
+    pub wind_v: &'a mut Vec<f32>,
+    pub moisture_flux_u: &'a mut Vec<f32>,
+    pub moisture_flux_v: &'a mut Vec<f32>,
     pub river_downstream: &'a mut Vec<SmallVec<[(u32, f32); 3]>>,
     pub river_next: &'a mut Vec<i32>,
     pub river_flow: &'a mut Vec<f32>,
@@ -560,6 +576,10 @@ impl WorldState {
             runoff: &self.climate.runoff,
             aridity: &self.climate.aridity,
             ocean_temperature: &self.climate.ocean_temperature,
+            wind_u: &self.climate.wind_u,
+            wind_v: &self.climate.wind_v,
+            moisture_flux_u: &self.climate.moisture_flux_u,
+            moisture_flux_v: &self.climate.moisture_flux_v,
             river_downstream: &self.hydrology.river_downstream,
             river_next: &self.hydrology.river_next,
             river_flow: &self.hydrology.river_flow,
@@ -589,6 +609,10 @@ impl WorldState {
             runoff: &mut self.climate.runoff,
             aridity: &mut self.climate.aridity,
             ocean_temperature: &mut self.climate.ocean_temperature,
+            wind_u: &mut self.climate.wind_u,
+            wind_v: &mut self.climate.wind_v,
+            moisture_flux_u: &mut self.climate.moisture_flux_u,
+            moisture_flux_v: &mut self.climate.moisture_flux_v,
             river_downstream: &mut self.hydrology.river_downstream,
             river_next: &mut self.hydrology.river_next,
             river_flow: &mut self.hydrology.river_flow,
