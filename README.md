@@ -32,12 +32,12 @@ docs/README.mdに仕様の全体像をメモ
 
 ベンチマーク実行では外部実データを使用する。生データの配置先は `benches/raw/`。
 
-- DEM: ETOPO 2022 Ice Surface（`geology.height`、`benches/raw/geology/`）
-- 気候: WorldClim v2.1（`temperature` / `precipitation`、`benches/raw/climate/`）
-- 気候: ERA5-Land monthly means（`runoff` / `evapotranspiration`、`benches/raw/climate/`）
-- 気候: CGIAR Global Aridity Index（`aridity`、`benches/raw/climate/`）
-- 水文: GloFAS historical / ERA5系（`river_flow` 参照、`benches/raw/hydrology/`）
-- 水文: HydroLAKES（`is_lake` 参照、`benches/raw/hydrology/`）
-- 生態: MODIS MOD44B（`tree_cover` / `ground_cover` / `biome` 合成参照、`benches/raw/ecology/`）
-- 生態: MODIS MCD12Q1（`natural_mask` / `biome` 合成参照、`benches/raw/ecology/`）
-- 生態: SoilGrids（`soil_fertility` proxy、`benches/raw/ecology/soilgrids/`）
+- ETOPO 2022 Ice Surface（`geology.height`、`benches/raw/geology/`）
+- WorldClim v2.1（`temperature` / `precipitation`、`benches/raw/climate/`）
+- ERA5-Land monthly means（`runoff` / `evapotranspiration`、`benches/raw/climate/`）
+- CGIAR Global Aridity Index（`aridity`、`benches/raw/climate/`）
+- GloFAS historical / ERA5系（`river_flow` 参照、`benches/raw/hydrology/`）
+- HydroLAKES（`is_lake` 参照、`benches/raw/hydrology/`）
+- MODIS MOD44B（`tree_cover` / `ground_cover` / `biome` 合成参照、`benches/raw/ecology/`）
+- MODIS MCD12Q1（`natural_mask` / `biome` 合成参照、`benches/raw/ecology/`）
+- SoilGrids（`soil_fertility` proxy、`benches/raw/ecology/soilgrids/`）
