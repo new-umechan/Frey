@@ -65,11 +65,13 @@ pub(super) fn apply_stress_and_surface_update(
             .slab_convergence_component
             .get(i)
             .copied()
+            .map(|v| finite_or(v, 0.0))
             .unwrap_or(0.0);
         let slab_roll = boundary_state
             .slab_rollback_component
             .get(i)
             .copied()
+            .map(|v| finite_or(v, 0.0))
             .unwrap_or(0.0);
         tensor.xx -= slab_conv * 0.08;
         tensor.yy -= slab_conv * 0.08;
@@ -79,6 +81,7 @@ pub(super) fn apply_stress_and_surface_update(
             .backarc_tension
             .get(i)
             .copied()
+            .map(|v| finite_or(v, 0.0))
             .unwrap_or(0.0);
         tensor.xx += backarc_tension;
         tensor.yy += backarc_tension;
@@ -102,9 +105,9 @@ pub(super) fn apply_stress_and_surface_update(
             } else {
                 0.18
             };
-            nbr_stress.xx += n_tensor.xx * atten;
-            nbr_stress.yy += n_tensor.yy * atten;
-            nbr_stress.xy += n_tensor.xy * atten;
+            nbr_stress.xx += finite_or(n_tensor.xx, 0.0) * atten;
+            nbr_stress.yy += finite_or(n_tensor.yy, 0.0) * atten;
+            nbr_stress.xy += finite_or(n_tensor.xy, 0.0) * atten;
         }
 
         tensor.xx += nbr_stress.xx;
@@ -122,9 +125,9 @@ pub(super) fn apply_stress_and_surface_update(
         tensor.yy *= inv_rigidity;
         tensor.xy *= inv_rigidity;
 
-        let stress_scalar = (tensor.xx + tensor.yy) * 0.5 + tensor.xy.abs() * 0.30;
+        let stress_scalar = finite_or((tensor.xx + tensor.yy) * 0.5 + tensor.xy.abs() * 0.30, 0.0);
         let relax = params.stress_relaxation_rate.clamp(0.0, 1.0);
-        let stress = prev.stress * (1.0 - relax) + stress_scalar * relax;
+        let stress = finite_or(prev.stress * (1.0 - relax) + stress_scalar * relax, 0.0);
 
         let mut state = prev;
         state.temperature = mantle_heat_i;
@@ -149,7 +152,8 @@ pub(super) fn apply_stress_and_surface_update(
             .get(i)
             .copied()
             .unwrap_or(BoundaryType::PassiveMargin);
-        let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
+        let boundary_activity = finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0)
+            .clamp(0.0, 1.0);
         let rollback_fraction = finite_or(
             boundary_state
                 .rollback_fraction
@@ -188,10 +192,14 @@ pub(super) fn apply_stress_and_surface_update(
         } else {
             0.0
         };
-        let volcanism = state.arc_volcanism
+        let volcanism = finite_or(
+            state.arc_volcanism
             + state.ridge_volcanism
             + state.hotspot_volcanism
-            + state.backarc_volcanism;
+            + state.backarc_volcanism,
+            0.0,
+        )
+        .max(0.0);
 
         let tectonic_uplift = params.tectonic_uplift_gain.max(0.0) * compressive;
         let volcanic_uplift = volcanism * params.volcanic_uplift_gain.max(0.0);
@@ -210,9 +218,9 @@ pub(super) fn apply_stress_and_surface_update(
         } else {
             (nbr_sum / nbr_count as f32 - heights[i]) * DEFAULT_DIFFUSION_WEIGHT
         };
-        let raw_delta = uplift - total_subsidence + diffusive;
+        let raw_delta = finite_or(uplift - total_subsidence + diffusive, 0.0);
         let delta = raw_delta.clamp(-MAX_HEIGHT_DELTA_PER_STEP, MAX_HEIGHT_DELTA_PER_STEP);
-        let mut next_h = (heights[i] + delta).clamp(-1.0, 1.0);
+        let mut next_h = finite_or(heights[i] + delta, heights[i]).clamp(-1.0, 1.0);
 
         if matches!(boundary_type, BoundaryType::Ridge | BoundaryType::Rift) && next_h < -0.02 {
             state.crust_type = CrustType::Oceanic;
@@ -237,9 +245,12 @@ pub(super) fn apply_stress_and_surface_update(
         state.stress_tensor.yy = finite_or(state.stress_tensor.yy, 0.0);
         state.stress_tensor.xy = finite_or(state.stress_tensor.xy, 0.0);
         let density_ratio = (state.density / params.mantle_density.max(1e-3)).clamp(0.1, 1.4);
-        let h_eq = state.thickness * (1.0 - density_ratio);
-        next_h =
-            (next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0)).clamp(-1.0, 1.0);
+        let h_eq = finite_or(state.thickness * (1.0 - density_ratio), next_h);
+        next_h = finite_or(
+            next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0),
+            next_h,
+        )
+        .clamp(-1.0, 1.0);
         state.rigidity = rigidity;
 
         terrain_delta_sum += delta.abs();
@@ -253,7 +264,7 @@ pub(super) fn apply_stress_and_surface_update(
         next_vertex_states[i] = state;
         next_height[i] = next_h;
         next_volcanism[i] = volcanism;
-        next_vertex_buoyancy[i] = h_eq - next_h;
+        next_vertex_buoyancy[i] = finite_or(h_eq - next_h, 0.0);
     }
 
     let denom = cell_count.max(1) as f32;

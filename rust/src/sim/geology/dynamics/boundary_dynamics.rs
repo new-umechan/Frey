@@ -6,6 +6,15 @@ use crate::GeologyParams;
 use crate::sim::exec::math::{cross3, dot, length3, seeded_axis};
 use crate::sim::exec::{lerp, CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFORM_THRESHOLD};
 
+#[inline]
+fn finite_or(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        fallback
+    }
+}
+
 pub(super) struct ReclassifyBoundariesInput<'a> {
     pub positions: &'a [[f32; 3]],
     pub nbr_offsets: &'a [u32],
@@ -94,13 +103,13 @@ pub(super) fn reclassify_boundaries(
             params,
         );
         edge_types[eid] = bt;
-        edge_scores[eid] = score.clamp(0.0, 1.0);
+        edge_scores[eid] = finite_or(score, 0.0).clamp(0.0, 1.0);
 
         if bt == BoundaryType::Subduction {
-            convergence_norm_edge[eid] = (rel.rel_n * 8.0).clamp(0.0, 1.0);
+            convergence_norm_edge[eid] = finite_or(rel.rel_n * 8.0, 0.0).clamp(0.0, 1.0);
             if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
-                subduction_age_edge[eid] = oceanic.age.max(0.0);
-                subduction_density_edge[eid] = oceanic.density.max(0.0);
+                subduction_age_edge[eid] = finite_or(oceanic.age, 0.0).max(0.0);
+                subduction_density_edge[eid] = finite_or(oceanic.density, 0.0).max(0.0);
             }
         }
     }
@@ -147,15 +156,18 @@ pub(super) fn reclassify_boundaries(
                 if other == eid {
                     continue;
                 }
-                acc += old_memory[other];
+                acc += finite_or(old_memory[other], 0.0);
                 cnt = cnt.saturating_add(1);
             }
         }
         if cnt == 0 {
             continue;
         }
-        boundary_state.edge_internal[eid].convergence_memory =
-            lerp(old_memory[eid], acc / cnt as f32, smooth_mix).clamp(0.0, 1.0);
+        boundary_state.edge_internal[eid].convergence_memory = finite_or(
+            lerp(old_memory[eid], acc / cnt as f32, smooth_mix),
+            old_memory[eid],
+        )
+        .clamp(0.0, 1.0);
     }
 
     boundary_state.rollback_fraction.fill(0.0);
@@ -173,20 +185,31 @@ pub(super) fn reclassify_boundaries(
             continue;
         }
 
-        let age_norm = (subduction_age_edge[eid] / age_ref).clamp(0.0, 1.0);
-        let density_ocean = subduction_density_edge[eid];
+        let age_norm = finite_or(subduction_age_edge[eid] / age_ref, 0.0).clamp(0.0, 1.0);
+        let density_ocean = finite_or(subduction_density_edge[eid], mantle_density);
         let dip_factor = ((density_ocean - mantle_density) / dip_density_scale).clamp(0.0, 1.0);
-        let memory = boundary_state.edge_internal[eid].convergence_memory;
+        let memory = finite_or(boundary_state.edge_internal[eid].convergence_memory, 0.0);
         let slab_depth_est = params.subduction_depth_gain.max(0.0) * age_norm * memory;
-        let suppression = (1.0 - convergence_norm_edge[eid] * params.rollback_suppression.max(0.0))
-            .clamp(0.0, 1.0);
+        let suppression = finite_or(
+            1.0 - convergence_norm_edge[eid] * params.rollback_suppression.max(0.0),
+            1.0,
+        )
+        .clamp(0.0, 1.0);
         let rollback =
-            (params.rollback_gain.max(0.0) * age_norm * dip_factor * slab_depth_est * suppression)
-                .clamp(0.0, params.rollback_fraction_max.max(0.0));
+            finite_or(
+                params.rollback_gain.max(0.0)
+                    * age_norm
+                    * dip_factor
+                    * slab_depth_est
+                    * suppression,
+                0.0,
+            )
+            .clamp(0.0, params.rollback_fraction_max.max(0.0));
 
-        let slab_pull_mag = edge_scores[eid].max(0.0)
-            * (density_ocean - mantle_density).max(0.0)
-            * (1.0 + slab_depth_est);
+        let slab_pull_mag = finite_or(
+            edge_scores[eid].max(0.0) * (density_ocean - mantle_density).max(0.0) * (1.0 + slab_depth_est),
+            0.0,
+        );
         let slab_conv = slab_pull_mag * (1.0 - rollback);
         let slab_roll = slab_pull_mag * rollback;
         let backarc = if rollback > params.rollback_threshold.max(0.0) {
@@ -206,11 +229,13 @@ pub(super) fn reclassify_boundaries(
 
     for (i, count) in cell_rollback_count.iter().enumerate().take(cell_count) {
         let denom = (*count).max(1) as f32;
-        boundary_state.rollback_fraction[i] = (boundary_state.rollback_fraction[i] / denom)
+        boundary_state.rollback_fraction[i] = finite_or(boundary_state.rollback_fraction[i] / denom, 0.0)
             .clamp(0.0, params.rollback_fraction_max.max(0.0));
-        boundary_state.backarc_tension[i] /= denom;
-        boundary_state.slab_convergence_component[i] /= denom;
-        boundary_state.slab_rollback_component[i] /= denom;
+        boundary_state.backarc_tension[i] = finite_or(boundary_state.backarc_tension[i] / denom, 0.0);
+        boundary_state.slab_convergence_component[i] =
+            finite_or(boundary_state.slab_convergence_component[i] / denom, 0.0);
+        boundary_state.slab_rollback_component[i] =
+            finite_or(boundary_state.slab_rollback_component[i] / denom, 0.0);
     }
 }
 
@@ -278,14 +303,14 @@ pub(super) fn update_plate_kinematics(
         if pid >= plate_states.len() {
             continue;
         }
-        plate_activity[pid] += boundary_state.activity.get(i).copied().unwrap_or(0.0);
+        plate_activity[pid] += finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0);
         plate_count[pid] = plate_count[pid].saturating_add(1);
     }
 
     let gain = params.plate_motion_gain.max(0.0);
     for pid in 0..plate_states.len() {
         let denom = plate_count[pid].max(1) as f32;
-        let activity = (plate_activity[pid] / denom).clamp(0.0, 1.0);
+        let activity = finite_or(plate_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
         let damping = match dominant_plate_boundary_type(
             PlateId(pid as u32),
             plate_id,
@@ -296,10 +321,13 @@ pub(super) fn update_plate_kinematics(
             BoundaryType::Subduction => 0.995,
             _ => 0.990,
         };
-        plate_states[pid].angular_speed =
-            (plate_states[pid].angular_speed * damping + gain * activity * 0.015).clamp(0.01, 0.30);
+        plate_states[pid].angular_speed = finite_or(
+            plate_states[pid].angular_speed * damping + gain * activity * 0.015,
+            0.12,
+        )
+        .clamp(0.01, 0.30);
         plate_states[pid].activity =
-            lerp(plate_states[pid].activity, activity, 0.20).clamp(0.0, 1.0);
+            finite_or(lerp(plate_states[pid].activity, activity, 0.20), activity).clamp(0.0, 1.0);
     }
 }
 
@@ -422,9 +450,17 @@ fn plate_velocity_from_state(
 ) -> [f32; 3] {
     let seed = plate_id.as_u32();
     let fallback_axis = seeded_axis(seed ^ 0x27d4_eb2f);
-    let angular_axis = state.map(|s| s.angular_axis).unwrap_or(fallback_axis);
+    let angular_axis = state
+        .map(|s| {
+            [
+                finite_or(s.angular_axis[0], fallback_axis[0]),
+                finite_or(s.angular_axis[1], fallback_axis[1]),
+                finite_or(s.angular_axis[2], fallback_axis[2]),
+            ]
+        })
+        .unwrap_or(fallback_axis);
     let angular_speed = state
-        .map(|s| s.angular_speed * (0.55 + 0.45 * s.activity))
+        .map(|s| finite_or(s.angular_speed * (0.55 + 0.45 * s.activity), 0.12))
         .unwrap_or(0.12);
     let omega = [
         angular_axis[0] * angular_speed,

@@ -232,6 +232,11 @@ fn debug_validate_geology_state(world: &World, params: &GeologyParams, stage: &s
     }
 }
 
+#[inline]
+fn should_run_debug_validation() -> bool {
+    cfg!(test)
+}
+
 pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
         return;
@@ -248,7 +253,9 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         .map(|state| state.params.clone())
         .unwrap_or_default();
     ensure_geology_dynamics(world);
-    debug_validate_geology_state(world, &params, "pre-step");
+    if should_run_debug_validation() {
+        debug_validate_geology_state(world, &params, "pre-step");
+    }
 
     let Some(dynamics) = world.runtime.geology_dynamics.as_mut() else {
         return;
@@ -395,7 +402,9 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         }
     }
     let _ = dynamics;
-    debug_validate_geology_state(world, &params, "post-step");
+    if should_run_debug_validation() {
+        debug_validate_geology_state(world, &params, "post-step");
+    }
 }
 
 fn ensure_geology_dynamics(world: &mut World) {
