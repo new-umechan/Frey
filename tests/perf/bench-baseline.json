@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-03-28T01:36:15.296Z",
+    "generated_at": "2026-03-28T01:52:02.879Z",
     "user_agent": "node v25.0.0",
     "timezone": "Asia/Tokyo"
   },
@@ -14,126 +14,126 @@
     "tickEnd": 16
   },
   "totals": {
-    "wall_time_ms": 5303.458,
+    "wall_time_ms": 8698.907,
     "processed_ticks": 16
   },
   "metrics": {
     "exec_world": {
       "count": 16,
-      "mean": 310.349,
-      "min": 220.425,
-      "max": 988.16,
-      "p50": 230.373,
-      "p95": 988.16,
-      "p99": 988.16
+      "mean": 507.772,
+      "min": 252.093,
+      "max": 1146.46,
+      "p50": 365.064,
+      "p95": 1146.46,
+      "p99": 1146.46
     },
     "delta_sync": {
       "count": 16,
-      "mean": 17.085,
-      "min": 13.225,
-      "max": 46.528,
-      "p50": 13.719,
-      "p95": 46.528,
-      "p99": 46.528
+      "mean": 25.385,
+      "min": 13.44,
+      "max": 47.073,
+      "p50": 18.155,
+      "p95": 47.073,
+      "p99": 47.073
     },
     "river_mask_update": {
       "count": 2,
-      "mean": 0.979,
-      "min": 0.928,
-      "max": 1.031,
-      "p50": 0.928,
-      "p95": 1.031,
-      "p99": 1.031
+      "mean": 1.241,
+      "min": 1.01,
+      "max": 1.473,
+      "p50": 1.01,
+      "p95": 1.473,
+      "p99": 1.473
     },
     "tick_total": {
       "count": 16,
-      "mean": 327.598,
-      "min": 233.674,
-      "max": 1035.98,
-      "p50": 245.999,
-      "p95": 1035.98,
-      "p99": 1035.98
+      "mean": 533.377,
+      "min": 265.557,
+      "max": 1195.01,
+      "p50": 383.09,
+      "p95": 1195.01,
+      "p99": 1195.01
     },
     "step_feedback": {
       "count": 4,
-      "mean": 0,
-      "min": 0,
-      "max": 0,
-      "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "mean": 0.087,
+      "min": 0.055,
+      "max": 0.121,
+      "p50": 0.081,
+      "p95": 0.121,
+      "p99": 0.121
     },
     "step_geology_terrain": {
       "count": 4,
-      "mean": 142.5,
-      "min": 142,
-      "max": 144,
-      "p50": 142,
-      "p95": 144,
-      "p99": 144
+      "mean": 206.577,
+      "min": 163.861,
+      "max": 266.761,
+      "p50": 192.759,
+      "p95": 266.761,
+      "p99": 266.761
     },
     "step_climate": {
       "count": 4,
-      "mean": 0,
-      "min": 0,
-      "max": 0,
-      "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "mean": 0.009,
+      "min": 0.008,
+      "max": 0.009,
+      "p50": 0.009,
+      "p95": 0.009,
+      "p99": 0.009
     },
     "step_geology_river": {
       "count": 4,
-      "mean": 59.5,
-      "min": 57,
-      "max": 61,
-      "p50": 60,
-      "p95": 61,
-      "p99": 61
+      "mean": 92.713,
+      "min": 61.064,
+      "max": 122.75,
+      "p50": 93.297,
+      "p95": 122.75,
+      "p99": 122.75
     },
     "step_ecology": {
       "count": 4,
-      "mean": 0,
-      "min": 0,
-      "max": 0,
-      "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "mean": 0.01,
+      "min": 0.007,
+      "max": 0.013,
+      "p50": 0.009,
+      "p95": 0.013,
+      "p99": 0.013
     },
     "step_civilization": {
       "count": 4,
-      "mean": 0,
-      "min": 0,
-      "max": 0,
-      "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "mean": 0.01,
+      "min": 0.007,
+      "max": 0.013,
+      "p50": 0.009,
+      "p95": 0.013,
+      "p99": 0.013
     },
     "step_transition": {
       "count": 4,
-      "mean": 0,
-      "min": 0,
-      "max": 0,
-      "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "mean": 0.009,
+      "min": 0.007,
+      "max": 0.012,
+      "p50": 0.008,
+      "p95": 0.012,
+      "p99": 0.012
     },
     "step_sync_erosion": {
       "count": 4,
-      "mean": 0,
+      "mean": 0.25,
       "min": 0,
-      "max": 0,
+      "max": 1,
       "p50": 0,
-      "p95": 0,
-      "p99": 0
+      "p95": 1,
+      "p99": 1
     },
     "step_observe_world_change": {
       "count": 4,
-      "mean": 26.5,
-      "min": 25,
-      "max": 29,
-      "p50": 25,
-      "p95": 29,
-      "p99": 29
+      "mean": 36.75,
+      "min": 24,
+      "max": 53,
+      "p50": 34,
+      "p95": 53,
+      "p99": 53
     },
     "step_history_snapshot": {
       "count": 4,
@@ -146,21 +146,21 @@
     },
     "step_geology_river_prepare": {
       "count": 4,
-      "mean": 5,
-      "min": 5,
-      "max": 5,
-      "p50": 5,
-      "p95": 5,
-      "p99": 5
+      "mean": 8.5,
+      "min": 7,
+      "max": 9,
+      "p50": 9,
+      "p95": 9,
+      "p99": 9
     },
     "step_geology_river_automaton": {
       "count": 4,
-      "mean": 32.75,
-      "min": 32,
-      "max": 34,
-      "p50": 32,
-      "p95": 34,
-      "p99": 34
+      "mean": 51,
+      "min": 33,
+      "max": 68,
+      "p50": 51,
+      "p95": 68,
+      "p99": 68
     },
     "step_geology_river_automaton_sink": {
       "count": 4,
@@ -173,12 +173,12 @@
     },
     "step_geology_river_automaton_cell": {
       "count": 4,
-      "mean": 32.75,
-      "min": 32,
-      "max": 34,
-      "p50": 32,
-      "p95": 34,
-      "p99": 34
+      "mean": 51,
+      "min": 33,
+      "max": 68,
+      "p50": 51,
+      "p95": 68,
+      "p99": 68
     },
     "step_geology_river_automaton_queue": {
       "count": 4,
@@ -200,12 +200,12 @@
     },
     "step_geology_river_sync": {
       "count": 4,
-      "mean": 14.5,
-      "min": 14,
-      "max": 15,
-      "p50": 14,
-      "p95": 15,
-      "p99": 15
+      "mean": 22.25,
+      "min": 15,
+      "max": 30,
+      "p50": 22,
+      "p95": 30,
+      "p99": 30
     },
     "step_geology_river_fallback": {
       "count": 4,
@@ -223,14 +223,14 @@
     "profile_fallback_count": 0,
     "replay_ticks_total": 0,
     "replay_time_ms_total": 0,
-    "exec_world_time_ms_total": 4965.589,
-    "exec_world_profiled_time_ms_total": 916.244,
-    "step_geology_river_time_ms_total": 238,
-    "tick_total_time_ms_total": 5241.572,
+    "exec_world_time_ms_total": 8124.353,
+    "exec_world_profiled_time_ms_total": 1347.984,
+    "step_geology_river_time_ms_total": 370.853,
+    "tick_total_time_ms_total": 8534.036,
     "replay_time_share_of_wall": 0,
     "replay_time_share_of_exec_world": 0,
-    "exec_world_share_of_tick": 0.947347,
-    "river_share_of_exec_world": 0.259756,
+    "exec_world_share_of_tick": 0.951994,
+    "river_share_of_exec_world": 0.275117,
     "river_network_rebuild_count_total": 0,
     "river_rebuild_rate": 0,
     "river_fallback_count_total": 0,

@@ -43,12 +43,7 @@ const CAP_DYNAMIC_MAX: f32 = 7.400000;
 const COLD_RELAX_CONVERGENCE_WEIGHT: f32 = 0.40;
 const COLD_RELAX_UPLIFT_WEIGHT: f32 = 0.35;
 const COLD_RELAX_MONSOON_WEIGHT: f32 = 0.25;
-const COLD_RELAX_HOTSPOT_WEIGHT: f32 = 0.20;
 const COLD_RELAX_MAX: f32 = 0.600000;
-const HOTSPOT_PRECIP_GAIN_MM: f32 = 520.0;
-const HOTSPOT_COAST_DISTANCE_KM: f32 = 320.0;
-const HOTSPOT_FETCH_WEIGHT: f32 = 0.55;
-const HOTSPOT_CONVERGENCE_WEIGHT: f32 = 0.45;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PrecipDiagnosticsSummary {
@@ -364,6 +359,7 @@ fn compute_precipitation_fields(
             &signal,
             convergence_mm,
             monsoon_mm,
+            climate_params,
         );
         convergence_field[i] = convergence_mm;
         uplift_field[i] = uplift_mm;
@@ -822,7 +818,7 @@ fn apply_cold_coast_precipitation(
                     * smoothstep(80.0, 280.0, uplift_mm.get(current).copied().unwrap_or(0.0))
                 + COLD_RELAX_MONSOON_WEIGHT
                     * smoothstep(70.0, 240.0, monsoon_mm.get(current).copied().unwrap_or(0.0))
-                + COLD_RELAX_HOTSPOT_WEIGHT
+                + params.cold_relax_hotspot_weight
                     * smoothstep(90.0, 320.0, hotspot_mm.get(current).copied().unwrap_or(0.0)))
             .clamp(0.0, COLD_RELAX_MAX);
             let relaxed_cold = lerp(cold_factor.clamp(0.2, 1.0), 1.0, relax);
@@ -851,6 +847,7 @@ fn marine_orographic_hotspot_boost_mm(
     signal: &OrographicSignal,
     convergence_mm: f32,
     monsoon_mm: f32,
+    params: &ClimateParams,
 ) -> f32 {
     if world.state.geology.height.get(index).copied().unwrap_or(0.0) <= 0.0 {
         return 0.0;
@@ -863,7 +860,9 @@ fn marine_orographic_hotspot_boost_mm(
         .copied()
         .unwrap_or(0.0)
         .max(0.0);
-    let coast_weight = (-distance_from_ocean / HOTSPOT_COAST_DISTANCE_KM).exp().clamp(0.0, 1.0);
+    let coast_weight = (-distance_from_ocean / params.hotspot_coast_distance_km.max(1.0))
+        .exp()
+        .clamp(0.0, 1.0);
     let barrier_norm = (signal.barrier_m / 1_200.0).clamp(0.0, 2.5);
     let rise_norm = (signal.rise_m / 900.0).clamp(0.0, 2.5);
     let fetch_weight = signal.ocean_fetch.clamp(0.0, 1.0);
@@ -881,9 +880,10 @@ fn marine_orographic_hotspot_boost_mm(
         (0.70 + 0.20 * gaussian(latitude, 12.0, 18.0) + 0.10 * gaussian(latitude, 48.0, 12.0))
             .clamp(0.0, 1.0);
 
-    HOTSPOT_PRECIP_GAIN_MM
+    params.hotspot_precip_gain_mm
         * coast_weight
-        * (HOTSPOT_FETCH_WEIGHT * fetch_weight + HOTSPOT_CONVERGENCE_WEIGHT * convergence_weight)
+        * (params.hotspot_fetch_weight * fetch_weight
+            + params.hotspot_convergence_weight * convergence_weight)
         * (0.55 * barrier_norm + 0.45 * rise_norm).clamp(0.0, 2.0)
         * (0.75 + 0.25 * monsoon_weight)
         * latitude_weight

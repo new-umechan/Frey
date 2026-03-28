@@ -29,6 +29,11 @@ pub struct ClimateParams {
     pub downwind_alignment_min: f32,
     pub precip_cap_from_moisture: f32,
     pub cold_coast_gain: f32,
+    pub cold_relax_hotspot_weight: f32,
+    pub hotspot_precip_gain_mm: f32,
+    pub hotspot_coast_distance_km: f32,
+    pub hotspot_fetch_weight: f32,
+    pub hotspot_convergence_weight: f32,
 }
 
 impl Default for ClimateParams {

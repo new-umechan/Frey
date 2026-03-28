@@ -36,6 +36,11 @@ const SCHEMA = [
     ["orography.downwind_alignment_min", "downwind_alignment_min", "f32"],
     ["precipitation.cap_from_moisture", "precip_cap_from_moisture", "f32"],
     ["coastal.cold_coast_gain", "cold_coast_gain", "f32"],
+    ["coastal.cold_relax_hotspot_weight", "cold_relax_hotspot_weight", "f32"],
+    ["precipitation.hotspot_precip_gain_mm", "hotspot_precip_gain_mm", "f32"],
+    ["precipitation.hotspot_coast_distance_km", "hotspot_coast_distance_km", "f32"],
+    ["precipitation.hotspot_fetch_weight", "hotspot_fetch_weight", "f32"],
+    ["precipitation.hotspot_convergence_weight", "hotspot_convergence_weight", "f32"],
 ];
 
 function stripInlineComment(value) {

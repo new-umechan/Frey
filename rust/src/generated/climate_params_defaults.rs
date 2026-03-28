@@ -32,5 +32,11 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         downwind_alignment_min: 0.20f32,
         precip_cap_from_moisture: 3.4f32,
         cold_coast_gain: 0.80f32,
+        cold_relax_hotspot_weight: 0.20f32,
+        hotspot_precip_gain_mm: 520.0f32,
+        hotspot_coast_distance_km: 320.0f32,
+        hotspot_fetch_weight: 0.55f32,
+        hotspot_convergence_weight: 0.45f32,
     }
 }
+

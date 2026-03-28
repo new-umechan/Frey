@@ -13,6 +13,10 @@ precipitation:
   convergence_max_mm: 480.0
   convergence_blend: 0.18
   cap_from_moisture: 3.4
+  hotspot_precip_gain_mm: 520.0
+  hotspot_coast_distance_km: 320.0
+  hotspot_fetch_weight: 0.55
+  hotspot_convergence_weight: 0.45
 orography:
   uplift_gain_mm: 280.0
   rise_scale_m: 900.0
@@ -31,3 +35,4 @@ orography:
 
 coastal:
   cold_coast_gain: 0.80
+  cold_relax_hotspot_weight: 0.20

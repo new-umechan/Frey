@@ -9,6 +9,9 @@ use super::pipeline::{
 
 use crate::sim::world::World;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::{JsCast, JsValue};
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ExecWorldBreakdown {
     pub exec_feedback_ms: f64,
@@ -51,6 +54,22 @@ type ProfileClock = std::time::Instant;
 
 #[cfg(target_arch = "wasm32")]
 fn profile_now() -> ProfileClock {
+    let global = js_sys::global();
+    let performance = js_sys::Reflect::get(&global, &JsValue::from_str("performance")).ok();
+    if let Some(perf) = performance {
+        if !perf.is_null() && !perf.is_undefined() {
+            let now_fn = js_sys::Reflect::get(&perf, &JsValue::from_str("now")).ok();
+            if let Some(now_fn) = now_fn {
+                if let Some(now_fn) = now_fn.dyn_ref::<js_sys::Function>() {
+                    if let Ok(value) = now_fn.call0(&perf) {
+                        if let Some(ms) = value.as_f64() {
+                            return ms;
+                        }
+                    }
+                }
+            }
+        }
+    }
     js_sys::Date::now()
 }
 
@@ -61,7 +80,7 @@ fn profile_now() -> ProfileClock {
 
 #[cfg(target_arch = "wasm32")]
 fn profile_elapsed_ms(start: ProfileClock) -> f64 {
-    js_sys::Date::now() - start
+    profile_now() - start
 }
 
 #[cfg(not(target_arch = "wasm32"))]

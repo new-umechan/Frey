@@ -1,11 +1,11 @@
 {
-  "timestamp_unix_ms": 1774661681662,
+  "timestamp_unix_ms": 1774662744877,
   "bench": "climate_solo",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "climate_step_ms": 39.310581
+    "climate_step_ms": 41.359791
   },
   "phase2": {
     "state": "ready",
