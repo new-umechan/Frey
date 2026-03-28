@@ -357,8 +357,17 @@ pnpm bench:dump-centroids
 `cargo bench --manifest-path rust/Cargo.toml --bench climate_solo` 実行時に、補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
 - 保存先: `benches/results/climate_main_scores.jsonl`
-- 1実行 = 1行（時刻、seed、mesh_level、cell_count、各指標のrho、補助評価要約）
+- 1実行 = 1行（時刻、seed、mesh_level、cell_count、`runtime.climate_step_ms`、各指標のrho、降水 process diagnostics、帯域別 rho、補助評価要約）
 - 実行ごとの差分比較はこのJSONLを入力に行う
+
+比較補助:
+
+- `pnpm run bench:compare:climate -- --baseline <path>`
+  - 最新レコードと baseline JSON の差分を表示する
+- `pnpm run perf:baseline:climate`
+  - `climate_solo` を実行し、最新レコードを `tests/perf/climate-bench-baseline.json` に保存する
+- `pnpm run perf:gate:climate`
+  - `climate_solo` を実行し、`runtime.climate_step_ms` が baseline 比 15% 以内かを確認する
 
 ### チューニング記録フロー（現行）
 

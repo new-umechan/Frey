@@ -1,0 +1,59 @@
+{
+  "timestamp_unix_ms": 1774661681662,
+  "bench": "climate_solo",
+  "seed": "earth",
+  "mesh_level": 6,
+  "cell_count": 40962,
+  "runtime": {
+    "climate_step_ms": 39.310581
+  },
+  "phase2": {
+    "state": "ready",
+    "ref_path": "../benches/data/climate_ref.bin",
+    "error": null,
+    "metrics": {
+      "temperature": 0.933565,
+      "precipitation": 0.511965,
+      "aridity": 0.446584,
+      "evapotranspiration": 0.339832,
+      "runoff": 0.468126
+    }
+  },
+  "phase1": {
+    "temperature": {
+      "matched": 7,
+      "total": 7,
+      "excluded_known_hard": 0,
+      "coverage_ratio": 1
+    },
+    "precipitation": {
+      "matched": 5,
+      "total": 5,
+      "excluded_known_hard": 2,
+      "coverage_ratio": 1
+    },
+    "aridity": {
+      "matched": 4,
+      "total": 5,
+      "excluded_known_hard": 0,
+      "coverage_ratio": 0.8
+    }
+  },
+  "diagnostics": {
+    "precipitation_process": {
+      "continental_reduction_ratio": 0.111405,
+      "cap_reduction_ratio": 0.000003,
+      "depletion_reduction_ratio": 0.124764,
+      "cold_coast_reduction_ratio": 0.058562,
+      "cap_hit_ratio": 0.000169,
+      "mean_monsoon_boost_mm": 8.216728,
+      "mean_hotspot_boost_mm": 2.458362
+    },
+    "precipitation_lat_bands": {
+      "tropics": 0.569845,
+      "subtropics": 0.212266,
+      "midlat": 0.366759,
+      "highlat": 0.611747
+    }
+  }
+}

@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frey_wasm::sim;
@@ -59,6 +60,16 @@ struct Phase1MetricSummary {
 struct Phase2MetricResult {
     name: &'static str,
     rho: f32,
+}
+
+struct LatBandMetricResult {
+    name: &'static str,
+    rho: f32,
+}
+
+struct BenchDiagnosticsSnapshot {
+    precipitation_process: sim::climate::surface::PrecipDiagnosticsSummary,
+    precipitation_lat_bands: Vec<LatBandMetricResult>,
 }
 
 struct LatBand {
@@ -359,10 +370,13 @@ fn main() {
     sim_world.state.ecology.ground_cover.fill(0.5);
 
     let climate_budget = world::EraKind::Environment.budgets().climate;
+    let climate_started_at = Instant::now();
     sim::run_climate_step_for_bench(&mut sim_world, climate_budget);
+    let climate_step_ms = climate_started_at.elapsed().as_secs_f64() * 1000.0;
 
     println!("=== Climate Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
+    println!("-- Runtime Diagnostics: climate_step_ms={:.3} --", climate_step_ms);
     println!();
     println!("-- Main Evaluation: Spearman Correlation (land cells only) --");
 
@@ -378,8 +392,11 @@ fn main() {
                     "-- Main Evaluation Summary: metrics_reported={} --",
                     results.len()
                 );
-                print_precipitation_process_diagnostics();
-                print_precipitation_diagnostics(&sim_world, &reference);
+                let diagnostics = collect_bench_diagnostics(&sim_world, &reference);
+                print_precipitation_process_diagnostics(
+                    &diagnostics.precipitation_process,
+                );
+                print_precipitation_diagnostics(&sim_world, &reference, &diagnostics);
                 Phase2State::Ready {
                     reference_path: path,
                     metrics: results,
@@ -463,8 +480,17 @@ fn main() {
         Phase2State::Error(_) => println!("-- Main Evaluation State: ERROR --"),
     }
 
+    let diagnostics_snapshot = match &phase2_state {
+        Phase2State::Ready { .. } => find_climate_ref_cache_path()
+            .and_then(|path| load_climate_ref(&path).ok())
+            .map(|reference| collect_bench_diagnostics(&sim_world, &reference)),
+        Phase2State::Skipped | Phase2State::Error(_) => None,
+    };
+
     if let Err(error) = append_score_record_jsonl(
         &phase2_state,
+        diagnostics_snapshot.as_ref(),
+        climate_step_ms as f32,
         seed,
         mesh_level,
         cell_count,
@@ -882,25 +908,62 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
     }
 }
 
-fn print_precipitation_diagnostics(world: &world::World, reference: &ClimateRef) {
+fn collect_bench_diagnostics(
+    world: &world::World,
+    reference: &ClimateRef,
+) -> BenchDiagnosticsSnapshot {
+    let model_precip = &world.state.climate.precipitation;
+    let ref_precip = &reference.precipitation;
+    let geology_height = &world.state.geology.height;
+    let positions = &world.mesh.positions;
+
+    let precipitation_lat_bands = PRECIP_LAT_BANDS
+        .iter()
+        .map(|band| LatBandMetricResult {
+            name: band.name,
+            rho: spearman_on_land_with_filter(model_precip, ref_precip, geology_height, |idx| {
+                let lat = positions
+                    .get(idx)
+                    .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
+                    .unwrap_or(0.0);
+                lat >= band.lat_min && lat < band.lat_max
+            })
+            .unwrap_or(f32::NAN),
+        })
+        .collect::<Vec<_>>();
+
+    BenchDiagnosticsSnapshot {
+        precipitation_process: sim::climate::surface::last_precip_diagnostics_summary(),
+        precipitation_lat_bands,
+    }
+}
+
+fn print_precipitation_diagnostics(
+    world: &world::World,
+    reference: &ClimateRef,
+    diagnostics: &BenchDiagnosticsSnapshot,
+) {
     let model_precip = &world.state.climate.precipitation;
     let ref_precip = &reference.precipitation;
     let geology_height = &world.state.geology.height;
     let positions = &world.mesh.positions;
 
     println!("-- Main Diagnostics: Precipitation by Latitude Band (land only) --");
-    for band in PRECIP_LAT_BANDS {
-        let rho = spearman_on_land_with_filter(model_precip, ref_precip, geology_height, |idx| {
-            let lat = positions
-                .get(idx)
-                .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
-                .unwrap_or(0.0);
-            lat >= band.lat_min && lat < band.lat_max
-        })
-        .unwrap_or(f32::NAN);
+    for band in &diagnostics.precipitation_lat_bands {
         println!(
             "[{} {:>4.1}-{:<4.1}] rho={:.3}",
-            band.name, band.lat_min, band.lat_max, rho
+            band.name,
+            PRECIP_LAT_BANDS
+                .iter()
+                .find(|candidate| candidate.name == band.name)
+                .map(|candidate| candidate.lat_min)
+                .unwrap_or(0.0),
+            PRECIP_LAT_BANDS
+                .iter()
+                .find(|candidate| candidate.name == band.name)
+                .map(|candidate| candidate.lat_max)
+                .unwrap_or(0.0),
+            band.rho
         );
     }
 
@@ -943,8 +1006,7 @@ fn print_precipitation_diagnostics(world: &world::World, reference: &ClimateRef)
     println!();
 }
 
-fn print_precipitation_process_diagnostics() {
-    let summary = sim::climate::surface::last_precip_diagnostics_summary();
+fn print_precipitation_process_diagnostics(summary: &sim::climate::surface::PrecipDiagnosticsSummary) {
     println!("-- Main Diagnostics: Precipitation Process (land aggregate) --");
     println!(
         "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%  cold_coast_reduction={:.1}%",
@@ -954,9 +1016,10 @@ fn print_precipitation_process_diagnostics() {
         summary.cold_coast_reduction_ratio * 100.0
     );
     println!(
-        "cap_hit_ratio={:.1}%  mean_monsoon_boost_mm={:.1}",
+        "cap_hit_ratio={:.1}%  mean_monsoon_boost_mm={:.1}  mean_hotspot_boost_mm={:.1}",
         summary.cap_hit_ratio * 100.0,
-        summary.mean_monsoon_boost_mm
+        summary.mean_monsoon_boost_mm,
+        summary.mean_hotspot_boost_mm
     );
     println!();
 }
@@ -1002,6 +1065,8 @@ fn format_json_number(value: f32) -> String {
 
 fn append_score_record_jsonl(
     phase2_state: &Phase2State,
+    diagnostics_snapshot: Option<&BenchDiagnosticsSnapshot>,
+    climate_step_ms: f32,
     seed: &str,
     mesh_level: u32,
     cell_count: usize,
@@ -1054,12 +1119,49 @@ fn append_score_record_jsonl(
         ),
     };
 
+    let process_json = diagnostics_snapshot
+        .map(|snapshot| {
+            let summary = snapshot.precipitation_process;
+            format!(
+                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{}}}",
+                format_json_number(summary.continental_reduction_ratio),
+                format_json_number(summary.cap_reduction_ratio),
+                format_json_number(summary.depletion_reduction_ratio),
+                format_json_number(summary.cold_coast_reduction_ratio),
+                format_json_number(summary.cap_hit_ratio),
+                format_json_number(summary.mean_monsoon_boost_mm),
+                format_json_number(summary.mean_hotspot_boost_mm),
+            )
+        })
+        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null}".to_string());
+
+    let bands_json = diagnostics_snapshot
+        .map(|snapshot| {
+            let metric_value = |name: &str| -> String {
+                snapshot
+                    .precipitation_lat_bands
+                    .iter()
+                    .find(|metric| metric.name == name)
+                    .map(|metric| format_json_number(metric.rho))
+                    .unwrap_or_else(|| "null".to_string())
+            };
+            format!(
+                "{{\"tropics\":{},\"subtropics\":{},\"midlat\":{},\"highlat\":{}}}",
+                metric_value("tropics"),
+                metric_value("subtropics"),
+                metric_value("midlat"),
+                metric_value("highlat"),
+            )
+        })
+        .unwrap_or_else(|| "{\"tropics\":null,\"subtropics\":null,\"midlat\":null,\"highlat\":null}".to_string());
+
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}}}}\n",
+        "{{\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"climate_step_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"precipitation_process\":{},\"precipitation_lat_bands\":{}}}}}\n",
         timestamp_unix_ms,
         json_escape(seed),
         mesh_level,
         cell_count,
+        format_json_number(climate_step_ms),
         phase2_state_label,
         phase2_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))
@@ -1080,6 +1182,8 @@ fn append_score_record_jsonl(
         aridity_summary.total,
         aridity_summary.excluded_known_hard,
         format_json_number(aridity_summary.coverage_ratio),
+        process_json,
+        bands_json,
     );
 
     let output_path = score_output_path();

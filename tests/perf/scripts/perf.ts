@@ -33,6 +33,7 @@ function parseArgs(argv) {
         threshold: DEFAULT_THRESHOLD,
         thresholdTickTotal: null,
         thresholdStepWorld: null,
+        thresholdStepClimate: null,
         thresholdStepGeologyRiver: null,
         progress: false,
         noGeometry: false,
@@ -91,6 +92,10 @@ function parseArgs(argv) {
             args.thresholdStepWorld = Math.max(0, parseNumber(next, "--threshold-step-world"));
             i += 1;
             break;
+        case "--threshold-step-climate":
+            args.thresholdStepClimate = Math.max(0, parseNumber(next, "--threshold-step-climate"));
+            i += 1;
+            break;
         case "--threshold-step-geology-river":
             args.thresholdStepGeologyRiver = Math.max(0, parseNumber(next, "--threshold-step-geology-river"));
             i += 1;
@@ -136,6 +141,7 @@ function printHelp() {
     console.error("  --threshold <ratio>");
     console.error("  --threshold-tick-total <ratio>");
     console.error("  --threshold-step-world <ratio>");
+    console.error("  --threshold-step-climate <ratio>");
     console.error("  --threshold-step-geology-river <ratio>");
     console.error("  --progress");
     console.error("  --no-geometry");
@@ -175,6 +181,11 @@ function evaluateRegression(current, baseline, args) {
             label: "exec_world.mean",
             path: "metrics.exec_world.mean",
             threshold: args.thresholdStepWorld ?? args.threshold,
+        },
+        {
+            label: "step_climate.mean",
+            path: "metrics.step_climate.mean",
+            threshold: args.thresholdStepClimate ?? args.threshold,
         },
         {
             label: "step_geology_river.mean",

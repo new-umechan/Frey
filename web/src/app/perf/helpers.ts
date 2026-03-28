@@ -46,8 +46,21 @@ export function pushStepBreakdownSamples(recorder: any, profiledResult: any): vo
         return;
     }
     const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
+    const rawMetricByName: Record<string, string> = {
+        step_feedback: "exec_feedback_ms",
+        step_geology_terrain: "exec_geology_terrain_ms",
+        step_climate: "exec_climate_ms",
+        step_geology_river: "exec_hydrology_ms",
+        step_ecology: "exec_ecology_ms",
+        step_civilization: "exec_society_ms",
+        step_transition: "exec_transition_ms",
+        step_sync_erosion: "step_sync_erosion_ms",
+        step_observe_world_change: "step_observe_world_change_ms",
+        step_history_snapshot: "step_history_snapshot_ms",
+    };
     for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = (profiledResult as any)[`${metricName}_ms`];
+        const rawFieldName = rawMetricByName[metricName] ?? `${metricName}_ms`;
+        const rawValue = (profiledResult as any)[rawFieldName];
         if (!Number.isFinite(rawValue)) {
             continue;
         }

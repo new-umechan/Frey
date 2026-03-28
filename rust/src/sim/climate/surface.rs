@@ -43,7 +43,12 @@ const CAP_DYNAMIC_MAX: f32 = 7.400000;
 const COLD_RELAX_CONVERGENCE_WEIGHT: f32 = 0.40;
 const COLD_RELAX_UPLIFT_WEIGHT: f32 = 0.35;
 const COLD_RELAX_MONSOON_WEIGHT: f32 = 0.25;
+const COLD_RELAX_HOTSPOT_WEIGHT: f32 = 0.20;
 const COLD_RELAX_MAX: f32 = 0.600000;
+const HOTSPOT_PRECIP_GAIN_MM: f32 = 520.0;
+const HOTSPOT_COAST_DISTANCE_KM: f32 = 320.0;
+const HOTSPOT_FETCH_WEIGHT: f32 = 0.55;
+const HOTSPOT_CONVERGENCE_WEIGHT: f32 = 0.45;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PrecipDiagnosticsSummary {
@@ -53,6 +58,7 @@ pub struct PrecipDiagnosticsSummary {
     pub cold_coast_reduction_ratio: f32,
     pub cap_hit_ratio: f32,
     pub mean_monsoon_boost_mm: f32,
+    pub mean_hotspot_boost_mm: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -61,6 +67,37 @@ struct OrographicSignal {
     barrier_m: f32,
     barrier_distance_km: f32,
     ocean_fetch: f32,
+}
+
+#[derive(Debug, Clone)]
+struct BaseClimateFields {
+    target_temperature: Vec<f32>,
+    target_ocean_temperature: Vec<f32>,
+    target_wind_u: Vec<f32>,
+    target_wind_v: Vec<f32>,
+    target_moisture_flux_u: Vec<f32>,
+    target_moisture_flux_v: Vec<f32>,
+    target_moisture_source: Vec<f32>,
+    wind_vectors: Vec<[f32; 3]>,
+    flux_vectors: Vec<[f32; 3]>,
+}
+
+#[derive(Debug, Clone)]
+struct PrecipitationFields {
+    target_precipitation: Vec<f32>,
+    precip_factor: Vec<f32>,
+    convergence_field: Vec<f32>,
+    uplift_field: Vec<f32>,
+    monsoon_field: Vec<f32>,
+    hotspot_field: Vec<f32>,
+    continental_pre_sum: f32,
+    continental_post_sum: f32,
+    cap_pre_sum: f32,
+    cap_post_sum: f32,
+    cap_hits: usize,
+    land_cells: usize,
+    monsoon_sum: f32,
+    hotspot_sum: f32,
 }
 
 static LAST_PRECIP_DIAGNOSTICS: OnceLock<Mutex<PrecipDiagnosticsSummary>> = OnceLock::new();
@@ -99,8 +136,120 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let climate_params = ClimateParams::default();
     ensure_climate_field_lengths(world, cell_count);
     let alpha = blend_alpha(budget, CLIMATE_BLEND_BASE);
+    let base_fields = compute_base_climate_fields(world, &climate_params, cell_count);
+    let mut precipitation_fields =
+        compute_precipitation_fields(world, &base_fields, &climate_params, cell_count);
+
+    let depletion_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
+    apply_downwind_moisture_depletion_iterative(
+        world,
+        &base_fields.wind_vectors,
+        &base_fields.target_moisture_source,
+        &mut precipitation_fields.target_precipitation,
+        &climate_params,
+    );
+    let depletion_output_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
+
+    let cold_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
+    apply_cold_coast_precipitation(
+        world,
+        &base_fields.target_ocean_temperature,
+        &mut precipitation_fields.precip_factor,
+        &precipitation_fields.convergence_field,
+        &precipitation_fields.uplift_field,
+        &precipitation_fields.monsoon_field,
+        &precipitation_fields.hotspot_field,
+        &climate_params,
+    );
+    let cold_output_sum = sum_land_precipitation_with_factor(
+        world,
+        &precipitation_fields.target_precipitation,
+        &precipitation_fields.precip_factor,
+    );
+
+    set_last_precip_diagnostics(PrecipDiagnosticsSummary {
+        continental_reduction_ratio: reduction_ratio(
+            precipitation_fields.continental_pre_sum,
+            precipitation_fields.continental_post_sum,
+        ),
+        cap_reduction_ratio: reduction_ratio(
+            precipitation_fields.cap_pre_sum,
+            precipitation_fields.cap_post_sum,
+        ),
+        depletion_reduction_ratio: reduction_ratio(depletion_input_sum, depletion_output_sum),
+        cold_coast_reduction_ratio: reduction_ratio(cold_input_sum, cold_output_sum),
+        cap_hit_ratio: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.cap_hits as f32 / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_monsoon_boost_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.monsoon_sum / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_hotspot_boost_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.hotspot_sum / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+    });
+
+    for i in 0..cell_count {
+        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+        let mut precipitation =
+            precipitation_fields.target_precipitation[i] * precipitation_fields.precip_factor[i];
+        precipitation =
+            precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
+        let vegetation_density = vegetation_density_proxy(world, i);
+        let pet = annual_pet_mm(base_fields.target_temperature[i], latitude);
+        let evapotranspiration =
+            actual_evapotranspiration_mm(precipitation, pet, vegetation_density);
+        let runoff = (precipitation - evapotranspiration).max(0.0);
+        let aridity = pet / precipitation.max(EPS);
+
+        world.state.climate.temperature[i] = lerp(
+            world.state.climate.temperature[i],
+            base_fields.target_temperature[i],
+            alpha,
+        );
+        world.state.climate.precipitation[i] =
+            lerp(world.state.climate.precipitation[i], precipitation, alpha);
+        world.state.climate.evapotranspiration[i] = lerp(
+            world.state.climate.evapotranspiration[i],
+            evapotranspiration,
+            alpha,
+        );
+        world.state.climate.runoff[i] = lerp(world.state.climate.runoff[i], runoff, alpha);
+        world.state.climate.aridity[i] = lerp(world.state.climate.aridity[i], aridity, alpha);
+        world.state.climate.ocean_temperature[i] = lerp(
+            world.state.climate.ocean_temperature[i],
+            base_fields.target_ocean_temperature[i],
+            alpha,
+        );
+        world.state.climate.wind_u[i] =
+            lerp(world.state.climate.wind_u[i], base_fields.target_wind_u[i], alpha);
+        world.state.climate.wind_v[i] =
+            lerp(world.state.climate.wind_v[i], base_fields.target_wind_v[i], alpha);
+        world.state.climate.moisture_flux_u[i] = lerp(
+            world.state.climate.moisture_flux_u[i],
+            base_fields.target_moisture_flux_u[i],
+            alpha,
+        );
+        world.state.climate.moisture_flux_v[i] = lerp(
+            world.state.climate.moisture_flux_v[i],
+            base_fields.target_moisture_flux_v[i],
+            alpha,
+        );
+    }
+}
+
+fn compute_base_climate_fields(
+    world: &World,
+    climate_params: &ClimateParams,
+    cell_count: usize,
+) -> BaseClimateFields {
     let mut target_temperature = vec![0.0; cell_count];
-    let mut target_precipitation = vec![0.0; cell_count];
     let mut target_ocean_temperature = vec![0.0; cell_count];
     let mut target_wind_u = vec![0.0; cell_count];
     let mut target_wind_v = vec![0.0; cell_count];
@@ -109,17 +258,6 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut target_moisture_source = vec![0.0; cell_count];
     let mut wind_vectors = vec![[0.0, 0.0, 0.0]; cell_count];
     let mut flux_vectors = vec![[0.0, 0.0, 0.0]; cell_count];
-    let mut precip_factor = vec![1.0; cell_count];
-    let mut convergence_field = vec![0.0; cell_count];
-    let mut uplift_field = vec![0.0; cell_count];
-    let mut monsoon_field = vec![0.0; cell_count];
-    let mut continental_pre_sum = 0.0;
-    let mut continental_post_sum = 0.0;
-    let mut cap_pre_sum = 0.0;
-    let mut cap_post_sum = 0.0;
-    let mut cap_hits = 0usize;
-    let mut land_cells = 0usize;
-    let mut monsoon_sum = 0.0;
 
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
@@ -155,6 +293,40 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         flux_vectors[i] = scale3(wind_vector, flux_magnitude);
     }
 
+    BaseClimateFields {
+        target_temperature,
+        target_ocean_temperature,
+        target_wind_u,
+        target_wind_v,
+        target_moisture_flux_u,
+        target_moisture_flux_v,
+        target_moisture_source,
+        wind_vectors,
+        flux_vectors,
+    }
+}
+
+fn compute_precipitation_fields(
+    world: &World,
+    base_fields: &BaseClimateFields,
+    climate_params: &ClimateParams,
+    cell_count: usize,
+) -> PrecipitationFields {
+    let mut target_precipitation = vec![0.0; cell_count];
+    let precip_factor = vec![1.0; cell_count];
+    let mut convergence_field = vec![0.0; cell_count];
+    let mut uplift_field = vec![0.0; cell_count];
+    let mut monsoon_field = vec![0.0; cell_count];
+    let mut hotspot_field = vec![0.0; cell_count];
+    let mut continental_pre_sum = 0.0;
+    let mut continental_post_sum = 0.0;
+    let mut cap_pre_sum = 0.0;
+    let mut cap_post_sum = 0.0;
+    let mut cap_hits = 0usize;
+    let mut land_cells = 0usize;
+    let mut monsoon_sum = 0.0;
+    let mut hotspot_sum = 0.0;
+
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
         let latitude_abs = latitude.abs();
@@ -166,9 +338,14 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             continue;
         }
         land_cells += 1;
-        let convergence = moisture_convergence_mm(world, i, &flux_vectors, &climate_params);
+        let convergence = moisture_convergence_mm(
+            world,
+            i,
+            &base_fields.flux_vectors,
+            climate_params,
+        );
         let convergence_mm = (climate_params.convergence_blend * convergence).max(0.0);
-        let signal = orographic_signal(world, i, wind_vectors[i], &climate_params);
+        let signal = orographic_signal(world, i, base_fields.wind_vectors[i], climate_params);
         let rise_norm =
             (signal.rise_m / climate_params.orographic_rise_scale_m.max(1.0)).clamp(0.0, 3.0);
         let fetch_factor = (0.70 + 0.60 * signal.ocean_fetch).clamp(0.5, 1.3);
@@ -176,28 +353,29 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let monsoon_mm = monsoon_precipitation_boost_mm(
             world,
             i,
-            target_wind_u[i],
-            wind_vectors[i],
-            target_temperature[i],
-            target_ocean_temperature[i],
+            base_fields.target_wind_u[i],
+            base_fields.wind_vectors[i],
+            base_fields.target_temperature[i],
+            base_fields.target_ocean_temperature[i],
+        );
+        let hotspot_mm = marine_orographic_hotspot_boost_mm(
+            world,
+            i,
+            &signal,
+            convergence_mm,
+            monsoon_mm,
         );
         convergence_field[i] = convergence_mm;
         uplift_field[i] = uplift_mm;
         monsoon_field[i] = monsoon_mm;
+        hotspot_field[i] = hotspot_mm;
         monsoon_sum += monsoon_mm;
-        let barrier_norm =
-            (signal.barrier_m / climate_params.rain_shadow_scale_m.max(1.0)).clamp(0.0, 3.0);
-        let distance_decay = if signal.barrier_distance_km > 0.0 {
-            (-signal.barrier_distance_km / climate_params.rain_shadow_distance_km.max(1.0)).exp()
-        } else {
-            0.0
-        };
-        let shadow_factor = (-climate_params.rain_shadow_gain * barrier_norm * distance_decay)
-            .exp()
-            .clamp(0.20, 1.0);
-        let mut precipitation = baseline + climate_params.convergence_blend * convergence + uplift_mm;
-        precipitation += monsoon_mm;
+        hotspot_sum += hotspot_mm;
+
+        let shadow_factor = rain_shadow_factor(&signal, climate_params);
+        let mut precipitation = baseline + convergence_mm + uplift_mm + monsoon_mm + hotspot_mm;
         precipitation *= shadow_factor;
+
         let precipitation_pre_continental = precipitation.max(climate_params.precip_min_mm);
         let continental_factor = continentality_factor_relaxed(
             world
@@ -209,15 +387,21 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
                 .unwrap_or(0.0),
             convergence_mm,
             uplift_mm,
-            monsoon_mm,
-            &climate_params,
+            monsoon_mm + hotspot_mm,
+            climate_params,
         );
         precipitation *= continental_factor;
         continental_pre_sum += precipitation_pre_continental;
         continental_post_sum += precipitation.max(climate_params.precip_min_mm);
-        let cap_scale =
-            dynamic_precip_cap_scale(&climate_params, convergence_mm, uplift_mm, monsoon_mm, signal.ocean_fetch);
-        let moisture_cap = cap_scale * target_moisture_source[i].max(0.0);
+
+        let cap_scale = dynamic_precip_cap_scale(
+            climate_params,
+            convergence_mm,
+            uplift_mm + hotspot_mm,
+            monsoon_mm,
+            signal.ocean_fetch,
+        );
+        let moisture_cap = cap_scale * base_fields.target_moisture_source[i].max(0.0);
         let precipitation_pre_cap = precipitation.max(climate_params.precip_min_mm);
         if precipitation_pre_cap > moisture_cap.max(climate_params.precip_min_mm) {
             cap_hits += 1;
@@ -229,91 +413,35 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
 
-    let depletion_input_sum = sum_land_precipitation(world, &target_precipitation);
-    apply_downwind_moisture_depletion_iterative(
-        world,
-        &wind_vectors,
-        &target_moisture_source,
-        &mut target_precipitation,
-        &climate_params,
-    );
-    let depletion_output_sum = sum_land_precipitation(world, &target_precipitation);
-
-    let cold_input_sum = sum_land_precipitation(world, &target_precipitation);
-    apply_cold_coast_precipitation(
-        world,
-        &target_ocean_temperature,
-        &mut precip_factor,
-        &convergence_field,
-        &uplift_field,
-        &monsoon_field,
-        &climate_params,
-    );
-    let cold_output_sum = sum_land_precipitation_with_factor(world, &target_precipitation, &precip_factor);
-
-    set_last_precip_diagnostics(PrecipDiagnosticsSummary {
-        continental_reduction_ratio: reduction_ratio(continental_pre_sum, continental_post_sum),
-        cap_reduction_ratio: reduction_ratio(cap_pre_sum, cap_post_sum),
-        depletion_reduction_ratio: reduction_ratio(depletion_input_sum, depletion_output_sum),
-        cold_coast_reduction_ratio: reduction_ratio(cold_input_sum, cold_output_sum),
-        cap_hit_ratio: if land_cells > 0 {
-            cap_hits as f32 / land_cells as f32
-        } else {
-            0.0
-        },
-        mean_monsoon_boost_mm: if land_cells > 0 {
-            monsoon_sum / land_cells as f32
-        } else {
-            0.0
-        },
-    });
-
-    for i in 0..cell_count {
-        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
-        let mut precipitation = target_precipitation[i] * precip_factor[i];
-        precipitation =
-            precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
-        let vegetation_density = vegetation_density_proxy(world, i);
-        let pet = annual_pet_mm(target_temperature[i], latitude);
-        let evapotranspiration =
-            actual_evapotranspiration_mm(precipitation, pet, vegetation_density);
-        let runoff = (precipitation - evapotranspiration).max(0.0);
-        let aridity = pet / precipitation.max(EPS);
-
-        world.state.climate.temperature[i] = lerp(
-            world.state.climate.temperature[i],
-            target_temperature[i],
-            alpha,
-        );
-        world.state.climate.precipitation[i] =
-            lerp(world.state.climate.precipitation[i], precipitation, alpha);
-        world.state.climate.evapotranspiration[i] = lerp(
-            world.state.climate.evapotranspiration[i],
-            evapotranspiration,
-            alpha,
-        );
-        world.state.climate.runoff[i] = lerp(world.state.climate.runoff[i], runoff, alpha);
-        world.state.climate.aridity[i] = lerp(world.state.climate.aridity[i], aridity, alpha);
-        world.state.climate.ocean_temperature[i] = lerp(
-            world.state.climate.ocean_temperature[i],
-            target_ocean_temperature[i],
-            alpha,
-        );
-        world.state.climate.wind_u[i] =
-            lerp(world.state.climate.wind_u[i], target_wind_u[i], alpha);
-        world.state.climate.wind_v[i] =
-            lerp(world.state.climate.wind_v[i], target_wind_v[i], alpha);
-        world.state.climate.moisture_flux_u[i] = lerp(
-            world.state.climate.moisture_flux_u[i],
-            target_moisture_flux_u[i],
-            alpha,
-        );
-        world.state.climate.moisture_flux_v[i] = lerp(
-            world.state.climate.moisture_flux_v[i],
-            target_moisture_flux_v[i],
-            alpha,
-        );
+    PrecipitationFields {
+        target_precipitation,
+        precip_factor,
+        convergence_field,
+        uplift_field,
+        monsoon_field,
+        hotspot_field,
+        continental_pre_sum,
+        continental_post_sum,
+        cap_pre_sum,
+        cap_post_sum,
+        cap_hits,
+        land_cells,
+        monsoon_sum,
+        hotspot_sum,
     }
+}
+
+fn rain_shadow_factor(signal: &OrographicSignal, climate_params: &ClimateParams) -> f32 {
+    let barrier_norm =
+        (signal.barrier_m / climate_params.rain_shadow_scale_m.max(1.0)).clamp(0.0, 3.0);
+    let distance_decay = if signal.barrier_distance_km > 0.0 {
+        (-signal.barrier_distance_km / climate_params.rain_shadow_distance_km.max(1.0)).exp()
+    } else {
+        0.0
+    };
+    (-climate_params.rain_shadow_gain * barrier_norm * distance_decay)
+        .exp()
+        .clamp(0.20, 1.0)
 }
 
 fn ensure_climate_field_lengths(world: &mut World, cell_count: usize) {
@@ -657,6 +785,7 @@ fn apply_cold_coast_precipitation(
     convergence_mm: &[f32],
     uplift_mm: &[f32],
     monsoon_mm: &[f32],
+    hotspot_mm: &[f32],
     params: &ClimateParams,
 ) {
     for i in 0..world.state.geology.height.len() {
@@ -692,7 +821,9 @@ fn apply_cold_coast_precipitation(
                 + COLD_RELAX_UPLIFT_WEIGHT
                     * smoothstep(80.0, 280.0, uplift_mm.get(current).copied().unwrap_or(0.0))
                 + COLD_RELAX_MONSOON_WEIGHT
-                    * smoothstep(70.0, 240.0, monsoon_mm.get(current).copied().unwrap_or(0.0)))
+                    * smoothstep(70.0, 240.0, monsoon_mm.get(current).copied().unwrap_or(0.0))
+                + COLD_RELAX_HOTSPOT_WEIGHT
+                    * smoothstep(90.0, 320.0, hotspot_mm.get(current).copied().unwrap_or(0.0)))
             .clamp(0.0, COLD_RELAX_MAX);
             let relaxed_cold = lerp(cold_factor.clamp(0.2, 1.0), 1.0, relax);
             let step_factor = lerp(
@@ -712,6 +843,50 @@ fn apply_cold_coast_precipitation(
             current = next;
         }
     }
+}
+
+fn marine_orographic_hotspot_boost_mm(
+    world: &World,
+    index: usize,
+    signal: &OrographicSignal,
+    convergence_mm: f32,
+    monsoon_mm: f32,
+) -> f32 {
+    if world.state.geology.height.get(index).copied().unwrap_or(0.0) <= 0.0 {
+        return 0.0;
+    }
+    let distance_from_ocean = world
+        .state
+        .geo
+        .distance_from_ocean
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        .max(0.0);
+    let coast_weight = (-distance_from_ocean / HOTSPOT_COAST_DISTANCE_KM).exp().clamp(0.0, 1.0);
+    let barrier_norm = (signal.barrier_m / 1_200.0).clamp(0.0, 2.5);
+    let rise_norm = (signal.rise_m / 900.0).clamp(0.0, 2.5);
+    let fetch_weight = signal.ocean_fetch.clamp(0.0, 1.0);
+    let convergence_weight = smoothstep(80.0, 320.0, convergence_mm);
+    let monsoon_weight = smoothstep(50.0, 220.0, monsoon_mm);
+    let latitude = world
+        .state
+        .geo
+        .latitude
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        .abs();
+    let latitude_weight =
+        (0.70 + 0.20 * gaussian(latitude, 12.0, 18.0) + 0.10 * gaussian(latitude, 48.0, 12.0))
+            .clamp(0.0, 1.0);
+
+    HOTSPOT_PRECIP_GAIN_MM
+        * coast_weight
+        * (HOTSPOT_FETCH_WEIGHT * fetch_weight + HOTSPOT_CONVERGENCE_WEIGHT * convergence_weight)
+        * (0.55 * barrier_norm + 0.45 * rise_norm).clamp(0.0, 2.0)
+        * (0.75 + 0.25 * monsoon_weight)
+        * latitude_weight
 }
 
 fn upwind_ocean_fraction(world: &World, index: usize, wind_vec: [f32; 3], steps: usize) -> f32 {
