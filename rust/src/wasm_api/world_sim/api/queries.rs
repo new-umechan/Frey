@@ -37,6 +37,15 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: None,
             },
+            "lake_depth" => FieldResponse {
+                field_kind,
+                stride,
+                cell_count: world_ref.state.geology.lake_depth.len() as u32,
+                sampled_count: sampled_len(world_ref.state.geology.lake_depth.len(), stride),
+                f32_data: Some(sample_f32(&world_ref.state.geology.lake_depth, stride)),
+                u32_data: None,
+                i32_data: None,
+            },
             "volcanism" => FieldResponse {
                 field_kind,
                 stride,

@@ -15,6 +15,7 @@ fn build_world() -> World {
         },
         GeologyState {
             height: vec![0.2, -0.1, 0.1, -0.2],
+            lake_depth: vec![0.0; 4],
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
@@ -44,6 +45,7 @@ fn build_generated_world(seed: &str, params: GeologyParams) -> World {
         },
         GeologyState {
             height: terrain.height,
+            lake_depth: terrain.lake_depth,
             plate_id,
             erosion_rate: vec![0.0; terrain.river_flux.len()],
             deposition_rate: vec![0.0; terrain.river_flux.len()],
@@ -234,6 +236,7 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
         },
         GeologyState {
             height: vec![0.3, 0.1, 0.2, -0.4],
+            lake_depth: vec![0.0; 4],
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
@@ -327,6 +330,7 @@ fn metrics_collects_height_and_flux_stats() {
         },
         GeologyState {
             height: vec![1.0, -1.0, 2.0, -2.0],
+            lake_depth: vec![0.0; 4],
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
             erosion_rate: vec![0.0; 4],
             deposition_rate: vec![0.0; 4],
@@ -383,6 +387,7 @@ fn metrics_are_deterministic_for_fixed_seed() {
         },
         GeologyState {
             height: terrain_a.height,
+            lake_depth: terrain_a.lake_depth,
             plate_id: plate_id_a,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
@@ -400,6 +405,7 @@ fn metrics_are_deterministic_for_fixed_seed() {
         },
         GeologyState {
             height: terrain_b.height,
+            lake_depth: terrain_b.lake_depth,
             plate_id: plate_id_b,
             erosion_rate: vec![0.0; world_a.cell_count()],
             deposition_rate: vec![0.0; world_a.cell_count()],
@@ -457,6 +463,7 @@ fn river_network_persists_without_early_collapse() {
         },
         GeologyState {
             height: terrain.height.clone(),
+            lake_depth: terrain.lake_depth.clone(),
             plate_id,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],

@@ -1,5 +1,6 @@
 export type FieldKind =
     | "height"
+    | "lake_depth"
     | "river_flux"
     | "river_next"
     | "mantle_heat"
@@ -19,6 +20,7 @@ export type FieldKind =
 
 export const FLOAT32_FIELDS = new Set<FieldKind>([
     "height",
+    "lake_depth",
     "river_flux",
     "mantle_heat",
     "erosion_rate",
@@ -65,12 +67,13 @@ export const WORLD_CHANGESET: WorldChangeset = Object.freeze({
 });
 
 export const DELTA_FIELD_KIND_BY_VIEW: Record<string, FieldKind[]> = Object.freeze({
-    normal: ["height", "river_flux", "river_next"],
-    metric: ["height", "river_flux", "river_next"],
+    normal: ["height", "lake_depth", "river_flux", "river_next"],
+    metric: ["height", "lake_depth", "river_flux", "river_next"],
 });
 
 export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     height: "heightData",
+    lake_depth: "lakeDepth",
     river_flux: "riverFlux",
     river_next: "riverNext",
     mantle_heat: "mantleHeat",
@@ -91,6 +94,7 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
 
 const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Object.freeze({
     height: "height",
+    lake_depth: "height",
     river_flux: "river",
     river_next: "river",
     mantle_heat: "mantleHeat",

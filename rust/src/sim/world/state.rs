@@ -315,6 +315,8 @@ pub enum CoastSide {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeologyState {
     pub height: Vec<f32>,
+    #[serde(default)]
+    pub lake_depth: Vec<f32>,
     pub plate_id: Vec<PlateId>,
     pub erosion_rate: Vec<f32>,
     pub deposition_rate: Vec<f32>,
@@ -479,6 +481,7 @@ pub struct CellStore<'a> {
     pub neighbors_offsets: &'a [u32],
     pub neighbors: &'a [u32],
     pub height: &'a [f32],
+    pub lake_depth: &'a [f32],
     pub plate_id: &'a [PlateId],
     pub erosion_rate: &'a [f32],
     pub deposition_rate: &'a [f32],
@@ -510,6 +513,7 @@ pub struct CellStoreMut<'a> {
     pub neighbors_offsets: &'a mut Vec<u32>,
     pub neighbors: &'a mut Vec<u32>,
     pub height: &'a mut Vec<f32>,
+    pub lake_depth: &'a mut Vec<f32>,
     pub plate_id: &'a mut Vec<PlateId>,
     pub erosion_rate: &'a mut Vec<f32>,
     pub deposition_rate: &'a mut Vec<f32>,
@@ -564,6 +568,7 @@ impl WorldState {
             neighbors_offsets: &self.geo.neighbors_offsets,
             neighbors: &self.geo.neighbors,
             height: &self.geology.height,
+            lake_depth: &self.geology.lake_depth,
             plate_id: &self.geology.plate_id,
             erosion_rate: &self.geology.erosion_rate,
             deposition_rate: &self.geology.deposition_rate,
@@ -597,6 +602,7 @@ impl WorldState {
             neighbors_offsets: &mut self.geo.neighbors_offsets,
             neighbors: &mut self.geo.neighbors,
             height: &mut self.geology.height,
+            lake_depth: &mut self.geology.lake_depth,
             plate_id: &mut self.geology.plate_id,
             erosion_rate: &mut self.geology.erosion_rate,
             deposition_rate: &mut self.geology.deposition_rate,

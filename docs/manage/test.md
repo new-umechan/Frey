@@ -218,7 +218,7 @@ let metrics = world.metrics();
 1. `list_history_ticks` が `interval=32` と保存済みtick一覧を返す
 2. `restore_world_to_tick` 実行後、tickとeraが復元時点へ戻る
 3. 不正tickで `restore_world_to_tick` を呼んだ場合、例外になる
-4. `get_field` は既知kindに対してFloat32Arrayを返す
+4. `get_field` は既知kindに対してFloat32Arrayを返す（`height`, `lake_depth` など）
 5. 未生成レイヤーkindと不正kindは例外になる
 6. `tick()` は `step(1)` ごとに単調増加する
 7. `tick()` は時代名ではなく累積管理Tickカウンタを返す

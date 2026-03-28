@@ -31,6 +31,12 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct FieldResponse {
+        field_kind: String,
+        f32_data: Option<Vec<f32>>,
+    }
+
+    #[derive(Deserialize)]
     struct StepWorldProfiledResponse {
         steps: u32,
         exec_feedback_ms: f64,
@@ -80,6 +86,30 @@ mod tests {
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert!(metrics_data.tick >= 1.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn get_field_lake_depth_is_available() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-lake-depth".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+
+        let field = controller
+            .get_field_js(init_data.world_id, "lake_depth".to_string(), 1)
+            .expect("get lake_depth field");
+        let field_data: FieldResponse =
+            serde_wasm_bindgen::from_value(field).expect("parse field response");
+
+        assert_eq!(field_data.field_kind, "lake_depth");
+        assert!(
+            field_data
+                .f32_data
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
+        );
     }
 
     #[wasm_bindgen_test]

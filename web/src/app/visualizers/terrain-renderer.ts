@@ -52,7 +52,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     let lastNormalRefreshTick = -1;
 
     const CORE_ATTRIBUTE_MAP: Record<string, string[]> = {
-        height: ["terrainHeight"],
+        height: ["terrainHeight", "terrainLakeDepth"],
         metric: ["terrainMetric"],
     };
 

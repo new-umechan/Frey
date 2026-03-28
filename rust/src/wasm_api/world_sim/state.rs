@@ -33,6 +33,7 @@ pub(super) struct I32FieldTracker {
 #[derive(Clone)]
 pub(super) struct WorldSyncState {
     pub height: F32FieldTracker,
+    pub lake_depth: F32FieldTracker,
     pub volcanism: F32FieldTracker,
     pub vertex_buoyancy: F32FieldTracker,
     pub river_flux: F32FieldTracker,
@@ -299,6 +300,7 @@ impl WorldSyncState {
             .unwrap_or_else(|| vec![0.5; world.state.geology.height.len()]);
         Self {
             height: F32FieldTracker::new(&world.state.geology.height),
+            lake_depth: F32FieldTracker::new(&world.state.geology.lake_depth),
             volcanism: F32FieldTracker::new(&world.state.geology.volcanism),
             vertex_buoyancy: F32FieldTracker::new(&world.state.geology.vertex_buoyancy),
             river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
@@ -322,6 +324,7 @@ impl WorldSyncState {
 
     pub fn observe_world(&mut self, world: &world::World) {
         self.height.observe(&world.state.geology.height);
+        self.lake_depth.observe(&world.state.geology.lake_depth);
         self.volcanism.observe(&world.state.geology.volcanism);
         self.vertex_buoyancy
             .observe(&world.state.geology.vertex_buoyancy);
@@ -374,6 +377,13 @@ impl WorldSyncState {
             }
         } else {
             self.height.discard_pending();
+        }
+        if include_field("lake_depth") {
+            if let Some(delta) = self.lake_depth.take_delta("lake_depth") {
+                deltas.push(delta);
+            }
+        } else {
+            self.lake_depth.discard_pending();
         }
         if include_field("volcanism") {
             if let Some(delta) = self.volcanism.take_delta("volcanism") {
@@ -574,6 +584,7 @@ mod tests {
     fn world_sync_state_discards_pending_for_excluded_fields() {
         let mut state = WorldSyncState {
             height: F32FieldTracker::new(&[1.0, 1.0]),
+            lake_depth: F32FieldTracker::new(&[0.0, 0.0]),
             volcanism: F32FieldTracker::new(&[0.0, 0.0]),
             vertex_buoyancy: F32FieldTracker::new(&[0.0, 0.0]),
             river_flux: F32FieldTracker::new(&[0.0, 0.0]),

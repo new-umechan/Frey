@@ -114,8 +114,10 @@ impl WorldSimController {
         let river_next = terrain.river_next;
         let volcanism = terrain.volcanism;
         let vertex_buoyancy = terrain.vertex_buoyancy;
+        let lake_depth = terrain.lake_depth;
         let geology = world::GeologyState {
             height: terrain.height,
+            lake_depth,
             plate_id,
             erosion_rate: vec![0.0; positions.len()],
             deposition_rate: vec![0.0; positions.len()],
