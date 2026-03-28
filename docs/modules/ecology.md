@@ -286,5 +286,5 @@ struct SoilFertilityFeedback {
 
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
-- `docs/modules/climate/climate.md`（`tree_cover` / `ground_cover` 由来の
+- `docs/modules/climate.md`（`tree_cover` / `ground_cover` 由来の
   `vegetation_density_proxy` をClimateが内部計算して利用）

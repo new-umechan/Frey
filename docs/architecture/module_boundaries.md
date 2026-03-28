@@ -130,7 +130,7 @@ FEEDBACK_EDGES = {
 ### 読むもの
 
 - 標高（`geology.height`）
-- 固定地理量（`geo.latitude_deg`、`geo.distance_from_ocean_km`、`geo.coast_side`、`geo.is_coastal`）
+- 固定地理量（`geo.latitude`、`geo.distance_from_ocean`、`geo.coast_side`、`geo.is_coastal`）
 - 植生密度（`ecology.tree_cover`、`ecology.ground_cover` から算出）
 - `Clock`
 

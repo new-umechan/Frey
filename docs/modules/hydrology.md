@@ -119,4 +119,4 @@ x = a * slope + b
 
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
-- `docs/modules/climate/climate.md`
+- `docs/modules/climate.md`

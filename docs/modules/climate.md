@@ -3,35 +3,36 @@
 ## 目的
 
 Climateは、地形と固定地理量から各セルの年平均気候場を近似計算する。
-毎tickで次の値を`World State`へ書く。
+毎tickで次の値を `World State` に書く。
 
-- 気温
-- 降水量
-- 実蒸発散量
-- 流出量
-- 乾燥指数
-- 海水温
-- 東西風成分
-- 南北風成分
-- 湿潤フラックス東西成分
-- 湿潤フラックス南北成分
+- 気温（`climate.temperature`）
+- 降水量（`climate.precipitation`）
+- 実蒸発散量（`climate.evapotranspiration`）
+- 流出量（`climate.runoff`）
+- 乾燥指数（`climate.aridity`）
+- 海水温（`climate.ocean_temperature`）
+- 東西風成分（`climate.wind_u`）
+- 南北風成分（`climate.wind_v`）
+- 湿潤フラックス東西成分（`climate.moisture_flux_u`）
+- 湿潤フラックス南北成分（`climate.moisture_flux_v`）
 
-Climateは`World State`と`Exec State`だけを読む。
+更新は `budget` に応じたブレンド係数 `alpha` で平滑化し、急変を抑える。
 
 ## 入力
 
 Climateが読む主な値は次のとおり。
 
 - `geology.height`
-- `geo.latitude_deg`
-- `geo.distance_from_ocean_km`
+- `geo.latitude`（互換入力として `latitude_deg` も受理）
+- `geo.distance_from_ocean`（互換入力として `distance_from_ocean_km` も受理）
 - `geo.coast_side`
 - `geo.is_coastal`
 - `ecology.tree_cover`
 - `ecology.ground_cover`
+- `clock.epoch`
 
-`Crust` / `Environment` では植生密度は既定値0.5を使う。`Life`以降は
-`tree_cover` と `ground_cover` から、次の proxy をClimate内部で計算して使う。
+`Crust` / `Environment` では植生密度は既定値 `0.5` を使う。
+`Life` 以降は `tree_cover` と `ground_cover` から次の proxy を使う。
 
 ```text
 vegetation_density_proxy = clamp(
@@ -40,90 +41,76 @@ vegetation_density_proxy = clamp(
 )
 ```
 
-## 出力
+## 降水モデルの実装フロー
 
-Climateは次の配列を全セル分持つ。
+降水は「緯度帯背景 + 風・地形・海陸効果」の合成で計算する。
+実装上の処理順は以下。
 
-- `climate.temperature`
-- `climate.precipitation`
-- `climate.evapotranspiration`
-- `climate.runoff`
-- `climate.aridity`
-- `climate.ocean_temperature`
-- `climate.wind_u`
-- `climate.wind_v`
-- `climate.moisture_flux_u`
-- `climate.moisture_flux_v`
+1. 風・水蒸気供給の前計算
+- Hadley/中緯度/極域帯から `wind_u` / `wind_v` を計算
+- 海水温と海からの距離から `moisture_source` を計算
+- 風ベクトルと `moisture_source` から湿潤フラックスを構築
 
-`ocean_temperature`は全セルに保持する。
-海岸セルでは海流補正込み、非海岸セルでは緯度基準海水温を入れる。
+2. 陸セル降水の一次推定
+- 緯度帯背景降水 `P_bg`
+- フラックス収束由来の `P_conv`
+- 風上トレース由来の地形性増雨 `P_orog`
+- モンスーン加算 `P_monsoon`
+- 雨陰係数 `F_shadow`
+- 大陸性係数 `F_continental`（収束・増雨・モンスーンに応じて緩和）
+- 可用水蒸気上限 `P_cap`（固定係数 + 動的ブースト）
 
-## 近似モデル
+概念式:
+
+```text
+P0 = (P_bg + P_conv + P_orog + P_monsoon) * F_shadow * F_continental
+P1 = min(P0, P_cap)
+```
+
+3. 風下枯渇の反復
+- `downwind_depletion_*` パラメータで、風上側降水消費を風下へ反復伝播
+
+4. 寒流沿岸補正
+- 海岸セルで寒流偏差がある場合に降水係数を減衰
+- ただし収束・増雨・モンスーンが強い場合は減衰を緩和
+
+## 気温・蒸発散・流出
 
 ### 気温
 
-年平均気温は、緯度基準温度から標高逓減を引いて求める。
+年平均気温:
 
 ```text
-T(lat, elev) = 30 * cos(lat_rad) - 5 - 6.5 * elev_km
+T_land = 30 * cos(lat_rad) - 5 - lapse_rate * elev_km
 ```
 
-実装では地形の無次元標高を近似的にmへ換算して使う。
+海水温は別式 `28 * cos(lat_rad) - 2` を基準に、海岸セルでは沿岸流補正を加える。
 
-### 降水
+### 蒸発散
 
-降水量は、年平均の水蒸気収支モデルで求める。
-Hadley循環を中心に風場（`wind_u` / `wind_v`）と湿潤フラックス（`moisture_flux_u` / `moisture_flux_v`）を計算し、
-次の合成で年間降水量を計算する。
+潜在蒸発散量（PET）は Thornthwaite を使う。
+年平均気温しか公開保持しないため、内部で緯度依存の12か月仮想気温を生成して年積算する。
 
-```text
-P = (P_bg(lat) + P_conv + P_orog) * F_shadow * F_continental * F_depletion
-```
-
-- `P_bg(lat)`: ITCZ・亜熱帯沈降帯・中緯度擾乱帯を含む緯度帯背景降水
-- `P_conv`: 近傍フラックスの収束/発散から計算した降水偏差
-- `P_orog`: 風上方向を2〜3ステップ追跡した累積持ち上げ量に応じた地形増雨
-- `F_shadow`: 風上障壁高と障壁距離の減衰で決まる雨陰係数
-- `F_continental`: 海からの距離で減衰する大陸度係数
-- `F_depletion`: 風上セルでの降水消費を風下へ伝播した水蒸気枯渇係数
-
-最後に、可用水蒸気量から導く上限をかけ、寒流沿岸の乾燥補正を適用する。
-係数は `config/climate.yaml` から管理し、`tools/sync/sync-climate-params.mjs` で
-`rust/src/generated/climate_params_defaults.rs` を生成して反映する。
-
-#### 再設計試行メモ（不採用）
-
-2026-03-27 に、降水本体を「水蒸気在庫を反復輸送・消費するモデル」へ再設計する試行を実施した。
-ただし `climate_solo` の主指標で、`precipitation rho` が既存モデルを下回ったため不採用とした。
-このため、現行の本書は既存モデル（`F_depletion` を含む合成モデル）を正とし、再設計案は採用しない。
-
-同日、海岸から内陸への経路積算減衰も試行した。
-実装とチューニングを実施したが、`climate_solo` で `precipitation rho` の有意改善が得られず、
-副指標の悪化ケースも確認されたため不採用とした。
-
-同日、年平均の陸海温度差にもとづくモンスーン風向バイアスも試行した。
-`monsoon_gain` / `monsoon_distance_km` / `monsoon_lat_center_deg` の 12 ケースを評価したが、
-採否基準（`precipitation rho>=0.48` ほか）を満たす候補は得られなかったため不採用とした。
-
-### 蒸発散と流出
-
-潜在蒸発散量はThornthwaite式を使う。
-ただし公開状態としては年平均気温しか持たないため、内部では緯度に応じた12か月の仮想月平均気温を生成して年積算する。
-
-実蒸発散量はFu式を使う。
+実蒸発散量（AET）は Fu式:
 
 ```text
 phi = PET / P
 w = 1.5 + 1.5 * vegetation_density
-E = P * (1 - (1 + phi^(-w))^(-1 / w))
+AET = P * (1 - (1 + phi^(-w))^(-1 / w))
 ```
 
-流出量と乾燥指数は次で求める。
+### 流出・乾燥指数
 
 ```text
-runoff = max(0, P - E)
-aridity = PET / P
+runoff = max(0, P - AET)
+aridity = PET / max(P, eps)
 ```
+
+## パラメータ管理
+
+気候パラメータは `config/climate.yaml` を正本とし、同期スクリプト
+`tools/sync/sync-climate-params.ts` で
+`rust/src/generated/climate_params_defaults.rs` を再生成する。
 
 ## 地理固定場
 
@@ -134,11 +121,10 @@ Climateの補助入力として、各セルに次の固定地理量を持つ。
 - 海岸セルかどうか
 - 東岸か西岸か
 
-これらは地形初期化時に前計算して`World State`へ保持する。
-毎tickで再構築しない。
+これらは地形初期化時に前計算して `World State` に保持し、毎tick再構築しない。
 
 関連:
 
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
-- `docs/modules/hydrology/hydrology.md`
+- `docs/modules/hydrology.md`
