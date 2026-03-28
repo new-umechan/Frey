@@ -59,16 +59,5 @@ export function buildCoreBuffers(controller: WorldSimController, worldId: string
         moistureFluxU: getFieldData(controller, worldId, "moisture_flux_u", cellCount),
         moistureFluxV: getFieldData(controller, worldId, "moisture_flux_v", cellCount),
         riverTransportCost: getFieldData(controller, worldId, "river_transport_cost", cellCount),
-        tectonicDebug: {
-            trench: getFieldData(controller, worldId, "debug_tectonic_trench" as FieldKind, cellCount),
-            arc: getFieldData(controller, worldId, "debug_tectonic_arc" as FieldKind, cellCount),
-            backarc: getFieldData(controller, worldId, "debug_tectonic_backarc" as FieldKind, cellCount),
-            oceanOceanArc: getFieldData(
-                controller,
-                worldId,
-                "debug_tectonic_ocean_ocean_arc" as FieldKind,
-                cellCount
-            ),
-        },
     };
 }
