@@ -288,6 +288,7 @@ fn main() {
         .collect::<Vec<_>>();
     let geology = world::GeologyState {
         height: terrain.height,
+        lake_depth: vec![0.0; cell_count],
         plate_id,
         erosion_rate: vec![0.0; cell_count],
         deposition_rate: vec![0.0; cell_count],
