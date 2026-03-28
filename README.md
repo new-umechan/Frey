@@ -25,8 +25,8 @@ docs/README.mdに仕様の全体像をメモ
 - Web + WASM
 - Rust: 計算コア
 - Vite: 開発サーバー
-- JavaScript（レンダリングとUI）
-- Three.js（現状の描画）
+- Typescript（レンダリングとUI）
+- Three.js（描画）
 
 ## External Data
 
