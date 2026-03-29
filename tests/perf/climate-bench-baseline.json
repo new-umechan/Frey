@@ -1,11 +1,22 @@
 {
-  "timestamp_unix_ms": 1774777813797,
+  "schema_version": 2,
+  "timestamp_unix_ms": 1774782485421,
   "bench": "climate_solo",
+  "run_id": "series-1774782480947-9c849dba",
+  "repeat_index": 5,
+  "repeat_total": 5,
+  "git_commit": "e287e26",
+  "cache_fingerprint": "../benches/data/terrain_ref.bin:163868:1774436244|../benches/data/climate_ref.bin:819260:1774432489",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "climate_step_ms": 28.305082
+    "climate_step_ms": 17.311001
+  },
+  "runtime_stats": {
+    "count": 5,
+    "median_ms": 17.311001,
+    "p95_ms": 17.313126
   },
   "phase2": {
     "state": "ready",
@@ -47,7 +58,11 @@
       "cold_coast_reduction_ratio": 0.058361,
       "cap_hit_ratio": 0.000169,
       "mean_monsoon_boost_mm": 8.216728,
-      "mean_hotspot_boost_mm": 2.458362
+      "mean_hotspot_boost_mm": 2.458362,
+      "mean_stage_source_mm": 799.976501,
+      "mean_stage_transport_mm": 38.555782,
+      "mean_stage_orographic_mm": 78.194786,
+      "mean_stage_correction_factor": 0.913789
     },
     "precipitation_lat_bands": {
       "tropics": 0.569716,

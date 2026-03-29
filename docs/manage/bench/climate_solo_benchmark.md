@@ -357,7 +357,7 @@ pnpm bench:dump-centroids
 `cargo bench --manifest-path rust/Cargo.toml --bench climate_solo` 実行時に、補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
 - 保存先: `benches/results/climate_main_scores.jsonl`
-- 1実行 = 1行（時刻、seed、mesh_level、cell_count、`runtime.climate_step_ms`、各指標のrho、降水 process diagnostics、帯域別 rho、補助評価要約）
+- 1実行 = 1行（`schema_version`、`run_id`、`repeat_index`、`git_commit`、`cache_fingerprint`、時刻、seed、mesh_level、cell_count、`runtime.climate_step_ms`、`runtime_stats`、各指標のrho、降水 process diagnostics、帯域別 rho、補助評価要約）
 - 実行ごとの差分比較はこのJSONLを入力に行う
 
 比較補助:
@@ -365,9 +365,9 @@ pnpm bench:dump-centroids
 - `pnpm run bench:compare:climate -- --baseline <path>`
   - 最新レコードと baseline JSON の差分を表示する
 - `pnpm run perf:baseline:climate`
-  - `climate_solo` を実行し、最新レコードを `tests/perf/climate-bench-baseline.json` に保存する
+  - `climate_solo` を5回連続実行し、`runtime_stats`（median/p95）付きで `tests/perf/climate-bench-baseline.json` に保存する
 - `pnpm run perf:gate:climate`
-  - `climate_solo` を実行し、`runtime.climate_step_ms` が baseline 比 15% 以内かを確認する
+  - `climate_solo` を5回連続実行し、`runtime p95` と品質指標（temperature/precipitation/aridity）が baseline から許容範囲内かを確認する
 
 ### チューニング記録フロー（現行）
 

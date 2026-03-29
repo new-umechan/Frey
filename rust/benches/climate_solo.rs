@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::env;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -85,6 +86,14 @@ enum Phase2State {
     },
     Skipped,
     Error(String),
+}
+
+struct BenchRunMetadata {
+    run_id: String,
+    repeat_index: Option<u32>,
+    repeat_total: Option<u32>,
+    git_commit: Option<String>,
+    cache_fingerprint: String,
 }
 
 const REGIONS: &[Region] = &[
@@ -304,6 +313,16 @@ fn main() {
     let mesh_level = geology_params.level;
 
     let seed = "earth";
+    let run_id = env::var("CLIMATE_BENCH_RUN_ID")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(default_run_id);
+    let repeat_index = parse_env_u32("CLIMATE_BENCH_REPEAT_INDEX");
+    let repeat_total = parse_env_u32("CLIMATE_BENCH_REPEAT_TOTAL");
+    let git_commit = env::var("CLIMATE_BENCH_GIT_COMMIT")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(resolve_git_commit);
     let (mut terrain, positions, nbr_offsets, nbrs) =
         sim::build_geology_with_mesh(seed, geology_params);
 
@@ -487,10 +506,26 @@ fn main() {
             .map(|reference| collect_bench_diagnostics(&sim_world, &reference)),
         Phase2State::Skipped | Phase2State::Error(_) => None,
     };
+    let climate_ref_fallback = match &phase2_state {
+        Phase2State::Ready { .. } => None,
+        Phase2State::Skipped | Phase2State::Error(_) => find_climate_ref_cache_path(),
+    };
+    let climate_ref_for_fingerprint = match &phase2_state {
+        Phase2State::Ready { reference_path, .. } => Some(reference_path.as_path()),
+        Phase2State::Skipped | Phase2State::Error(_) => climate_ref_fallback.as_deref(),
+    };
+    let run_metadata = BenchRunMetadata {
+        run_id,
+        repeat_index,
+        repeat_total,
+        git_commit,
+        cache_fingerprint: build_cache_fingerprint(Some(terrain_ref_path.as_path()), climate_ref_for_fingerprint),
+    };
 
     if let Err(error) = append_score_record_jsonl(
         &phase2_state,
         diagnostics_snapshot.as_ref(),
+        &run_metadata,
         climate_step_ms as f32,
         seed,
         mesh_level,
@@ -1022,6 +1057,13 @@ fn print_precipitation_process_diagnostics(summary: &sim::climate::surface::Prec
         summary.mean_monsoon_boost_mm,
         summary.mean_hotspot_boost_mm
     );
+    println!(
+        "stage_source_mm={:.1}  stage_transport_mm={:.1}  stage_orographic_mm={:.1}  stage_correction_factor={:.3}",
+        summary.mean_stage_source_mm,
+        summary.mean_stage_transport_mm,
+        summary.mean_stage_orographic_mm,
+        summary.mean_stage_correction_factor,
+    );
     println!();
 }
 
@@ -1064,9 +1106,70 @@ fn format_json_number(value: f32) -> String {
     }
 }
 
+fn parse_env_u32(key: &str) -> Option<u32> {
+    env::var(key)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+}
+
+fn default_run_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("run-{}", millis)
+}
+
+fn resolve_git_commit() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|value| !value.is_empty())
+}
+
+fn file_fingerprint_component(path: &Path) -> String {
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            let len = metadata.len();
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                .map(|duration| duration.as_secs())
+                .unwrap_or(0);
+            format!("{}:{}:{}", path.display(), len, modified)
+        }
+        Err(_) => format!("{}:missing", path.display()),
+    }
+}
+
+fn build_cache_fingerprint(terrain_ref: Option<&Path>, climate_ref: Option<&Path>) -> String {
+    let mut parts = Vec::<String>::new();
+    if let Some(path) = terrain_ref {
+        parts.push(file_fingerprint_component(path));
+    }
+    if let Some(path) = climate_ref {
+        parts.push(file_fingerprint_component(path));
+    }
+    if parts.is_empty() {
+        "none".to_string()
+    } else {
+        parts.join("|")
+    }
+}
+
 fn append_score_record_jsonl(
     phase2_state: &Phase2State,
     diagnostics_snapshot: Option<&BenchDiagnosticsSnapshot>,
+    run_metadata: &BenchRunMetadata,
     climate_step_ms: f32,
     seed: &str,
     mesh_level: u32,
@@ -1124,7 +1227,7 @@ fn append_score_record_jsonl(
         .map(|snapshot| {
             let summary = snapshot.precipitation_process;
             format!(
-                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{}}}",
+                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{}}}",
                 format_json_number(summary.continental_reduction_ratio),
                 format_json_number(summary.cap_reduction_ratio),
                 format_json_number(summary.depletion_reduction_ratio),
@@ -1132,9 +1235,13 @@ fn append_score_record_jsonl(
                 format_json_number(summary.cap_hit_ratio),
                 format_json_number(summary.mean_monsoon_boost_mm),
                 format_json_number(summary.mean_hotspot_boost_mm),
+                format_json_number(summary.mean_stage_source_mm),
+                format_json_number(summary.mean_stage_transport_mm),
+                format_json_number(summary.mean_stage_orographic_mm),
+                format_json_number(summary.mean_stage_correction_factor),
             )
         })
-        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null}".to_string());
+        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null,\"mean_stage_source_mm\":null,\"mean_stage_transport_mm\":null,\"mean_stage_orographic_mm\":null,\"mean_stage_correction_factor\":null}".to_string());
 
     let bands_json = diagnostics_snapshot
         .map(|snapshot| {
@@ -1157,11 +1264,28 @@ fn append_score_record_jsonl(
         .unwrap_or_else(|| "{\"tropics\":null,\"subtropics\":null,\"midlat\":null,\"highlat\":null}".to_string());
 
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"climate_step_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"precipitation_process\":{},\"precipitation_lat_bands\":{}}}}}\n",
+        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"cache_fingerprint\":\"{}\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"climate_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"precipitation_process\":{},\"precipitation_lat_bands\":{}}}}}\n",
         timestamp_unix_ms,
+        json_escape(&run_metadata.run_id),
+        run_metadata
+            .repeat_index
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string()),
+        run_metadata
+            .repeat_total
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string()),
+        run_metadata
+            .git_commit
+            .as_ref()
+            .map(|value| format!("\"{}\"", json_escape(value)))
+            .unwrap_or_else(|| "null".to_string()),
+        json_escape(&run_metadata.cache_fingerprint),
         json_escape(seed),
         mesh_level,
         cell_count,
+        format_json_number(climate_step_ms),
+        format_json_number(climate_step_ms),
         format_json_number(climate_step_ms),
         phase2_state_label,
         phase2_ref_path

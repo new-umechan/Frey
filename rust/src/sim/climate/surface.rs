@@ -54,6 +54,10 @@ pub struct PrecipDiagnosticsSummary {
     pub cap_hit_ratio: f32,
     pub mean_monsoon_boost_mm: f32,
     pub mean_hotspot_boost_mm: f32,
+    pub mean_stage_source_mm: f32,
+    pub mean_stage_transport_mm: f32,
+    pub mean_stage_orographic_mm: f32,
+    pub mean_stage_correction_factor: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -107,6 +111,10 @@ struct PrecipitationFields {
     land_cells: usize,
     monsoon_sum: f32,
     hotspot_sum: f32,
+    source_sum: f32,
+    transport_sum: f32,
+    orographic_sum: f32,
+    correction_factor_sum: f32,
 }
 
 static LAST_PRECIP_DIAGNOSTICS: OnceLock<Mutex<PrecipDiagnosticsSummary>> = OnceLock::new();
@@ -211,6 +219,26 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             precipitation_fields.hotspot_sum / precipitation_fields.land_cells as f32
         } else {
             0.0
+        },
+        mean_stage_source_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.source_sum / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_stage_transport_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.transport_sum / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_stage_orographic_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.orographic_sum / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_stage_correction_factor: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.correction_factor_sum / precipitation_fields.land_cells as f32
+        } else {
+            1.0
         },
     });
 
@@ -346,6 +374,10 @@ fn compute_precipitation_fields(
     let mut land_cells = 0usize;
     let mut monsoon_sum = 0.0;
     let mut hotspot_sum = 0.0;
+    let mut source_sum = 0.0;
+    let mut transport_sum = 0.0;
+    let mut orographic_sum = 0.0;
+    let mut correction_factor_sum = 0.0;
 
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
@@ -358,6 +390,7 @@ fn compute_precipitation_fields(
             continue;
         }
         land_cells += 1;
+        source_sum += baseline.max(0.0);
         let convergence = moisture_convergence_mm(
             world,
             i,
@@ -365,6 +398,7 @@ fn compute_precipitation_fields(
             climate_params,
         );
         let convergence_mm = (climate_params.convergence_blend * convergence).max(0.0);
+        transport_sum += convergence_mm;
         let signal = orographic_signal(
             world,
             neighbor_lookup,
@@ -399,10 +433,12 @@ fn compute_precipitation_fields(
         hotspot_field[i] = hotspot_mm;
         monsoon_sum += monsoon_mm;
         hotspot_sum += hotspot_mm;
+        orographic_sum += uplift_mm + monsoon_mm + hotspot_mm;
 
         let shadow_factor = rain_shadow_factor(&signal, climate_params);
         let mut precipitation = baseline + convergence_mm + uplift_mm + monsoon_mm + hotspot_mm;
         precipitation *= shadow_factor;
+        correction_factor_sum += shadow_factor;
 
         let precipitation_pre_continental = precipitation.max(climate_params.precip_min_mm);
         let continental_factor = continentality_factor_relaxed(
@@ -456,6 +492,10 @@ fn compute_precipitation_fields(
         land_cells,
         monsoon_sum,
         hotspot_sum,
+        source_sum,
+        transport_sum,
+        orographic_sum,
+        correction_factor_sum,
     }
 }
 

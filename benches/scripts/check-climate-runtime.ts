@@ -11,6 +11,9 @@ interface ClimateRecord {
     runtime?: {
         climate_step_ms?: number | null;
     };
+    runtime_stats?: {
+        p95_ms?: number | null;
+    };
 }
 
 function parseArgs(argv: string[]): Args {
@@ -71,13 +74,21 @@ function formatRatio(value: number): string {
     return `${(value * 100).toFixed(2)}%`;
 }
 
+function resolveRuntimeValue(record: ClimateRecord): number {
+    const p95 = Number(record.runtime_stats?.p95_ms);
+    if (Number.isFinite(p95)) {
+        return p95;
+    }
+    return Number(record.runtime?.climate_step_ms);
+}
+
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     const current = await loadLatestJsonlRecord(args.jsonl);
     const baseline = await loadJsonRecord(args.baseline);
 
-    const currentValue = Number(current.runtime?.climate_step_ms);
-    const baselineValue = Number(baseline.runtime?.climate_step_ms);
+    const currentValue = resolveRuntimeValue(current);
+    const baselineValue = resolveRuntimeValue(baseline);
     if (!Number.isFinite(currentValue) || !Number.isFinite(baselineValue) || baselineValue <= 0) {
         throw new Error("Missing numeric climate_step_ms in current or baseline record");
     }
