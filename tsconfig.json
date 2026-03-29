@@ -31,6 +31,6 @@
       "@wasm/*": ["generated/wasm/web/*"]
     }
   },
-  "include": ["web/src", "tools", "benches/scripts", "tests/perf/scripts", "tests/seed-regression/scripts", "generated/wasm/web/*.d.ts"],
+  "include": ["web/src", "web/tests", "tools", "benches/scripts", "tests/perf/scripts", "tests/seed-regression/scripts", "generated/wasm/web/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

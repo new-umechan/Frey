@@ -5,12 +5,12 @@ import globals from "globals";
 
 export default [
     {
-        files: ["web/src/**/*.ts"],
+        files: ["web/src/**/*.ts", "web/tests/**/*.ts"],
         languageOptions: {
             parser: typescriptParser,
             ecmaVersion: "latest",
             sourceType: "module",
-            globals: globals.browser,
+            globals: { ...globals.browser, ...globals.node },
         },
         plugins: {
             "@typescript-eslint": typescriptEslint,

@@ -12,6 +12,9 @@
         "dev": "pnpm runtime:sync && pnpm terrain:sync && tsx tools/dev/dev-hotreload.ts",
         "build": "pnpm runtime:sync && pnpm wasm:build && vite build --config web/vite.config.ts",
         "preview": "vite preview --config web/vite.config.ts",
+        "test": "vitest -c web/vitest.config.ts",
+        "test:ui": "vitest -c web/vitest.config.ts --ui",
+        "test:run": "vitest -c web/vitest.config.ts run",
         "lint:web": "sh -c 'eslint --no-error-on-unmatched-pattern \"web/src/**/*.ts\"'",
         "lint:rust": "cargo clippy --manifest-path rust/Cargo.toml --all-targets",
         "lint:prepush": "pnpm lint:web && pnpm lint:rust",
@@ -66,12 +69,16 @@
         "@types/three": "^0.183.1",
         "@typescript-eslint/eslint-plugin": "^8.57.2",
         "@typescript-eslint/parser": "^8.57.2",
+        "@vitest/coverage-v8": "^4.1.2",
+        "@vitest/ui": "^4.1.2",
         "eslint": "^9.39.4",
         "eslint-plugin-import": "^2.32.0",
         "globals": "^17.4.0",
         "jiti": "^2.6.1",
+        "jsdom": "^29.0.1",
         "tsx": "^4.21.0",
         "typescript": "~5.7.3",
-        "vite": "^7.1.9"
+        "vite": "^7.1.9",
+        "vitest": "^4.1.2"
     }
 }
