@@ -364,6 +364,8 @@ pub struct ClimateState {
     pub aridity: Vec<f32>,
     pub ocean_temperature: Vec<f32>,
     #[serde(default)]
+    pub precipitable_water: Vec<f32>,
+    #[serde(default)]
     pub wind_u: Vec<f32>,
     #[serde(default)]
     pub wind_v: Vec<f32>,

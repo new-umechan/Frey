@@ -101,6 +101,7 @@ struct BaseClimateFields {
 #[derive(Debug, Clone)]
 struct PrecipitationFields {
     target_precipitation: Vec<f32>,
+    target_precipitable_water: Vec<f32>,
     precip_factor: Vec<f32>,
     convergence_field: Vec<f32>,
     uplift_field: Vec<f32>,
@@ -307,6 +308,11 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             base_fields.target_moisture_flux_v[i],
             alpha,
         );
+        world.state.climate.precipitable_water[i] = lerp(
+            world.state.climate.precipitable_water[i],
+            precipitation_fields.target_precipitable_water[i],
+            alpha,
+        );
     }
 }
 
@@ -504,13 +510,11 @@ fn compute_precipitation_fields(
     let depletion_pre_sum = sum_land_precipitation(world, &target_precipitation);
     let depletion_source_pre_sum = sum_land_values(world, &base_fields.target_moisture_source);
     let mut moisture_source_budget = base_fields.target_moisture_source.clone();
-    let mut depleted_precipitation = target_precipitation.clone();
-    apply_downwind_moisture_depletion_iterative(
+    apply_conservative_moisture_transport(
         world,
         neighbor_lookup,
         &base_fields.wind_vectors,
         &mut moisture_source_budget,
-        &mut depleted_precipitation,
         climate_params,
     );
     for i in 0..cell_count {
@@ -522,9 +526,14 @@ fn compute_precipitation_fields(
             .clamp(0.30, 1.0);
         let moisture_cap =
             climate_params.precip_cap_from_moisture * moisture_source_budget[i].max(0.0);
-        target_precipitation[i] = (target_precipitation[i] * source_ratio)
+        let adjusted = (target_precipitation[i] * source_ratio)
             .min(moisture_cap.max(climate_params.precip_min_mm))
             .clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
+        let sink = (target_precipitation[i] - adjusted).max(0.0);
+        if sink > 0.0 {
+            moisture_source_budget[i] = (moisture_source_budget[i] - sink).max(0.0);
+        }
+        target_precipitation[i] = adjusted;
     }
     let depletion_post_sum = sum_land_precipitation(world, &target_precipitation);
     let depletion_source_post_sum = sum_land_values(world, &moisture_source_budget);
@@ -535,6 +544,7 @@ fn compute_precipitation_fields(
 
     PrecipitationFields {
         target_precipitation,
+        target_precipitable_water: moisture_source_budget,
         precip_factor,
         convergence_field,
         uplift_field,
@@ -585,6 +595,9 @@ fn ensure_climate_field_lengths(world: &mut World, cell_count: usize) {
     }
     if world.state.climate.moisture_flux_v.len() != cell_count {
         world.state.climate.moisture_flux_v.resize(cell_count, 0.0);
+    }
+    if world.state.climate.precipitable_water.len() != cell_count {
+        world.state.climate.precipitable_water.resize(cell_count, 0.0);
     }
 }
 
@@ -1102,117 +1115,74 @@ fn reduction_ratio(before: f32, after: f32) -> f32 {
     }
 }
 
-fn apply_downwind_moisture_depletion(
-    world: &World,
-    neighbor_lookup: &NeighborLookup,
-    wind_vectors: &[[f32; 3]],
-    moisture_source: &[f32],
-    precipitation: &[f32],
-    depletion: &mut [f32],
-    params: &ClimateParams,
-) {
-    let cell_count = world.state.geology.height.len();
-    if wind_vectors.len() != cell_count
-        || moisture_source.len() != cell_count
-        || precipitation.len() != cell_count
-        || depletion.len() != cell_count
-    {
-        return;
-    }
-    depletion.fill(0.0);
-    let step_count = params.downwind_depletion_steps.max(1);
-    for i in 0..cell_count {
-        if world.state.geology.height[i] <= 0.0 {
-            continue;
-        }
-        let local_source = moisture_source[i].max(1.0);
-        let local_cap = (params.precip_cap_from_moisture * local_source).max(params.precip_min_mm);
-        let local_span = (local_cap - params.precip_min_mm).max(1.0);
-        let precip_norm =
-            ((precipitation[i] - params.precip_min_mm).max(0.0) / local_span).clamp(0.0, 1.0);
-        let source_weight = (local_source / (local_source + 300.0)).clamp(0.0, 1.0);
-        let mut carry = params.downwind_depletion_gain * precip_norm * source_weight;
-        if carry <= 0.0 {
-            continue;
-        }
-        let mut current = i;
-        for step in 0..step_count {
-            let current_wind = wind_vectors
-                .get(current)
-                .copied()
-                .unwrap_or([0.0, 0.0, 0.0]);
-            let Some((primary, secondary)) = top_two_neighbors_toward(
-                neighbor_lookup,
-                current,
-                current_wind,
-                params.downwind_alignment_min,
-                true,
-            ) else {
-                break;
-            };
-            if primary.0 == current {
-                break;
-            }
-            let attenuation = params
-                .downwind_depletion_decay
-                .clamp(0.0, 1.0)
-                .powi(step as i32);
-            let primary_share = 0.70;
-            let secondary_share = 0.30;
-            depletion[primary.0] += carry * attenuation * primary_share;
-            if let Some((secondary_idx, _, _)) = secondary {
-                depletion[secondary_idx] += carry * attenuation * secondary_share;
-            } else {
-                depletion[primary.0] += carry * attenuation * secondary_share;
-            }
-            carry *= 0.92;
-            if carry < 1e-4 {
-                break;
-            }
-            current = primary.0;
-        }
-    }
-}
-
-fn apply_downwind_moisture_depletion_iterative(
+fn apply_conservative_moisture_transport(
     world: &World,
     neighbor_lookup: &NeighborLookup,
     wind_vectors: &[[f32; 3]],
     moisture_source: &mut [f32],
-    precipitation: &mut [f32],
     params: &ClimateParams,
 ) {
     let cell_count = world.state.geology.height.len();
-    if precipitation.len() != cell_count || moisture_source.len() != cell_count {
+    if moisture_source.len() != cell_count || wind_vectors.len() != cell_count {
         return;
     }
 
     let pass_count = params.downwind_depletion_passes.max(1) as usize;
-    let mut depletion = vec![0.0_f32; cell_count];
+    let transport_gain = params.downwind_depletion_gain.clamp(0.02, 0.35);
+    let mut delta = vec![0.0_f32; cell_count];
     for _ in 0..pass_count {
-        apply_downwind_moisture_depletion(
-            world,
-            neighbor_lookup,
-            wind_vectors,
-            moisture_source,
-            precipitation,
-            &mut depletion,
-            params,
-        );
-
+        delta.fill(0.0);
         for i in 0..cell_count {
             if world.state.geology.height[i] <= 0.0 {
                 continue;
             }
-            let reduction = depletion[i].clamp(0.0, params.downwind_depletion_max.clamp(0.0, 0.95));
-            if reduction > 0.0 {
-                precipitation[i] *= 1.0 - reduction;
-                moisture_source[i] *= 1.0 - reduction;
+            let current = moisture_source[i].max(0.0);
+            if current <= EPS {
+                continue;
             }
-            let moisture_cap = params.precip_cap_from_moisture * moisture_source[i].max(0.0);
-            precipitation[i] = precipitation[i]
-                .min(moisture_cap.max(params.precip_min_mm))
-                .clamp(params.precip_min_mm, params.precip_max_mm);
+            let current_wind = wind_vectors.get(i).copied().unwrap_or([0.0, 0.0, 0.0]);
+            let Some((primary, secondary)) = top_two_neighbors_toward(
+                neighbor_lookup,
+                i,
+                current_wind,
+                params.downwind_alignment_min,
+                false,
+            ) else {
+                continue;
+            };
+            if primary.0 == i {
+                continue;
+            }
+            let inland_weight = smoothstep(
+                0.0,
+                2_500.0,
+                world
+                    .state
+                    .geo
+                    .distance_from_ocean
+                    .get(i)
+                    .copied()
+                    .unwrap_or(0.0)
+                    .max(0.0),
+            );
+            let outgoing = (current * transport_gain * (0.35 + 0.65 * inland_weight))
+                .min(current * params.downwind_depletion_max.clamp(0.05, 0.90));
+            if outgoing <= EPS {
+                continue;
+            }
+
+            let primary_align = primary.2.max(0.0);
+            let secondary_align = secondary.map(|entry| entry.2.max(0.0)).unwrap_or(0.0);
+            let align_sum = (primary_align + secondary_align).max(EPS);
+            delta[i] -= outgoing;
+            delta[primary.0] += outgoing * (primary_align / align_sum);
+            if let Some((secondary_idx, _, _)) = secondary {
+                delta[secondary_idx] += outgoing * (secondary_align / align_sum);
+            }
+        }
+
+        for i in 0..cell_count {
+            moisture_source[i] = (moisture_source[i] + delta[i]).max(0.0);
         }
     }
 }

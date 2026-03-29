@@ -41,6 +41,7 @@ impl World {
                     runoff: vec![200.0; cell_count],
                     aridity: vec![1.0; cell_count],
                     ocean_temperature,
+                    precipitable_water: vec![0.0; cell_count],
                     wind_u: vec![0.0; cell_count],
                     wind_v: vec![0.0; cell_count],
                     moisture_flux_u: vec![0.0; cell_count],
