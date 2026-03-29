@@ -58,6 +58,9 @@ pub struct PrecipDiagnosticsSummary {
     pub mean_stage_transport_mm: f32,
     pub mean_stage_orographic_mm: f32,
     pub mean_stage_correction_factor: f32,
+    pub mean_budget_storage_change_mm: f32,
+    pub mean_budget_residual_mm: f32,
+    pub budget_residual_ratio: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -109,6 +112,9 @@ struct PrecipitationFields {
     cap_post_sum: f32,
     depletion_pre_sum: f32,
     depletion_post_sum: f32,
+    depletion_source_pre_sum: f32,
+    depletion_budget_storage_change_sum: f32,
+    depletion_budget_residual_sum: f32,
     cap_hits: usize,
     land_cells: usize,
     monsoon_sum: f32,
@@ -233,6 +239,25 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             precipitation_fields.correction_factor_sum / precipitation_fields.land_cells as f32
         } else {
             1.0
+        },
+        mean_budget_storage_change_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.depletion_budget_storage_change_sum
+                / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        mean_budget_residual_mm: if precipitation_fields.land_cells > 0 {
+            precipitation_fields.depletion_budget_residual_sum
+                / precipitation_fields.land_cells as f32
+        } else {
+            0.0
+        },
+        budget_residual_ratio: if precipitation_fields.depletion_source_pre_sum > EPS {
+            (precipitation_fields.depletion_budget_residual_sum
+                / precipitation_fields.depletion_source_pre_sum)
+                .abs()
+        } else {
+            0.0
         },
     });
 
@@ -477,6 +502,7 @@ fn compute_precipitation_fields(
     }
 
     let depletion_pre_sum = sum_land_precipitation(world, &target_precipitation);
+    let depletion_source_pre_sum = sum_land_values(world, &base_fields.target_moisture_source);
     let mut moisture_source_budget = base_fields.target_moisture_source.clone();
     let mut depleted_precipitation = target_precipitation.clone();
     apply_downwind_moisture_depletion_iterative(
@@ -501,6 +527,11 @@ fn compute_precipitation_fields(
             .clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
     let depletion_post_sum = sum_land_precipitation(world, &target_precipitation);
+    let depletion_source_post_sum = sum_land_values(world, &moisture_source_budget);
+    let depletion_budget_storage_change_sum = depletion_source_post_sum - depletion_source_pre_sum;
+    let depletion_sink_sum = (depletion_pre_sum - depletion_post_sum).max(0.0);
+    let depletion_budget_residual_sum =
+        (depletion_source_pre_sum - depletion_source_post_sum) - depletion_sink_sum;
 
     PrecipitationFields {
         target_precipitation,
@@ -515,6 +546,9 @@ fn compute_precipitation_fields(
         cap_post_sum,
         depletion_pre_sum,
         depletion_post_sum,
+        depletion_source_pre_sum,
+        depletion_budget_storage_change_sum,
+        depletion_budget_residual_sum,
         cap_hits,
         land_cells,
         monsoon_sum,
@@ -1032,6 +1066,15 @@ fn upwind_ocean_fraction(
 
 fn sum_land_precipitation(world: &World, precipitation: &[f32]) -> f32 {
     precipitation
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| world.state.geology.height.get(*i).copied().unwrap_or(0.0) > 0.0)
+        .map(|(_, value)| (*value).max(0.0))
+        .sum()
+}
+
+fn sum_land_values(world: &World, values: &[f32]) -> f32 {
+    values
         .iter()
         .enumerate()
         .filter(|(i, _)| world.state.geology.height.get(*i).copied().unwrap_or(0.0) > 0.0)

@@ -44,6 +44,17 @@ fn exec_world_advances_tick_and_sets_budget_to_one() {
 }
 
 #[test]
+fn climate_water_budget_residual_stays_bounded() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::Environment;
+    exec_world(&mut world);
+
+    let diagnostics = crate::sim::climate::surface::last_precip_diagnostics_summary();
+    assert!(diagnostics.budget_residual_ratio.is_finite());
+    assert!(diagnostics.budget_residual_ratio <= 5.0);
+}
+
+#[test]
 fn exec_world_slice_matches_full_tick_execution() {
     let mut full_world = build_test_world();
     let mut sliced_world = build_test_world();

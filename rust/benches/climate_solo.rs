@@ -1064,6 +1064,12 @@ fn print_precipitation_process_diagnostics(summary: &sim::climate::surface::Prec
         summary.mean_stage_orographic_mm,
         summary.mean_stage_correction_factor,
     );
+    println!(
+        "budget_storage_change_mm={:.2}  budget_residual_mm={:.2}  budget_residual_ratio={:.3}%",
+        summary.mean_budget_storage_change_mm,
+        summary.mean_budget_residual_mm,
+        summary.budget_residual_ratio * 100.0,
+    );
     println!();
 }
 
@@ -1227,7 +1233,7 @@ fn append_score_record_jsonl(
         .map(|snapshot| {
             let summary = snapshot.precipitation_process;
             format!(
-                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{}}}",
+                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{},\"mean_budget_storage_change_mm\":{},\"mean_budget_residual_mm\":{},\"budget_residual_ratio\":{}}}",
                 format_json_number(summary.continental_reduction_ratio),
                 format_json_number(summary.cap_reduction_ratio),
                 format_json_number(summary.depletion_reduction_ratio),
@@ -1239,9 +1245,12 @@ fn append_score_record_jsonl(
                 format_json_number(summary.mean_stage_transport_mm),
                 format_json_number(summary.mean_stage_orographic_mm),
                 format_json_number(summary.mean_stage_correction_factor),
+                format_json_number(summary.mean_budget_storage_change_mm),
+                format_json_number(summary.mean_budget_residual_mm),
+                format_json_number(summary.budget_residual_ratio),
             )
         })
-        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null,\"mean_stage_source_mm\":null,\"mean_stage_transport_mm\":null,\"mean_stage_orographic_mm\":null,\"mean_stage_correction_factor\":null}".to_string());
+        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null,\"mean_stage_source_mm\":null,\"mean_stage_transport_mm\":null,\"mean_stage_orographic_mm\":null,\"mean_stage_correction_factor\":null,\"mean_budget_storage_change_mm\":null,\"mean_budget_residual_mm\":null,\"budget_residual_ratio\":null}".to_string());
 
     let bands_json = diagnostics_snapshot
         .map(|snapshot| {
