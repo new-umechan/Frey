@@ -107,6 +107,8 @@ struct PrecipitationFields {
     continental_post_sum: f32,
     cap_pre_sum: f32,
     cap_post_sum: f32,
+    depletion_pre_sum: f32,
+    depletion_post_sum: f32,
     cap_hits: usize,
     land_cells: usize,
     monsoon_sum: f32,
@@ -164,17 +166,6 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             cell_count,
         );
 
-    let depletion_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
-    apply_downwind_moisture_depletion_iterative(
-        world,
-        &neighbor_lookup,
-        &base_fields.wind_vectors,
-        &base_fields.target_moisture_source,
-        &mut precipitation_fields.target_precipitation,
-        &climate_params,
-    );
-    let depletion_output_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
-
     let cold_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
     apply_cold_coast_precipitation(
         world,
@@ -203,7 +194,10 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             precipitation_fields.cap_pre_sum,
             precipitation_fields.cap_post_sum,
         ),
-        depletion_reduction_ratio: reduction_ratio(depletion_input_sum, depletion_output_sum),
+        depletion_reduction_ratio: reduction_ratio(
+            precipitation_fields.depletion_pre_sum,
+            precipitation_fields.depletion_post_sum,
+        ),
         cold_coast_reduction_ratio: reduction_ratio(cold_input_sum, cold_output_sum),
         cap_hit_ratio: if precipitation_fields.land_cells > 0 {
             precipitation_fields.cap_hits as f32 / precipitation_fields.land_cells as f32
@@ -482,6 +476,32 @@ fn compute_precipitation_fields(
             precipitation.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
 
+    let depletion_pre_sum = sum_land_precipitation(world, &target_precipitation);
+    let mut moisture_source_budget = base_fields.target_moisture_source.clone();
+    let mut depleted_precipitation = target_precipitation.clone();
+    apply_downwind_moisture_depletion_iterative(
+        world,
+        neighbor_lookup,
+        &base_fields.wind_vectors,
+        &mut moisture_source_budget,
+        &mut depleted_precipitation,
+        climate_params,
+    );
+    for i in 0..cell_count {
+        if world.state.geology.height[i] <= 0.0 {
+            continue;
+        }
+        let source_ratio = (moisture_source_budget[i]
+            / base_fields.target_moisture_source[i].max(1.0))
+            .clamp(0.30, 1.0);
+        let moisture_cap =
+            climate_params.precip_cap_from_moisture * moisture_source_budget[i].max(0.0);
+        target_precipitation[i] = (target_precipitation[i] * source_ratio)
+            .min(moisture_cap.max(climate_params.precip_min_mm))
+            .clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
+    }
+    let depletion_post_sum = sum_land_precipitation(world, &target_precipitation);
+
     PrecipitationFields {
         target_precipitation,
         precip_factor,
@@ -493,6 +513,8 @@ fn compute_precipitation_fields(
         continental_post_sum,
         cap_pre_sum,
         cap_post_sum,
+        depletion_pre_sum,
+        depletion_post_sum,
         cap_hits,
         land_cells,
         monsoon_sum,
@@ -1113,7 +1135,7 @@ fn apply_downwind_moisture_depletion_iterative(
     world: &World,
     neighbor_lookup: &NeighborLookup,
     wind_vectors: &[[f32; 3]],
-    moisture_source: &[f32],
+    moisture_source: &mut [f32],
     precipitation: &mut [f32],
     params: &ClimateParams,
 ) {
@@ -1142,6 +1164,7 @@ fn apply_downwind_moisture_depletion_iterative(
             let reduction = depletion[i].clamp(0.0, params.downwind_depletion_max.clamp(0.0, 0.95));
             if reduction > 0.0 {
                 precipitation[i] *= 1.0 - reduction;
+                moisture_source[i] *= 1.0 - reduction;
             }
             let moisture_cap = params.precip_cap_from_moisture * moisture_source[i].max(0.0);
             precipitation[i] = precipitation[i]
