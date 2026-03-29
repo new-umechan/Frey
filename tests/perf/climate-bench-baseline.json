@@ -1,11 +1,11 @@
 {
-  "timestamp_unix_ms": 1774662744877,
+  "timestamp_unix_ms": 1774777813797,
   "bench": "climate_solo",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "climate_step_ms": 41.359791
+    "climate_step_ms": 28.305082
   },
   "phase2": {
     "state": "ready",
@@ -13,10 +13,10 @@
     "error": null,
     "metrics": {
       "temperature": 0.933565,
-      "precipitation": 0.511965,
-      "aridity": 0.446584,
-      "evapotranspiration": 0.339832,
-      "runoff": 0.468126
+      "precipitation": 0.511815,
+      "aridity": 0.446331,
+      "evapotranspiration": 0.339269,
+      "runoff": 0.467947
     }
   },
   "phase1": {
@@ -44,16 +44,16 @@
       "continental_reduction_ratio": 0.111405,
       "cap_reduction_ratio": 0.000003,
       "depletion_reduction_ratio": 0.124764,
-      "cold_coast_reduction_ratio": 0.058562,
+      "cold_coast_reduction_ratio": 0.058361,
       "cap_hit_ratio": 0.000169,
       "mean_monsoon_boost_mm": 8.216728,
       "mean_hotspot_boost_mm": 2.458362
     },
     "precipitation_lat_bands": {
-      "tropics": 0.569845,
-      "subtropics": 0.212266,
-      "midlat": 0.366759,
-      "highlat": 0.611747
+      "tropics": 0.569716,
+      "subtropics": 0.212326,
+      "midlat": 0.366995,
+      "highlat": 0.609079
     }
   }
 }
