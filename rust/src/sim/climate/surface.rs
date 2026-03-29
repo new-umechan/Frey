@@ -64,6 +64,20 @@ struct OrographicSignal {
     ocean_fetch: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct NeighborSample {
+    index: usize,
+    dir: [f32; 3],
+    edge_km: f32,
+    is_land: bool,
+}
+
+#[derive(Debug, Clone)]
+struct NeighborLookup {
+    offsets: Vec<usize>,
+    entries: Vec<NeighborSample>,
+}
+
 #[derive(Debug, Clone)]
 struct BaseClimateFields {
     target_temperature: Vec<f32>,
@@ -132,12 +146,20 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     ensure_climate_field_lengths(world, cell_count);
     let alpha = blend_alpha(budget, CLIMATE_BLEND_BASE);
     let base_fields = compute_base_climate_fields(world, &climate_params, cell_count);
+    let neighbor_lookup = build_neighbor_lookup(world);
     let mut precipitation_fields =
-        compute_precipitation_fields(world, &base_fields, &climate_params, cell_count);
+        compute_precipitation_fields(
+            world,
+            &base_fields,
+            &neighbor_lookup,
+            &climate_params,
+            cell_count,
+        );
 
     let depletion_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
     apply_downwind_moisture_depletion_iterative(
         world,
+        &neighbor_lookup,
         &base_fields.wind_vectors,
         &base_fields.target_moisture_source,
         &mut precipitation_fields.target_precipitation,
@@ -148,7 +170,9 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let cold_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
     apply_cold_coast_precipitation(
         world,
+        &neighbor_lookup,
         &base_fields.target_ocean_temperature,
+        &base_fields.wind_vectors,
         &mut precipitation_fields.precip_factor,
         &precipitation_fields.convergence_field,
         &precipitation_fields.uplift_field,
@@ -304,6 +328,7 @@ fn compute_base_climate_fields(
 fn compute_precipitation_fields(
     world: &World,
     base_fields: &BaseClimateFields,
+    neighbor_lookup: &NeighborLookup,
     climate_params: &ClimateParams,
     cell_count: usize,
 ) -> PrecipitationFields {
@@ -340,13 +365,20 @@ fn compute_precipitation_fields(
             climate_params,
         );
         let convergence_mm = (climate_params.convergence_blend * convergence).max(0.0);
-        let signal = orographic_signal(world, i, base_fields.wind_vectors[i], climate_params);
+        let signal = orographic_signal(
+            world,
+            neighbor_lookup,
+            i,
+            base_fields.wind_vectors[i],
+            climate_params,
+        );
         let rise_norm =
             (signal.rise_m / climate_params.orographic_rise_scale_m.max(1.0)).clamp(0.0, 3.0);
         let fetch_factor = (0.70 + 0.60 * signal.ocean_fetch).clamp(0.5, 1.3);
         let uplift_mm = climate_params.orographic_uplift_gain_mm * rise_norm * fetch_factor;
         let monsoon_mm = monsoon_precipitation_boost_mm(
             world,
+            neighbor_lookup,
             i,
             base_fields.target_wind_u[i],
             base_fields.wind_vectors[i],
@@ -483,6 +515,7 @@ fn latitude_band_precipitation_reference_mm(latitude_abs: f32) -> f32 {
 
 fn monsoon_precipitation_boost_mm(
     world: &World,
+    neighbor_lookup: &NeighborLookup,
     index: usize,
     wind_u: f32,
     wind_vec: [f32; 3],
@@ -524,7 +557,7 @@ fn monsoon_precipitation_boost_mm(
         CoastSide::None => 0.0,
     }
     .clamp(0.0, 1.2);
-    let upwind_ocean = upwind_ocean_fraction(world, index, wind_vec, 3);
+    let upwind_ocean = upwind_ocean_fraction(world, neighbor_lookup, index, wind_vec, 3);
     let onshore_weight = (0.65 * zonal_onshore + 0.35 * upwind_ocean).clamp(0.0, 1.3);
     MONSOON_GAIN_MM * tropical_weight * coastal_weight * thermal_contrast * onshore_weight
 }
@@ -651,6 +684,7 @@ fn moisture_convergence_mm(
 
 fn orographic_signal(
     world: &World,
+    neighbor_lookup: &NeighborLookup,
     index: usize,
     wind_vec: [f32; 3],
     params: &ClimateParams,
@@ -673,7 +707,7 @@ fn orographic_signal(
 
     for step in 0..params.orographic_trace_steps.max(1) {
         let Some((next, edge_km, _alignment)) = best_neighbor_toward(
-            world,
+            neighbor_lookup,
             cursor,
             upwind_vec,
             params.orographic_trace_alignment_min,
@@ -776,7 +810,9 @@ fn ocean_current_offset(latitude_abs: f32, coast_side: CoastSide) -> f32 {
 
 fn apply_cold_coast_precipitation(
     world: &World,
+    neighbor_lookup: &NeighborLookup,
     ocean_temperature: &[f32],
+    wind_vectors: &[[f32; 3]],
     precip_factor: &mut [f32],
     convergence_mm: &[f32],
     uplift_mm: &[f32],
@@ -804,7 +840,6 @@ fn apply_cold_coast_precipitation(
         }
         let cold_factor =
             1.0 - params.cold_coast_gain * cold_anomaly / mean_ocean_temperature.abs().max(1.0);
-        let (wind_u, wind_v) = hadley_wind_components(latitude);
         let mut current = i;
         for step in 0..4 {
             let attenuation = 1.0 - (step as f32) * 0.2;
@@ -828,8 +863,12 @@ fn apply_cold_coast_precipitation(
                 attenuation.clamp(0.0, 1.0),
             );
             precip_factor[current] *= step_factor;
-            let wind_vector = local_wind_vector(world, current, wind_u, wind_v);
-            let Some((next, _, _)) = best_neighbor_toward(world, current, wind_vector, 0.15, true)
+            let wind_vector = wind_vectors
+                .get(current)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0]);
+            let Some((next, _, _)) =
+                best_neighbor_toward(neighbor_lookup, current, wind_vector, 0.15, true)
             else {
                 break;
             };
@@ -889,7 +928,13 @@ fn marine_orographic_hotspot_boost_mm(
         * latitude_weight
 }
 
-fn upwind_ocean_fraction(world: &World, index: usize, wind_vec: [f32; 3], steps: usize) -> f32 {
+fn upwind_ocean_fraction(
+    world: &World,
+    neighbor_lookup: &NeighborLookup,
+    index: usize,
+    wind_vec: [f32; 3],
+    steps: usize,
+) -> f32 {
     if steps == 0 {
         return 0.0;
     }
@@ -898,7 +943,8 @@ fn upwind_ocean_fraction(world: &World, index: usize, wind_vec: [f32; 3], steps:
     let mut ocean_hits: f32 = 0.0;
     let mut samples: f32 = 0.0;
     for _ in 0..steps {
-        let Some((next, _, _)) = best_neighbor_toward(world, cursor, upwind, 0.10, false) else {
+        let Some((next, _, _)) = best_neighbor_toward(neighbor_lookup, cursor, upwind, 0.10, false)
+        else {
             break;
         };
         if next == cursor {
@@ -948,19 +994,22 @@ fn reduction_ratio(before: f32, after: f32) -> f32 {
 
 fn apply_downwind_moisture_depletion(
     world: &World,
+    neighbor_lookup: &NeighborLookup,
     wind_vectors: &[[f32; 3]],
     moisture_source: &[f32],
     precipitation: &[f32],
+    depletion: &mut [f32],
     params: &ClimateParams,
-) -> Vec<f32> {
+) {
     let cell_count = world.state.geology.height.len();
     if wind_vectors.len() != cell_count
         || moisture_source.len() != cell_count
         || precipitation.len() != cell_count
+        || depletion.len() != cell_count
     {
-        return vec![0.0_f32; cell_count];
+        return;
     }
-    let mut depletion = vec![0.0_f32; cell_count];
+    depletion.fill(0.0);
     let step_count = params.downwind_depletion_steps.max(1);
     for i in 0..cell_count {
         if world.state.geology.height[i] <= 0.0 {
@@ -983,7 +1032,7 @@ fn apply_downwind_moisture_depletion(
                 .copied()
                 .unwrap_or([0.0, 0.0, 0.0]);
             let Some((next, _, _)) = best_neighbor_toward(
-                world,
+                neighbor_lookup,
                 current,
                 current_wind,
                 params.downwind_alignment_min,
@@ -1006,11 +1055,11 @@ fn apply_downwind_moisture_depletion(
             current = next;
         }
     }
-    depletion
 }
 
 fn apply_downwind_moisture_depletion_iterative(
     world: &World,
+    neighbor_lookup: &NeighborLookup,
     wind_vectors: &[[f32; 3]],
     moisture_source: &[f32],
     precipitation: &mut [f32],
@@ -1022,12 +1071,15 @@ fn apply_downwind_moisture_depletion_iterative(
     }
 
     let pass_count = params.downwind_depletion_passes.max(1) as usize;
+    let mut depletion = vec![0.0_f32; cell_count];
     for _ in 0..pass_count {
-        let depletion = apply_downwind_moisture_depletion(
+        apply_downwind_moisture_depletion(
             world,
+            neighbor_lookup,
             wind_vectors,
             moisture_source,
             precipitation,
+            &mut depletion,
             params,
         );
 
@@ -1047,48 +1099,77 @@ fn apply_downwind_moisture_depletion_iterative(
     }
 }
 
+fn build_neighbor_lookup(world: &World) -> NeighborLookup {
+    let cell_count = world.state.geology.height.len();
+    let mut offsets = Vec::with_capacity(cell_count + 1);
+    let mut entries = Vec::with_capacity(world.mesh.nbrs.len());
+    offsets.push(0);
+
+    for index in 0..cell_count {
+        let pos = world
+            .mesh
+            .positions
+            .get(index)
+            .copied()
+            .unwrap_or([0.0, 0.0, 1.0]);
+        let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+        let end = world
+            .mesh
+            .nbr_offsets
+            .get(index + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
+
+        for &n_u32 in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
+            let n = n_u32 as usize;
+            if n >= cell_count {
+                continue;
+            }
+            let neighbor_pos = world
+                .mesh
+                .positions
+                .get(n)
+                .copied()
+                .unwrap_or([0.0, 0.0, 1.0]);
+            let dir = normalize3(project_to_tangent(sub3(neighbor_pos, pos), pos));
+            let edge_km = edge_distance_km(pos, neighbor_pos).max(1.0);
+            entries.push(NeighborSample {
+                index: n,
+                dir,
+                edge_km,
+                is_land: world.state.geology.height[n] > 0.0,
+            });
+        }
+        offsets.push(entries.len());
+    }
+
+    NeighborLookup { offsets, entries }
+}
+
 fn best_neighbor_toward(
-    world: &World,
+    lookup: &NeighborLookup,
     index: usize,
     direction_vec: [f32; 3],
     min_alignment: f32,
     land_only: bool,
 ) -> Option<(usize, f32, f32)> {
-    let pos = world
-        .mesh
-        .positions
-        .get(index)
-        .copied()
-        .unwrap_or([0.0, 0.0, 1.0]);
-    let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-    let end = world
-        .mesh
-        .nbr_offsets
-        .get(index + 1)
-        .copied()
-        .unwrap_or(start as u32) as usize;
+    if index + 1 >= lookup.offsets.len() {
+        return None;
+    }
+    let start = lookup.offsets[index];
+    let end = lookup.offsets[index + 1];
     let mut best = None::<(usize, f32, f32)>;
 
-    for &n_u32 in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
-        let n = n_u32 as usize;
-        if n >= world.state.geology.height.len() {
+    for sample in lookup.entries.get(start..end).unwrap_or(&[]) {
+        if land_only && !sample.is_land {
             continue;
         }
-        if land_only && world.state.geology.height[n] <= 0.0 {
-            continue;
-        }
-        let neighbor_pos = world
-            .mesh
-            .positions
-            .get(n)
-            .copied()
-            .unwrap_or([0.0, 0.0, 1.0]);
-        let dir = normalize3(project_to_tangent(sub3(neighbor_pos, pos), pos));
-        let alignment = dot3(dir, direction_vec);
-        let edge_km = edge_distance_km(pos, neighbor_pos).max(1.0);
+        let alignment = dot3(sample.dir, direction_vec);
         match best {
             Some((_, _, best_alignment)) if alignment <= best_alignment => {}
-            _ if alignment > min_alignment => best = Some((n, edge_km, alignment)),
+            _ if alignment > min_alignment => {
+                best = Some((sample.index, sample.edge_km, alignment));
+            }
             _ => {}
         }
     }
