@@ -8,7 +8,7 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         lapse_rate_c_per_km: 6.5f32,
         height_to_meters: 6000.0f32,
         precip_min_mm: 25.0f32,
-        precip_max_mm: 4000.0f32,
+        precip_max_mm: 8000.0f32,
         hadley_anomaly_gain: 0.35f32,
         distance_scale_km: 1300.0f32,
         continentality_gain: 0.36f32,

@@ -397,8 +397,10 @@ fn compute_precipitation_fields(
             &base_fields.flux_vectors,
             climate_params,
         );
-        let convergence_mm = (climate_params.convergence_blend * convergence).max(0.0);
-        transport_sum += convergence_mm;
+        let convergence_mm = climate_params.convergence_blend * convergence;
+        let convergence_wet_mm = convergence_mm.max(0.0);
+        let divergence_dry_mm = (-convergence_mm).max(0.0);
+        transport_sum += convergence_wet_mm;
         let signal = orographic_signal(
             world,
             neighbor_lookup,
@@ -423,7 +425,7 @@ fn compute_precipitation_fields(
             world,
             i,
             &signal,
-            convergence_mm,
+            convergence_wet_mm,
             monsoon_mm,
             climate_params,
         );
@@ -436,9 +438,12 @@ fn compute_precipitation_fields(
         orographic_sum += uplift_mm + monsoon_mm + hotspot_mm;
 
         let shadow_factor = rain_shadow_factor(&signal, climate_params);
-        let mut precipitation = baseline + convergence_mm + uplift_mm + monsoon_mm + hotspot_mm;
+        let mut precipitation = baseline + convergence_wet_mm + uplift_mm + monsoon_mm + hotspot_mm;
+        let divergence_dry_factor = (1.0 - 0.40 * smoothstep(35.0, 220.0, divergence_dry_mm))
+            .clamp(0.45, 1.0);
+        precipitation *= divergence_dry_factor;
         precipitation *= shadow_factor;
-        correction_factor_sum += shadow_factor;
+        correction_factor_sum += shadow_factor * divergence_dry_factor;
 
         let precipitation_pre_continental = precipitation.max(climate_params.precip_min_mm);
         let continental_factor = continentality_factor_relaxed(
@@ -449,7 +454,7 @@ fn compute_precipitation_fields(
                 .get(i)
                 .copied()
                 .unwrap_or(0.0),
-            convergence_mm,
+            convergence_wet_mm,
             uplift_mm,
             monsoon_mm + hotspot_mm,
             climate_params,
@@ -460,7 +465,7 @@ fn compute_precipitation_fields(
 
         let cap_scale = dynamic_precip_cap_scale(
             climate_params,
-            convergence_mm,
+            convergence_wet_mm,
             uplift_mm + hotspot_mm,
             monsoon_mm,
             signal.ocean_fetch,
@@ -1071,7 +1076,7 @@ fn apply_downwind_moisture_depletion(
                 .get(current)
                 .copied()
                 .unwrap_or([0.0, 0.0, 0.0]);
-            let Some((next, _, _)) = best_neighbor_toward(
+            let Some((primary, secondary)) = top_two_neighbors_toward(
                 neighbor_lookup,
                 current,
                 current_wind,
@@ -1080,19 +1085,26 @@ fn apply_downwind_moisture_depletion(
             ) else {
                 break;
             };
-            if next == current {
+            if primary.0 == current {
                 break;
             }
             let attenuation = params
                 .downwind_depletion_decay
                 .clamp(0.0, 1.0)
                 .powi(step as i32);
-            depletion[next] += carry * attenuation;
+            let primary_share = 0.70;
+            let secondary_share = 0.30;
+            depletion[primary.0] += carry * attenuation * primary_share;
+            if let Some((secondary_idx, _, _)) = secondary {
+                depletion[secondary_idx] += carry * attenuation * secondary_share;
+            } else {
+                depletion[primary.0] += carry * attenuation * secondary_share;
+            }
             carry *= 0.92;
             if carry < 1e-4 {
                 break;
             }
-            current = next;
+            current = primary.0;
         }
     }
 }
@@ -1215,6 +1227,48 @@ fn best_neighbor_toward(
     }
 
     best
+}
+
+fn top_two_neighbors_toward(
+    lookup: &NeighborLookup,
+    index: usize,
+    direction_vec: [f32; 3],
+    min_alignment: f32,
+    land_only: bool,
+) -> Option<((usize, f32, f32), Option<(usize, f32, f32)>)> {
+    if index + 1 >= lookup.offsets.len() {
+        return None;
+    }
+    let start = lookup.offsets[index];
+    let end = lookup.offsets[index + 1];
+    let mut first = None::<(usize, f32, f32)>;
+    let mut second = None::<(usize, f32, f32)>;
+
+    for sample in lookup.entries.get(start..end).unwrap_or(&[]) {
+        if land_only && !sample.is_land {
+            continue;
+        }
+        let alignment = dot3(sample.dir, direction_vec);
+        if alignment <= min_alignment {
+            continue;
+        }
+        let candidate = (sample.index, sample.edge_km, alignment);
+        match first {
+            Some((_, _, best_alignment)) if alignment <= best_alignment => {
+                match second {
+                    Some((_, _, second_alignment)) if alignment <= second_alignment => {}
+                    _ => {
+                        second = Some(candidate);
+                    }
+                }
+            }
+            _ => {
+                second = first;
+                first = Some(candidate);
+            }
+        }
+    }
+    first.map(|head| (head, second))
 }
 
 fn vegetation_density_proxy(world: &World, index: usize) -> f32 {

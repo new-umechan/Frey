@@ -4,7 +4,7 @@ temperature:
 
 precipitation:
   min_mm: 25.0
-  max_mm: 4000.0
+  max_mm: 8000.0
   hadley_anomaly_gain: 0.35
   distance_scale_km: 1300.0
   continentality_gain: 0.36
