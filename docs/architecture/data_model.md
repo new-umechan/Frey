@@ -2,27 +2,31 @@
 
 ## 目的
 
-この文書は、`Simulation` を構成する各データ構造の定義と配置方針を記述する。
+この文書は、`World`を構成する各データ構造の定義と配置方針を記述する。
 
 設計上の原則は次の通りである。
 
-- 全セルが持つ現在値は `CellStore` にSoAで置く
+- 全セルが持つ現在値は `WorldState` 内の各State構造体にSoAで置く
 - 他Systemが読むComponentと内部状態Componentは命名で分離する（`_internal` サフィックス）
-- 疎なEntity（国家・集落・地域など）は `hecs::World` で管理する
+- 疎なEntity（国家・集落・地域など）は`EntitiesState`で管理する
+- 国家間関係・プレート間関係は `World` 直下に `HashMap` で保持する
 - 国家間関係は `Simulation` 直下に `HashMap` で保持する
-- tick進行や履歴管理のための進行管理状態は `Clock`・`FeedbackQueue`・`Archive` に分割して置く
+- tick 進行や履歴管理のための進行管理状態は `ClockState`・`FeedbackQueue`・`ArchiveState` に分割して置く
 
 ## 目標構造
 
 ```rust
-struct Simulation {
-    cells:            CellStore,
-    entities:         hecs::World,
+struct World {
+    mesh:             WorldMesh,
+    state:            WorldState,      // 全セルの状態（Geology, Climate, Hydrology, etc.）
+    entities:         EntitiesState,   // 疎な Entity（hecs::World をラップ）
+    clock:            ClockState,
+    feedback:         FeedbackQueue,
+    runtime:          RuntimeState,    // 実行時状態（ターゲット値、活動量 EMA など）
     polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     polity_groups:    Vec<PolityGroup>,
-    clock:            Clock,
-    feedback:         FeedbackQueue,
-    archive:          Archive,
+    plate_relations:  HashMap<(PlateId, PlateId), PlateRelation>,
+    archive:          ArchiveState,
 }
 ```
 
@@ -39,7 +43,11 @@ struct RegionId(u32);
 struct PlateId(u32);
 ```
 
-## CellStore
+## WorldState
+
+WorldStateは複数のState構造体を含む。各StateはSoA構造を持つ。
+
+### GeologyState
 
 全セルのComponentをSoA（Structure of Arrays）で保持する。
 セルは常に全数存在し、全Componentを保持する。
@@ -50,7 +58,7 @@ struct PlateId(u32);
 隣接セル情報は初期化時に一度計算し、その後は固定とする。
 
 ```rust
-struct CellStore {
+struct GeologyState {
     // --- Geo（固定地理量）---
     latitude:             Vec<f32>,
     distance_from_ocean:  Vec<f32>,
@@ -180,8 +188,9 @@ struct BoundaryDynamicsState {
 `age`・`thickness`・`density` は連続属性として移流する。
 `stress`・`temperature`・`rigidity` はその場で毎tick再計算する。
 
-## hecs::World
+## EntitiesState
 
+hecs::Worldをラップする。
 Polity・Settlement・Regionなど、数が少なく動的に生滅する疎なEntityを管理する。
 各EntityはComponentの組み合わせとして表現する。
 
@@ -211,7 +220,7 @@ struct RegionComponent {
 ```
 
 `SettlementComponent.cell` を集落位置の正本とする。
-居住地分布は `CellStore` の `urbanization` などの公開列から導出して扱う。
+居住地分布は `GeologyState` の `urbanization` などの公開列から導出して扱う。
 
 ---
 
@@ -264,12 +273,12 @@ enum GroupKind {
 
 ---
 
-## Clock
+## ClockState
 
 tick進行・時代・予算を管理する。「世界の状態」ではなく「世界を進めるための時間制御」を担う。
 
 ```rust
-struct Clock {
+struct ClockState {
     tick:    Tick,
     epoch:   Epoch,
     budgets: SubsystemBudgets,
@@ -283,7 +292,7 @@ struct Clock {
 ## FeedbackQueue
 
 同一tick内で循環依存を作らないための遅延反映キュー。
-tick開始時に `ExecSystem` が一括で `CellStore` と `hecs::World` に適用する。
+tick開始時に `ExecSystem` が一括で `GeologyState` と `EntitiesState` に適用する。
 
 `ModuleId` は実行単位の `System` ID ではない。
 予算配分、責務境界、フィードバック帰属を表す `Module` 識別子として扱う。
@@ -360,17 +369,50 @@ enum FeedbackPayload {
 
 ---
 
-## Archive
+## ArchiveState
 
 履歴と過去スナップショットの記録。世界の現在状態ではなく観測・再生用途。
 
 ```rust
-struct Archive {
+struct ArchiveState {
     history: History,
 }
 ```
 
----
+## WorldMesh
+
+メッシュ構造情報。正二十面体分割による球面メッシュを保持する。
+
+```rust
+struct WorldMesh {
+    positions:    Vec<[f32; 3]>,   // 頂点位置（3 次元座標）
+    nbr_offsets:  Vec<u32>,        // 隣接リストのオフセット（CSR 形式）
+    nbrs:         Vec<u32>,        // 隣接頂点インデックス（CSR 形式）
+}
+```
+
+## RuntimeState
+
+実行時状態。シミュレーションの進行に伴うターゲット値や活動量の指数移動平均を保持する。
+
+```rust
+struct RuntimeState {
+    target_sea_ratio:        f32,              // 目標海比率
+    transition: TransitionState,
+    geology_dynamics:        Option<GeologyDynamicsState>,
+    hydrology_dynamics:      Option<ErosionAutomatonState>,
+}
+
+struct TransitionState {
+    era_enter_tick:          u64,              // 時代遷移時の tick
+    stable_ticks_in_era:     u64,              // 現在の時代での安定 tick 数
+    last_land_ratio:         f32,              // 前回の陸比率
+    ema_geology_activity:    f32,              // 地質活動量の EMA
+    ema_climate_activity:    f32,              // 気候活動量の EMA
+    ema_ecology_activity:    f32,              // 生態系活動量の EMA
+    ema_civilization_activity: f32,            // 文明活動量の EMA
+}
+```
 
 ## Tier 2 追加時の拡張予定
 
