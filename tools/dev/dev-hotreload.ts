@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 import { watch } from "node:fs";
 import path from "node:path";
@@ -13,11 +14,11 @@ let syncTerrainRunning = false;
 let syncTerrainQueued = false;
 let syncRuntimeRunning = false;
 let syncRuntimeQueued = false;
-let viteProcess = null;
+let viteProcess: ChildProcess | null = null;
 let shutdownRequested = false;
-let debounceTimer = null;
-let syncTerrainDebounceTimer = null;
-let syncRuntimeDebounceTimer = null;
+let debounceTimer: NodeJS.Timeout | null = null;
+let syncTerrainDebounceTimer: NodeJS.Timeout | null = null;
+let syncRuntimeDebounceTimer: NodeJS.Timeout | null = null;
 
 function runCommand(command: string, args: string[], options: any = {}): Promise<{ code: number | null; signal: string | null }> {
     return new Promise((resolve) => {
@@ -128,7 +129,7 @@ function shouldTriggerBuild(filename = "") {
     return true;
 }
 
-function scheduleBuild(filename) {
+function scheduleBuild(filename: string) {
     if (!shouldTriggerBuild(filename)) {
         return;
     }
@@ -145,7 +146,7 @@ function scheduleBuild(filename) {
     }, 150);
 }
 
-function scheduleTerrainParamsSync(filename) {
+function scheduleTerrainParamsSync(filename: string) {
     if (filename !== "terrain.yaml") {
         return;
     }
@@ -162,7 +163,7 @@ function scheduleTerrainParamsSync(filename) {
     }, 150);
 }
 
-function scheduleRuntimeParamsSync(filename) {
+function scheduleRuntimeParamsSync(filename: string) {
     if (filename !== "runtime.yaml") {
         return;
     }
@@ -186,7 +187,7 @@ function startRustWatcher() {
         }
     });
 
-    watcher.on("error", (error) => {
+    watcher.on("error", (error: Error) => {
         console.error("[dev] rust watcher error:", error);
     });
 
@@ -201,14 +202,14 @@ function startConfigWatcher() {
         }
     });
 
-    watcher.on("error", (error) => {
+    watcher.on("error", (error: Error) => {
         console.error("[dev] config watcher error:", error);
     });
 
     return watcher;
 }
 
-function stopChild(child) {
+function stopChild(child: ChildProcess | null) {
     if (!child || child.killed) {
         return;
     }

@@ -21,7 +21,7 @@ const METRIC_SPECS = [
     },
 ];
 
-function parseNumber(value, flagName) {
+function parseNumber(value: unknown, flagName: string): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
         throw new Error(`${flagName} must be a finite number`);
@@ -29,7 +29,7 @@ function parseNumber(value, flagName) {
     return parsed;
 }
 
-function parseSeedsCsv(raw) {
+function parseSeedsCsv(raw: unknown): string[] {
     if (typeof raw !== "string") {
         return [];
     }
@@ -39,16 +39,16 @@ function parseSeedsCsv(raw) {
         .filter((seed) => seed.length > 0);
 }
 
-function parseArgs(argv) {
+function parseArgs(argv: string[]) {
     const args = {
         ticks: DEFAULT_TICKS,
         seeds: [...DEFAULT_SEEDS],
         level: TERRAIN_LEVEL,
-        out: null,
-        baseline: null,
+        out: null as string | null,
+        baseline: null as string | null,
         check: false,
         threshold: DEFAULT_THRESHOLD,
-        thresholdByMetric: {},
+        thresholdByMetric: {} as Record<string, number>,
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -142,15 +142,15 @@ async function initWasmForNode() {
     }
 }
 
-async function loadBaseline(pathname) {
+async function loadBaseline(pathname: string): Promise<unknown> {
     const content = await readFile(resolve(pathname), "utf8");
-    return JSON.parse(content);
+    return JSON.parse(content) as unknown;
 }
 
-function collectMetricsFromResponse(metrics) {
-    const result = {};
+function collectMetricsFromResponse(metrics: unknown): Record<string, number> {
+    const result: Record<string, number> = {};
     for (const spec of METRIC_SPECS) {
-        const value = Number(metrics?.[spec.sourceKey]);
+        const value = Number((metrics as Record<string, unknown>)?.[spec.sourceKey]);
         if (!Number.isFinite(value)) {
             throw new Error(`missing numeric metric from wasm response: ${spec.sourceKey}`);
         }
@@ -159,15 +159,24 @@ function collectMetricsFromResponse(metrics) {
     return result;
 }
 
-function buildEffectiveThresholds(args) {
-    const thresholds = {};
+interface Thresholds {
+    [key: string]: number;
+}
+
+function buildEffectiveThresholds(args: { thresholdByMetric: Record<string, number>; threshold: number }): Thresholds {
+    const thresholds: Thresholds = {};
     for (const spec of METRIC_SPECS) {
         thresholds[spec.key] = args.thresholdByMetric[spec.key] ?? args.threshold;
     }
     return thresholds;
 }
 
-function relativeOrAbsoluteDiff(currentValue, baselineValue) {
+interface DiffResult {
+    mode: "relative" | "absolute";
+    diff: number;
+}
+
+function relativeOrAbsoluteDiff(currentValue: number, baselineValue: number): DiffResult {
     const absDiff = Math.abs(currentValue - baselineValue);
     if (baselineValue === 0) {
         return {
@@ -181,15 +190,32 @@ function relativeOrAbsoluteDiff(currentValue, baselineValue) {
     };
 }
 
-function normalizeSeedSet(seeds) {
+function normalizeSeedSet(seeds: unknown): string[] {
     if (!Array.isArray(seeds)) {
         return [];
     }
     return [...new Set(seeds.map((seed) => String(seed)))].sort();
 }
 
-function validateBaselineMeta(current, baseline) {
-    const failures = [];
+interface MetaFailure {
+    seed: string;
+    metric: string;
+    reason: string;
+    expected: unknown;
+    actual: unknown;
+}
+
+interface BaselineMeta {
+    ticks: number;
+    level: number;
+    seeds: unknown;
+    transition_mode: string;
+    era_boundaries: unknown;
+    eras_at_measurement: Record<string, string>;
+}
+
+function validateBaselineMeta(current: { meta: BaselineMeta }, baseline: { meta: BaselineMeta }): MetaFailure[] {
+    const failures: MetaFailure[] = [];
     const baselineMeta = baseline?.meta ?? {};
 
     const baselineTicks = Number(baselineMeta.ticks);
@@ -240,10 +266,10 @@ function validateBaselineMeta(current, baseline) {
     }
 
     const currentBoundaries = Array.isArray(current.meta.era_boundaries)
-        ? current.meta.era_boundaries.map((v) => Number(v))
+        ? (current.meta.era_boundaries as number[]).map((v: number) => Number(v))
         : [];
     const baselineBoundaries = Array.isArray(baselineMeta.era_boundaries)
-        ? baselineMeta.era_boundaries.map((v) => Number(v))
+        ? (baselineMeta.era_boundaries as number[]).map((v: number) => Number(v))
         : [];
     const sameBoundaries = currentBoundaries.length === baselineBoundaries.length
         && currentBoundaries.every((value, index) => value === baselineBoundaries[index]);
@@ -276,21 +302,43 @@ function validateBaselineMeta(current, baseline) {
     return failures;
 }
 
-function evaluateAgainstBaseline(current, baseline, thresholds) {
+interface Deviation {
+    seed: string;
+    metric: string;
+    reason?: string;
+    mode?: "relative" | "absolute";
+    currentValue?: number;
+    baselineValue?: number;
+    diff?: number;
+    threshold?: number;
+    expected?: unknown;
+    actual?: unknown;
+}
+
+interface EvaluationResult {
+    warnings: string[];
+    deviations: Deviation[];
+}
+
+function evaluateAgainstBaseline(
+    current: { meta: BaselineMeta; results: Array<{ seed: string; metrics: Record<string, number> }> },
+    baseline: { meta: BaselineMeta; results?: Array<{ seed: string; metrics: Record<string, number> }> },
+    thresholds: Thresholds,
+): EvaluationResult {
     const currentBySeed = new Map(current.results.map((entry) => [entry.seed, entry.metrics]));
     const baselineBySeed = new Map(
         (baseline?.results ?? []).map((entry) => [entry.seed, entry.metrics]),
     );
 
-    const warnings = [];
-    const deviations = [];
+    const warnings: string[] = [];
+    const deviations: Deviation[] = [];
 
     deviations.push(...validateBaselineMeta(current, baseline));
     if (deviations.length > 0) {
         return { warnings, deviations };
     }
 
-    for (const seed of current.meta.seeds) {
+    for (const seed of current.meta.seeds as string[]) {
         if (!baselineBySeed.has(seed)) {
             deviations.push({
                 seed,
@@ -340,7 +388,12 @@ function evaluateAgainstBaseline(current, baseline, thresholds) {
     return { warnings, deviations };
 }
 
-async function runSeedSimulation(seed, ticks, level) {
+interface SimulationResult {
+    metrics: Record<string, number>;
+    era: string;
+}
+
+async function runSeedSimulation(seed: string, ticks: number, level: number): Promise<SimulationResult> {
     const controller = new WorldSimController();
     const init = controller.init_world(seed, level, {
         geology_params: TERRAIN_PARAMS,
@@ -362,8 +415,22 @@ async function runSeedSimulation(seed, ticks, level) {
     };
 }
 
-function buildOutput(args, thresholds, results) {
-    const erasAtMeasurement = {};
+interface OutputData {
+    meta: {
+        generated_at: string;
+        ticks: number;
+        level: number;
+        seeds: string[];
+        thresholds: Thresholds;
+        transition_mode: string;
+        era_boundaries: number[];
+        eras_at_measurement: Record<string, string>;
+    };
+    results: Array<{ seed: string; tick: number; era: string; metrics: Record<string, number> }>;
+}
+
+function buildOutput(args: { ticks: number; level: number; seeds: string[] }, thresholds: Thresholds, results: Array<{ seed: string; era: string; metrics: Record<string, number> }>): OutputData {
+    const erasAtMeasurement: Record<string, string> = {};
     for (const result of results) {
         erasAtMeasurement[result.seed] = result.era;
     }
@@ -379,7 +446,7 @@ function buildOutput(args, thresholds, results) {
             era_boundaries: [...ERA_BOUNDARIES],
             eras_at_measurement: erasAtMeasurement,
         },
-        results,
+        results: results.map((r, _i) => ({ seed: r.seed, tick: args.ticks, era: r.era, metrics: r.metrics })),
     };
 }
 
@@ -408,9 +475,13 @@ async function main() {
         await writeFile(resolve(args.out), `${output}\n`);
     }
 
-    if (args.check) {
+    if (args.check && args.baseline) {
         const baseline = await loadBaseline(args.baseline);
-        const comparison = evaluateAgainstBaseline(outputData, baseline, thresholds);
+        const comparison = evaluateAgainstBaseline(
+            outputData,
+            baseline as { meta: BaselineMeta; results?: Array<{ seed: string; metrics: Record<string, number> }> },
+            thresholds,
+        );
 
         for (const warning of comparison.warnings) {
             console.error(`[seed-regression] warn: ${warning}`);

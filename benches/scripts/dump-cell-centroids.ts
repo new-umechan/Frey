@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 
 import initWasm, { generate_mesh } from "../../generated/wasm/web/frey_wasm";
 
-function parseNumber(value, name) {
+function parseNumber(value: unknown, name: string) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
         throw new Error(`${name} must be a finite number`);
@@ -11,7 +11,7 @@ function parseNumber(value, name) {
     return parsed;
 }
 
-function parseArgs(argv) {
+function parseArgs(argv: string[]) {
     const args = {
         level: 6,
         out: "benches/data/cell_centroids.csv",
@@ -57,7 +57,7 @@ async function initWasmForNode() {
     }
 }
 
-function normalizeLongitude(lonDeg) {
+function normalizeLongitude(lonDeg: number) {
     let lon = lonDeg;
     while (lon <= -180) {
         lon += 360;
@@ -68,7 +68,7 @@ function normalizeLongitude(lonDeg) {
     return lon;
 }
 
-function buildCsv(positionsFlat) {
+function buildCsv(positionsFlat: number[]) {
     const lines = ["cell_id,latitude,longitude"];
     const count = Math.floor(positionsFlat.length / 3);
     for (let i = 0; i < count; i += 1) {

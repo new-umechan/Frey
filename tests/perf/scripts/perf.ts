@@ -12,7 +12,7 @@ import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params
 
 const DEFAULT_THRESHOLD = 0.10;
 
-function parseNumber(value, flagName) {
+function parseNumber(value: unknown, flagName: string): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
         throw new Error(`${flagName} must be a finite number`);
@@ -20,7 +20,7 @@ function parseNumber(value, flagName) {
     return parsed;
 }
 
-function parseArgs(argv) {
+function parseArgs(argv: string[]) {
     const args = {
         ticks: 32,
         seed: "alpha",
@@ -28,13 +28,13 @@ function parseArgs(argv) {
         viewMode: "normal",
         sampleInterval: 4,
         level: TERRAIN_LEVEL,
-        out: null,
-        baseline: null,
+        out: null as string | null,
+        baseline: null as string | null,
         threshold: DEFAULT_THRESHOLD,
-        thresholdTickTotal: null,
-        thresholdStepWorld: null,
-        thresholdStepClimate: null,
-        thresholdStepGeologyRiver: null,
+        thresholdTickTotal: null as number | null,
+        thresholdStepWorld: null as number | null,
+        thresholdStepClimate: null as number | null,
+        thresholdStepGeologyRiver: null as number | null,
         progress: false,
         noGeometry: false,
         profileEveryTick: false,
@@ -149,28 +149,51 @@ function printHelp() {
     console.error("  --geometry-update-min-changed-ratio <0..1>");
 }
 
-function getPathValue(obj, path) {
+function getPathValue(obj: Record<string, unknown>, path: string): unknown {
     const keys = path.split(".");
-    let current = obj;
+    let current: unknown = obj;
     for (const key of keys) {
-        if (current == null || !(key in current)) {
+        if (current == null || typeof current !== "object" || !(key in current)) {
             return undefined;
         }
-        current = current[key];
+        current = (current as Record<string, unknown>)[key];
     }
     return current;
 }
 
-function formatRatio(value) {
+function formatRatio(value: number): string {
     return `${(value * 100).toFixed(2)}%`;
 }
 
-async function loadBaseline(pathname) {
+async function loadBaseline(pathname: string): Promise<unknown> {
     const content = await readFile(resolve(pathname), "utf8");
-    return JSON.parse(content);
+    return JSON.parse(content) as unknown;
 }
 
-function evaluateRegression(current, baseline, args) {
+interface RegressionArgs {
+    thresholdTickTotal: number | null;
+    thresholdStepWorld: number | null;
+    thresholdStepClimate: number | null;
+    thresholdStepGeologyRiver: number | null;
+    threshold: number;
+}
+
+interface RegressionResult {
+    warnings: string[];
+    regressions: Array<{
+        label: string;
+        baselineValue: number;
+        currentValue: number;
+        threshold: number;
+        allowedMax: number;
+    }>;
+}
+
+function evaluateRegression(
+    current: unknown,
+    baseline: unknown,
+    args: RegressionArgs,
+): RegressionResult {
     const specs = [
         {
             label: "tick_total.mean",
@@ -198,8 +221,8 @@ function evaluateRegression(current, baseline, args) {
     const regressions = [];
 
     for (const spec of specs) {
-        const currentValue = Number(getPathValue(current, spec.path));
-        const baselineValue = Number(getPathValue(baseline, spec.path));
+        const currentValue = Number(getPathValue(current as Record<string, unknown>, spec.path));
+        const baselineValue = Number(getPathValue(baseline as Record<string, unknown>, spec.path));
 
         if (!Number.isFinite(currentValue) || !Number.isFinite(baselineValue)) {
             warnings.push(`skip ${spec.label}: missing numeric value`);
@@ -269,12 +292,12 @@ async function main() {
             user_agent: `node ${process.version}`,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
-        onProgress(payload) {
+        onProgress(payload: { status: string }) {
             if (args.progress) {
                 console.error(payload.status);
             }
         },
-        onWarning(message) {
+        onWarning(message: string) {
             console.error(`[bench warning] ${message}`);
         },
     });

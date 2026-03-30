@@ -14,19 +14,19 @@ const BENCHES = [
         title: "CLIMATE_SOLO",
         jsonlPath: "benches/results/climate_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "climate_solo"],
-        summarize(record) {
-            const phase2 = record?.phase2?.metrics ?? {};
-            const phase1 = record?.phase1 ?? {};
+        summarize(record: Record<string, unknown>) {
+            const phase2 = (record as { phase2?: { metrics?: Record<string, unknown> } })?.phase2?.metrics ?? {};
+            const phase1 = (record as { phase1?: Record<string, { matched?: unknown }> })?.phase1 ?? {};
             const rankingMatched = ["temperature", "precipitation", "aridity"]
                 .map((key) => Number(phase1?.[key]?.matched))
                 .filter((value) => Number.isFinite(value))
                 .reduce((sum, value) => sum + (value > 0 ? 1 : 0), 0);
             return [
-                ["temperature_rho", phase2.temperature],
-                ["precipitation_rho", phase2.precipitation],
-                ["evapotrans_rho", phase2.evapotranspiration],
-                ["runoff_rho", phase2.runoff],
-                ["aridity_rho", phase2.aridity],
+                ["temperature_rho", (phase2 as Record<string, unknown>).temperature],
+                ["precipitation_rho", (phase2 as Record<string, unknown>).precipitation],
+                ["evapotrans_rho", (phase2 as Record<string, unknown>).evapotranspiration],
+                ["runoff_rho", (phase2 as Record<string, unknown>).runoff],
+                ["aridity_rho", (phase2 as Record<string, unknown>).aridity],
                 [
                     "ranking_assertions",
                     {
@@ -35,7 +35,7 @@ const BENCHES = [
                         ratio: 3 > 0 ? rankingMatched / 3 : null,
                     },
                 ],
-            ];
+            ] as [string, unknown][];
         },
     },
     {
@@ -43,21 +43,21 @@ const BENCHES = [
         title: "HYDROLOGY_SOLO",
         jsonlPath: "benches/results/hydrology_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "hydrology_solo"],
-        summarize(record) {
-            const main = record?.main_evaluation?.metrics ?? {};
-            const ranking = record?.diagnostic_evaluation?.river_flow_assertions ?? {};
+        summarize(record: Record<string, unknown>) {
+            const main = (record as { main_evaluation?: { metrics?: Record<string, unknown> } })?.main_evaluation?.metrics ?? {};
+            const ranking = (record as { diagnostic_evaluation?: { river_flow_assertions?: Record<string, unknown> } })?.diagnostic_evaluation?.river_flow_assertions ?? {};
             return [
-                ["river_flow_rho", main.river_flow_rho],
-                ["is_lake_f1", main.is_lake_f1],
+                ["river_flow_rho", (main as Record<string, unknown>).river_flow_rho],
+                ["is_lake_f1", (main as Record<string, unknown>).is_lake_f1],
                 [
                     "ranking_assertions",
                     {
-                        matched: ranking.matched,
-                        total: ranking.total,
-                        ratio: ranking.coverage_ratio,
+                        matched: (ranking as Record<string, unknown>).matched,
+                        total: (ranking as Record<string, unknown>).total,
+                        ratio: (ranking as Record<string, unknown>).coverage_ratio,
                     },
                 ],
-            ];
+            ] as [string, unknown][];
         },
     },
     {
@@ -65,37 +65,37 @@ const BENCHES = [
         title: "ECOLOGY_SOLO",
         jsonlPath: "benches/results/ecology_main_scores.jsonl",
         command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "ecology_solo"],
-        summarize(record) {
-            const main = record?.main_evaluation?.metrics ?? {};
-            const ranking = record?.diagnostic_evaluation?.biome_assertions ?? {};
+        summarize(record: Record<string, unknown>) {
+            const main = (record as { main_evaluation?: { metrics?: Record<string, unknown> } })?.main_evaluation?.metrics ?? {};
+            const ranking = (record as { diagnostic_evaluation?: { biome_assertions?: Record<string, unknown> } })?.diagnostic_evaluation?.biome_assertions ?? {};
             return [
-                ["tree_cover_rho", main.tree_cover_rho],
-                ["ground_cover_rho", main.ground_cover_rho],
-                ["biome_macro_f1", main.biome_macro_f1],
+                ["tree_cover_rho", (main as Record<string, unknown>).tree_cover_rho],
+                ["ground_cover_rho", (main as Record<string, unknown>).ground_cover_rho],
+                ["biome_macro_f1", (main as Record<string, unknown>).biome_macro_f1],
                 [
                     "ranking_assertions",
                     {
-                        matched: ranking.matched,
-                        total: ranking.total,
-                        ratio: ranking.coverage_ratio,
+                        matched: (ranking as Record<string, unknown>).matched,
+                        total: (ranking as Record<string, unknown>).total,
+                        ratio: (ranking as Record<string, unknown>).coverage_ratio,
                     },
                 ],
-            ];
+            ] as [string, unknown][];
         },
     },
 ];
 
-function toFiniteNumber(value) {
+function toFiniteNumber(value: unknown) {
     const num = Number(value);
     return Number.isFinite(num) ? num : null;
 }
 
-function formatNumber(value, digits = 3) {
+function formatNumber(value: unknown, digits = 3) {
     const num = toFiniteNumber(value);
     return num == null ? "-" : num.toFixed(digits);
 }
 
-function formatDelta(current, previous) {
+function formatDelta(current: unknown, previous: unknown) {
     const c = toFiniteNumber(current);
     const p = toFiniteNumber(previous);
     if (c == null || p == null) {
@@ -106,13 +106,14 @@ function formatDelta(current, previous) {
     return `${sign}${diff.toFixed(3)}`;
 }
 
-function parseRankingValue(value) {
+function parseRankingValue(value: unknown) {
     if (!value || typeof value !== "object") {
         return null;
     }
-    const matched = toFiniteNumber(value.matched);
-    const total = toFiniteNumber(value.total);
-    const ratio = toFiniteNumber(value.ratio);
+    const obj = value as Record<string, unknown>;
+    const matched = toFiniteNumber(obj.matched);
+    const total = toFiniteNumber(obj.total);
+    const ratio = toFiniteNumber(obj.ratio);
     if (matched == null || total == null || total <= 0) {
         return null;
     }
@@ -123,7 +124,7 @@ function parseRankingValue(value) {
     };
 }
 
-function formatMetricValue(value) {
+function formatMetricValue(value: unknown) {
     const ranking = parseRankingValue(value);
     if (ranking) {
         return `${Math.round(ranking.matched)}/${Math.round(ranking.total)} (${ranking.ratio.toFixed(3)})`;
@@ -131,7 +132,7 @@ function formatMetricValue(value) {
     return formatNumber(value);
 }
 
-function metricToChartValue(value) {
+function metricToChartValue(value: unknown) {
     const ranking = parseRankingValue(value);
     if (ranking) {
         return ranking.ratio;
@@ -143,8 +144,8 @@ function metricToChartValue(value) {
     return Math.max(0, Math.min(1, num));
 }
 
-function readParsedJsonLines(content) {
-    const rows = [];
+function readParsedJsonLines(content: string) {
+    const rows: Record<string, unknown>[] = [];
     for (const line of content.split("\n")) {
         const trimmed = line.trim();
         if (trimmed.length === 0) {
@@ -159,7 +160,7 @@ function readParsedJsonLines(content) {
     return rows;
 }
 
-async function readRecentRecords(pathname, count = 2) {
+async function readRecentRecords(pathname: string, count = 2) {
     try {
         const content = await readFile(resolve(pathname), "utf8");
         const parsed = readParsedJsonLines(content);
@@ -172,7 +173,16 @@ async function readRecentRecords(pathname, count = 2) {
     }
 }
 
-function renderStatusTable(widget, states) {
+interface BenchState {
+    status?: string;
+    startedAt?: number | null;
+    endedAt?: number | null;
+    elapsedMs?: number | null;
+    summary?: [string, unknown][];
+    previousSummary?: [string, unknown][];
+}
+
+function renderStatusTable(widget: { setData: (data: { headers: string[]; data: string[][] }) => void }, states: Record<string, BenchState>) {
     const rows = BENCHES.map((bench, index) => {
         const state = states[bench.id] ?? {};
         const started = state.startedAt ? new Date(state.startedAt).toLocaleTimeString() : "-";
@@ -186,7 +196,7 @@ function renderStatusTable(widget, states) {
     });
 }
 
-function renderMetricsTable(widget, activeBenchId, states) {
+function renderMetricsTable(widget: { setData: (data: { headers: string[]; data: string[][] }) => void }, activeBenchId: string | null, states: Record<string, BenchState>) {
     const state = activeBenchId ? states[activeBenchId] : null;
     const current = state?.summary ?? [];
     const previousMap = new Map((state?.previousSummary ?? []).map(([name, value]) => [name, value]));
@@ -207,7 +217,7 @@ function renderMetricsTable(widget, activeBenchId, states) {
     });
 }
 
-function renderChart(widget, activeBenchId, states) {
+function renderChart(widget: { setData: (data: unknown[]) => void }, activeBenchId: string | null, states: Record<string, BenchState>) {
     const state = activeBenchId ? states[activeBenchId] : null;
     const current = state?.summary ?? [];
     const previousMap = new Map((state?.previousSummary ?? []).map(([name, value]) => [name, value]));
@@ -251,7 +261,7 @@ function renderChart(widget, activeBenchId, states) {
     ]);
 }
 
-function pushSummaryLog(logWidget, title, summary, previousSummary) {
+function pushSummaryLog(logWidget: { log: (message: string) => void }, title: string, summary: [string, unknown][], previousSummary: [string, unknown][]) {
     const previousMap = new Map(previousSummary.map(([name, value]) => [name, value]));
     logWidget.log(`[${title}]`);
     for (const [name, value] of summary) {
@@ -269,7 +279,7 @@ function pushSummaryLog(logWidget, title, summary, previousSummary) {
     logWidget.log("");
 }
 
-function runBench(bench, states, onLog, onUpdate) {
+function runBench(bench: typeof BENCHES[number], states: Record<string, BenchState>, onLog: (message: string) => void, onUpdate: (id: string) => void) {
     return new Promise((resolveRun) => {
         const startedAt = Date.now();
         const currentState = states[bench.id] ?? {};
@@ -320,7 +330,7 @@ function runBench(bench, states, onLog, onUpdate) {
         child.on("close", async (code, signal) => {
             const endedAt = Date.now();
             const status = code === 0 ? "done" : `error(${code ?? "?"}${signal ? `/${signal}` : ""})`;
-            const next = {
+            const next: BenchState = {
                 ...(states[bench.id] ?? {}),
                 status,
                 endedAt,
@@ -340,7 +350,7 @@ function runBench(bench, states, onLog, onUpdate) {
     });
 }
 
-async function preloadHistory(states) {
+async function preloadHistory(states: Record<string, BenchState>) {
     for (const bench of BENCHES) {
         const recent = await readRecentRecords(bench.jsonlPath, 2);
         states[bench.id] = {
@@ -409,12 +419,12 @@ async function main() {
         border: { fg: UI_COLOR },
     });
 
-    const states = {};
-    let activeBenchId = null;
+    const states: Record<string, BenchState> = {};
+    let activeBenchId: string | null = null;
 
     await preloadHistory(states);
 
-    function rerender(currentBenchId = activeBenchId) {
+    function rerender(currentBenchId: string | null = activeBenchId) {
         if (currentBenchId) {
             activeBenchId = currentBenchId;
         }
@@ -430,7 +440,7 @@ async function main() {
         screen.render();
     }
 
-    function pushLog(message) {
+    function pushLog(message: string) {
         log.log(message);
         screen.render();
     }

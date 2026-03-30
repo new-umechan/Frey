@@ -6,7 +6,7 @@ const SUITES = [
     "ecology_solo",
 ];
 
-function parseArgs(argv) {
+function parseArgs(argv: string[]) {
     const args = {
         suite: "all",
         list: false,
@@ -47,7 +47,7 @@ function printSuites() {
     }
 }
 
-function resolveSuites(args) {
+function resolveSuites(args: { suite: string; list: boolean }) {
     if (args.suite === "all") {
         return [...SUITES];
     }
@@ -57,7 +57,7 @@ function resolveSuites(args) {
     return [args.suite];
 }
 
-function runCargoBench(suite) {
+function runCargoBench(suite: string) {
     return new Promise((resolve, reject) => {
         const child = spawn(
             "cargo",
@@ -68,7 +68,7 @@ function runCargoBench(suite) {
         );
 
         child.on("error", reject);
-        child.on("exit", (code, signal) => {
+        child.on("exit", (code: number | null, signal: string | null) => {
             if (signal) {
                 reject(new Error(`${suite} terminated by signal: ${signal}`));
                 return;
