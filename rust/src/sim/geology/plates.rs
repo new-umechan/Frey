@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
 pub(super) fn choose_plate_count(
     min_count: u32,
@@ -360,7 +361,7 @@ pub(super) fn partition_plates(
     input: PlatePartitionInput<'_>,
     seeds: &[usize],
     growth_profiles: &[PlateGrowthProfile],
-) -> Vec<u32> {
+) -> Vec<PlateId> {
     let positions = input.positions;
     let phi = input.phi;
     let plate_cost_warp_basis = input.plate_cost_warp_basis;
@@ -369,12 +370,12 @@ pub(super) fn partition_plates(
     let boundary_band = input.boundary_band;
 
     let mut best_cost = vec![f32::INFINITY; positions.len()];
-    let mut plate_id = vec![u32::MAX; positions.len()];
+    let mut plate_id = vec![PlateId(u32::MAX); positions.len()];
     let mut heap = BinaryHeap::<QueueState>::new();
 
     for (plate, &seed) in seeds.iter().enumerate() {
         best_cost[seed] = 0.0;
-        plate_id[seed] = plate as u32;
+        plate_id[seed] = PlateId(plate as u32);
         heap.push(QueueState {
             cost: 0.0,
             vertex: seed,
@@ -418,7 +419,7 @@ pub(super) fn partition_plates(
 
             if next_cost + 1e-7 < best_cost[n] {
                 best_cost[n] = next_cost;
-                plate_id[n] = state.plate as u32;
+                plate_id[n] = PlateId(state.plate as u32);
                 heap.push(QueueState {
                     cost: next_cost,
                     vertex: n,
@@ -429,7 +430,7 @@ pub(super) fn partition_plates(
     }
 
     for v in 0..plate_id.len() {
-        if plate_id[v] == u32::MAX {
+        if plate_id[v].as_u32() == u32::MAX {
             let mut best_seed = 0;
             let mut best_dist = f32::MAX;
             for (plate, &seed) in seeds.iter().enumerate() {
@@ -439,7 +440,7 @@ pub(super) fn partition_plates(
                     best_seed = plate as u32;
                 }
             }
-            plate_id[v] = best_seed;
+            plate_id[v] = PlateId(best_seed);
         }
     }
 
@@ -449,7 +450,7 @@ pub(super) fn partition_plates(
 pub(super) fn cleanup_plate_components(
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &mut [u32],
+    plate_id: &mut [PlateId],
     plate_count: usize,
 ) {
     if plate_id.is_empty() || plate_count == 0 {
@@ -461,7 +462,7 @@ pub(super) fn cleanup_plate_components(
         let largest = largest_component_sizes_by_plate(nbr_offsets, nbrs, plate_id, plate_count);
         let mut visited = vec![false; plate_id.len()];
         let mut stack = Vec::<usize>::new();
-        let mut relabel = Vec::<(usize, u32)>::new();
+        let mut relabel = Vec::<(usize, PlateId)>::new();
         let mut changed = false;
 
         for start_v in 0..plate_id.len() {
@@ -469,7 +470,7 @@ pub(super) fn cleanup_plate_components(
                 continue;
             }
             let plate = plate_id[start_v];
-            if (plate as usize) >= plate_count {
+            if plate.as_usize() >= plate_count {
                 visited[start_v] = true;
                 continue;
             }
@@ -502,8 +503,8 @@ pub(super) fn cleanup_plate_components(
                 let end = nbr_offsets[v + 1] as usize;
                 for &n in &nbrs[start..end] {
                     let n = n as usize;
-                    let other = plate_id[n] as usize;
-                    if other >= plate_count || other == plate as usize {
+                    let other = plate_id[n].as_usize();
+                    if other >= plate_count || other == plate.as_usize() {
                         continue;
                     }
                     if neighbor_counts[other] == 0 {
@@ -519,14 +520,14 @@ pub(super) fn cleanup_plate_components(
 
             let is_enclave = unique_neighbors == 1 && best_neighbor.is_some();
             let is_small_fragment =
-                component.len() <= small_component_max && component.len() < largest[plate as usize];
+                component.len() <= small_component_max && component.len() < largest[plate.as_usize()];
 
             if !(is_enclave || is_small_fragment) {
                 continue;
             }
 
             let target = match best_neighbor {
-                Some(v) => v as u32,
+                Some(v) => PlateId(v as u32),
                 None => continue,
             };
             for &v in &component {
@@ -550,7 +551,7 @@ pub(super) fn cleanup_plate_components(
 pub(super) fn largest_component_sizes_by_plate(
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     plate_count: usize,
 ) -> Vec<usize> {
     let mut largest = vec![0usize; plate_count];
@@ -562,7 +563,7 @@ pub(super) fn largest_component_sizes_by_plate(
             continue;
         }
         visited[start_v] = true;
-        let plate = plate_id[start_v] as usize;
+        let plate = plate_id[start_v].as_usize();
         if plate >= plate_count {
             continue;
         }
@@ -575,7 +576,7 @@ pub(super) fn largest_component_sizes_by_plate(
             let end = nbr_offsets[v + 1] as usize;
             for &n in &nbrs[start..end] {
                 let n = n as usize;
-                if visited[n] || plate_id[n] as usize != plate {
+                if visited[n] || plate_id[n].as_usize() != plate {
                     continue;
                 }
                 visited[n] = true;
@@ -591,11 +592,12 @@ pub(super) fn largest_component_sizes_by_plate(
     largest
 }
 
-pub(super) fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> Vec<u32> {
+pub(super) fn compact_plate_ids(mut plate_id: Vec<PlateId>, plate_count: usize) -> Vec<PlateId> {
     let mut counts = vec![0usize; plate_count];
     for &id in &plate_id {
-        if (id as usize) < counts.len() {
-            counts[id as usize] += 1;
+        let idx = id.as_usize();
+        if idx < counts.len() {
+            counts[idx] += 1;
         }
     }
 
@@ -603,11 +605,12 @@ pub(super) fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> V
         .iter()
         .enumerate()
         .max_by_key(|(_, c)| **c)
-        .map(|(i, _)| i as u32)
-        .unwrap_or(0);
+        .map(|(i, _)| PlateId(i as u32))
+        .unwrap_or(PlateId(0));
 
     for id in &mut plate_id {
-        if (*id as usize) >= plate_count || counts[*id as usize] == 0 {
+        let idx = id.as_usize();
+        if idx >= plate_count || counts[idx] == 0 {
             *id = fallback;
         }
     }
@@ -616,7 +619,7 @@ pub(super) fn compact_plate_ids(mut plate_id: Vec<u32>, plate_count: usize) -> V
 }
 
 pub(super) fn assign_plate_attributes(
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     plate_count: usize,
     phi: &[f32],
     rng: &mut DeterministicRng,
@@ -624,13 +627,13 @@ pub(super) fn assign_plate_attributes(
 ) -> Vec<PlateAttr> {
     let mut plate_counts = vec![0usize; plate_count];
     let mut plate_phi_sum = vec![0.0f32; plate_count];
-    for (v, &pid_u32) in plate_id.iter().enumerate() {
-        let pid = pid_u32 as usize;
-        if pid >= plate_count {
+    for (v, &pid) in plate_id.iter().enumerate() {
+        let pid_idx = pid.as_usize();
+        if pid_idx >= plate_count {
             continue;
         }
-        plate_counts[pid] += 1;
-        plate_phi_sum[pid] += phi[v];
+        plate_counts[pid_idx] += 1;
+        plate_phi_sum[pid_idx] += phi[v];
     }
 
     let mut plate_scores = Vec::with_capacity(plate_count);
@@ -712,7 +715,7 @@ pub(super) fn compute_vertex_lithosphere(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     boundary_edges: &[BoundaryEdge],
     params: &GeologyParams,
@@ -745,7 +748,7 @@ pub(super) fn compute_vertex_lithosphere(
     let mut has_boundary_seed = vec![false; plate_count];
 
     for i in 0..v_count {
-        let pid = plate_id[i] as usize;
+        let pid = plate_id[i].as_usize();
         lith[i].weight = attributes[pid].base_weight;
         lith[i].buoyancy = attributes[pid].base_height;
         lith[i].competence = 0.5;
@@ -753,7 +756,7 @@ pub(super) fn compute_vertex_lithosphere(
 
     let mut continental_competence_raw = vec![0.0_f32; v_count];
     for v in 0..v_count {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if attributes[pid].is_ocean {
             continue;
         }
@@ -776,7 +779,7 @@ pub(super) fn compute_vertex_lithosphere(
     for edge in boundary_edges {
         let is_divergent = matches!(edge.boundary_type, BoundaryType::Divergent);
         for &v in &[edge.a, edge.b] {
-            let pv = plate_id[v] as usize;
+            let pv = plate_id[v].as_usize();
             if !attributes[pv].is_ocean {
                 continue;
             }
@@ -796,7 +799,7 @@ pub(super) fn compute_vertex_lithosphere(
     }
 
     for i in 0..v_count {
-        let pid = plate_id[i] as usize;
+        let pid = plate_id[i].as_usize();
         if !attributes[pid].is_ocean {
             continue;
         }
@@ -824,7 +827,7 @@ pub(super) fn compute_vertex_lithosphere(
         if state.cost > crust_age_dist[state.vertex] + 1e-6 {
             continue;
         }
-        let pid = plate_id[state.vertex] as usize;
+        let pid = plate_id[state.vertex].as_usize();
         if !attributes[pid].is_ocean {
             continue;
         }
@@ -836,7 +839,7 @@ pub(super) fn compute_vertex_lithosphere(
             if plate_id[n] != plate_id[state.vertex] {
                 continue;
             }
-            let npid = plate_id[n] as usize;
+            let npid = plate_id[n].as_usize();
             if !attributes[npid].is_ocean {
                 continue;
             }
@@ -872,7 +875,7 @@ pub(super) fn compute_vertex_lithosphere(
 
     let mut ocean_plate_max_age = vec![0.0_f32; plate_count];
     for v in 0..v_count {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if !attributes[pid].is_ocean {
             continue;
         }
@@ -882,7 +885,7 @@ pub(super) fn compute_vertex_lithosphere(
     }
 
     for v in 0..v_count {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if !attributes[pid].is_ocean {
             lith[v].age_norm = 0.0;
             let competence = clamp(
@@ -940,7 +943,7 @@ pub(super) fn sample_continental_competence_noise(
 pub(super) fn smooth_continental_field_by_plate(
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     field: &mut [f32],
     iter: u32,
@@ -951,7 +954,7 @@ pub(super) fn smooth_continental_field_by_plate(
     let mut buf = field.to_vec();
     for _ in 0..iter {
         for v in 0..field.len() {
-            let pid = plate_id[v] as usize;
+            let pid = plate_id[v].as_usize();
             if attributes[pid].is_ocean {
                 buf[v] = field[v];
                 continue;

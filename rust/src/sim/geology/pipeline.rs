@@ -162,7 +162,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
         CrustUpdatePhase::BuildBaseHeight => {
             let mut height = vec![0.0; state.positions.len()];
             for (v, height_v) in height.iter_mut().enumerate().take(state.positions.len()) {
-                let pid = state.plate_id[v] as usize;
+                let pid = state.plate_id[v].as_usize();
                 let boundary_w = state.plate_boundary_proximity[v];
                 let land_ocean_scale = if state.attributes[pid].is_ocean {
                     0.85

@@ -1,10 +1,11 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
 pub(super) struct BoundaryModelInput<'a> {
     pub positions: &'a [[f32; 3]],
     pub nbr_offsets: &'a [u32],
     pub nbrs: &'a [u32],
-    pub plate_id: &'a [u32],
+    pub plate_id: &'a [PlateId],
     pub attributes: &'a [PlateAttr],
     pub vertex_lithosphere: &'a [VertexLithosphere],
     pub boundary_edges: &'a [BoundaryEdge],
@@ -55,7 +56,7 @@ pub(super) fn apply_boundary_model(
             continue;
         }
         let edge = boundary_edges[edge_idx];
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         let d = boundary_dist[v];
         let dist_scale = (-(d * params.boundary_distance_falloff)).exp();
 
@@ -304,7 +305,7 @@ pub(super) struct IntraplateFoldInput<'a> {
     pub positions: &'a [[f32; 3]],
     pub nbr_offsets: &'a [u32],
     pub nbrs: &'a [u32],
-    pub plate_id: &'a [u32],
+    pub plate_id: &'a [PlateId],
     pub attributes: &'a [PlateAttr],
     pub vertex_lithosphere: &'a [VertexLithosphere],
     pub boundary_edges: &'a [BoundaryEdge],
@@ -350,7 +351,7 @@ pub(super) fn apply_intraplate_fold_belts(
     let preserve_gain = 0.55;
 
     for v in 0..height.len() {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if pid >= attributes.len() || attributes[pid].is_ocean {
             continue;
         }
@@ -435,7 +436,7 @@ pub(super) fn extract_boundary_edges(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
 ) -> Vec<BoundaryEdge> {
     let mut edges = Vec::new();
@@ -450,8 +451,8 @@ pub(super) fn extract_boundary_edges(
                 continue;
             }
 
-            let plate_a = plate_id[i] as usize;
-            let plate_b = plate_id[j] as usize;
+            let plate_a = plate_id[i].as_usize();
+            let plate_b = plate_id[j].as_usize();
             if plate_a == plate_b {
                 continue;
             }
@@ -758,7 +759,7 @@ fn compute_continental_stress_assignment(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     fold_sources: &[IntraplateFoldSource],
 ) -> (Vec<usize>, Vec<f32>) {
@@ -769,7 +770,7 @@ fn compute_continental_stress_assignment(
 
     for (source_idx, source) in fold_sources.iter().enumerate() {
         for &v in &[source.edge.a, source.edge.b] {
-            let pid = plate_id[v] as usize;
+            let pid = plate_id[v].as_usize();
             if pid >= attributes.len() || attributes[pid].is_ocean {
                 continue;
             }
@@ -794,7 +795,7 @@ fn compute_continental_stress_assignment(
         let end = nbr_offsets[state.vertex + 1] as usize;
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
-            let npid = plate_id[n] as usize;
+            let npid = plate_id[n].as_usize();
             if npid >= attributes.len() || attributes[npid].is_ocean {
                 continue;
             }

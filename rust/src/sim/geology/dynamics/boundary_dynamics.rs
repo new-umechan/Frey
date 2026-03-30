@@ -1,5 +1,6 @@
+use crate::sim::geology_types::{CrustType, PlateId};
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, PlateId, PlateKinematicsState, VertexCrustState,
+    BoundaryDynamicsState, BoundaryType, PlateKinematicsState, VertexCrustState,
 };
 use crate::GeologyParams;
 

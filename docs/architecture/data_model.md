@@ -63,8 +63,21 @@ struct CellStore {
     plate_id:             Vec<PlateId>,
     volcanism:            Vec<f32>,
     vertex_buoyancy:      Vec<f32>,
+    lake_depth:           Vec<f32>,       // 湖の深さ。窪地を湖として扱う
 
     geology_internal:     Vec<GeologyInternal>,
+
+    // --- Geology (debug/intermediate) ---
+    // 以下のフィールドはデバッグ用途または内部中間状態。公開 API (GeologyOutput) からのみ参照可能。
+    plate_is_ocean:       Vec<u8>,        // プレートが海洋か大陸か (0: 大陸，1: 海洋)
+    plate_base_height:    Vec<f32>,       // プレート基準高さ (デバッグ用)
+    plate_base_weight:    Vec<f32>,       // プレート基準重み (デバッグ用)
+    vertex_age_norm:      Vec<f32>,       // 頂点年齢正規化 (デバッグ用)
+    vertex_weight:        Vec<f32>,       // 頂点重み (デバッグ用)
+    debug_trench_strength: Vec<f32>,      // 海溝強度 (デバッグ用)
+    debug_arc_strength:    Vec<f32>,      // アーク強度 (デバッグ用)
+    debug_backarc_strength: Vec<f32>,     // バックアーク強度 (デバッグ用)
+    debug_ocean_ocean_arc_strength: Vec<f32>, // 海洋 - 海洋アーク強度 (デバッグ用)
 
     // --- Climate ---
     temperature:          Vec<f32>,
@@ -80,10 +93,10 @@ struct CellStore {
 
     river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,
-    river_transport_cost: Vec<f32>,
+    river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用
     erosion_rate:         Vec<f32>,
     deposition_rate:      Vec<f32>,
-    is_lake:              Vec<bool>,  // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
+    is_lake:              Vec<bool>,      // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
 
     // --- Ecology（公開）---
     biome:                Vec<Biome>,
@@ -128,7 +141,7 @@ struct CellStore {
 ### 内部状態Componentの型定義
 
 ```rust
-struct GeologyInternal {
+struct GeologyInternal {  // geology_types.rs で定義
     crust_type:        CrustType,
     age:               f32,
     thickness:         f32,

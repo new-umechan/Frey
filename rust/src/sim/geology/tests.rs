@@ -64,7 +64,7 @@ mod cases {
         );
         let mut height = vec![0.0; positions.len()];
         for v in 0..positions.len() {
-            let pid = plate_id[v] as usize;
+            let pid = plate_id[v].as_usize();
             let noise = rng.gen_range_f32(-0.03, 0.03);
             let crust_base = if attributes[pid].is_ocean {
                 vertex_lithosphere[v].buoyancy
@@ -299,7 +299,7 @@ mod cases {
         let mut ocean_land = 0usize;
 
         for (i, &h) in output.height.iter().enumerate() {
-            let pid = output.plate_id[i] as usize;
+            let pid = output.plate_id[i].as_usize();
             let is_ocean = output.plate_is_ocean[pid] != 0;
             if is_ocean {
                 ocean_sum += h;
@@ -349,7 +349,7 @@ mod cases {
             let mut mean_sum = vec![0.0f32; plate_count];
 
             for (i, &h) in output.height.iter().enumerate() {
-                let pid = output.plate_id[i] as usize;
+                let pid = output.plate_id[i].as_usize();
                 counts[pid] += 1;
                 mean_sum[pid] += h;
                 if h > 0.0 {
@@ -391,7 +391,7 @@ mod cases {
             let mut ocean_land = 0usize;
             let mut ocean_vertices = 0usize;
             for (i, &h) in output.height.iter().enumerate() {
-                let pid = output.plate_id[i] as usize;
+                let pid = output.plate_id[i].as_usize();
                 let is_ocean = output.plate_is_ocean[pid] != 0;
                 if !is_ocean {
                     continue;

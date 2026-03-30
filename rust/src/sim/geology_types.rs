@@ -7,6 +7,61 @@ pub struct MeshOutput {
     pub(crate) indices: Vec<u32>,
 }
 
+/// 地殻タイプ。海洋地殻と大陸地殻を区別する
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CrustType {
+    #[default]
+    Continental,
+    Oceanic,
+}
+
+/// 応力テンソル。2D平面応力状態を表現する
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct StressTensor {
+    pub xx: f32,
+    pub yy: f32,
+    pub xy: f32,
+}
+
+/// 地殻内部状態。GeologySystem内部で保持する永続状態
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct GeologyInternal {
+    #[serde(default)]
+    pub crust_type: CrustType,
+    #[serde(default)]
+    pub age: f32,
+    #[serde(default = "default_thickness")]
+    pub thickness: f32,
+    #[serde(default = "default_density")]
+    pub density: f32,
+    #[serde(default)]
+    pub stress: StressTensor,
+    #[serde(default)]
+    pub temperature: f32,
+    #[serde(default = "default_rigidity")]
+    pub rigidity: f32,
+    #[serde(default)]
+    pub arc_volcanism: f32,
+    #[serde(default)]
+    pub ridge_volcanism: f32,
+    #[serde(default)]
+    pub hotspot_volcanism: f32,
+    #[serde(default)]
+    pub backarc_volcanism: f32,
+}
+
+fn default_thickness() -> f32 {
+    30.0
+}
+
+fn default_density() -> f32 {
+    2700.0
+}
+
+fn default_rigidity() -> f32 {
+    30e9
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct GeologyParams {
     pub level: u32,
@@ -113,10 +168,27 @@ impl Default for GeologyParams {
     }
 }
 
+/// プレート ID。newtype パターンで型安全性を確保する
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd
+)]
+#[serde(transparent)]
+pub struct PlateId(pub u32);
+
+impl PlateId {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
 #[derive(Serialize)]
 pub struct GeologyOutput {
     pub height: Vec<f32>,
-    pub plate_id: Vec<u32>,
+    pub plate_id: Vec<PlateId>,
     pub plate_count: u32,
     pub land_ratio: f32,
     pub river_flux: Vec<f32>,

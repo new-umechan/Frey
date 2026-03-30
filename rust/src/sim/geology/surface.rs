@@ -1,16 +1,17 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
 pub(super) fn postprocess_height(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &mut [f32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     target_sea_ratio: f32,
 ) {
     let mut adjusted = Vec::with_capacity(height.len());
     for v in 0..height.len() {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         let buoyancy_bias = if attributes[pid].is_ocean {
             -0.09
         } else {
@@ -61,14 +62,14 @@ pub(super) fn apply_hotspot_island_chains(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     height: &mut [f32],
     rng: &mut DeterministicRng,
 ) {
     let mut ocean_interior = Vec::new();
     for v in 0..positions.len() {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if pid >= attributes.len() || !attributes[pid].is_ocean {
             continue;
         }
@@ -119,7 +120,7 @@ pub(super) fn apply_hotspot_island_chains(
     }
 
     for &source in &chosen_sources {
-        let pid = plate_id[source] as usize;
+        let pid = plate_id[source].as_usize();
         let source_pos = positions[source];
 
         let mut tangent = local_plate_velocity(&attributes[pid], pid, source_pos);
@@ -163,7 +164,7 @@ pub(super) fn apply_hotspot_island_chains(
         }
 
         for v in 0..positions.len() {
-            if plate_id[v] as usize != pid {
+            if plate_id[v].as_usize() != pid {
                 continue;
             }
             if height[v] > 0.20 {
@@ -2245,8 +2246,10 @@ pub(super) fn earth_preset(
     nbrs: &[u32],
     river_rain_base: f32,
 ) -> GeologyOutput {
+    use crate::sim::geology_types::PlateId;
+
     let mut height = vec![0.0; positions.len()];
-    let mut plate_id = vec![0u32; positions.len()];
+    let mut plate_id = vec![PlateId(0); positions.len()];
 
     let continents = [
         ([0.90, 0.15, 0.35], 0.55, 0.75),
@@ -2269,13 +2272,13 @@ pub(super) fn earth_preset(
         height[i] = clamp(land_signal + ridge, -1.0, 1.0);
 
         plate_id[i] = if height[i] > 0.35 {
-            1
+            PlateId(1)
         } else if height[i] > 0.05 {
-            2
+            PlateId(2)
         } else if p[0] > 0.0 {
-            0
+            PlateId(0)
         } else {
-            3
+            PlateId(3)
         };
     }
 

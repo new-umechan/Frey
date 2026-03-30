@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
 #[derive(Clone)]
 pub(super) struct PlateAttr {
@@ -179,7 +180,7 @@ pub(crate) struct CrustTerrainUpdateState {
     pub(super) spherical: Vec<(f32, f32)>,
     pub(super) phi: Vec<f32>,
     pub(super) plate_count_target: usize,
-    pub(super) plate_id: Vec<u32>,
+    pub(super) plate_id: Vec<PlateId>,
     pub(super) attributes: Vec<PlateAttr>,
     pub(super) boundary_edges: Vec<BoundaryEdge>,
     pub(super) vertex_lithosphere: Vec<VertexLithosphere>,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
 pub(super) fn compute_spherical_coords(positions: &[[f32; 3]]) -> Vec<(f32, f32)> {
     positions
@@ -260,7 +261,7 @@ pub(super) fn smooth_scalar_field(nbr_offsets: &[u32], nbrs: &[u32], field: &mut
 pub(super) fn compute_plate_boundary_proximity(
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     max_hops: u32,
 ) -> Vec<f32> {
     let mut dist = vec![u32::MAX; plate_id.len()];

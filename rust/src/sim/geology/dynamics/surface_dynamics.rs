@@ -1,7 +1,5 @@
-use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, GeologyStepMetrics, PlateId, StressTensor,
-    VertexCrustState,
-};
+use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
+use crate::sim::world::{BoundaryDynamicsState, BoundaryType, GeologyStepMetrics, VertexCrustState};
 use crate::GeologyParams;
 
 use crate::sim::exec::{DEFAULT_DIFFUSION_WEIGHT, MAX_HEIGHT_DELTA_PER_STEP};

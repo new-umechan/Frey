@@ -8,7 +8,9 @@ mod wasm_api;
 pub use sim::world;
 
 pub use crate::sim::erosion::ErosionAutomatonState;
-pub use crate::sim::geology_types::{GeologyOutput, GeologyParams, MeshOutput};
+pub use crate::sim::geology_types::{
+    GeologyInternal, GeologyOutput, GeologyParams, MeshOutput, PlateId, CrustType, StressTensor,
+};
 pub use crate::wasm_api::world_sim::WorldSimController;
 use wasm_bindgen::prelude::*;
 

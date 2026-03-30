@@ -3,9 +3,10 @@ use crate::GeologyParams;
 mod boundary_dynamics;
 mod surface_dynamics;
 
+use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, CrustType, GeologyDynamicsState, GeologyInternal,
-    GeologyStepMetrics, PlateId, PlateKinematicsState, StressTensor, VertexCrustState, World,
+    BoundaryDynamicsState, BoundaryType, GeologyDynamicsState, GeologyStepMetrics,
+    PlateKinematicsState, VertexCrustState, World,
 };
 
 use crate::sim::exec::math::{hash01, seeded_axis};
