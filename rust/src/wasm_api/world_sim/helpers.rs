@@ -1,5 +1,5 @@
 use crate::sim::erosion::ErosionAutomatonState;
-use crate::sim::geology_types::GeologyParams;
+use crate::sim::geology_types::{GeologyParams, PlateId};
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
@@ -185,7 +185,7 @@ pub(super) fn sample_f32(values: &[f32], stride: u32) -> Vec<f32> {
         .collect()
 }
 
-pub(super) fn sample_u32_from_plate_id(values: &[world::PlateId], stride: u32) -> Vec<u32> {
+pub(super) fn sample_u32_from_plate_id(values: &[PlateId], stride: u32) -> Vec<u32> {
     values
         .iter()
         .step_by(stride.max(1) as usize)
@@ -218,9 +218,9 @@ pub(super) fn apply_i32(values: &mut [i32], index: usize, value: i32) -> bool {
 }
 
 pub(super) fn apply_plate_id(
-    values: &mut [world::PlateId],
+    values: &mut [PlateId],
     index: usize,
-    value: world::PlateId,
+    value: PlateId,
 ) -> bool {
     if index >= values.len() {
         return false;

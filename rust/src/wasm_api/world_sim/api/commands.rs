@@ -60,7 +60,7 @@ impl WorldSimController {
                         apply_plate_id(
                             &mut managed.world.state.geology.plate_id,
                             idx,
-                            crate::sim::world::PlateId(op.value as u32),
+                            crate::sim::geology_types::PlateId(op.value as u32),
                         )
                     }
                 }

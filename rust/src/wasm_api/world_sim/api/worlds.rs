@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 use crate::sim;
-use crate::sim::world::GeologyInternal;
+use crate::sim::geology_types::GeologyInternal;
 use crate::sim::{
     exec_world, exec_world_profiled, exec_world_profiled_detailed, exec_world_slice, world,
     ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase,
@@ -103,12 +103,7 @@ impl WorldSimController {
             ));
         }
 
-        let plate_id = terrain
-            .plate_id
-            .iter()
-            .copied()
-            .map(world::PlateId)
-            .collect::<Vec<_>>();
+        let plate_id = terrain.plate_id;
 
         let river_flow = terrain.river_flux;
         let river_next = terrain.river_next;
