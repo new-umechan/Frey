@@ -280,12 +280,7 @@ fn main() {
     }
 
     terrain.height = terrain_ref.height;
-    let plate_id = terrain
-        .plate_id
-        .iter()
-        .copied()
-        .map(world::PlateId)
-        .collect::<Vec<_>>();
+    let plate_id = terrain.plate_id.clone();
     let geology = world::GeologyState {
         height: terrain.height,
         lake_depth: vec![0.0; cell_count],

@@ -1173,6 +1173,7 @@ fn build_cache_fingerprint(terrain_ref: Option<&Path>, climate_ref: Option<&Path
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_score_record_jsonl(
     phase2_state: &Phase2State,
     diagnostics_snapshot: Option<&BenchDiagnosticsSnapshot>,

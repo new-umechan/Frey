@@ -39,11 +39,11 @@ const CAP_DYNAMIC_CONVERGENCE_WEIGHT: f32 = 0.50;
 const CAP_DYNAMIC_UPLIFT_WEIGHT: f32 = 0.60;
 const CAP_DYNAMIC_MONSOON_WEIGHT: f32 = 0.40;
 const CAP_DYNAMIC_FETCH_WEIGHT: f32 = 0.25;
-const CAP_DYNAMIC_MAX: f32 = 7.400000;
+const CAP_DYNAMIC_MAX: f32 = 7.4;
 const COLD_RELAX_CONVERGENCE_WEIGHT: f32 = 0.40;
 const COLD_RELAX_UPLIFT_WEIGHT: f32 = 0.35;
 const COLD_RELAX_MONSOON_WEIGHT: f32 = 0.25;
-const COLD_RELAX_MAX: f32 = 0.600000;
+const COLD_RELAX_MAX: f32 = 0.6;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PrecipDiagnosticsSummary {
@@ -935,6 +935,7 @@ fn ocean_current_offset(latitude_abs: f32, coast_side: CoastSide) -> f32 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_cold_coast_precipitation(
     world: &World,
     neighbor_lookup: &NeighborLookup,
@@ -1282,6 +1283,7 @@ fn best_neighbor_toward(
     best
 }
 
+#[allow(clippy::type_complexity)]
 fn top_two_neighbors_toward(
     lookup: &NeighborLookup,
     index: usize,
