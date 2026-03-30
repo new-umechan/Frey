@@ -36,3 +36,18 @@ orography:
 coastal:
   cold_coast_gain: 0.80
   cold_relax_hotspot_weight: 0.20
+
+core:
+  substeps: 8
+  temperature_diffusion_gain: 0.10
+  moisture_transport_gain: 0.18
+  condense_excess_gain: 0.65
+  orographic_condense_gain: 0.040
+  ocean_evaporation_gain: 0.30
+  land_recycle_gain: 0.025
+  land_bucket_capacity_mm: 220.0
+  land_drainage_gain: 0.40
+  land_relaxation_years: 8000000.0
+  humidity_floor_mm: 4.0
+  humidity_ref_mm: 26.0
+  humidity_cc_rate_per_c: 0.067

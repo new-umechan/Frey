@@ -37,6 +37,19 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         hotspot_coast_distance_km: 320.0f32,
         hotspot_fetch_weight: 0.55f32,
         hotspot_convergence_weight: 0.45f32,
+        core_substeps: 8,
+        core_temperature_diffusion_gain: 0.10f32,
+        core_moisture_transport_gain: 0.18f32,
+        core_condense_excess_gain: 0.65f32,
+        core_orographic_condense_gain: 0.040f32,
+        core_ocean_evaporation_gain: 0.30f32,
+        core_land_recycle_gain: 0.025f32,
+        core_land_bucket_capacity_mm: 220.0f32,
+        core_land_drainage_gain: 0.40f32,
+        core_land_relaxation_years: 8000000.0f32,
+        core_humidity_floor_mm: 4.0f32,
+        core_humidity_ref_mm: 26.0f32,
+        core_humidity_cc_rate_per_c: 0.067f32,
     }
 }
 
