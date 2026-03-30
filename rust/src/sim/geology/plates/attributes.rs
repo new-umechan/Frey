@@ -159,7 +159,7 @@ fn compute_vertex_lithosphere(
     );
 
     for edge in boundary_edges {
-        let is_divergent = matches!(edge.boundary_type, BoundaryType::Divergent);
+        let is_divergent = matches!(edge.boundary_type, EdgeReliefType::Divergent);
         for &v in &[edge.a, edge.b] {
             let pv = plate_id[v] as usize;
             if !attributes[pv].is_ocean {

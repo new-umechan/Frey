@@ -103,13 +103,11 @@ mod tests {
             serde_wasm_bindgen::from_value(field).expect("parse field response");
 
         assert_eq!(field_data.field_kind, "lake_depth");
-        assert!(
-            field_data
-                .f32_data
-                .as_ref()
-                .map(|v| !v.is_empty())
-                .unwrap_or(false)
-        );
+        assert!(field_data
+            .f32_data
+            .as_ref()
+            .map(|v| !v.is_empty())
+            .unwrap_or(false));
     }
 
     #[wasm_bindgen_test]

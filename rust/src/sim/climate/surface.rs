@@ -164,14 +164,13 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let alpha = blend_alpha(budget, CLIMATE_BLEND_BASE);
     let base_fields = compute_base_climate_fields(world, &climate_params, cell_count);
     let neighbor_lookup = build_neighbor_lookup(world);
-    let mut precipitation_fields =
-        compute_precipitation_fields(
-            world,
-            &base_fields,
-            &neighbor_lookup,
-            &climate_params,
-            cell_count,
-        );
+    let mut precipitation_fields = compute_precipitation_fields(
+        world,
+        &base_fields,
+        &neighbor_lookup,
+        &climate_params,
+        cell_count,
+    );
 
     let cold_input_sum = sum_land_precipitation(world, &precipitation_fields.target_precipitation);
     apply_cold_coast_precipitation(
@@ -294,10 +293,16 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             base_fields.target_ocean_temperature[i],
             alpha,
         );
-        world.state.climate.wind_u[i] =
-            lerp(world.state.climate.wind_u[i], base_fields.target_wind_u[i], alpha);
-        world.state.climate.wind_v[i] =
-            lerp(world.state.climate.wind_v[i], base_fields.target_wind_v[i], alpha);
+        world.state.climate.wind_u[i] = lerp(
+            world.state.climate.wind_u[i],
+            base_fields.target_wind_u[i],
+            alpha,
+        );
+        world.state.climate.wind_v[i] = lerp(
+            world.state.climate.wind_v[i],
+            base_fields.target_wind_v[i],
+            alpha,
+        );
         world.state.climate.moisture_flux_u[i] = lerp(
             world.state.climate.moisture_flux_u[i],
             base_fields.target_moisture_flux_u[i],
@@ -416,12 +421,8 @@ fn compute_precipitation_fields(
         }
         land_cells += 1;
         source_sum += baseline.max(0.0);
-        let convergence = moisture_convergence_mm(
-            world,
-            i,
-            &base_fields.flux_vectors,
-            climate_params,
-        );
+        let convergence =
+            moisture_convergence_mm(world, i, &base_fields.flux_vectors, climate_params);
         let convergence_mm = climate_params.convergence_blend * convergence;
         let convergence_wet_mm = convergence_mm.max(0.0);
         let divergence_dry_mm = (-convergence_mm).max(0.0);
@@ -464,8 +465,8 @@ fn compute_precipitation_fields(
 
         let shadow_factor = rain_shadow_factor(&signal, climate_params);
         let mut precipitation = baseline + convergence_wet_mm + uplift_mm + monsoon_mm + hotspot_mm;
-        let divergence_dry_factor = (1.0 - 0.40 * smoothstep(35.0, 220.0, divergence_dry_mm))
-            .clamp(0.45, 1.0);
+        let divergence_dry_factor =
+            (1.0 - 0.40 * smoothstep(35.0, 220.0, divergence_dry_mm)).clamp(0.45, 1.0);
         precipitation *= divergence_dry_factor;
         precipitation *= shadow_factor;
         correction_factor_sum += shadow_factor * divergence_dry_factor;
@@ -523,7 +524,7 @@ fn compute_precipitation_fields(
         }
         let source_ratio = (moisture_source_budget[i]
             / base_fields.target_moisture_source[i].max(1.0))
-            .clamp(0.30, 1.0);
+        .clamp(0.30, 1.0);
         let moisture_cap =
             climate_params.precip_cap_from_moisture * moisture_source_budget[i].max(0.0);
         let adjusted = (target_precipitation[i] * source_ratio)
@@ -597,7 +598,11 @@ fn ensure_climate_field_lengths(world: &mut World, cell_count: usize) {
         world.state.climate.moisture_flux_v.resize(cell_count, 0.0);
     }
     if world.state.climate.precipitable_water.len() != cell_count {
-        world.state.climate.precipitable_water.resize(cell_count, 0.0);
+        world
+            .state
+            .climate
+            .precipitable_water
+            .resize(cell_count, 0.0);
     }
 }
 
@@ -636,7 +641,15 @@ fn monsoon_precipitation_boost_mm(
     land_temperature: f32,
     ocean_temperature: f32,
 ) -> f32 {
-    if world.state.geology.height.get(index).copied().unwrap_or(0.0) <= 0.0 {
+    if world
+        .state
+        .geology
+        .height
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        <= 0.0
+    {
         return 0.0;
     }
     let latitude_abs = world
@@ -971,11 +984,7 @@ fn apply_cold_coast_precipitation(
                     * smoothstep(90.0, 320.0, hotspot_mm.get(current).copied().unwrap_or(0.0)))
             .clamp(0.0, COLD_RELAX_MAX);
             let relaxed_cold = lerp(cold_factor.clamp(0.2, 1.0), 1.0, relax);
-            let step_factor = lerp(
-                1.0,
-                relaxed_cold,
-                attenuation.clamp(0.0, 1.0),
-            );
+            let step_factor = lerp(1.0, relaxed_cold, attenuation.clamp(0.0, 1.0));
             precip_factor[current] *= step_factor;
             let wind_vector = wind_vectors
                 .get(current)
@@ -1002,7 +1011,15 @@ fn marine_orographic_hotspot_boost_mm(
     monsoon_mm: f32,
     params: &ClimateParams,
 ) -> f32 {
-    if world.state.geology.height.get(index).copied().unwrap_or(0.0) <= 0.0 {
+    if world
+        .state
+        .geology
+        .height
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        <= 0.0
+    {
         return 0.0;
     }
     let distance_from_ocean = world
@@ -1290,14 +1307,12 @@ fn top_two_neighbors_toward(
         }
         let candidate = (sample.index, sample.edge_km, alignment);
         match first {
-            Some((_, _, best_alignment)) if alignment <= best_alignment => {
-                match second {
-                    Some((_, _, second_alignment)) if alignment <= second_alignment => {}
-                    _ => {
-                        second = Some(candidate);
-                    }
+            Some((_, _, best_alignment)) if alignment <= best_alignment => match second {
+                Some((_, _, second_alignment)) if alignment <= second_alignment => {}
+                _ => {
+                    second = Some(candidate);
                 }
-            }
+            },
             _ => {
                 second = first;
                 first = Some(candidate);

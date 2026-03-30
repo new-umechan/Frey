@@ -1,10 +1,10 @@
+use std::env;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::env;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -391,7 +391,10 @@ fn main() {
 
     println!("=== Climate Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
-    println!("-- Runtime Diagnostics: climate_step_ms={:.3} --", climate_step_ms);
+    println!(
+        "-- Runtime Diagnostics: climate_step_ms={:.3} --",
+        climate_step_ms
+    );
     println!();
     println!("-- Main Evaluation: Spearman Correlation (land cells only) --");
 
@@ -408,9 +411,7 @@ fn main() {
                     results.len()
                 );
                 let diagnostics = collect_bench_diagnostics(&sim_world, &reference);
-                print_precipitation_process_diagnostics(
-                    &diagnostics.precipitation_process,
-                );
+                print_precipitation_process_diagnostics(&diagnostics.precipitation_process);
                 print_precipitation_diagnostics(&sim_world, &reference, &diagnostics);
                 Phase2State::Ready {
                     reference_path: path,
@@ -514,7 +515,10 @@ fn main() {
         repeat_index,
         repeat_total,
         git_commit,
-        cache_fingerprint: build_cache_fingerprint(Some(terrain_ref_path.as_path()), climate_ref_for_fingerprint),
+        cache_fingerprint: build_cache_fingerprint(
+            Some(terrain_ref_path.as_path()),
+            climate_ref_for_fingerprint,
+        ),
     };
 
     if let Err(error) = append_score_record_jsonl(
@@ -1037,7 +1041,9 @@ fn print_precipitation_diagnostics(
     println!();
 }
 
-fn print_precipitation_process_diagnostics(summary: &sim::climate::surface::PrecipDiagnosticsSummary) {
+fn print_precipitation_process_diagnostics(
+    summary: &sim::climate::surface::PrecipDiagnosticsSummary,
+) {
     println!("-- Main Diagnostics: Precipitation Process (land aggregate) --");
     println!(
         "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%  cold_coast_reduction={:.1}%",
@@ -1265,7 +1271,9 @@ fn append_score_record_jsonl(
                 metric_value("highlat"),
             )
         })
-        .unwrap_or_else(|| "{\"tropics\":null,\"subtropics\":null,\"midlat\":null,\"highlat\":null}".to_string());
+        .unwrap_or_else(|| {
+            "{\"tropics\":null,\"subtropics\":null,\"midlat\":null,\"highlat\":null}".to_string()
+        });
 
     let line = format!(
         "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"cache_fingerprint\":\"{}\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"climate_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"precipitation_process\":{},\"precipitation_lat_bands\":{}}}}}\n",

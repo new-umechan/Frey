@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smallvec::SmallVec;
 
 use super::exec::{ClockState, FeedbackQueue, RuntimeState};
-use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
+use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, PlateRelation, StressTensor};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,6 +20,8 @@ pub struct World {
     pub polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     #[serde(default)]
     pub polity_groups: Vec<PolityGroup>,
+    #[serde(default)]
+    pub plate_relations: HashMap<(PlateId, PlateId), PlateRelation>,
     #[serde(default)]
     pub archive: ArchiveState,
 }

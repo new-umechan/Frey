@@ -36,17 +36,17 @@ fn extract_boundary_edges(
             let obliquity = v_rel_t / (v_rel_t + v_rel_n.abs() + 1e-5);
             let (boundary_type, strength) = if v_rel_n > classify_eps {
                 (
-                    BoundaryType::Convergent,
+                    EdgeReliefType::Convergent,
                     clamp((v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
                 )
             } else if v_rel_n < -classify_eps {
                 (
-                    BoundaryType::Divergent,
+                    EdgeReliefType::Divergent,
                     clamp((-v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
                 )
             } else {
                 (
-                    BoundaryType::Transform,
+                    EdgeReliefType::Transform,
                     clamp((v_rel_t - 0.02) / 0.18, 0.0, 1.0),
                 )
             };
@@ -80,7 +80,7 @@ fn collect_intraplate_fold_sources(
 ) -> Vec<IntraplateFoldSource> {
     let mut sources = Vec::new();
     for (idx, edge) in boundary_edges.iter().enumerate() {
-        if !matches!(edge.boundary_type, BoundaryType::Convergent) {
+        if !matches!(edge.boundary_type, EdgeReliefType::Convergent) {
             continue;
         }
 
@@ -229,7 +229,7 @@ fn accumulate_multi_edge_arc_signal(
             continue;
         }
         let edge = boundary_edges[edge_idx];
-        if !matches!(edge.boundary_type, BoundaryType::Convergent) {
+        if !matches!(edge.boundary_type, EdgeReliefType::Convergent) {
             continue;
         }
 

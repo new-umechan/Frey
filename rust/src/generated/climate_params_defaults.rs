@@ -39,4 +39,3 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         hotspot_convergence_weight: 0.45f32,
     }
 }
-

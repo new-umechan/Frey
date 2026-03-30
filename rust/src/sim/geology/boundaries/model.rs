@@ -42,7 +42,7 @@ fn apply_boundary_model(
         let dist_scale = (-(d * params.boundary_distance_falloff)).exp();
 
         match edge.boundary_type {
-            BoundaryType::Convergent => {
+            EdgeReliefType::Convergent => {
                 let oblique_relief = 1.0 - params.boundary_obliquity_mix * edge.obliquity;
                 let conv_base = params.boundary_convergent_base_gain * edge.strength * oblique_relief;
 
@@ -218,7 +218,7 @@ fn apply_boundary_model(
                     }
                 }
             }
-            BoundaryType::Divergent => {
+            EdgeReliefType::Divergent => {
                 let mut rift_width = params.boundary_rift_width;
                 if !attributes[edge.plate_a].is_ocean && !attributes[edge.plate_b].is_ocean {
                     rift_width *= 1.35;
@@ -237,7 +237,7 @@ fn apply_boundary_model(
                 }
                 preserve_strength[v] = preserve_strength[v].max(0.55 * rift_w);
             }
-            BoundaryType::Transform => {
+            EdgeReliefType::Transform => {
                 let width = params.boundary_trench_width * 0.9;
                 let w = band_weight(d, width, params.boundary_anisotropy * 0.5);
                 let sign = if ((v as u32).wrapping_mul(1103515245) ^ (edge_idx as u32)) & 1 == 0 {

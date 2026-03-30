@@ -170,7 +170,7 @@ impl Default for GeologyParams {
 
 /// プレート ID。newtype パターンで型安全性を確保する
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
 )]
 #[serde(transparent)]
 pub struct PlateId(pub u32);
@@ -183,6 +183,38 @@ impl PlateId {
     pub fn as_usize(self) -> usize {
         self.0 as usize
     }
+}
+
+/// プレート間の関係。相対運動と境界の性質を記録する
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateRelation {
+    /// 相対速度ベクトル（3 次元）
+    #[serde(default)]
+    pub relative_velocity: [f32; 3],
+    /// 収束の継続度合い（0..1）
+    #[serde(default)]
+    pub convergence_memory: f32,
+    /// 沈み込み極性
+    #[serde(default)]
+    pub subduction_polarity: SubductionPolarity,
+    /// 境界の傾斜角（ラジアン）
+    #[serde(default)]
+    pub dip_angle: f32,
+    /// ロールバック割合（0..1）
+    #[serde(default)]
+    pub rollback_fraction: f32,
+}
+
+/// 沈み込み極性。どちらのプレートが沈み込んでいるか
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum SubductionPolarity {
+    /// プレート A が下
+    AUnderB,
+    /// プレート B が下
+    BUnderA,
+    /// 沈み込みなし
+    #[default]
+    None,
 }
 
 #[derive(Serialize)]

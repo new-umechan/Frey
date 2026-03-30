@@ -519,8 +519,8 @@ pub(super) fn cleanup_plate_components(
             }
 
             let is_enclave = unique_neighbors == 1 && best_neighbor.is_some();
-            let is_small_fragment =
-                component.len() <= small_component_max && component.len() < largest[plate.as_usize()];
+            let is_small_fragment = component.len() <= small_component_max
+                && component.len() < largest[plate.as_usize()];
 
             if !(is_enclave || is_small_fragment) {
                 continue;
@@ -777,7 +777,7 @@ pub(super) fn compute_vertex_lithosphere(
     );
 
     for edge in boundary_edges {
-        let is_divergent = matches!(edge.boundary_type, BoundaryType::Divergent);
+        let is_divergent = matches!(edge.boundary_type, EdgeReliefType::Divergent);
         for &v in &[edge.a, edge.b] {
             let pv = plate_id[v].as_usize();
             if !attributes[pv].is_ocean {

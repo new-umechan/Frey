@@ -116,6 +116,7 @@ impl World {
             },
             polity_relations: std::collections::HashMap::new(),
             polity_groups: Vec::new(),
+            plate_relations: std::collections::HashMap::new(),
             archive: super::state::ArchiveState::default(),
         }
     }

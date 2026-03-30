@@ -1,5 +1,7 @@
 use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
-use crate::sim::world::{BoundaryDynamicsState, BoundaryType, GeologyStepMetrics, VertexCrustState};
+use crate::sim::world::{
+    BoundaryDynamicsState, BoundaryType, GeologyStepMetrics, VertexCrustState,
+};
 use crate::GeologyParams;
 
 use crate::sim::exec::{DEFAULT_DIFFUSION_WEIGHT, MAX_HEIGHT_DELTA_PER_STEP};
@@ -150,8 +152,8 @@ pub(super) fn apply_stress_and_surface_update(
             .get(i)
             .copied()
             .unwrap_or(BoundaryType::PassiveMargin);
-        let boundary_activity = finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0)
-            .clamp(0.0, 1.0);
+        let boundary_activity =
+            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0);
         let rollback_fraction = finite_or(
             boundary_state
                 .rollback_fraction
@@ -192,9 +194,9 @@ pub(super) fn apply_stress_and_surface_update(
         };
         let volcanism = finite_or(
             state.arc_volcanism
-            + state.ridge_volcanism
-            + state.hotspot_volcanism
-            + state.backarc_volcanism,
+                + state.ridge_volcanism
+                + state.hotspot_volcanism
+                + state.backarc_volcanism,
             0.0,
         )
         .max(0.0);

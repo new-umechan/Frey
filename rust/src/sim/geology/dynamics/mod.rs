@@ -171,11 +171,7 @@ fn debug_validate_geology_state(world: &World, params: &GeologyParams, stage: &s
         );
         debug_assert_finite_non_negative(state.rigidity, "vertex_states.rigidity", i);
         debug_assert_finite_non_negative(state.arc_volcanism, "vertex_states.arc_volcanism", i);
-        debug_assert_finite_non_negative(
-            state.ridge_volcanism,
-            "vertex_states.ridge_volcanism",
-            i,
-        );
+        debug_assert_finite_non_negative(state.ridge_volcanism, "vertex_states.ridge_volcanism", i);
         debug_assert_finite_non_negative(
             state.hotspot_volcanism,
             "vertex_states.hotspot_volcanism",

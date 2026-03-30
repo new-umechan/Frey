@@ -467,7 +467,7 @@ height_next
 ```rust
 pub struct GeologyOutput {
     pub height: Vec<f32>,
-    pub plate_id: Vec<u32>,
+    pub plate_id: Vec<PlateId>,
     pub plate_count: u32,
     pub land_ratio: f32,
     pub river_flux: Vec<f32>,
@@ -506,14 +506,14 @@ pub struct VertexCrustState {
     pub thickness: f32,
     pub density: f32,
     pub age: f32,
-    pub stress: f32,
+    pub stress: f32,              // 応力のスカラー表現（圧縮/引張の高速判定用キャッシュ）
     pub temperature: f32,
     pub rigidity: f32,
     pub arc_volcanism: f32,
     pub ridge_volcanism: f32,
     pub hotspot_volcanism: f32,
     pub backarc_volcanism: f32,
-    pub stress_tensor: StressTensor,
+    pub stress_tensor: StressTensor,  // 完全な応力テンソル（物理計算・保存用）
 }
 
 pub struct BoundaryDynamicsState {

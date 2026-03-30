@@ -1,9 +1,9 @@
 use super::{CellId, EraKind, FeedbackQueue, GeologyState, PolityId, World, WorldMesh};
-use crate::PlateId;
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
 use crate::GeologyParams;
+use crate::PlateId;
 
 const EPSILON: f32 = 1e-5;
 
@@ -48,7 +48,10 @@ fn build_generated_world(seed: &str, params: GeologyParams) -> World {
             deposition_rate: vec![0.0; terrain.river_flux.len()],
             volcanism: vec![0.0; terrain.river_flux.len()],
             vertex_buoyancy: vec![0.0; terrain.river_flux.len()],
-            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); terrain.river_flux.len()],
+            geology_internal: vec![
+                crate::sim::geology_types::GeologyInternal::default();
+                terrain.river_flux.len()
+            ],
             boundary_condition: vec![0.0; terrain.river_flux.len()],
         },
     );
@@ -69,7 +72,10 @@ fn assert_vec_f32_close(name: &str, lhs: &[f32], rhs: &[f32], eps: f32) {
 
 fn assert_geology_runtime_close(lhs: &World, rhs: &World, eps: f32) {
     assert_eq!(lhs.state.geology.plate_id, rhs.state.geology.plate_id);
-    assert_eq!(lhs.state.hydrology.river_next, rhs.state.hydrology.river_next);
+    assert_eq!(
+        lhs.state.hydrology.river_next,
+        rhs.state.hydrology.river_next
+    );
     assert_vec_f32_close(
         "state.geology.height",
         &lhs.state.geology.height,
@@ -106,12 +112,18 @@ fn assert_geology_runtime_close(lhs: &World, rhs: &World, eps: f32) {
         .as_ref()
         .expect("rhs geology runtime is missing");
 
-    assert_eq!(lhs_runtime.vertex_states.len(), rhs_runtime.vertex_states.len());
+    assert_eq!(
+        lhs_runtime.vertex_states.len(),
+        rhs_runtime.vertex_states.len()
+    );
     assert_eq!(
         lhs_runtime.boundary_state.dominant_type,
         rhs_runtime.boundary_state.dominant_type
     );
-    assert_eq!(lhs_runtime.boundary_state.edge_pairs, rhs_runtime.boundary_state.edge_pairs);
+    assert_eq!(
+        lhs_runtime.boundary_state.edge_pairs,
+        rhs_runtime.boundary_state.edge_pairs
+    );
 
     for (i, (a, b)) in lhs_runtime
         .vertex_states
@@ -382,7 +394,10 @@ fn metrics_are_deterministic_for_fixed_seed() {
             deposition_rate: vec![0.0; positions.len()],
             volcanism: vec![0.0; positions.len()],
             vertex_buoyancy: vec![0.0; positions.len()],
-            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); positions.len()],
+            geology_internal: vec![
+                crate::sim::geology_types::GeologyInternal::default();
+                positions.len()
+            ],
             boundary_condition: vec![0.0; positions.len()],
         },
     );
@@ -400,7 +415,10 @@ fn metrics_are_deterministic_for_fixed_seed() {
             deposition_rate: vec![0.0; world_a.cell_count()],
             volcanism: vec![0.0; world_a.cell_count()],
             vertex_buoyancy: vec![0.0; world_a.cell_count()],
-            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); world_a.cell_count()],
+            geology_internal: vec![
+                crate::sim::geology_types::GeologyInternal::default();
+                world_a.cell_count()
+            ],
             boundary_condition: vec![0.0; world_a.cell_count()],
         },
     );
@@ -454,7 +472,10 @@ fn river_network_persists_without_early_collapse() {
             deposition_rate: vec![0.0; positions.len()],
             volcanism: vec![0.0; positions.len()],
             vertex_buoyancy: vec![0.0; positions.len()],
-            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); positions.len()],
+            geology_internal: vec![
+                crate::sim::geology_types::GeologyInternal::default();
+                positions.len()
+            ],
             boundary_condition: vec![0.0; positions.len()],
         },
     );

@@ -196,19 +196,16 @@ pub(super) fn reclassify_boundaries(
             1.0,
         )
         .clamp(0.0, 1.0);
-        let rollback =
-            finite_or(
-                params.rollback_gain.max(0.0)
-                    * age_norm
-                    * dip_factor
-                    * slab_depth_est
-                    * suppression,
-                0.0,
-            )
-            .clamp(0.0, params.rollback_fraction_max.max(0.0));
+        let rollback = finite_or(
+            params.rollback_gain.max(0.0) * age_norm * dip_factor * slab_depth_est * suppression,
+            0.0,
+        )
+        .clamp(0.0, params.rollback_fraction_max.max(0.0));
 
         let slab_pull_mag = finite_or(
-            edge_scores[eid].max(0.0) * (density_ocean - mantle_density).max(0.0) * (1.0 + slab_depth_est),
+            edge_scores[eid].max(0.0)
+                * (density_ocean - mantle_density).max(0.0)
+                * (1.0 + slab_depth_est),
             0.0,
         );
         let slab_conv = slab_pull_mag * (1.0 - rollback);
@@ -230,9 +227,11 @@ pub(super) fn reclassify_boundaries(
 
     for (i, count) in cell_rollback_count.iter().enumerate().take(cell_count) {
         let denom = (*count).max(1) as f32;
-        boundary_state.rollback_fraction[i] = finite_or(boundary_state.rollback_fraction[i] / denom, 0.0)
-            .clamp(0.0, params.rollback_fraction_max.max(0.0));
-        boundary_state.backarc_tension[i] = finite_or(boundary_state.backarc_tension[i] / denom, 0.0);
+        boundary_state.rollback_fraction[i] =
+            finite_or(boundary_state.rollback_fraction[i] / denom, 0.0)
+                .clamp(0.0, params.rollback_fraction_max.max(0.0));
+        boundary_state.backarc_tension[i] =
+            finite_or(boundary_state.backarc_tension[i] / denom, 0.0);
         boundary_state.slab_convergence_component[i] =
             finite_or(boundary_state.slab_convergence_component[i] / denom, 0.0);
         boundary_state.slab_rollback_component[i] =
@@ -304,7 +303,8 @@ pub(super) fn update_plate_kinematics(
         if pid >= plate_states.len() {
             continue;
         }
-        plate_activity[pid] += finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0);
+        plate_activity[pid] +=
+            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0);
         plate_count[pid] = plate_count[pid].saturating_add(1);
     }
 

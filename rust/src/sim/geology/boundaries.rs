@@ -61,7 +61,7 @@ pub(super) fn apply_boundary_model(
         let dist_scale = (-(d * params.boundary_distance_falloff)).exp();
 
         match edge.boundary_type {
-            BoundaryType::Convergent => {
+            EdgeReliefType::Convergent => {
                 let oblique_relief = 1.0 - params.boundary_obliquity_mix * edge.obliquity;
                 let conv_base =
                     params.boundary_convergent_base_gain * edge.strength * oblique_relief;
@@ -247,7 +247,7 @@ pub(super) fn apply_boundary_model(
                     }
                 }
             }
-            BoundaryType::Divergent => {
+            EdgeReliefType::Divergent => {
                 let mut rift_width = params.boundary_rift_width;
                 if !attributes[edge.plate_a].is_ocean && !attributes[edge.plate_b].is_ocean {
                     rift_width *= 1.35;
@@ -265,7 +265,7 @@ pub(super) fn apply_boundary_model(
                 }
                 preserve_strength[v] = preserve_strength[v].max(0.55 * rift_w);
             }
-            BoundaryType::Transform => {
+            EdgeReliefType::Transform => {
                 let width = params.boundary_trench_width * 0.9;
                 let w = band_weight(d, width, params.boundary_anisotropy * 0.5);
                 let sign = if ((v as u32).wrapping_mul(1103515245) ^ (edge_idx as u32)) & 1 == 0 {
@@ -468,17 +468,17 @@ pub(super) fn extract_boundary_edges(
             let obliquity = v_rel_t / (v_rel_t + v_rel_n.abs() + 1e-5);
             let (boundary_type, strength) = if v_rel_n > classify_eps {
                 (
-                    BoundaryType::Convergent,
+                    EdgeReliefType::Convergent,
                     clamp((v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
                 )
             } else if v_rel_n < -classify_eps {
                 (
-                    BoundaryType::Divergent,
+                    EdgeReliefType::Divergent,
                     clamp((-v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
                 )
             } else {
                 (
-                    BoundaryType::Transform,
+                    EdgeReliefType::Transform,
                     clamp((v_rel_t - 0.02) / 0.18, 0.0, 1.0),
                 )
             };
@@ -512,7 +512,7 @@ fn collect_intraplate_fold_sources(
 ) -> Vec<IntraplateFoldSource> {
     let mut sources = Vec::new();
     for (idx, edge) in boundary_edges.iter().enumerate() {
-        if !matches!(edge.boundary_type, BoundaryType::Convergent) {
+        if !matches!(edge.boundary_type, EdgeReliefType::Convergent) {
             continue;
         }
 
@@ -683,7 +683,7 @@ pub(super) fn accumulate_multi_edge_arc_signal(input: ArcSignalInput<'_>) -> (f3
             continue;
         }
         let edge = boundary_edges[edge_idx];
-        if !matches!(edge.boundary_type, BoundaryType::Convergent) {
+        if !matches!(edge.boundary_type, EdgeReliefType::Convergent) {
             continue;
         }
 

@@ -14,7 +14,7 @@ pub(super) struct PlateAttr {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum BoundaryType {
+pub(super) enum EdgeReliefType {
     Convergent,
     Divergent,
     Transform,
@@ -40,7 +40,7 @@ pub(super) struct BoundaryEdge {
     pub(super) b: usize,
     pub(super) plate_a: usize,
     pub(super) plate_b: usize,
-    pub(super) boundary_type: BoundaryType,
+    pub(super) boundary_type: EdgeReliefType,
     pub(super) strength: f32,
     pub(super) obliquity: f32,
 }
