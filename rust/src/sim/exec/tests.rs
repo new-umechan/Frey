@@ -2,8 +2,9 @@ use super::*;
 use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
     CellFieldId, CellId, FeedbackEntry, FeedbackPayload, FieldValue, GeologyState, ModuleId,
-    PlateId, PolityId, TargetRef, World, WorldMesh,
+    PolityId, TargetRef, World, WorldMesh,
 };
+use crate::PlateId;
 
 fn build_test_world() -> World {
     let mesh = WorldMesh {
@@ -24,7 +25,7 @@ fn build_test_world() -> World {
         deposition_rate: vec![0.0; 4],
         volcanism: vec![0.0; 4],
         vertex_buoyancy: vec![0.0; 4],
-        geology_internal: vec![crate::sim::world::GeologyInternal::default(); 4],
+        geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
         boundary_condition: vec![0.0; 4],
     };
     World::new(mesh, geology)

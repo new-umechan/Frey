@@ -1,4 +1,5 @@
-use super::{CellId, EraKind, FeedbackQueue, GeologyState, PlateId, PolityId, World, WorldMesh};
+use super::{CellId, EraKind, FeedbackQueue, GeologyState, PolityId, World, WorldMesh};
+use crate::PlateId;
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
@@ -21,7 +22,7 @@ fn build_world() -> World {
             deposition_rate: vec![0.0; 4],
             volcanism: vec![0.0; 4],
             vertex_buoyancy: vec![0.0; 4],
-            geology_internal: vec![super::GeologyInternal::default(); 4],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     )
@@ -32,11 +33,7 @@ fn build_generated_world(seed: &str, params: GeologyParams) -> World {
     let terrain = crate::sim::build_geology(seed, params);
     let (positions, indices) = generate_icosphere(level);
     let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let plate_id = terrain
-        .plate_id
-        .iter()
-        .map(|&v| PlateId(v))
-        .collect::<Vec<_>>();
+    let plate_id = terrain.plate_id;
     let mut world = World::new(
         WorldMesh {
             positions,
@@ -51,7 +48,7 @@ fn build_generated_world(seed: &str, params: GeologyParams) -> World {
             deposition_rate: vec![0.0; terrain.river_flux.len()],
             volcanism: vec![0.0; terrain.river_flux.len()],
             vertex_buoyancy: vec![0.0; terrain.river_flux.len()],
-            geology_internal: vec![super::GeologyInternal::default(); terrain.river_flux.len()],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); terrain.river_flux.len()],
             boundary_condition: vec![0.0; terrain.river_flux.len()],
         },
     );
@@ -242,7 +239,7 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
             deposition_rate: vec![0.0; 4],
             volcanism: vec![0.0; 4],
             vertex_buoyancy: vec![0.0; 4],
-            geology_internal: vec![super::GeologyInternal::default(); 4],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     );
@@ -336,7 +333,7 @@ fn metrics_collects_height_and_flux_stats() {
             deposition_rate: vec![0.0; 4],
             volcanism: vec![0.0; 4],
             vertex_buoyancy: vec![0.0; 4],
-            geology_internal: vec![super::GeologyInternal::default(); 4],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
         },
     );
@@ -368,16 +365,8 @@ fn metrics_are_deterministic_for_fixed_seed() {
     let terrain_b = crate::sim::build_geology(seed, params);
     let (positions, indices) = generate_icosphere(2);
     let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let plate_id_a = terrain_a
-        .plate_id
-        .iter()
-        .map(|&v| PlateId(v))
-        .collect::<Vec<_>>();
-    let plate_id_b = terrain_b
-        .plate_id
-        .iter()
-        .map(|&v| PlateId(v))
-        .collect::<Vec<_>>();
+    let plate_id_a = terrain_a.plate_id;
+    let plate_id_b = terrain_b.plate_id;
 
     let mut world_a = World::new(
         WorldMesh {
@@ -393,7 +382,7 @@ fn metrics_are_deterministic_for_fixed_seed() {
             deposition_rate: vec![0.0; positions.len()],
             volcanism: vec![0.0; positions.len()],
             vertex_buoyancy: vec![0.0; positions.len()],
-            geology_internal: vec![super::GeologyInternal::default(); positions.len()],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); positions.len()],
             boundary_condition: vec![0.0; positions.len()],
         },
     );
@@ -411,7 +400,7 @@ fn metrics_are_deterministic_for_fixed_seed() {
             deposition_rate: vec![0.0; world_a.cell_count()],
             volcanism: vec![0.0; world_a.cell_count()],
             vertex_buoyancy: vec![0.0; world_a.cell_count()],
-            geology_internal: vec![super::GeologyInternal::default(); world_a.cell_count()],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); world_a.cell_count()],
             boundary_condition: vec![0.0; world_a.cell_count()],
         },
     );
@@ -449,11 +438,7 @@ fn river_network_persists_without_early_collapse() {
     let terrain = crate::sim::build_geology(seed, params.clone());
     let (positions, indices) = generate_icosphere(2);
     let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let plate_id = terrain
-        .plate_id
-        .iter()
-        .map(|&v| PlateId(v))
-        .collect::<Vec<_>>();
+    let plate_id = terrain.plate_id;
 
     let mut world = World::new(
         WorldMesh {
@@ -469,7 +454,7 @@ fn river_network_persists_without_early_collapse() {
             deposition_rate: vec![0.0; positions.len()],
             volcanism: vec![0.0; positions.len()],
             vertex_buoyancy: vec![0.0; positions.len()],
-            geology_internal: vec![super::GeologyInternal::default(); positions.len()],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); positions.len()],
             boundary_condition: vec![0.0; positions.len()],
         },
     );

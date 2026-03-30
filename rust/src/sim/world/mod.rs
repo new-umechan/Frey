@@ -18,10 +18,10 @@ pub use metrics::WorldMetrics;
 pub use state::{
     ArchiveState, Biome, BoundaryDynamicsState, BoundaryType, CellId, CellStore, CellStoreMut,
     CivilizationIndicators, CivilizationState, CivilizationStateMut, ClimateState, CoastSide,
-    ConflictState, CropBitmap, CrustType, DomesticatesInternal, DomesticatesState, EcologyInternal,
-    EcologyState, EntitiesState, GeoState, GeologyDynamicsState, GeologyInternal, GeologyState,
-    GeologyStepMetrics, HydrologyState, LivestockBitmap, PlateId, PlateKinematicsState,
+    ConflictState, CropBitmap, DomesticatesInternal, DomesticatesState, EcologyInternal,
+    EcologyState, EntitiesState, GeoState, GeologyDynamicsState, GeologyState,
+    GeologyStepMetrics, HydrologyState, LivestockBitmap, PlateKinematicsState,
     PolityComponent, PolityGroupId, PolityId, PolityState, PopulationState, RegionComponent,
-    RegionId, SettlementComponent, SettlementId, SettlementState, StressTensor, SubsistenceMix,
+    RegionId, SettlementComponent, SettlementId, SettlementState, SubsistenceMix,
     SubsistenceState, VertexCrustState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };

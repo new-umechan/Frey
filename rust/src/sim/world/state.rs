@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smallvec::SmallVec;
 
 use super::exec::{ClockState, FeedbackQueue, RuntimeState};
+use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,22 +37,6 @@ pub struct ArchiveState {
 pub struct CellId(pub u32);
 
 impl CellId {
-    pub fn as_usize(self) -> usize {
-        self.0 as usize
-    }
-}
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, Ord, PartialOrd,
-)]
-#[serde(transparent)]
-pub struct PlateId(pub u32);
-
-impl PlateId {
-    pub fn as_u32(self) -> u32 {
-        self.0
-    }
-
     pub fn as_usize(self) -> usize {
         self.0 as usize
     }
@@ -329,32 +314,6 @@ pub struct GeologyState {
     pub boundary_condition: Vec<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct GeologyInternal {
-    #[serde(default)]
-    pub crust_type: CrustType,
-    #[serde(default)]
-    pub age: f32,
-    #[serde(default = "default_thickness")]
-    pub thickness: f32,
-    #[serde(default = "default_density")]
-    pub density: f32,
-    #[serde(default)]
-    pub stress: StressTensor,
-    #[serde(default)]
-    pub temperature: f32,
-    #[serde(default = "default_rigidity")]
-    pub rigidity: f32,
-    #[serde(default)]
-    pub arc_volcanism: f32,
-    #[serde(default)]
-    pub ridge_volcanism: f32,
-    #[serde(default)]
-    pub hotspot_volcanism: f32,
-    #[serde(default)]
-    pub backarc_volcanism: f32,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClimateState {
     pub temperature: Vec<f32>,
@@ -365,6 +324,8 @@ pub struct ClimateState {
     pub ocean_temperature: Vec<f32>,
     #[serde(default)]
     pub precipitable_water: Vec<f32>,
+    #[serde(default)]
+    pub cloud_water: Vec<f32>,
     #[serde(default)]
     pub wind_u: Vec<f32>,
     #[serde(default)]
@@ -496,6 +457,8 @@ pub struct CellStore<'a> {
     pub runoff: &'a [f32],
     pub aridity: &'a [f32],
     pub ocean_temperature: &'a [f32],
+    pub precipitable_water: &'a [f32],
+    pub cloud_water: &'a [f32],
     pub wind_u: &'a [f32],
     pub wind_v: &'a [f32],
     pub moisture_flux_u: &'a [f32],
@@ -528,6 +491,8 @@ pub struct CellStoreMut<'a> {
     pub runoff: &'a mut Vec<f32>,
     pub aridity: &'a mut Vec<f32>,
     pub ocean_temperature: &'a mut Vec<f32>,
+    pub precipitable_water: &'a mut Vec<f32>,
+    pub cloud_water: &'a mut Vec<f32>,
     pub wind_u: &'a mut Vec<f32>,
     pub wind_v: &'a mut Vec<f32>,
     pub moisture_flux_u: &'a mut Vec<f32>,
@@ -583,6 +548,8 @@ impl WorldState {
             runoff: &self.climate.runoff,
             aridity: &self.climate.aridity,
             ocean_temperature: &self.climate.ocean_temperature,
+            precipitable_water: &self.climate.precipitable_water,
+            cloud_water: &self.climate.cloud_water,
             wind_u: &self.climate.wind_u,
             wind_v: &self.climate.wind_v,
             moisture_flux_u: &self.climate.moisture_flux_u,
@@ -617,6 +584,8 @@ impl WorldState {
             runoff: &mut self.climate.runoff,
             aridity: &mut self.climate.aridity,
             ocean_temperature: &mut self.climate.ocean_temperature,
+            precipitable_water: &mut self.climate.precipitable_water,
+            cloud_water: &mut self.climate.cloud_water,
             wind_u: &mut self.climate.wind_u,
             wind_v: &mut self.climate.wind_v,
             moisture_flux_u: &mut self.climate.moisture_flux_u,
@@ -694,13 +663,6 @@ pub struct PlateKinematicsState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum CrustType {
-    #[default]
-    Continental,
-    Oceanic,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum BoundaryType {
     Ridge,
     Rift,
@@ -709,13 +671,6 @@ pub enum BoundaryType {
     Transform,
     #[default]
     PassiveMargin,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct StressTensor {
-    pub xx: f32,
-    pub yy: f32,
-    pub xy: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
