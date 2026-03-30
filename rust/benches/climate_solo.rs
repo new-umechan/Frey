@@ -9,7 +9,7 @@ use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frey_wasm::sim;
-use frey_wasm::sim::geology_types::GeologyParams;
+use frey_wasm::sim::geology_types::{GeologyInternal, GeologyParams};
 use frey_wasm::world;
 
 #[derive(Clone, Copy)]
@@ -360,12 +360,7 @@ fn main() {
     }
     terrain.height = terrain_ref.height;
 
-    let plate_id = terrain
-        .plate_id
-        .iter()
-        .copied()
-        .map(world::PlateId)
-        .collect::<Vec<_>>();
+    let plate_id = terrain.plate_id.clone();
 
     let geology = world::GeologyState {
         height: terrain.height,
@@ -375,7 +370,7 @@ fn main() {
         deposition_rate: vec![0.0; cell_count],
         volcanism: terrain.volcanism,
         vertex_buoyancy: terrain.vertex_buoyancy,
-        geology_internal: vec![world::GeologyInternal::default(); cell_count],
+        geology_internal: vec![GeologyInternal::default(); cell_count],
         boundary_condition: vec![0.0; cell_count],
     };
 

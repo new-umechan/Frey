@@ -242,7 +242,7 @@ fn main() {
         deposition_rate: vec![0.0; cell_count],
         volcanism: terrain.volcanism,
         vertex_buoyancy: terrain.vertex_buoyancy,
-        geology_internal: vec![world::GeologyInternal::default(); cell_count],
+        geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); cell_count],
         boundary_condition: vec![0.0; cell_count],
     };
     let mesh = world::WorldMesh {
