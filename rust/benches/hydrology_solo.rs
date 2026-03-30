@@ -1,9 +1,11 @@
+use std::env;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frey_wasm::sim;
@@ -79,6 +81,13 @@ struct ReferenceSummary {
     mean: f32,
     p50: f32,
     p95: f32,
+}
+
+struct BenchRunMetadata {
+    run_id: String,
+    repeat_index: Option<u32>,
+    repeat_total: Option<u32>,
+    git_commit: Option<String>,
 }
 
 const REGIONS: &[Region] = &[
@@ -159,6 +168,17 @@ fn main() {
     };
     let mesh_level = geology_params.level;
     let seed = "earth";
+
+    let run_id = env::var("HYDROLOGY_BENCH_RUN_ID")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(default_run_id);
+    let repeat_index = parse_env_u32("HYDROLOGY_BENCH_REPEAT_INDEX");
+    let repeat_total = parse_env_u32("HYDROLOGY_BENCH_REPEAT_TOTAL");
+    let git_commit = env::var("HYDROLOGY_BENCH_GIT_COMMIT")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(resolve_git_commit);
 
     let (mut terrain, positions, nbr_offsets, nbrs) =
         sim::build_geology_with_mesh(seed, geology_params.clone());
@@ -263,11 +283,17 @@ fn main() {
         return;
     }
     let geology_budget = sim_world.clock.budgets.geology;
+    let hydro_started_at = Instant::now();
     sim::run_hydrology_step_for_bench(&mut sim_world, geology_budget, true);
+    let hydrology_step_ms = hydro_started_at.elapsed().as_secs_f64() * 1000.0;
 
     println!("=== Hydrology Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
     println!("-- Hydro Input Source: {} --", hydro_input_path.display());
+    println!(
+        "-- Runtime Diagnostics: hydrology_step_ms={:.3} --",
+        hydrology_step_ms
+    );
     println!();
     println!("-- Main Evaluation 1-A: river_flow Spearman (log scale, land cells only) --");
 
@@ -372,12 +398,21 @@ fn main() {
         MainEvaluationState::Error(_) => println!("-- Main Evaluation State: ERROR --"),
     }
 
+    let run_metadata = BenchRunMetadata {
+        run_id,
+        repeat_index,
+        repeat_total,
+        git_commit,
+    };
+
     if let Err(error) = append_score_record_jsonl(
         &main_eval_state,
+        &run_metadata,
         seed,
         mesh_level,
         cell_count,
         &diagnostic_summary,
+        hydrology_step_ms as f32,
     ) {
         println!("-- Score Save: ERROR ({}) --", error);
     } else {
@@ -816,6 +851,32 @@ fn summarize_diagnostics(outcomes: &[AssertionOutcome]) -> DiagnosticSummary {
     }
 }
 
+fn default_run_id() -> String {
+    format!(
+        "default-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    )
+}
+
+fn parse_env_u32(key: &str) -> Option<u32> {
+    env::var(key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|value| value.parse::<u32>().ok())
+}
+
+fn resolve_git_commit() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|commit| commit.trim().to_string())
+}
+
 fn score_output_path() -> PathBuf {
     let candidates = [
         Path::new("benches/results/hydrology_main_scores.jsonl"),
@@ -857,10 +918,12 @@ fn format_json_number(value: f32) -> String {
 
 fn append_score_record_jsonl(
     main_eval_state: &MainEvaluationState,
+    run_metadata: &BenchRunMetadata,
     seed: &str,
     mesh_level: u32,
     cell_count: usize,
     diagnostic_summary: &DiagnosticSummary,
+    hydrology_step_ms: f32,
 ) -> Result<(), String> {
     let timestamp_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -899,11 +962,28 @@ fn append_score_record_jsonl(
     };
 
     let line = format!(
-        "{{\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"main_evaluation\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"diagnostic_evaluation\":{{\"river_flow_assertions\":{{\"matched\":{},\"total\":{},\"coverage_ratio\":{}}}}}\n",
+        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}}}}\n",
         timestamp_unix_ms,
+        json_escape(&run_metadata.run_id),
+        run_metadata
+            .repeat_index
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string()),
+        run_metadata
+            .repeat_total
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string()),
+        run_metadata
+            .git_commit
+            .as_ref()
+            .map(|value| format!("\"{}\"", json_escape(value)))
+            .unwrap_or_else(|| "null".to_string()),
         json_escape(seed),
         mesh_level,
         cell_count,
+        format_json_number(hydrology_step_ms),
+        format_json_number(hydrology_step_ms),
+        format_json_number(hydrology_step_ms),
         main_state_label,
         main_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))

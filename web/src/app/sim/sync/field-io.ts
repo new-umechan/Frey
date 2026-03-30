@@ -17,7 +17,7 @@ export function readFieldToBuffer(
     let response: FieldResponse | null = null;
     try {
         response = controller.get_field(worldId, fieldKind, mode);
-    } catch (_error) {
+    } catch {
         return false;
     }
 
@@ -54,7 +54,7 @@ export function writeBufferToField(
             return false;
         }
         return true;
-    } catch (_error) {
+    } catch {
         return false;
     }
 }
