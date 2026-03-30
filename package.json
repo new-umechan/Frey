@@ -15,7 +15,7 @@
         "test": "vitest -c web/vitest.config.ts",
         "test:ui": "vitest -c web/vitest.config.ts --ui",
         "test:run": "vitest -c web/vitest.config.ts run",
-        "lint:web": "sh -c 'oxlint \"web/src/**/*.ts\"'",
+        "lint:web": "oxlint web/src",
         "format:rust": "cargo fmt --manifest-path rust/Cargo.toml",
         "lint:rust": "cargo fmt --manifest-path rust/Cargo.toml -- --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets",
         "lint:prepush": "pnpm lint:web && pnpm lint:rust",
