@@ -15,3 +15,4 @@ benches/data/
 benches/results/
 
 .pnpm-store/
+.worktrees
