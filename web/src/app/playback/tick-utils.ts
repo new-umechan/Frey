@@ -1,19 +1,19 @@
-export function sanitizeTick(rawTick) {
+export function sanitizeTick(rawTick: unknown): number | null {
     const tick = Math.floor(Number(rawTick));
     return Number.isFinite(tick) && tick >= 0 ? tick : null;
 }
 
-export function normalizeTicks(rawTicks) {
+export function normalizeTicks(rawTicks: unknown[]): number[] {
     return Array.from(
         new Set(
             rawTicks
                 .map((value) => sanitizeTick(value))
-                .filter((value) => value !== null),
+                .filter((value): value is number => value !== null),
         ),
-    ).sort((a: number, b: number) => a - b);
+    ).sort((a, b) => a - b);
 }
 
-export function resolveStepTick(ticks, baseTick, direction, interval) {
+export function resolveStepTick(ticks: number[], baseTick: unknown, direction: number, interval: unknown): number | null {
     if (!Array.isArray(ticks) || ticks.length === 0) {
         return null;
     }

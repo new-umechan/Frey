@@ -10,6 +10,8 @@ import {
     type PerfControlsElements,
 } from "./dom";
 
+export type { PlaybackControlsElements, PerfControlsElements };
+
 export interface CanvasInputHandlers {
     onPointerDown?: (event: PointerEvent) => void;
     onPointerMove?: (event: PointerEvent) => void;
@@ -46,9 +48,9 @@ export interface SetupUiControlsOptions {
     onTogglePlay: () => void;
     onStepForward: () => void;
     onRewind: () => void;
-    onHistorySeek: (tick: number) => void;
+    onHistorySeek: (indexText: string) => void;
     onHistoryStepDirection: (dir: number) => void;
-    onEventLogJump: (tick: number) => void;
+    onEventLogJump: (tickText: string) => void;
     onRunPerfBenchmark: () => void;
     onCopyPerfBenchmark: () => void;
     getDebugEnabled: () => boolean;

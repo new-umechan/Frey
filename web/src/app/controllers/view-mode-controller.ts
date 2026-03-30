@@ -13,7 +13,7 @@ export function createViewModeController(options: any = {}) {
         setCurrentCellMetric,
     } = options;
 
-    const setViewMode = (nextMode) => {
+    const setViewMode = (nextMode: string) => {
         const normalizedMode = nextMode === "metric" ? "metric" : "normal";
         setCurrentViewMode(normalizedMode);
         for (const input of viewModeInputs) {
@@ -31,7 +31,7 @@ export function createViewModeController(options: any = {}) {
         }
     };
 
-    const setCellMetric = (nextMetric) => {
+    const setCellMetric = (nextMetric: string) => {
         const normalizedMetric = normalizeCellMetric(nextMetric);
         setCurrentCellMetric(normalizedMetric);
         if (getCurrentViewMode() !== "metric") {

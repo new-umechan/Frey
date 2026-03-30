@@ -3,6 +3,29 @@ import {
     isInteractiveTarget,
 } from "./keyboard-guards";
 
+interface KeyboardHandlerOptions {
+    controlHelp: {
+        toggleControlHelp: () => void;
+        closeControlHelp: () => void;
+        isOpen: () => boolean;
+    };
+    viewCui: {
+        moveViewCursor: (direction: number) => void;
+        commitViewSelection: () => void;
+        backViewMenu: () => boolean;
+        handleDigitSelect: (key: string) => boolean;
+    };
+    seedInput: HTMLInputElement;
+    getDebugEnabled: () => boolean;
+    getCurrentSurfaceMode: () => string;
+    onToggleDebug: (enabled: boolean) => void;
+    onToggleSurface: (mode: string) => void;
+    onTogglePlay: () => void;
+    onStepForward: () => void;
+    onRewind: () => void;
+    onHistoryStepDirection: (direction: number) => void;
+}
+
 export function createGlobalKeyboardHandler({
     controlHelp,
     viewCui,
@@ -15,8 +38,8 @@ export function createGlobalKeyboardHandler({
     onStepForward,
     onRewind,
     onHistoryStepDirection,
-}) {
-    return function onDocumentKeyDown(event) {
+}: KeyboardHandlerOptions) {
+    return function onDocumentKeyDown(event: KeyboardEvent) {
         if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
             return;
         }

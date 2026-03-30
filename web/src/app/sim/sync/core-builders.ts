@@ -1,4 +1,4 @@
-import { type WorldSimController } from "../../interface/wasm";
+import { type WorldSimController } from "../../../interface/wasm";
 import { FLOAT32_FIELDS, OPTIONAL_FIELD_KINDS, type FieldKind } from "./constants";
 import { type CoreBuffers, type TypedArray } from "./types";
 

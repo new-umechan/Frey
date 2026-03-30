@@ -1,4 +1,6 @@
 import { renderEraScaleControls } from "../state/era-presets";
+import { type EraScaleWeightFields } from "../../components/dom";
+import { type EraMetrics } from "../state/era-presets";
 
 export async function runInitialWorldAndUiSync({
     updateTerrain,
@@ -14,6 +16,25 @@ export async function runInitialWorldAndUiSync({
     viewportPanel,
     onResize,
     plateHover,
+}: {
+    updateTerrain: (seed: string) => Promise<void>;
+    defaultTerrainSeed: string;
+    eraScaleSelect: HTMLSelectElement;
+    eraScaleTickLabel: HTMLElement;
+    eraScaleWeightFields: EraScaleWeightFields;
+    currentEraScale: string;
+    currentEraMetrics: EraMetrics;
+    setEraScale: (scale: string, metrics: EraMetrics) => void;
+    syncClimateUi: () => void;
+    playbackController: {
+        refreshHistoryTicks: () => void;
+        syncPlaybackUi: () => void;
+        notePlaybackOverlayActivity: () => void;
+        bindOverlayActivityEvents: (element: HTMLElement) => void;
+    };
+    viewportPanel: HTMLElement;
+    onResize: () => void;
+    plateHover: { hidePopup: () => void };
 }) {
     await updateTerrain(defaultTerrainSeed);
 

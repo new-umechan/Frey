@@ -46,7 +46,7 @@ export function createLoadingOverlayController(options: any = {}) {
         loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
     }
 
-    function measurePlanetScreenRadius(camera, panelWidth, panelHeight) {
+    function measurePlanetScreenRadius(camera: THREE.Camera, panelWidth: number, panelHeight: number) {
         sphere.getWorldPosition(loadingPlanetCenterWorld);
         loadingPlanetEdgeWorld.copy(loadingPlanetEdgeLocal);
         sphere.localToWorld(loadingPlanetEdgeWorld);
@@ -83,7 +83,7 @@ export function createLoadingOverlayController(options: any = {}) {
         loadingOverlayContext.fill();
     }
 
-    function setWorldInitializing(value) {
+    function setWorldInitializing(value: boolean) {
         isWorldInitializing = Boolean(value);
     }
 

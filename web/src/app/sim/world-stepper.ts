@@ -18,7 +18,7 @@ export interface WorldStepperOptions {
     syncWorldDeltaFromController: (options: SyncDeltaOptions) => { changes: any; statsRefreshed: boolean };
     syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => any;
     getDeltaFieldKindsForView: (options: { viewMode: string; cellMetric: string }) => FieldKind[];
-    refreshWorldStats: (options: any) => boolean;
+    refreshWorldStats: () => boolean;
     syncClimateUi: () => void;
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;

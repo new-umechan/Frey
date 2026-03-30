@@ -1,4 +1,18 @@
-export function bindPlaybackUiEvents({ playbackControls, eventLogList, onTogglePlay, onHistorySeek, onHistoryStepDirection, onEventLogJump }) {
+interface PlaybackUiEventsOptions {
+    playbackControls: {
+        playToggleButton: HTMLElement;
+        historySeekSlider: HTMLInputElement;
+        seekBackwardButton: HTMLElement;
+        seekForwardButton: HTMLElement;
+    };
+    eventLogList: HTMLUListElement;
+    onTogglePlay: () => void;
+    onHistorySeek: (indexText: string) => void;
+    onHistoryStepDirection: (direction: number) => void;
+    onEventLogJump: (tickText: string) => void;
+}
+
+export function bindPlaybackUiEvents({ playbackControls, eventLogList, onTogglePlay, onHistorySeek, onHistoryStepDirection, onEventLogJump }: PlaybackUiEventsOptions) {
     playbackControls.playToggleButton.addEventListener("click", onTogglePlay);
     playbackControls.historySeekSlider.addEventListener("input", () => {
         onHistorySeek(playbackControls.historySeekSlider.value);
@@ -13,7 +27,7 @@ export function bindPlaybackUiEvents({ playbackControls, eventLogList, onToggleP
         onHistoryStepDirection(1);
     });
 
-    eventLogList.addEventListener("click", (event) => {
+    eventLogList.addEventListener("click", (event: Event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) {
             return;
@@ -30,7 +44,14 @@ export function bindPlaybackUiEvents({ playbackControls, eventLogList, onToggleP
     });
 }
 
-export function bindPerfEvents(perfEnabled, perfControls, onRunPerfBenchmark, onCopyPerfBenchmark) {
+interface PerfEventsOptions {
+    perfControls: {
+        runButton: HTMLElement;
+        copyButton: HTMLElement;
+    } | null;
+}
+
+export function bindPerfEvents(perfEnabled: boolean, perfControls: PerfEventsOptions["perfControls"] | null, onRunPerfBenchmark: () => void, onCopyPerfBenchmark: () => void) {
     if (!perfEnabled || !perfControls) {
         return;
     }

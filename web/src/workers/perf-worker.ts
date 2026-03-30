@@ -11,7 +11,7 @@ const runner = createPerfRunner({
     generate_mesh,
 });
 
-let wasmReadyPromise = null;
+let wasmReadyPromise: Promise<unknown> | null = null;
 
 function ensureWasmReady() {
     if (!wasmReadyPromise) {
@@ -20,7 +20,27 @@ function ensureWasmReady() {
     return wasmReadyPromise;
 }
 
-async function runBenchmark(message) {
+interface BenchmarkMessage {
+    type: "run";
+    runId: number;
+    profile?: Record<string, unknown>;
+    level?: number;
+    terrainParams?: Record<string, unknown>;
+    sampleInterval?: number;
+    meta?: {
+        user_agent?: string;
+        timezone?: string;
+    };
+}
+
+interface ProgressPayload {
+    done: number;
+    total: number;
+    percent: number;
+    status: string;
+}
+
+async function runBenchmark(message: BenchmarkMessage) {
     await ensureWasmReady();
     return await runner.runBenchmark({
         runId: message.runId,
@@ -32,7 +52,7 @@ async function runBenchmark(message) {
             user_agent: message?.meta?.user_agent ?? self.navigator?.userAgent ?? "worker",
             timezone: message?.meta?.timezone ?? "unknown",
         },
-        onProgress(payload) {
+        onProgress(payload: ProgressPayload) {
             self.postMessage({
                 type: "progress",
                 runId: message.runId,
@@ -42,7 +62,7 @@ async function runBenchmark(message) {
                 status: payload.status,
             });
         },
-        onWarning(warningMessage) {
+        onWarning(warningMessage: string) {
             self.postMessage({
                 type: "progress",
                 runId: message.runId,
@@ -55,13 +75,13 @@ async function runBenchmark(message) {
     });
 }
 
-self.addEventListener("message", async (event) => {
+self.addEventListener("message", async (event: MessageEvent) => {
     const message = event.data ?? {};
     if (message.type !== "run") {
         return;
     }
     try {
-        const result = await runBenchmark(message);
+        const result = await runBenchmark(message as BenchmarkMessage);
         self.postMessage({
             type: "done",
             runId: message.runId,

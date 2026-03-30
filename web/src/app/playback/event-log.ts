@@ -1,14 +1,21 @@
-function formatEventLogLine(entry) {
+interface EventLogEntry {
+    type: string;
+    tick: number;
+    label: string;
+    detail?: string;
+}
+
+function formatEventLogLine(entry: EventLogEntry) {
     const detail = entry.detail ? ` ${entry.detail}` : "";
     return `${entry.label}${detail}`;
 }
 
-function hasFailureKeyword(entry) {
+function hasFailureKeyword(entry: EventLogEntry | null | undefined) {
     const text = `${entry?.label ?? ""} ${entry?.detail ?? ""}`;
-    return /(fail|error|失敗|エラー)/i.test(text);
+    return /(fail|error|失敗 | エラー)/i.test(text);
 }
 
-function resolveEventTone(entry) {
+function resolveEventTone(entry: EventLogEntry) {
     const type = entry?.type ?? "";
     if (type === "era-changed" || type === "error" || type === "fatal" || hasFailureKeyword(entry)) {
         return "important";
@@ -41,7 +48,7 @@ export function createEmptyEventLogElement() {
     return item;
 }
 
-export function createEventLogElement(entry, canJump) {
+export function createEventLogElement(entry: EventLogEntry, canJump: boolean) {
     const item = document.createElement("li");
     item.className = "event-log-item";
 

@@ -16,6 +16,11 @@ export interface GlobePinchFocusController {
     onWheel: (event: WheelEvent) => boolean;
 }
 
+interface PointerState {
+    clientX: number;
+    clientY: number;
+}
+
 export function createGlobePinchFocusController({
     canvas,
     sphere,
@@ -26,10 +31,10 @@ export function createGlobePinchFocusController({
     canvas: HTMLCanvasElement;
     sphere: THREE.Mesh;
     globeCamera: THREE.PerspectiveCamera;
-    globeControls: any; // TODO: improve this type if possible
+    globeControls: any;
     getCurrentSurfaceMode: () => string;
 }): GlobePinchFocusController {
-    const activePointers = new Map();
+    const activePointers = new Map<number, PointerState>();
     const raycaster = new THREE.Raycaster();
     const pointerNdc = new THREE.Vector2();
     const sphereCenter = new THREE.Vector3();
@@ -41,10 +46,10 @@ export function createGlobePinchFocusController({
     const centerSurfaceDirection = new THREE.Vector3();
     const anchorSurfaceDirection = new THREE.Vector3();
     const rotateQuat = new THREE.Quaternion();
-    let pinchDistance = null;
+    let pinchDistance: number | null = null;
     let previousNoRotate = false;
 
-    function isTouchEvent(event) {
+    function isTouchEvent(event: PointerEvent) {
         return event.pointerType === "touch";
     }
 
@@ -53,7 +58,7 @@ export function createGlobePinchFocusController({
         globeControls.noRotate = previousNoRotate;
     }
 
-    function removePointer(pointerId) {
+    function removePointer(pointerId: number) {
         activePointers.delete(pointerId);
         if (activePointers.size < MIN_POINTERS_FOR_PINCH) {
             clearPinchState();
@@ -65,20 +70,20 @@ export function createGlobePinchFocusController({
         clearPinchState();
     }
 
-    function getPinchDistance(firstPointer, secondPointer) {
+    function getPinchDistance(firstPointer: PointerState, secondPointer: PointerState) {
         const dx = firstPointer.clientX - secondPointer.clientX;
         const dy = firstPointer.clientY - secondPointer.clientY;
         return Math.hypot(dx, dy);
     }
 
-    function raycastGlobeAtNdc(ndcX, ndcY) {
+    function raycastGlobeAtNdc(ndcX: number, ndcY: number) {
         pointerNdc.set(ndcX, ndcY);
         raycaster.setFromCamera(pointerNdc, globeCamera);
         const [hit] = raycaster.intersectObject(sphere, false);
         return hit?.point ?? null;
     }
 
-    function raycastGlobe(clientX, clientY) {
+    function raycastGlobe(clientX: number, clientY: number) {
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) {
             return null;
@@ -88,7 +93,7 @@ export function createGlobePinchFocusController({
         return raycastGlobeAtNdc(ndcX, ndcY);
     }
 
-    function applyCenterZoomOnly(currentDistance, zoomRatio) {
+    function applyCenterZoomOnly(currentDistance: number, zoomRatio: number) {
         const nextDistance = THREE.MathUtils.clamp(
             currentDistance * zoomRatio,
             globeControls.minDistance,
@@ -101,7 +106,7 @@ export function createGlobePinchFocusController({
         globeCamera.lookAt(sphereCenter);
     }
 
-    function applyFocusZoom(clientX, clientY, zoomRatio = 1) {
+    function applyFocusZoom(clientX: number, clientY: number, zoomRatio = 1) {
         if (getCurrentSurfaceMode() !== "globe") {
             return;
         }
@@ -192,7 +197,7 @@ export function createGlobePinchFocusController({
         globeCamera.lookAt(sphereCenter);
     }
 
-    function onPointerDown(event) {
+    function onPointerDown(event: PointerEvent) {
         if (!isTouchEvent(event)) {
             return;
         }
@@ -208,7 +213,7 @@ export function createGlobePinchFocusController({
         }
     }
 
-    function onPointerMove(event) {
+    function onPointerMove(event: PointerEvent) {
         if (!isTouchEvent(event)) {
             return;
         }
@@ -236,21 +241,21 @@ export function createGlobePinchFocusController({
         applyFocusZoom(midX, midY, zoomRatio);
     }
 
-    function onPointerUp(event) {
+    function onPointerUp(event: PointerEvent) {
         if (!isTouchEvent(event)) {
             return;
         }
         removePointer(event.pointerId);
     }
 
-    function onPointerCancel(event) {
+    function onPointerCancel(event: PointerEvent) {
         if (!isTouchEvent(event)) {
             return;
         }
         removePointer(event.pointerId);
     }
 
-    function onWheel(event) {
+    function onWheel(event: WheelEvent) {
         if (getCurrentSurfaceMode() !== "globe") {
             return false;
         }

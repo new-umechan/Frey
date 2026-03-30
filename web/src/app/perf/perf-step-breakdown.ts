@@ -13,15 +13,28 @@ const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_history_snapshot",
 ];
 
-export function pushStepBreakdownSamples(perfRecorder, profiledResult, options: any = {}) {
+interface PerfRecorder {
+    pushSample: (metricName: string, value: number) => void;
+}
+
+interface ProfiledResult {
+    [key: string]: unknown;
+    steps?: number;
+}
+
+interface StepBreakdownOptions {
+    stepCountKey?: string;
+}
+
+export function pushStepBreakdownSamples(perfRecorder: PerfRecorder | null, profiledResult: ProfiledResult, options: StepBreakdownOptions = {}) {
     if (!perfRecorder || !profiledResult) {
         return;
     }
     const stepCountKey = options.stepCountKey ?? "steps";
-    const steps = Math.max(1, Math.floor(profiledResult[stepCountKey] ?? 1));
+    const steps = Math.max(1, Math.floor((profiledResult[stepCountKey] as number) ?? 1));
     for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = profiledResult[`${metricName}_ms`];
-        if (!Number.isFinite(rawValue)) {
+        const rawValue = profiledResult[`${metricName}_ms`] as number | undefined;
+        if (rawValue === undefined || !Number.isFinite(rawValue)) {
             continue;
         }
         perfRecorder.pushSample(metricName, rawValue / steps);

@@ -1,3 +1,19 @@
+import * as THREE from "three";
+
+interface CameraControllerOptions {
+    globeCamera: THREE.PerspectiveCamera;
+    mapCamera: THREE.OrthographicCamera;
+    globeControls: any;
+    mapControls: any;
+    sphere: THREE.Mesh;
+    wireframe: THREE.Mesh;
+    halo: THREE.Mesh;
+    resizeViewport: (panel: HTMLElement, globeCam: THREE.PerspectiveCamera, mapCam: THREE.OrthographicCamera, renderer: THREE.WebGLRenderer) => void;
+    viewportPanel: HTMLElement;
+    renderer: THREE.WebGLRenderer;
+    isDebugEnabled: () => boolean;
+}
+
 export function createCameraController({
     globeCamera,
     mapCamera,
@@ -10,11 +26,11 @@ export function createCameraController({
     viewportPanel,
     renderer,
     isDebugEnabled,
-}) {
+}: CameraControllerOptions) {
     const GLOBE_CAMERA_DISTANCE = 3.2;
     const centerX = sphere.position.x;
     let currentSurfaceMode = "globe";
-    let camera = globeCamera;
+    let camera: THREE.Camera = globeCamera;
     let activeControls = globeControls;
 
     function fitCameraToCurrentSurface() {
@@ -48,7 +64,7 @@ export function createCameraController({
         globeControls.update();
     }
 
-    function setSurfaceMode(nextMode) {
+    function setSurfaceMode(nextMode: string) {
         const normalizedMode = nextMode === "map" ? "map" : "globe";
         currentSurfaceMode = normalizedMode;
         fitCameraToCurrentSurface();

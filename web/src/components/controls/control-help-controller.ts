@@ -1,4 +1,4 @@
-export function createControlHelpController(controlHelpModal, controlHelpCloseButton) {
+export function createControlHelpController(controlHelpModal: HTMLElement | null, controlHelpCloseButton: HTMLElement | null) {
     function openControlHelp() {
         if (!controlHelpModal) {
             return;

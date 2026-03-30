@@ -3,8 +3,8 @@ export function isPerfFeatureEnabled() {
     return params.get("perf") === "1" || params.get("bench") === "1";
 }
 
-export function createStatusController(statusMessage, statusRows) {
-    function showStatusError(message) {
+export function createStatusController(statusMessage: HTMLElement, statusRows: HTMLElement[]) {
+    function showStatusError(message: string) {
         statusMessage.hidden = false;
         statusMessage.textContent = message;
         for (const row of statusRows) {
@@ -20,7 +20,7 @@ export function createStatusController(statusMessage, statusRows) {
     }
 
     return {
-        setStatus(message) {
+        setStatus(message: string) {
             const text = String(message ?? "");
             const lowered = text.toLowerCase();
             const isError = lowered.includes("failed") || lowered.includes("error");
@@ -33,7 +33,7 @@ export function createStatusController(statusMessage, statusRows) {
     };
 }
 
-export function setPerfPanelVisibility(perfPanel, isPerfEnabled) {
+export function setPerfPanelVisibility(perfPanel: HTMLElement | null, isPerfEnabled: boolean) {
     if (!perfPanel) {
         return;
     }

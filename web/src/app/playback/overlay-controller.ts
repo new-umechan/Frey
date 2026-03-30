@@ -1,5 +1,10 @@
-export function createPlaybackOverlayController({ overlay, idleMs }) {
-    let hideTimerId = null;
+interface PlaybackOverlayOptions {
+    overlay: HTMLElement;
+    idleMs: number;
+}
+
+export function createPlaybackOverlayController({ overlay, idleMs }: PlaybackOverlayOptions) {
+    let hideTimerId: number | null = null;
 
     function clearHideTimer() {
         if (hideTimerId !== null) {
@@ -34,23 +39,45 @@ export function createPlaybackOverlayController({ overlay, idleMs }) {
         scheduleAutoHide();
     }
 
-    function bindActivityEvents(viewportPanel) {
-        viewportPanel.addEventListener("pointermove", noteActivity);
-        viewportPanel.addEventListener("pointerenter", noteActivity);
-        viewportPanel.addEventListener("wheel", noteActivity, { passive: true });
-        viewportPanel.addEventListener("touchstart", noteActivity, { passive: true });
+    function bindActivityEvents(viewportPanel: HTMLElement): () => void {
+        const cleanupListeners: Array<() => void> = [];
 
-        overlay.addEventListener("pointerenter", noteActivity);
-        overlay.addEventListener("pointermove", noteActivity);
-        overlay.addEventListener("focusin", noteActivity);
-        overlay.addEventListener("pointerleave", scheduleAutoHide);
-        overlay.addEventListener("focusout", scheduleAutoHide);
+        const viewportHandlers = ["pointermove", "pointerenter", "wheel", "touchstart"];
+        for (const type of viewportHandlers) {
+            const handler = type === "wheel" || type === "touchstart"
+                ? () => noteActivity()
+                : () => noteActivity();
+            viewportPanel.addEventListener(type, handler, type === "wheel" || type === "touchstart" ? { passive: true } : undefined);
+            cleanupListeners.push(() => viewportPanel.removeEventListener(type, handler));
+        }
 
-        document.addEventListener("keydown", (event) => {
+        const overlayHandlers = ["pointerenter", "pointermove", "focusin"];
+        for (const type of overlayHandlers) {
+            const handler = () => noteActivity();
+            overlay.addEventListener(type, handler);
+            cleanupListeners.push(() => overlay.removeEventListener(type, handler));
+        }
+
+        const overlayLeaveHandlers = ["pointerleave", "focusout"];
+        for (const type of overlayLeaveHandlers) {
+            const handler = scheduleAutoHide;
+            overlay.addEventListener(type, handler);
+            cleanupListeners.push(() => overlay.removeEventListener(type, handler));
+        }
+
+        const keydownHandler = (event: KeyboardEvent) => {
             if (event.code === "Space" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
                 noteActivity();
             }
-        });
+        };
+        document.addEventListener("keydown", keydownHandler);
+        cleanupListeners.push(() => document.removeEventListener("keydown", keydownHandler));
+
+        return () => {
+            for (const cleanup of cleanupListeners) {
+                cleanup();
+            }
+        };
     }
 
     return {

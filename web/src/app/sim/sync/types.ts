@@ -1,10 +1,10 @@
-import { type WorldSimController } from "../../interface/wasm";
+import { type WorldSimController } from "../../../interface/wasm";
 import { type FieldKind } from "./constants";
-import { type TerrainRenderer } from "../visualizers/terrain-renderer";
-import { type WorldState } from "../state/app-state";
-import { type EraMetrics } from "../state/era-presets";
-import { type StatFields } from "../../components/dom";
-import { type TickPerfRecorder } from "../perf/recorder";
+import { type TerrainRenderer } from "../../visualizers/terrain-renderer";
+import { type WorldState } from "../../state/app-state";
+import { type EraMetrics } from "../../state/era-presets";
+import { type StatFields } from "../../../components/dom";
+import { type TickPerfRecorder } from "../../perf/recorder";
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 

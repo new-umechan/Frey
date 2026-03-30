@@ -1,8 +1,8 @@
-export function isHelpToggleKey(event) {
+export function isHelpToggleKey(event: KeyboardEvent) {
     return event.key === "?" || (event.code === "Slash" && event.shiftKey);
 }
 
-export function isInteractiveTarget(target) {
+export function isInteractiveTarget(target: EventTarget | null) {
     return target instanceof HTMLElement && (
         target.isContentEditable
         || (target instanceof HTMLInputElement && target.type !== "range")

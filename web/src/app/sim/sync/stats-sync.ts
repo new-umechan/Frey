@@ -1,4 +1,4 @@
-import { type StatFields } from "../../components/dom";
+import { type StatFields } from "../../../components/dom";
 
 function formatPercent(ratio: number): string {
     if (!Number.isFinite(ratio)) {

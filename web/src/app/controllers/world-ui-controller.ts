@@ -1,6 +1,6 @@
 import { type AppState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics, type EraScalePreset, type EraScaleWeightFields } from "../state/era-presets";
+import { type EraMetrics, type EraScaleConfig, type EraScaleWeightFields } from "../state/era-presets";
 import { type PlateHoverController } from "../input/plate-hover";
 
 export interface WorldUiController {
@@ -19,7 +19,7 @@ export interface WorldUiControllerOptions {
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
     eraScaleWeightFields: EraScaleWeightFields;
-    getEraScalePreset: (era: string) => EraScalePreset;
+    getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
     createEraMetrics: (era: string) => EraMetrics;
     renderEraScaleControls: (
         select: HTMLSelectElement,

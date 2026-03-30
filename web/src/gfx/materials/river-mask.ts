@@ -8,7 +8,7 @@ const RIVER_WIDTH_MIN_PX = 1.0;
 const RIVER_WIDTH_MAX_PX = 4.5;
 const RIVER_WIDTH_GAMMA = 0.55;
 
-function lonLatToMapUv(x, y, z) {
+function lonLatToMapUv(x: number, y: number, z: number) {
     const invLen = 1 / Math.max(1e-6, Math.hypot(x, y, z));
     const nx = x * invLen;
     const ny = y * invLen;
@@ -18,7 +18,7 @@ function lonLatToMapUv(x, y, z) {
     return { u, v };
 }
 
-function wrapAwarePair(u0, u1) {
+function wrapAwarePair(u0: number, u1: number): [number, number] {
     let a = u0;
     let b = u1;
     if (Math.abs(b - a) <= 0.5) {
@@ -32,7 +32,7 @@ function wrapAwarePair(u0, u1) {
     return [a, b];
 }
 
-function drawWrappedSegment(ctx, x0, y0, x1, y1, width, canvasWidth) {
+function drawWrappedSegment(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, width: number, canvasWidth: number) {
     ctx.lineWidth = width;
     ctx.beginPath();
     ctx.moveTo(x0, y0);
@@ -64,7 +64,7 @@ function createEmptyRiverMaskTexture() {
     return texture;
 }
 
-function quantile(values, q) {
+function quantile(values: number[], q: number) {
     if (!Array.isArray(values) || values.length === 0) {
         return 0;
     }
@@ -74,7 +74,7 @@ function quantile(values, q) {
     return sorted[index];
 }
 
-export function buildTerrainUvFromPositions(basePositions) {
+export function buildTerrainUvFromPositions(basePositions: Float32Array) {
     const vertexCount = basePositions.length / 3;
     const uv = new Float32Array(vertexCount * 2);
     for (let i = 0; i < vertexCount; i += 1) {
@@ -87,7 +87,7 @@ export function buildTerrainUvFromPositions(basePositions) {
     return uv;
 }
 
-export function buildRiverMaskTexture(basePositions, riverNext, riverFlux) {
+export function buildRiverMaskTexture(basePositions: Float32Array, riverNext: Int32Array, riverFlux: Float32Array) {
     if (!basePositions?.length || !riverNext?.length || !riverFlux?.length) {
         return createEmptyRiverMaskTexture();
     }
@@ -107,7 +107,7 @@ export function buildRiverMaskTexture(basePositions, riverNext, riverFlux) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    const segmentFluxSamples = [];
+    const segmentFluxSamples: number[] = [];
     for (let i = 0; i < riverNext.length; i += 1) {
         const next = riverNext[i];
         if (next < 0 || next >= riverNext.length) {

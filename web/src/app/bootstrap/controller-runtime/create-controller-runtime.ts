@@ -43,7 +43,7 @@ export interface RuntimeContext extends ControllerDeps {
     statFields: StatFields;
     statusEraLabel: HTMLElement;
     playbackControls: any;
-    eventLogList: HTMLElement;
+    eventLogList: HTMLUListElement;
     perfControls: any;
     perfStatFields: PerfStatFields | null;
     viewportPanel: HTMLElement;

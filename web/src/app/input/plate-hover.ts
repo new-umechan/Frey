@@ -8,6 +8,33 @@ export interface PlateHoverController {
     syncDebugMode: () => void;
 }
 
+interface PlateHoverState {
+    currentTerrainData: Record<string, Float32Array | Int32Array> | null;
+    currentViewMode: string;
+    currentCellMetric: string;
+    debugEnabled: boolean;
+    camera: THREE.Camera;
+}
+
+interface HoverDiagnostics {
+    weight: number | null;
+    debugLines: string[];
+}
+
+interface PendingPlateHover {
+    clientX: number;
+    clientY: number;
+    plateId: number;
+    hoverDiagnostics: HoverDiagnostics;
+}
+
+interface MetricHoverValue {
+    meta: { label: string; unit: string; formatter: (value: number) => string; dataKey: string };
+    vertexIndex: number;
+    value: number;
+    formattedValue: string;
+}
+
 export function createPlateHover({
     canvas,
     sphere,
@@ -22,7 +49,7 @@ export function createPlateHover({
     geometry: THREE.BufferGeometry;
     viewportPanel: HTMLElement;
     plateHoverPopup: HTMLElement;
-    getState: () => any; // TODO: improve this type if possible
+    getState: () => PlateHoverState;
     onClimateHover?: (data: { label: string; value: string } | null) => void;
 }): PlateHoverController {
     const raycaster = new THREE.Raycaster();
@@ -32,9 +59,9 @@ export function createPlateHover({
     const hoverTriB = new THREE.Vector3();
     const hoverTriC = new THREE.Vector3();
     const hoverBarycoord = new THREE.Vector3();
-    let plateHoverTimerId = null;
-    let pendingPlateHover = null;
-    let visiblePlateHoverId = null;
+    let plateHoverTimerId: number | null = null;
+    let pendingPlateHover: PendingPlateHover | null = null;
+    let visiblePlateHoverId: number | null = null;
 
     function clearPlateHoverTimer() {
         if (plateHoverTimerId !== null) {
@@ -52,7 +79,7 @@ export function createPlateHover({
         onClimateHover?.(null);
     }
 
-    function showPlateHoverPopup(clientX, clientY, plateIdValue, hoverDiagnostics) {
+    function showPlateHoverPopup(clientX: number, clientY: number, plateIdValue: number, hoverDiagnostics: HoverDiagnostics) {
         const {
             currentTerrainData,
             currentViewMode,
@@ -84,7 +111,7 @@ export function createPlateHover({
         });
     }
 
-    function positionPopup(clientX, clientY) {
+    function positionPopup(clientX: number, clientY: number) {
         const viewportRect = viewportPanel.getBoundingClientRect();
         const margin = 10;
         const offset = 14;
@@ -102,7 +129,7 @@ export function createPlateHover({
         plateHoverPopup.style.top = `${top}px`;
     }
 
-    function schedulePlateHoverPopup(clientX, clientY, plateIdValue, hoverDiagnostics) {
+    function schedulePlateHoverPopup(clientX: number, clientY: number, plateIdValue: number, hoverDiagnostics: HoverDiagnostics) {
         const plateIndex = Number(plateIdValue);
         if (!Number.isInteger(plateIndex)) {
             hidePopup();
@@ -141,7 +168,7 @@ export function createPlateHover({
         }, PLATE_HOVER_POPUP_DELAY_MS);
     }
 
-    function sampleHoverWeight(hit, plateIndexFallback) {
+    function sampleHoverWeight(hit: THREE.Intersection, plateIndexFallback: number) {
         const { currentTerrainData } = getState();
         const face = hit?.face;
         const positionAttr = geometry.getAttribute("position");
@@ -170,12 +197,12 @@ export function createPlateHover({
             hoverBarycoord,
         );
 
-        const weightA = currentTerrainData.vertexWeight[face.a];
-        const weightB = currentTerrainData.vertexWeight[face.b];
-        const weightC = currentTerrainData.vertexWeight[face.c];
-        const plateA = currentTerrainData.plateId[face.a];
-        const plateB = currentTerrainData.plateId[face.b];
-        const plateC = currentTerrainData.plateId[face.c];
+        const weightA = (currentTerrainData.vertexWeight as Float32Array)?.[face.a];
+        const weightB = (currentTerrainData.vertexWeight as Float32Array)?.[face.b];
+        const weightC = (currentTerrainData.vertexWeight as Float32Array)?.[face.c];
+        const plateA = (currentTerrainData.plateId as Int32Array)?.[face.a];
+        const plateB = (currentTerrainData.plateId as Int32Array)?.[face.b];
+        const plateC = (currentTerrainData.plateId as Int32Array)?.[face.c];
         const fallbackVertexWeight = weightA;
 
         const baseDebugLines = [
@@ -308,7 +335,7 @@ export function createPlateHover({
         };
     }
 
-    function updateFromPointer(event) {
+    function updateFromPointer(event: PointerEvent) {
         const {
             currentTerrainData,
             currentViewMode,
@@ -354,12 +381,12 @@ export function createPlateHover({
         const sampledWeightResult = sampleHoverWeight(hit, hoveredVertexIndex);
         const sampledWeight = Number.isFinite(sampledWeightResult?.weight)
             ? sampledWeightResult.weight
-            : currentTerrainData.vertexWeight[hoveredVertexIndex];
-        const hoverDiagnostics = {
+            : (currentTerrainData.vertexWeight as Float32Array)?.[hoveredVertexIndex];
+        const hoverDiagnostics: HoverDiagnostics = {
             weight: sampledWeight,
             debugLines: [
                 ...(sampledWeightResult?.debugLines ?? ["debug: source=unknown"]),
-                `debug: faceAWeight=${currentTerrainData.vertexWeight[hoveredVertexIndex].toFixed(3)}`,
+                `debug: faceAWeight=${(currentTerrainData.vertexWeight as Float32Array)?.[hoveredVertexIndex].toFixed(3)}`,
             ],
         };
 
@@ -377,12 +404,12 @@ export function createPlateHover({
         );
     }
 
-    function readMetricHoverValue(currentTerrainData, currentCellMetric, vertexIndexValue) {
+    function readMetricHoverValue(currentTerrainData: Record<string, Float32Array | Int32Array>, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
         const meta = getCellMetricMeta(currentCellMetric);
         const vertexIndex = Number(vertexIndexValue);
-        const values = currentTerrainData[meta.dataKey];
+        const values = currentTerrainData[meta.dataKey] as Float32Array | undefined;
         const value = values?.[vertexIndex];
-        if (!Number.isInteger(vertexIndex) || !Number.isFinite(value)) {
+        if (!Number.isInteger(vertexIndex) || value === undefined || !Number.isFinite(value)) {
             return null;
         }
         return {

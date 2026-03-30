@@ -2,15 +2,34 @@ import {
     STEP_BREAKDOWN_SAMPLE_INTERVAL,
 } from "./perf-step-breakdown";
 
-function formatMs(value) {
+interface PerfStatFields {
+    tickP50: HTMLElement;
+    tickP95: HTMLElement;
+    stepMean: HTMLElement;
+    deltaMean: HTMLElement;
+    geomMean: HTMLElement;
+    riverMean: HTMLElement;
+}
+
+interface PerfResult {
+    metrics: {
+        tick_total?: { p50?: number; p95?: number };
+        exec_world?: { mean?: number };
+        delta_sync?: { mean?: number };
+        geometry_update?: { mean?: number };
+        river_mask_update?: { mean?: number };
+    };
+}
+
+function formatMs(value: unknown) {
     if (!Number.isFinite(value)) {
         return "-";
     }
-    return `${value.toFixed(3)} ms`;
+    return `${Number(value).toFixed(3)} ms`;
 }
 
-function createPerfStatsRenderer(perfStatFields) {
-    return function renderPerfStats(result) {
+function createPerfStatsRenderer(perfStatFields: PerfStatFields | null) {
+    return function renderPerfStats(result: PerfResult | null) {
         if (!perfStatFields) {
             return;
         }
@@ -24,7 +43,39 @@ function createPerfStatsRenderer(perfStatFields) {
     };
 }
 
-export function createPerfController(options: any = {}) {
+interface PerfControllerOptions {
+    enabled: boolean;
+    controls: {
+        status: HTMLElement;
+        progress: HTMLProgressElement;
+        runButton: HTMLButtonElement;
+        copyButton: HTMLButtonElement;
+    };
+    perfStatFields: PerfStatFields | null;
+    workerUrl: string;
+    terrainParams: Record<string, unknown>;
+    level: number;
+    createPerfProfile: () => { tickCount: number };
+    createPerfConsoleTable: (result: unknown) => unknown;
+    formatPerfSummaryLine: (result: unknown) => string;
+    getRuntimeMeta: () => Record<string, unknown>;
+    canRunBenchmark: () => boolean;
+    setPlaybackRunning: (playing: boolean) => boolean;
+    syncPlaybackUi: () => void;
+}
+
+interface WorkerMessage {
+    type: "progress" | "done" | "error";
+    runId: number;
+    done?: number;
+    total?: number;
+    percent?: number;
+    status?: string;
+    result?: unknown;
+    message?: string;
+}
+
+export function createPerfController(options: Partial<PerfControllerOptions> = {}) {
     const {
         enabled,
         controls,
@@ -41,7 +92,7 @@ export function createPerfController(options: any = {}) {
         syncPlaybackUi,
     } = options;
 
-    if (!enabled) {
+    if (!enabled || !controls) {
         return {
             initialize() {},
             getLastResult() {
@@ -52,31 +103,31 @@ export function createPerfController(options: any = {}) {
         };
     }
 
-    let lastResult = null;
+    let lastResult: unknown = null;
     let isRunning = false;
-    let worker = null;
+    let worker: Worker | null = null;
     let runSeq = 0;
-    const renderPerfStats = createPerfStatsRenderer(perfStatFields);
+    const renderPerfStats = createPerfStatsRenderer(perfStatFields ?? null);
 
-    const setStatus = (message) => {
+    const setStatus = (message: string) => {
         controls.status.textContent = message;
     };
 
-    const setProgress = (value, max = 1) => {
+    const setProgress = (value: number, max = 1) => {
         const normalizedMax = Math.max(1, Math.floor(max));
         const normalizedValue = Math.max(0, Math.min(normalizedMax, Math.floor(value)));
         controls.progress.max = normalizedMax;
         controls.progress.value = normalizedValue;
     };
 
-    const setControlsDisabled = (isDisabled) => {
+    const setControlsDisabled = (isDisabled: boolean) => {
         controls.runButton.disabled = isDisabled;
         controls.copyButton.disabled = isDisabled || !lastResult;
     };
 
     const getWorker = () => {
         if (!worker) {
-            worker = new Worker(workerUrl, { type: "module" });
+            worker = new Worker(workerUrl!, { type: "module" });
         }
         return worker;
     };
@@ -89,13 +140,13 @@ export function createPerfController(options: any = {}) {
         worker = null;
     };
 
-    const runOnWorker = async (profile) => {
+    const runOnWorker = async (profile: { tickCount: number }) => {
         const currentWorker = getWorker();
         const runId = runSeq + 1;
         runSeq = runId;
 
         return await new Promise((resolve, reject) => {
-            const handleMessage = (event) => {
+            const handleMessage = (event: MessageEvent<WorkerMessage>) => {
                 const message = event.data ?? {};
                 if (message.runId !== runId) {
                     return;
@@ -104,7 +155,7 @@ export function createPerfController(options: any = {}) {
                     const done = Math.max(0, Math.floor(message.done ?? 0));
                     const total = Math.max(1, Math.floor(message.total ?? profile.tickCount));
                     const percent = Math.max(0, Math.min(100, Math.floor(message.percent ?? 0)));
-            const status = typeof message.status === "string"
+                    const status = typeof message.status === "string"
                         ? message.status
                         : `Running ${done}/${total} ticks... (${percent}%)`;
                     setProgress(done, total);
@@ -122,7 +173,7 @@ export function createPerfController(options: any = {}) {
                 }
             };
 
-            const handleError = (event) => {
+            const handleError = (event: ErrorEvent) => {
                 cleanup();
                 reject(new Error(event?.message || "Worker crashed during performance run"));
             };
@@ -141,7 +192,7 @@ export function createPerfController(options: any = {}) {
                 level,
                 terrainParams,
                 sampleInterval: STEP_BREAKDOWN_SAMPLE_INTERVAL,
-                meta: getRuntimeMeta(),
+                meta: getRuntimeMeta?.() ?? {},
             });
         });
     };
@@ -166,15 +217,19 @@ export function createPerfController(options: any = {}) {
     };
 
     const runBenchmark = async () => {
-        if (isRunning || !canRunBenchmark()) {
+        if (isRunning || !canRunBenchmark?.()) {
             return;
         }
 
-        const profile = createPerfProfile();
+        const profile = createPerfProfile?.();
+        if (!profile) {
+            setStatus("Failed to create performance profile.");
+            return;
+        }
         isRunning = true;
         setControlsDisabled(true);
         setStatus("Preparing performance profile...");
-        const wasPlaying = setPlaybackRunning(false);
+        const wasPlaying = setPlaybackRunning?.(false) ?? false;
 
         try {
             setStatus(`Running 0/${profile.tickCount} ticks... (0%)`);
@@ -183,7 +238,7 @@ export function createPerfController(options: any = {}) {
             try {
                 result = await runOnWorker(profile);
             } catch (error) {
-                const errorText = String(error?.message ?? error);
+                const errorText = String((error as Error)?.message ?? error);
                 const looksLikeWasmTrap = /unreachable|wasm|worker crashed/i.test(errorText);
                 if (!looksLikeWasmTrap) {
                     setStatus(`Performance run failed: ${errorText}`);
@@ -196,24 +251,24 @@ export function createPerfController(options: any = {}) {
                 try {
                     result = await runOnWorker(profile);
                 } catch (retryError) {
-                    setStatus(`Performance run failed: ${String(retryError?.message ?? retryError)}`);
+                    setStatus(`Performance run failed: ${String((retryError as Error)?.message ?? retryError)}`);
                     console.error(retryError);
                     return;
                 }
             }
 
             lastResult = result;
-            renderPerfStats(result);
-            const summaryLine = formatPerfSummaryLine(result);
+            renderPerfStats(result as PerfResult | null);
+            const summaryLine = formatPerfSummaryLine?.(result) ?? "Done";
             setStatus(`Done: ${summaryLine}`);
             setProgress(profile.tickCount, profile.tickCount);
             console.group(`[perf] ${profile.tickCount} tick performance run`);
             console.log("result", result);
-            console.table(createPerfConsoleTable(result));
+            console.table(createPerfConsoleTable?.(result) ?? result);
             console.groupEnd();
         } finally {
-            syncPlaybackUi();
-            setPlaybackRunning(wasPlaying);
+            syncPlaybackUi?.();
+            setPlaybackRunning?.(wasPlaying);
             isRunning = false;
             setControlsDisabled(false);
         }

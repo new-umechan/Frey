@@ -1,7 +1,7 @@
-import { type WorldSimController } from "../interface/wasm";
+import { type WorldSimController } from "../../interface/wasm";
 import { type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
-import { type EraMetrics, type EraScalePreset } from "../state/era-presets";
+import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 
 export interface TerrainGenerationController {
     updateTerrain: (seed: string) => Promise<void>;
@@ -25,7 +25,7 @@ export interface TerrainGenerationControllerOptions {
         createInitialBudgets: () => any,
         createEraMetrics: (era: string) => EraMetrics,
     ) => EraMetrics;
-    getEraScalePreset: (era: string) => EraScalePreset;
+    getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
     setStatus: (msg: string) => void;
     syncWorldFromActiveController: () => Promise<void>;
     getCurrentEraScale: () => string;

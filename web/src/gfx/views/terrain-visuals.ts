@@ -2,7 +2,7 @@ import {
     build_render_positions as wasmBuildRenderPositions,
 } from "../../interface/wasm";
 
-export function buildRenderPositions(basePositions, heightData, surfaceMode = "globe") {
+export function buildRenderPositions(basePositions: Float32Array, heightData: Float32Array, surfaceMode = "globe") {
     const positions = wasmBuildRenderPositions({
         base_positions: basePositions,
         height_data: heightData,

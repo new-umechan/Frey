@@ -19,14 +19,13 @@
     "maxNodeModuleJsDepth": 1,
 
     /* Linting */
-    "strict": false, // 最初は緩めに設定
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
     /* Path Aliases (if needed) */
     "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "paths": {
       "@wasm/*": ["generated/wasm/web/*"]
     }

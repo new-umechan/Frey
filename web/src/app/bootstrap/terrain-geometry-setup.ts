@@ -8,6 +8,17 @@ export function setupTerrainGeometryAttributes({
     currentViewMode,
     currentCellMetric,
     debugEnabled,
+}: {
+    geometry: THREE.BufferGeometry;
+    terrainMaterial: {
+        setViewMode: (mode: string) => void;
+        setCellMetric: (metric: string) => void;
+        setDebugEnabled: (enabled: boolean) => void;
+    };
+    basePositions: Float32Array;
+    currentViewMode: string;
+    currentCellMetric: string;
+    debugEnabled: boolean;
 }) {
     const vertexCount = basePositions.length / 3;
     const terrainUv = buildTerrainUvFromPositions(basePositions);

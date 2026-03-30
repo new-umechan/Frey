@@ -1,10 +1,10 @@
 import { getCellMetricMeta } from "../visualizers/cell-metric";
 
-function computeLegendStats(values) {
+function computeLegendStats(values: number[] | null) {
     if (!values || values.length === 0) {
         return null;
     }
-    const finiteValues = [];
+    const finiteValues: number[] = [];
     for (let i = 0; i < values.length; i += 1) {
         const value = values[i];
         if (Number.isFinite(value)) {
@@ -15,7 +15,7 @@ function computeLegendStats(values) {
         return null;
     }
     finiteValues.sort((a, b) => a - b);
-    const quantile = (ratio) => {
+    const quantile = (ratio: number): number => {
         const index = Math.max(0, Math.min(finiteValues.length - 1, Math.floor((finiteValues.length - 1) * ratio)));
         return finiteValues[index];
     };
@@ -34,7 +34,7 @@ export function createClimateUiController(options: any = {}) {
         getCurrentTerrainData,
     } = options;
 
-    const updateClimateHoverReadout = (payload) => {
+    const updateClimateHoverReadout = (payload: { label: string; value: string } | null) => {
         if (!climateLegend) {
             return;
         }

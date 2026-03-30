@@ -205,7 +205,7 @@ export function createPlaybackController({
         }
 
         const response = worldSimController.list_history_ticks(activeWorldId);
-        const ticks = Array.isArray(response?.ticks) ? response.ticks : [];
+        const ticks: unknown[] = Array.isArray(response?.ticks) ? response.ticks : [];
         const normalized = normalizeTicks(ticks);
         playbackState.availableTicks = normalized;
 
@@ -215,7 +215,7 @@ export function createPlaybackController({
         }
 
         if (playbackState.selectedTick === null || !normalized.includes(playbackState.selectedTick)) {
-            const candidates = normalized.filter((tick) => tick <= getWorldTick());
+            const candidates = normalized.filter((tick: number) => tick <= getWorldTick());
             playbackState.selectedTick = candidates.length > 0
                 ? candidates[candidates.length - 1]
                 : normalized[normalized.length - 1] ?? null;
