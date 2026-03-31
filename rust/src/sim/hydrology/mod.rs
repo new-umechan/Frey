@@ -171,7 +171,7 @@ fn run_river_step_with_erosion_state(
         );
         // 正規化前の flux を保持（river_flow 用）
         let raw_flux = rebuilt.flux.clone();
-        
+
         smooth_and_normalize_flux(
             &mut rebuilt.flux,
             &state.river_flux,
@@ -195,7 +195,7 @@ fn run_river_step_with_erosion_state(
         );
         align_flow_heading(mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
         state.prev_river_next.clone_from(&state.river_next);
-        state.river_flux = rebuilt.flux;  // 正規化済み（内部処理用）
+        state.river_flux = rebuilt.flux; // 正規化済み（内部処理用）
         state.river_next = rebuilt.primary_next;
         state.flow_heading = rebuilt.heading;
         state.last_rebuild_tick = tick;
@@ -208,7 +208,7 @@ fn run_river_step_with_erosion_state(
             &rebuilt.downstream_cells,
             &rebuilt.downstream_weights,
         ));
-        
+
         // raw_flux を state に保存（river_flow 用）
         state.raw_river_flux = raw_flux;
     }

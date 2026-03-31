@@ -490,6 +490,7 @@ fn river_network_persists_without_early_collapse() {
         armor: vec![0.0; terrain.river_flux.len()],
         rain: vec![0.12; terrain.river_flux.len()],
         river_flux: terrain.river_flux,
+        raw_river_flux: Vec::new(),
         river_next: terrain.river_next,
         active_queue: (0..world.cell_count() as u32).collect(),
         active_head: 0,
