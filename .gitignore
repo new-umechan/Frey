@@ -12,4 +12,8 @@ __pycache__/
 # Benchmark data artifacts
 benches/raw
 benches/data/
+benches/data
 benches/results/
+rust/benches/result/
+rust/benches/results/
+.git/info/exclude
