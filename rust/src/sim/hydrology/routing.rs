@@ -1,14 +1,20 @@
 use super::*;
 
+/// mm/yr を m³/s に変換する係数
+/// 計算：cell_area_m2 / (1000 * seconds_per_year)
+/// レベル 6: 1.25e10 m² / (1000 * 31557600) ≈ 0.395
+const RUNOFF_MM_YR_TO_M3S: f32 = 0.395;
+
 pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
     if world.clock.epoch != EraKind::Crust {
+        // runoff (mm/yr) を m³/s に変換
         return world
             .state
             .climate
             .runoff
             .iter()
             .copied()
-            .map(normalize_runoff_mm)
+            .map(|runoff_mm_yr| runoff_mm_yr.max(0.0) * RUNOFF_MM_YR_TO_M3S)
             .collect();
     }
     world
@@ -130,10 +136,6 @@ pub(super) fn compute_rebuild_interval(params: &GeologyParams, driver: f32) -> u
     let t = ((driver - low) / (high - low)).clamp(0.0, 1.0);
     let span = (max_interval - min_interval) as f32;
     (max_interval as f32 - span * t).round() as u32
-}
-
-pub(super) fn normalize_runoff_mm(runoff_mm: f32) -> f32 {
-    (runoff_mm.max(0.0) / RIVER_RUNOFF_SCALE_MM).clamp(0.0, 1.0)
 }
 
 pub(super) fn should_rebuild_network(

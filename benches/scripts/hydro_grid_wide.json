@@ -1,0 +1,7 @@
+{
+  "river_accumulation_threshold": [0.004, 0.008, 0.012, 0.016, 0.020],
+  "river_inertia_gain": [0.05, 0.15, 0.25, 0.35, 0.45],
+  "baseflow_infiltration_rate": [0.10, 0.22, 0.34, 0.46, 0.58],
+  "baseflow_release_rate": [0.04, 0.08, 0.12, 0.16, 0.20],
+  "baseflow_storage_cap": [100.0, 180.0, 240.0, 320.0, 400.0]
+}

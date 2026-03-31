@@ -30,7 +30,6 @@ use sync::{erosion_state_matches_world, sync_erosion_rain};
 const NETWORK_BLEND_ALPHA: f32 = 0.38;
 const FLUX_SCALE_EMA_ALPHA: f32 = 0.20;
 const ACTIVE_OFF_THRESHOLD_SCALE: f32 = 0.65;
-const RIVER_RUNOFF_SCALE_MM: f32 = 1_200.0;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct HydrologyStepDetailBreakdown {
@@ -170,6 +169,9 @@ fn run_river_step_with_erosion_state(
             &state.params,
             Some(&*state),
         );
+        // 正規化前の flux を保持（river_flow 用）
+        let raw_flux = rebuilt.flux.clone();
+        
         smooth_and_normalize_flux(
             &mut rebuilt.flux,
             &state.river_flux,
@@ -193,7 +195,7 @@ fn run_river_step_with_erosion_state(
         );
         align_flow_heading(mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
         state.prev_river_next.clone_from(&state.river_next);
-        state.river_flux = rebuilt.flux;
+        state.river_flux = rebuilt.flux;  // 正規化済み（内部処理用）
         state.river_next = rebuilt.primary_next;
         state.flow_heading = rebuilt.heading;
         state.last_rebuild_tick = tick;
@@ -206,12 +208,16 @@ fn run_river_step_with_erosion_state(
             &rebuilt.downstream_cells,
             &rebuilt.downstream_weights,
         ));
+        
+        // raw_flux を state に保存（river_flow 用）
+        state.raw_river_flux = raw_flux;
     }
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
     update_erosion_and_deposition_rates(geology, &state.height);
-    hydrology.river_flow.clone_from(&state.river_flux);
+    // raw_river_flux（正規化前）を river_flow として使用
+    hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
     rebuild_mfd_from_primary(hydrology);
     hydrology.is_lake.fill(false);

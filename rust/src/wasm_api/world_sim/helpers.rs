@@ -27,6 +27,7 @@ pub(super) fn build_erosion_state(
             .map(|value| (value.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0))
             .collect(),
         river_flux: world.state.hydrology.river_flow.clone(),
+        raw_river_flux: Vec::new(),
         river_next: world.state.hydrology.river_next.clone(),
         active_queue: (0..cell_count as u32).collect(),
         active_head: 0,

@@ -11,7 +11,10 @@ pub struct ErosionAutomatonState {
     pub sediment: Vec<f32>,
     pub armor: Vec<f32>,
     pub rain: Vec<f32>,
+    #[serde(default)]
     pub river_flux: Vec<f32>,
+    #[serde(default)]
+    pub raw_river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
     pub active_queue: Vec<u32>,
     pub active_head: usize,

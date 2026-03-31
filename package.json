@@ -31,6 +31,8 @@
         "bench:compare:hydrology": "tsx benches/scripts/compare-hydrology-scores.ts",
         "bench:check:hydrology-runtime": "tsx benches/scripts/check-hydrology-runtime.ts",
         "bench:check:hydrology-quality": "tsx benches/scripts/check-hydrology-quality.ts",
+        "bench:tune:hydrology": "python3 benches/scripts/tune-hydrology-params.py",
+        "bench:tune:ecology": "python3 benches/scripts/tune-ecology-params.py",
         "perf:run": "tsx tests/perf/scripts/perf.ts",
         "perf:run:dev": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts",
         "perf:baseline": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts --ticks 16 --seed alpha --no-geometry --sample-interval 4 --out tests/perf/bench-baseline.json",
