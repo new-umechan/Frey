@@ -12,7 +12,7 @@ precipitation:
   convergence_min_mm: -260.0
   convergence_max_mm: 480.0
   convergence_blend: 0.18
-  cap_from_moisture: 3.4
+  cap_from_moisture: 2.2
   hotspot_precip_gain_mm: 520.0
   hotspot_coast_distance_km: 320.0
   hotspot_fetch_weight: 0.55
@@ -40,10 +40,10 @@ coastal:
 core:
   substeps: 8
   temperature_diffusion_gain: 0.10
-  moisture_transport_gain: 0.18
+  moisture_transport_gain: 0.22
   condense_excess_gain: 0.65
-  orographic_condense_gain: 0.040
-  ocean_evaporation_gain: 0.30
+  orographic_condense_gain: 0.04
+  ocean_evaporation_gain: 0.3
   land_recycle_gain: 0.025
   land_bucket_capacity_mm: 220.0
   land_drainage_gain: 0.40

@@ -66,6 +66,7 @@ struct WindFields {
     wind_u: Vec<f32>,
     wind_v: Vec<f32>,
     wind_vectors: Vec<[f32; 3]>,
+    vertical_motion: Vec<f32>,
 }
 
 static LAST_PRECIP_DIAGNOSTICS: OnceLock<Mutex<PrecipDiagnosticsSummary>> = OnceLock::new();
@@ -281,8 +282,21 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             upwind_ocean_fraction(world, &neighbor_lookup, i, wind_fields.wind_vectors[i], 3);
         let humidity_ratio = (humidity[i] / qsat[i].max(1.0)).clamp(0.0, 2.0);
         let wet_gate = smoothstep(0.55, 1.05, humidity_ratio);
+        let wind_convergence =
+            local_wind_convergence_proxy(&neighbor_lookup, i, &wind_fields.wind_vectors);
+        let convergence_gate = smoothstep(0.03, 0.35, wind_convergence);
+        let divergence_gate = smoothstep(0.03, 0.35, -wind_convergence);
+        let circulation_ascent = wind_fields.vertical_motion[i].max(0.0);
+        let circulation_subsidence = (-wind_fields.vertical_motion[i]).max(0.0);
+        let onshore_gate = onshore_weight(world, i, wind_fields.wind_u[i], upwind_ocean);
         let subtropical_dry = gaussian(latitude_abs, 26.0, 8.5);
-        let boost_gate = smoothstep(220.0, 950.0, baseline) * wet_gate;
+        let boost_gate = smoothstep(220.0, 950.0, baseline)
+            * wet_gate
+            * onshore_gate
+            * (0.40 + 0.80 * circulation_ascent).clamp(0.25, 1.30)
+            * (0.25 + 0.75 * convergence_gate)
+            * (1.0 - 0.35 * circulation_subsidence).clamp(0.25, 1.0)
+            * (1.0 - 0.60 * divergence_gate).clamp(0.15, 1.0);
         let monsoon_boost = 760.0
             * gaussian(latitude_abs, 18.0, 14.0)
             * distance_weight
@@ -299,12 +313,24 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let hotspot_boost = climate_params.hotspot_precip_gain_mm
             * distance_weight
             * signal.ocean_fetch
-            * upwind_ocean.max(0.25)
+            * upwind_ocean.max(0.20)
             * boost_gate
-            * (signal.rise_m / 2.6).clamp(0.0, 1.6);
+            * (signal.rise_m / 2.2).clamp(0.0, 1.8);
         let annualized_limited =
-            annualized.min(2.0 * baseline + 1_200.0 * distance_weight + 900.0 * signal.ocean_fetch);
-        let combined = 0.88 * baseline + 0.65 * annualized_limited + monsoon_boost + hotspot_boost;
+            annualized.min(
+                2.0 * baseline
+                    + 1_150.0 * distance_weight
+                    + 950.0 * signal.ocean_fetch
+                    + 850.0 * convergence_gate
+                    + 380.0 * circulation_ascent,
+            );
+        let equatorial_suppression = smoothstep(5.0, 16.0, latitude_abs);
+        let tropical_transition = 0.30 + 0.70 * equatorial_suppression;
+        let combined = 0.88 * baseline
+            + 0.65 * annualized_limited
+            + monsoon_boost * tropical_transition
+            + hotspot_boost * tropical_transition
+            - 70.0 * circulation_subsidence * subtropical_dry;
         precipitation_raw[i] = combined;
         if world.state.geology.height[i] <= 0.0 {
             precipitation_target[i] = combined.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
@@ -371,14 +397,29 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let (target_et, target_runoff, target_storage, aridity) = if is_land {
             land_cells += 1;
             let storage_cap = climate_params.core_land_bucket_capacity_mm.max(1.0);
-            let prev_storage_state = world
+            let prev_storage_state = (world
                 .state
                 .climate
-                .cloud_water
+                .precipitation
                 .get(i)
                 .copied()
-                .unwrap_or(storage_cap * 0.45)
-                .clamp(0.0, storage_cap);
+                .unwrap_or(0.0)
+                - world
+                    .state
+                    .climate
+                    .runoff
+                    .get(i)
+                    .copied()
+                    .unwrap_or(0.0)
+                - 0.35
+                    * world
+                        .state
+                        .climate
+                        .evapotranspiration
+                        .get(i)
+                        .copied()
+                        .unwrap_or(0.0))
+            .clamp(0.0, storage_cap);
             let humidity_ratio = (humidity[i] / qsat[i].max(1.0)).clamp(0.0, 1.6);
             let climate_storage = storage_cap * (0.28 + 0.44 * humidity_ratio);
             let prev_storage = if prev_storage_state <= EPS {
@@ -454,9 +495,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         world.state.climate.moisture_flux_v[i] =
             lerp(world.state.climate.moisture_flux_v[i], flux_mag * wind_fields.wind_v[i], alpha);
 
-        if is_land {
-            world.state.climate.cloud_water[i] = target_storage;
-        }
+        let _ = target_storage;
     }
 
     let land_cells_f = land_cells.max(1) as f32;
@@ -506,9 +545,6 @@ fn ensure_climate_field_lengths(world: &mut World, cell_count: usize) {
     if world.state.climate.precipitable_water.len() != cell_count {
         world.state.climate.precipitable_water.resize(cell_count, 0.0);
     }
-    if world.state.climate.cloud_water.len() != cell_count {
-        world.state.climate.cloud_water.resize(cell_count, 0.0);
-    }
 }
 
 fn build_wind_fields(
@@ -521,6 +557,7 @@ fn build_wind_fields(
     let mut wind_u = vec![0.0_f32; cell_count];
     let mut wind_v = vec![0.0_f32; cell_count];
     let mut wind_vectors = vec![[0.0_f32, 0.0_f32, 0.0_f32]; cell_count];
+    let mut vertical_motion = vec![0.0_f32; cell_count];
 
     for i in 0..cell_count {
         let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
@@ -535,12 +572,15 @@ fn build_wind_fields(
         wind_u[i] = u;
         wind_v[i] = v;
         wind_vectors[i] = local_wind_vector(world, i, u, v);
+        vertical_motion[i] =
+            circulation_vertical_motion_proxy(latitude, baroclinic_grad, thermal_contrast, v);
     }
 
     WindFields {
         wind_u,
         wind_v,
         wind_vectors,
+        vertical_motion,
     }
 }
 
@@ -763,6 +803,57 @@ fn upwind_ocean_fraction(
     }
 }
 
+fn local_wind_convergence_proxy(
+    lookup: &NeighborLookup,
+    index: usize,
+    wind_vectors: &[[f32; 3]],
+) -> f32 {
+    if index + 1 >= lookup.offsets.len() || index >= wind_vectors.len() {
+        return 0.0;
+    }
+    let wind_i = wind_vectors[index];
+    let start = lookup.offsets[index];
+    let end = lookup.offsets[index + 1];
+    let neighbors = lookup.entries.get(start..end).unwrap_or(&[]);
+    if neighbors.is_empty() {
+        return 0.0;
+    }
+
+    let mut divergence = 0.0_f32;
+    let mut weight_sum = 0.0_f32;
+    for neighbor in neighbors {
+        if neighbor.index >= wind_vectors.len() {
+            continue;
+        }
+        let wind_n = wind_vectors[neighbor.index];
+        let along = dot3(sub3(wind_n, wind_i), neighbor.dir);
+        let weight = 1.0 / neighbor.edge_km.max(1.0);
+        divergence += along * weight;
+        weight_sum += weight;
+    }
+    if weight_sum <= EPS {
+        return 0.0;
+    }
+    (-divergence / weight_sum * 0.22).clamp(-1.2, 1.2)
+}
+
+fn onshore_weight(world: &World, index: usize, wind_u: f32, upwind_ocean: f32) -> f32 {
+    let coast_side = world
+        .state
+        .geo
+        .coast_side
+        .get(index)
+        .copied()
+        .unwrap_or(CoastSide::None);
+    let zonal_onshore = match coast_side {
+        CoastSide::West => wind_u.max(0.0),
+        CoastSide::East => (-wind_u).max(0.0),
+        CoastSide::None => 0.0,
+    }
+    .clamp(0.0, 1.2);
+    (0.40 + 0.45 * zonal_onshore + 0.35 * upwind_ocean.clamp(0.0, 1.0)).clamp(0.0, 1.25)
+}
+
 fn local_relief_proxy(world: &World, lookup: &NeighborLookup, index: usize) -> f32 {
     if index + 1 >= lookup.offsets.len() {
         return 0.0;
@@ -821,7 +912,28 @@ fn apply_cold_coast_factor(
     let latitude = world.state.geo.latitude.get(index).copied().unwrap_or(0.0);
     let baseline = base_ocean_temperature(latitude);
     let anomaly = (baseline - ocean_temperature).max(0.0);
-    let factor = 1.0 - params.cold_coast_gain * anomaly / baseline.abs().max(1.0);
+    let coast_side = world
+        .state
+        .geo
+        .coast_side
+        .get(index)
+        .copied()
+        .unwrap_or(CoastSide::None);
+    let distance = world
+        .state
+        .geo
+        .distance_from_ocean
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        .max(0.0);
+    let inland_decay = (-distance / 420.0).exp().clamp(0.2, 1.0);
+    let east_coast_bias = match coast_side {
+        CoastSide::East => 1.15,
+        _ => 1.0,
+    };
+    let effective_gain = params.cold_coast_gain * east_coast_bias * inland_decay;
+    let factor = 1.0 - effective_gain * anomaly / baseline.abs().max(1.0);
     precipitation_mm * factor.clamp(0.35, 1.0)
 }
 
@@ -861,6 +973,27 @@ fn hadley_wind_components(latitude: f32, baroclinic_grad: f32, thermal_contrast:
         + monsoon_direction * (0.08 * baroclinic_boost * hadley);
 
     (zonal, meridional)
+}
+
+fn circulation_vertical_motion_proxy(
+    latitude: f32,
+    baroclinic_grad: f32,
+    thermal_contrast: f32,
+    meridional_wind: f32,
+) -> f32 {
+    let abs_lat = latitude.abs();
+    let itcz_ascent = gaussian(abs_lat, 6.0, 12.0);
+    let midlat_ascent = gaussian(abs_lat, 53.0, 11.0);
+    let subtropical_descent = gaussian(abs_lat, 28.0, 9.0);
+    let polar_descent = gaussian(abs_lat, 76.0, 10.0);
+
+    let cell_structure =
+        0.95 * itcz_ascent + 0.55 * midlat_ascent - 0.90 * subtropical_descent - 0.42 * polar_descent;
+    let baroclinic_term = 0.16 * baroclinic_grad.abs() * midlat_ascent;
+    let monsoon_lift = 0.08 * thermal_contrast.max(0.0) * itcz_ascent;
+    let heated_descent = 0.10 * thermal_contrast.max(0.0) * subtropical_descent;
+    let overturning = 0.20 * meridional_wind.abs() * (0.65 * itcz_ascent + 0.35 * midlat_ascent);
+    (cell_structure + baroclinic_term + monsoon_lift + overturning - heated_descent).clamp(-1.2, 1.2)
 }
 
 fn local_wind_vector(world: &World, index: usize, wind_u: f32, wind_v: f32) -> [f32; 3] {

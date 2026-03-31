@@ -32,12 +32,12 @@ BAND_RHO_PATTERN = re.compile(
 
 DEFAULT_GRID = {
     "precipitation.hadley_anomaly_gain": [0.35, 0.45, 0.55],
-    "precipitation.continentality_gain": [0.36, 0.44, 0.52],
-    "precipitation.moisture_convergence_gain": [32000.0, 38000.0, 44000.0],
-    "precipitation.convergence_blend": [0.18, 0.24, 0.30],
-    "precipitation.cap_from_moisture": [2.2, 2.8, 3.4],
-    "orography.uplift_gain_mm": [280.0, 360.0, 440.0],
-    "orography.rain_shadow_gain": [1.4, 1.7, 2.0],
+    "precipitation.continentality_gain": [0.30, 0.36, 0.42],
+    "precipitation.cap_from_moisture": [2.0, 2.4, 2.8],
+    "core.moisture_transport_gain": [0.12, 0.16, 0.20],
+    "core.condense_excess_gain": [0.45, 0.55, 0.65],
+    "core.orographic_condense_gain": [0.08, 0.12, 0.16],
+    "core.ocean_evaporation_gain": [0.20, 0.26, 0.32],
 }
 
 
