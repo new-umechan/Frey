@@ -1074,18 +1074,9 @@ fn print_precipitation_process_diagnostics(summary: &sim::climate::surface::Prec
 }
 
 fn score_output_path() -> PathBuf {
-    let candidates = [
-        Path::new("benches/results/climate_main_scores.jsonl"),
-        Path::new("../benches/results/climate_main_scores.jsonl"),
-    ];
-    for candidate in candidates {
-        if let Some(parent) = candidate.parent() {
-            if parent.exists() {
-                return candidate.to_path_buf();
-            }
-        }
-    }
-    candidates[0].to_path_buf()
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = manifest_dir.parent().unwrap_or(manifest_dir.as_path());
+    repo_root.join("benches/results/climate_main_scores.jsonl")
 }
 
 fn json_escape(input: &str) -> String {

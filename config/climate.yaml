@@ -7,7 +7,7 @@ precipitation:
   max_mm: 8000.0
   hadley_anomaly_gain: 0.35
   distance_scale_km: 1300.0
-  continentality_gain: 0.36
+  continentality_gain: 0.42
   moisture_convergence_gain: 32000.0
   convergence_min_mm: -260.0
   convergence_max_mm: 480.0
@@ -41,7 +41,7 @@ core:
   substeps: 8
   temperature_diffusion_gain: 0.10
   moisture_transport_gain: 0.22
-  condense_excess_gain: 0.68
+  condense_excess_gain: 0.65
   orographic_condense_gain: 0.04
   ocean_evaporation_gain: 0.3
   land_recycle_gain: 0.025

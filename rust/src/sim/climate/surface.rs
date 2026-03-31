@@ -179,6 +179,30 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut transport_sum = 0.0_f32;
     let mut orographic_sum = 0.0_f32;
     let mut condense_sum = 0.0_f32;
+    let mut convergence_proxy = vec![0.0_f32; cell_count];
+    let mut orographic_base = vec![OrographicSignal::default(); cell_count];
+    let mut ascent_gate_base = vec![0.0_f32; cell_count];
+    let mut subsidence_gate_base = vec![0.0_f32; cell_count];
+    for i in 0..cell_count {
+        convergence_proxy[i] =
+            local_wind_convergence_proxy(&neighbor_lookup, i, &wind_fields.wind_vectors);
+        orographic_base[i] = orographic_signal(
+            world,
+            &neighbor_lookup,
+            i,
+            wind_fields.wind_vectors[i],
+            &climate_params,
+        );
+        let signal = orographic_base[i];
+        let terrain_lift =
+            smoothstep(0.10, 0.90, signal.rise_m) * (signal.rise_m / 2.0).clamp(0.0, 1.5);
+        let ascent_proxy = (0.60 * wind_fields.vertical_motion[i]
+            + 0.30 * convergence_proxy[i]
+            + 0.35 * terrain_lift)
+            .clamp(-1.2, 1.2);
+        ascent_gate_base[i] = smoothstep(0.02, 0.35, ascent_proxy);
+        subsidence_gate_base[i] = smoothstep(0.04, 0.40, -ascent_proxy);
+    }
 
     let extra_substeps = world.clock.real_years_per_tick.max(1.0).log10().floor() as usize;
     let substeps = (climate_params.core_substeps.max(1) as usize + extra_substeps).min(24);
@@ -224,20 +248,32 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         );
 
         for i in 0..cell_count {
-            let signal = orographic_signal(world, &neighbor_lookup, i, wind_fields.wind_vectors[i], &climate_params);
+            let signal = orographic_base[i];
             let excess = (humidity[i] - qsat[i]).max(0.0);
-            let windward_gate = smoothstep(0.10, 0.90, signal.rise_m);
-            let orographic_condense =
-                climate_params.core_orographic_condense_gain * signal.rise_m.max(0.0) * (0.45 + 0.55 * signal.ocean_fetch) * humidity[i];
-            let excess_condense = climate_params.core_condense_excess_gain * excess;
-            let orographic_condense_effective = orographic_condense * windward_gate;
-            let condensation = (excess_condense + orographic_condense_effective)
+            let humidity_ratio = (humidity[i] / qsat[i].max(1.0)).clamp(0.0, 2.0);
+            let near_saturation = smoothstep(0.82, 1.02, humidity_ratio);
+            let ascent_gate = ascent_gate_base[i];
+            let subsidence_gate = subsidence_gate_base[i];
+            let excess_condense =
+                climate_params.core_condense_excess_gain * excess * (0.35 + 0.65 * ascent_gate);
+            let lift_condense = climate_params.core_condense_excess_gain
+                * 0.06
+                * humidity[i]
+                * near_saturation
+                * ascent_gate;
+            let orographic_condense = climate_params.core_orographic_condense_gain
+                * signal.rise_m.max(0.0)
+                * (0.40 + 0.60 * signal.ocean_fetch)
+                * humidity[i]
+                * (0.30 + 0.70 * ascent_gate);
+            let condensation = ((excess_condense + lift_condense + orographic_condense)
+                * (1.0 - 0.55 * subsidence_gate).clamp(0.15, 1.0))
                 .min(humidity[i])
                 .max(0.0);
             humidity[i] -= condensation;
             precip_column[i] += condensation;
             condense_sum += condensation;
-            orographic_sum += orographic_condense_effective.min(condensation);
+            orographic_sum += orographic_condense.min(condensation);
         }
 
         for value in &mut humidity {
@@ -282,8 +318,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             upwind_ocean_fraction(world, &neighbor_lookup, i, wind_fields.wind_vectors[i], 3);
         let humidity_ratio = (humidity[i] / qsat[i].max(1.0)).clamp(0.0, 2.0);
         let wet_gate = smoothstep(0.55, 1.05, humidity_ratio);
-        let wind_convergence =
-            local_wind_convergence_proxy(&neighbor_lookup, i, &wind_fields.wind_vectors);
+        let wind_convergence = convergence_proxy[i];
         let convergence_gate = smoothstep(0.03, 0.35, wind_convergence);
         let divergence_gate = smoothstep(0.03, 0.35, -wind_convergence);
         let circulation_ascent = wind_fields.vertical_motion[i].max(0.0);
@@ -303,13 +338,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             * upwind_ocean
             * boost_gate
             * (1.0 - 0.65 * subtropical_dry).clamp(0.20, 1.0);
-        let signal = orographic_signal(
-            world,
-            &neighbor_lookup,
-            i,
-            wind_fields.wind_vectors[i],
-            &climate_params,
-        );
+        let signal = orographic_base[i];
         let hotspot_boost = climate_params.hotspot_precip_gain_mm
             * distance_weight
             * signal.ocean_fetch
@@ -344,13 +373,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         continental_post_sum += after_continental.max(climate_params.precip_min_mm);
 
         cap_pre_sum += after_continental.max(climate_params.precip_min_mm);
-        let signal_for_cap = orographic_signal(
-            world,
-            &neighbor_lookup,
-            i,
-            wind_fields.wind_vectors[i],
-            &climate_params,
-        );
+        let signal_for_cap = orographic_base[i];
         let cap_scale = climate_params.precip_cap_from_moisture
             * (0.80 + 0.60 * humidity_ratio + 0.40 * signal_for_cap.ocean_fetch + 0.20 * distance_weight);
         let cap = cap_scale.max(1.0) * humidity[i].max(0.0) * PRECIPITATION_TURNOVER;
@@ -444,6 +467,10 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
                 qsat[i],
                 target_ocean_temperature[i],
                 distance_from_ocean,
+            ) * (
+                1.0
+                    + 0.22 * (-wind_fields.vertical_motion[i]).max(0.0)
+                    + 0.12 * smoothstep(0.03, 0.35, -convergence_proxy[i])
             );
             let et_potential = atmospheric_demand
                 * (0.16 + 0.84 * veg.clamp(0.0, 1.0)).clamp(0.16, 1.0);
