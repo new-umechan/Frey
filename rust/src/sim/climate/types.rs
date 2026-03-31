@@ -34,6 +34,19 @@ pub struct ClimateParams {
     pub hotspot_coast_distance_km: f32,
     pub hotspot_fetch_weight: f32,
     pub hotspot_convergence_weight: f32,
+    pub core_substeps: u32,
+    pub core_temperature_diffusion_gain: f32,
+    pub core_moisture_transport_gain: f32,
+    pub core_condense_excess_gain: f32,
+    pub core_orographic_condense_gain: f32,
+    pub core_ocean_evaporation_gain: f32,
+    pub core_land_recycle_gain: f32,
+    pub core_land_bucket_capacity_mm: f32,
+    pub core_land_drainage_gain: f32,
+    pub core_land_relaxation_years: f32,
+    pub core_humidity_floor_mm: f32,
+    pub core_humidity_ref_mm: f32,
+    pub core_humidity_cc_rate_per_c: f32,
 }
 
 impl Default for ClimateParams {

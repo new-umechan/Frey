@@ -1,33 +1,33 @@
 {
   "schema_version": 2,
-  "timestamp_unix_ms": 1774930935325,
+  "timestamp_unix_ms": 1774931613653,
   "bench": "climate_solo",
-  "run_id": "series-1774930929144-ec02ab31",
+  "run_id": "series-1774931607184-00187458",
   "repeat_index": 5,
   "repeat_total": 5,
-  "git_commit": "145dd80",
+  "git_commit": "38d4df6",
   "cache_fingerprint": "../benches/data/terrain_ref.bin:163868:1774436244|../benches/data/climate_ref.bin:819260:1774432489",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "climate_step_ms": 27.007126
+    "climate_step_ms": 49.912167
   },
   "runtime_stats": {
     "count": 5,
-    "median_ms": 27.094418,
-    "p95_ms": 27.476999
+    "median_ms": 50.338833,
+    "p95_ms": 51.828335
   },
   "phase2": {
     "state": "ready",
     "ref_path": "../benches/data/climate_ref.bin",
     "error": null,
     "metrics": {
-      "temperature": 0.933565,
-      "precipitation": 0.508117,
-      "aridity": 0.451942,
-      "evapotranspiration": 0.368638,
-      "runoff": 0.464076
+      "temperature": 0.934471,
+      "precipitation": 0.525101,
+      "aridity": 0.421662,
+      "evapotranspiration": 0.621405,
+      "runoff": 0.471691
     }
   },
   "phase1": {
@@ -52,26 +52,26 @@
   },
   "diagnostics": {
     "precipitation_process": {
-      "continental_reduction_ratio": 0.111387,
-      "cap_reduction_ratio": 0.000003,
-      "depletion_reduction_ratio": 0.012409,
-      "cold_coast_reduction_ratio": 0.055012,
-      "cap_hit_ratio": 0.000169,
-      "mean_monsoon_boost_mm": 8.216728,
-      "mean_hotspot_boost_mm": 2.458362,
-      "mean_stage_source_mm": 799.976501,
-      "mean_stage_transport_mm": 38.555782,
-      "mean_stage_orographic_mm": 78.194786,
-      "mean_stage_correction_factor": 0.911432,
-      "mean_budget_storage_change_mm": -19.109968,
-      "mean_budget_residual_mm": 9.826578,
-      "budget_residual_ratio": 0.010074
+      "continental_reduction_ratio": 0.129635,
+      "cap_reduction_ratio": 0.000133,
+      "depletion_reduction_ratio": 0.000133,
+      "cold_coast_reduction_ratio": 0.024967,
+      "cap_hit_ratio": 0.000758,
+      "mean_monsoon_boost_mm": 0,
+      "mean_hotspot_boost_mm": 0,
+      "mean_stage_source_mm": 93.529442,
+      "mean_stage_transport_mm": 384.348907,
+      "mean_stage_orographic_mm": 629.467834,
+      "mean_stage_correction_factor": 1,
+      "mean_budget_storage_change_mm": 12.679223,
+      "mean_budget_residual_mm": -5.434446,
+      "budget_residual_ratio": 0.001278
     },
     "precipitation_lat_bands": {
-      "tropics": 0.575795,
-      "subtropics": 0.21082,
-      "midlat": 0.318867,
-      "highlat": 0.626561
+      "tropics": 0.596669,
+      "subtropics": 0.06293,
+      "midlat": 0.463297,
+      "highlat": 0.701897
     }
   }
 }

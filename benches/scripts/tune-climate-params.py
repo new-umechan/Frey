@@ -32,12 +32,12 @@ BAND_RHO_PATTERN = re.compile(
 
 DEFAULT_GRID = {
     "precipitation.hadley_anomaly_gain": [0.35, 0.45, 0.55],
-    "precipitation.continentality_gain": [0.36, 0.44, 0.52],
-    "precipitation.moisture_convergence_gain": [32000.0, 38000.0, 44000.0],
-    "precipitation.convergence_blend": [0.18, 0.24, 0.30],
-    "precipitation.cap_from_moisture": [2.2, 2.8, 3.4],
-    "orography.uplift_gain_mm": [280.0, 360.0, 440.0],
-    "orography.rain_shadow_gain": [1.4, 1.7, 2.0],
+    "precipitation.continentality_gain": [0.30, 0.36, 0.42],
+    "precipitation.cap_from_moisture": [2.0, 2.4, 2.8],
+    "core.moisture_transport_gain": [0.12, 0.16, 0.20],
+    "core.condense_excess_gain": [0.45, 0.55, 0.65],
+    "core.orographic_condense_gain": [0.08, 0.12, 0.16],
+    "core.ocean_evaporation_gain": [0.20, 0.26, 0.32],
 }
 
 
@@ -87,6 +87,18 @@ def set_scalar(yaml_text: str, dotted_key: str, value: float) -> str:
     return replaced
 
 
+def get_scalar(yaml_text: str, dotted_key: str) -> float:
+    key = dotted_key.split(".")[-1]
+    pattern = re.compile(
+        rf"^\s*{re.escape(key)}:\s*([-+]?\d+(?:\.\d+)?)\s*$",
+        re.MULTILINE,
+    )
+    match = pattern.search(yaml_text)
+    if not match:
+        raise RuntimeError(f"failed to read key={dotted_key}")
+    return float(match.group(1))
+
+
 def apply_values(yaml_path: Path, values: Dict[str, float]) -> None:
     text = yaml_path.read_text()
     for key, value in values.items():
@@ -111,6 +123,9 @@ def objective_score(
     min_aridity: float,
     max_temp_drop: float,
     max_runoff_drop: float,
+    weight_precip: float,
+    weight_subtropics: float,
+    weight_aridity: float,
 ) -> Tuple[bool, float]:
     feasible = (
         metrics["aridity"] >= min_aridity
@@ -121,7 +136,11 @@ def objective_score(
         return False, -math.inf
     subtropics = metrics.get("subtropics_precipitation_band", float("nan"))
     subtropics_term = 0.0 if math.isnan(subtropics) else subtropics
-    return True, 0.75 * metrics["precipitation"] + 0.25 * subtropics_term
+    return True, (
+        weight_precip * metrics["precipitation"]
+        + weight_subtropics * subtropics_term
+        + weight_aridity * metrics["aridity"]
+    )
 
 
 def trial_grid(grid: Dict[str, List[float]]) -> List[Dict[str, float]]:
@@ -158,6 +177,21 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional JSON file containing { dotted_key: [values...] }",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["exhaustive", "coordinate"],
+        default="coordinate",
+        help="Search mode. coordinate is faster for iterative local tuning.",
+    )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=2,
+        help="Rounds for coordinate mode.",
+    )
+    parser.add_argument("--weight-precip", type=float, default=0.60)
+    parser.add_argument("--weight-subtropics", type=float, default=0.20)
+    parser.add_argument("--weight-aridity", type=float, default=0.20)
     return parser.parse_args()
 
 
@@ -178,12 +212,8 @@ def main() -> int:
     else:
         grid = DEFAULT_GRID
 
-    candidates = trial_grid(grid)
-    if args.max_runs > 0:
-        candidates = candidates[: args.max_runs]
-
-    if not candidates:
-        print(json.dumps({"error": "no candidates"}))
+    if not grid:
+        print(json.dumps({"error": "empty grid"}))
         return 1
 
     baseline_metrics = run_bench(repo)
@@ -191,44 +221,96 @@ def main() -> int:
     baseline_runoff = baseline_metrics["runoff"]
     best: TrialResult | None = None
     results: List[TrialResult] = []
+    trial_index = 0
+
+    def evaluate(values: Dict[str, float]) -> TrialResult:
+        nonlocal trial_index, best
+        trial_index += 1
+        started = time.time()
+        apply_values(yaml_path, values)
+        sync_climate_params(repo)
+        metrics = run_bench(repo)
+        feasible, score = objective_score(
+            metrics,
+            baseline_temperature,
+            baseline_runoff,
+            args.min_aridity,
+            args.max_temp_drop,
+            args.max_runoff_drop,
+            args.weight_precip,
+            args.weight_subtropics,
+            args.weight_aridity,
+        )
+        elapsed = time.time() - started
+        trial = TrialResult(
+            index=trial_index,
+            values=dict(values),
+            metrics=metrics,
+            objective=score,
+            feasible=feasible,
+            elapsed_sec=elapsed,
+        )
+        results.append(trial)
+        write_jsonl(
+            output_path,
+            {
+                "trial": trial.index,
+                "values": trial.values,
+                "metrics": trial.metrics,
+                "feasible": trial.feasible,
+                "objective_score": trial.objective,
+                "elapsed_sec": trial.elapsed_sec,
+            },
+        )
+        if feasible and (best is None or score > best.objective):
+            best = trial
+        return trial
 
     try:
-        for idx, values in enumerate(candidates, start=1):
-            started = time.time()
-            apply_values(yaml_path, values)
-            sync_climate_params(repo)
-            metrics = run_bench(repo)
-            feasible, score = objective_score(
-                metrics,
-                baseline_temperature,
-                baseline_runoff,
-                args.min_aridity,
-                args.max_temp_drop,
-                args.max_runoff_drop,
-            )
-            elapsed = time.time() - started
-            trial = TrialResult(
-                index=idx,
-                values=values,
-                metrics=metrics,
-                objective=score,
-                feasible=feasible,
-                elapsed_sec=elapsed,
-            )
-            results.append(trial)
-            write_jsonl(
-                output_path,
-                {
-                    "trial": idx,
-                    "values": values,
-                    "metrics": metrics,
-                    "feasible": feasible,
-                    "objective_score": score,
-                    "elapsed_sec": elapsed,
-                },
-            )
-            if feasible and (best is None or score > best.objective):
-                best = trial
+        if args.mode == "exhaustive":
+            candidates = trial_grid(grid)
+            if args.max_runs > 0:
+                candidates = candidates[: args.max_runs]
+            if not candidates:
+                print(json.dumps({"error": "no candidates"}))
+                return 1
+            for values in candidates:
+                evaluate(values)
+        else:
+            current_yaml = yaml_path.read_text()
+            current = {
+                key: get_scalar(current_yaml, key)
+                for key in grid.keys()
+            }
+            current_trial = evaluate(current)
+            current_score = current_trial.objective if current_trial.feasible else -math.inf
+            budget_limit = args.max_runs if args.max_runs > 0 else 10**9
+
+            for _ in range(max(1, args.rounds)):
+                improved = False
+                for key, choices in grid.items():
+                    if trial_index >= budget_limit:
+                        break
+                    unique_choices = sorted({float(v) for v in choices}, key=lambda v: abs(v - current[key]))
+                    best_local_value = current[key]
+                    best_local_score = current_score
+                    for value in unique_choices:
+                        if abs(value - current[key]) <= 1e-9:
+                            continue
+                        if trial_index >= budget_limit:
+                            break
+                        candidate = dict(current)
+                        candidate[key] = value
+                        trial = evaluate(candidate)
+                        if trial.feasible and trial.objective > best_local_score:
+                            best_local_score = trial.objective
+                            best_local_value = value
+                    if abs(best_local_value - current[key]) > 1e-9:
+                        current[key] = best_local_value
+                        current_score = best_local_score
+                        improved = True
+                if trial_index >= budget_limit or not improved:
+                    break
     finally:
         yaml_path.write_text(original_yaml)
         if best is not None:
@@ -237,6 +319,7 @@ def main() -> int:
 
     summary = {
         "search_space_size": len(trial_grid(grid)),
+        "mode": args.mode,
         "evaluated_runs": len(results),
         "baseline": baseline_metrics,
         "constraints": {
@@ -245,6 +328,11 @@ def main() -> int:
             "max_runoff_drop": args.max_runoff_drop,
             "baseline_temperature": baseline_temperature,
             "baseline_runoff": baseline_runoff,
+        },
+        "weights": {
+            "precipitation": args.weight_precip,
+            "subtropics": args.weight_subtropics,
+            "aridity": args.weight_aridity,
         },
         "best": None
         if best is None

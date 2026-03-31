@@ -41,6 +41,19 @@ const SCHEMA = [
     ["precipitation.hotspot_coast_distance_km", "hotspot_coast_distance_km", "f32"],
     ["precipitation.hotspot_fetch_weight", "hotspot_fetch_weight", "f32"],
     ["precipitation.hotspot_convergence_weight", "hotspot_convergence_weight", "f32"],
+    ["core.substeps", "core_substeps", "u32"],
+    ["core.temperature_diffusion_gain", "core_temperature_diffusion_gain", "f32"],
+    ["core.moisture_transport_gain", "core_moisture_transport_gain", "f32"],
+    ["core.condense_excess_gain", "core_condense_excess_gain", "f32"],
+    ["core.orographic_condense_gain", "core_orographic_condense_gain", "f32"],
+    ["core.ocean_evaporation_gain", "core_ocean_evaporation_gain", "f32"],
+    ["core.land_recycle_gain", "core_land_recycle_gain", "f32"],
+    ["core.land_bucket_capacity_mm", "core_land_bucket_capacity_mm", "f32"],
+    ["core.land_drainage_gain", "core_land_drainage_gain", "f32"],
+    ["core.land_relaxation_years", "core_land_relaxation_years", "f32"],
+    ["core.humidity_floor_mm", "core_humidity_floor_mm", "f32"],
+    ["core.humidity_ref_mm", "core_humidity_ref_mm", "f32"],
+    ["core.humidity_cc_rate_per_c", "core_humidity_cc_rate_per_c", "f32"],
 ];
 
 function stripInlineComment(value: string) {
