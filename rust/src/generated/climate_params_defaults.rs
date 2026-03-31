@@ -40,7 +40,7 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         core_substeps: 8,
         core_temperature_diffusion_gain: 0.10f32,
         core_moisture_transport_gain: 0.22f32,
-        core_condense_excess_gain: 0.65f32,
+        core_condense_excess_gain: 0.68f32,
         core_orographic_condense_gain: 0.04f32,
         core_ocean_evaporation_gain: 0.3f32,
         core_land_recycle_gain: 0.025f32,
