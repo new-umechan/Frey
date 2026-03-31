@@ -4,7 +4,7 @@ generated/wasm/web/
 
 rust/target/
 
-docs/manage/todo.md
+todo.md
 .cdsapirc
 __pycache__/
 *.pyc
