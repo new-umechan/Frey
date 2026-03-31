@@ -152,8 +152,8 @@ async function main() {
     }
 
     const metricKeys = [
-        { key: "river_flow", maxDrop: args.maxFlowRhoDrop },
-        { key: "lake_f1", maxDrop: args.maxLakeF1Drop },
+        { key: "river_flow_rho", maxDrop: args.maxFlowRhoDrop },
+        { key: "is_lake_f1", maxDrop: args.maxLakeF1Drop },
     ];
     const metricRows = metricKeys.map((item) => {
         const currentValues = currentRecords

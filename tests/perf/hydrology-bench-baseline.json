@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "timestamp_unix_ms": 1774930866630,
+  "bench": "hydrology_solo",
+  "run_id": "series-1774930860486-9fc7df96",
+  "repeat_index": 5,
+  "repeat_total": 5,
+  "git_commit": "145dd8035e9b7451f14f303997fc509c795290b4",
+  "seed": "earth",
+  "mesh_level": 6,
+  "cell_count": 40962,
+  "runtime": {
+    "hydrology_step_ms": 33.35754
+  },
+  "runtime_stats": {
+    "count": 5,
+    "median_ms": 32.920876,
+    "p95_ms": 33.720791
+  },
+  "phase2": {
+    "state": "ready",
+    "ref_path": "../benches/data/hydro_ref.bin",
+    "error": null,
+    "metrics": {
+      "river_flow_rho": 0.614673,
+      "is_lake_precision": 0,
+      "is_lake_recall": 0,
+      "is_lake_f1": 0
+    }
+  },
+  "phase1": {
+    "river_flow_ranking": {
+      "matched": 4,
+      "total": 5,
+      "excluded_known_hard": 0,
+      "coverage_ratio": 0.8
+    }
+  }
+}

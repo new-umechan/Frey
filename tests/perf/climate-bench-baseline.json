@@ -1,22 +1,22 @@
 {
   "schema_version": 2,
-  "timestamp_unix_ms": 1774782485421,
+  "timestamp_unix_ms": 1774930935325,
   "bench": "climate_solo",
-  "run_id": "series-1774782480947-9c849dba",
+  "run_id": "series-1774930929144-ec02ab31",
   "repeat_index": 5,
   "repeat_total": 5,
-  "git_commit": "e287e26",
+  "git_commit": "145dd80",
   "cache_fingerprint": "../benches/data/terrain_ref.bin:163868:1774436244|../benches/data/climate_ref.bin:819260:1774432489",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "climate_step_ms": 17.311001
+    "climate_step_ms": 27.007126
   },
   "runtime_stats": {
     "count": 5,
-    "median_ms": 17.311001,
-    "p95_ms": 17.313126
+    "median_ms": 27.094418,
+    "p95_ms": 27.476999
   },
   "phase2": {
     "state": "ready",
@@ -24,10 +24,10 @@
     "error": null,
     "metrics": {
       "temperature": 0.933565,
-      "precipitation": 0.511815,
-      "aridity": 0.446331,
-      "evapotranspiration": 0.339269,
-      "runoff": 0.467947
+      "precipitation": 0.508117,
+      "aridity": 0.451942,
+      "evapotranspiration": 0.368638,
+      "runoff": 0.464076
     }
   },
   "phase1": {
@@ -52,23 +52,26 @@
   },
   "diagnostics": {
     "precipitation_process": {
-      "continental_reduction_ratio": 0.111405,
+      "continental_reduction_ratio": 0.111387,
       "cap_reduction_ratio": 0.000003,
-      "depletion_reduction_ratio": 0.124764,
-      "cold_coast_reduction_ratio": 0.058361,
+      "depletion_reduction_ratio": 0.012409,
+      "cold_coast_reduction_ratio": 0.055012,
       "cap_hit_ratio": 0.000169,
       "mean_monsoon_boost_mm": 8.216728,
       "mean_hotspot_boost_mm": 2.458362,
       "mean_stage_source_mm": 799.976501,
       "mean_stage_transport_mm": 38.555782,
       "mean_stage_orographic_mm": 78.194786,
-      "mean_stage_correction_factor": 0.913789
+      "mean_stage_correction_factor": 0.911432,
+      "mean_budget_storage_change_mm": -19.109968,
+      "mean_budget_residual_mm": 9.826578,
+      "budget_residual_ratio": 0.010074
     },
     "precipitation_lat_bands": {
-      "tropics": 0.569716,
-      "subtropics": 0.212326,
-      "midlat": 0.366995,
-      "highlat": 0.609079
+      "tropics": 0.575795,
+      "subtropics": 0.21082,
+      "midlat": 0.318867,
+      "highlat": 0.626561
     }
   }
 }
