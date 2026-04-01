@@ -42,3 +42,6 @@ jobs:
 
             - name: Run perf gate
               run: pnpm run perf:gate
+
+            - name: Run hydrology perf gate
+              run: pnpm run perf:gate:hydrology
