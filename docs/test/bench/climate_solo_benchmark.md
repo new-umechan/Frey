@@ -10,7 +10,7 @@
 
 ### 実行コマンド（現行）
 
-```
+```sh
 # repo root から pnpm wrapper で実行
 pnpm run bench --suite climate_solo
 
