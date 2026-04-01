@@ -402,8 +402,8 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     }
 
     let mut precipitation_target_sum = 0.0_f32;
-    for i in 0..cell_count {
-        precipitation_target_sum += precipitation_target[i].max(0.0);
+    for value in precipitation_target.iter().take(cell_count) {
+        precipitation_target_sum += value.max(0.0);
     }
     let condense_supply_sum = (condense_sum * PRECIPITATION_TURNOVER).max(EPS);
     let precipitation_scale =
@@ -1312,13 +1312,15 @@ fn best_neighbor_toward(
     best
 }
 
+type NeighborCandidate = (usize, f32, f32);
+
 fn top_two_neighbors_toward(
     lookup: &NeighborLookup,
     index: usize,
     direction_vec: [f32; 3],
     min_alignment: f32,
     land_only: bool,
-) -> Option<((usize, f32, f32), Option<(usize, f32, f32)>)> {
+) -> Option<(NeighborCandidate, Option<NeighborCandidate>)> {
     if index + 1 >= lookup.offsets.len() {
         return None;
     }
