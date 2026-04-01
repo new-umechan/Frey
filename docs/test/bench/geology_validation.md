@@ -217,16 +217,24 @@ Earth 類似の plate tectonics を定量評価するうえで、最低限みる
 
 ---
 
-## ウィルソンサイクル定性評価
+## ウィルソンサイクル定量評価
 
 **tick 換算の基準: 1 tick = 500 万年**
 
-長期実行（WC-1・WC-2 は目安 100 tick = 5 億年、WC-3 は目安 10〜50 tick = 5000 万〜2 億 5000 万年）における挙動を目視で確認する。
-実データとの定量一致ではなく、「意味のある地質サイクルが再現されているか」の定性評価とする。
+長期実行（WC-core・WC-1 は目安 100 tick = 5 億年、WC-3 は目安 10〜50 tick = 5000 万〜2 億 5000 万年）における挙動を、可能な限り basin-scale の定量指標で確認する。
+ここでの主判定は、モデル内部の仮説変数ではなく、**海洋盆の生成・拡大・消費・閉鎖・衝突** という Earth で観測可能な一次特徴に置く。
+
+### 基本方針
+
+- 主判定は **basin lifecycle** を使う
+- `mantle_heat`、`plume_threshold`、`rollback_fraction` は主判定に使わず、必要なら補助診断に下げる
+- 超大陸の集合・分裂は Wilson cycle の長期的表れとして記録してよいが、主判定の必須条件にはしない
+- 背弧盆形成は一部の沈み込み系でのみ期待されるため、主判定ではなく拡張評価に置く
+- `PassiveMargin -> Subduction` の直接遷移は現実 Earth でも拘束が弱いため、必須イベントとして要求しない
 
 ### 観察前の前提チェック
 
-WC 観察の前に、次を短く確認する。
+WC 判定の前に、次を短く確認する。
 
 - 大域バランス: 全海洋/全大陸への崩壊がない
 - 境界分類の破綻兆候: 収束・発散・衝突の分類が長時間矛盾したまま固定されていない
@@ -235,41 +243,134 @@ WC 観察の前に、次を短く確認する。
 
 上記に重大な破綻がある場合、WC 判定は保留し、先に実装異常の切り分けを行う。
 
-### WC-1: 超大陸の集合と分裂
+### WC-core: 海洋盆ライフサイクル
+
+Wilson cycle の主判定は、個別の ocean basin が「開く」「成熟する」「閉じる」順序を持つかで行う。
+評価単位は全球平均ではなく **basin 単位** とする。
+
+#### 調べる
+
+少なくとも次の 6 段階を確認する。
+
+1. continental crust 内で rift が局在する
+2. 連続した新生 oceanic crust corridor が形成される
+3. ridge を中心に海洋地殻年齢が若い側から古い側へ配列する
+4. ocean basin 面積が増加する時期がある
+5. oceanic crust が優先的に消費される時期がある
+6. basin 縮小の終末相で collision 境界または大陸接合帯が形成される
+
+#### 指標
+
+- `rift_localization_score`
+- `connected_ocean_birth`
+- `ridge_age_symmetry`
+- `ocean_basin_area_trend`
+- `oceanic_consumption_bias`
+- `terminal_collision_signal`
+
+#### 定義
+
+`rift_localization_score`
+
+- continental crust 内で、引張応力と `thickness` 低下が空間的に集中している度合い
+- 「広く薄く引き延ばされる」のではなく、rift 帯が局在していることをみる
+
+`connected_ocean_birth`
+
+- rift 帯に沿って、連続した新生 `Oceanic` 地殻の corridor が形成されたか
+- 単発の oceanic patch や一時的な浸水は数えない
+
+`ridge_age_symmetry`
+
+- ridge 両側で海洋地殻年齢が若い側から古い側へ増加しているか
+- 左右非対称が極端すぎず、海洋底拡大の一次特徴を保っているかをみる
+
+`ocean_basin_area_trend`
+
+- basin 面積時系列に opening 相と closing 相の両方があるか
+- 単なる短周期振動ではなく、持続的な増加相・減少相を区別する
+
+`oceanic_consumption_bias`
+
+- 消失または収束で失われる地殻が、continental crust より oceanic crust に偏っているか
+- basin closure が「海洋盆の消費」として起きていることを確認する
+
+`terminal_collision_signal`
+
+- basin 消滅の終末相で `Collision` 境界、または旧 oceanic corridor を挟む大陸地殻の接合と厚化・高標高帯が現れるか
+- basin 消滅後も永続的な海洋 corridor が残るなら未達とする
+
+#### 判定
+
+- 少なくとも 1 つの basin で `connected_ocean_birth` が成立する
+- 同 basin で `ridge_age_symmetry` と `Q-3 oceanic_age_depth_consistency` が維持される
+- `ocean_basin_area_trend` に opening 相と closing 相の両方がある
+- closing 相で `oceanic_consumption_bias` が正である
+- 終末相で `terminal_collision_signal` がある
+
+満たした場合、WC-core は PASS とする。
+
+### WC-1: 大陸集合イベント
+
+超大陸の集合・分裂は Wilson cycle の長期表現のひとつだが、単独 basin の開閉より強い条件である。
+したがって、主判定ではなく拡張評価として扱う。
 
 確認ポイント:
 
-- 大陸地殻が一箇所に集積するフェーズが発生するか
-- 集積した大陸地殻の下で `mantle_heat` が上昇するか（大陸地殻の放熱率が低いため）
-- `mantle_heat > plume_threshold` となり uplift force が発生するか
-- 大陸が分裂し、後続フェーズへ移行するか
+- 大陸地殻の連結成分が粗視化して集約する時期があるか
+- 大規模 `Collision` 境界または接合帯が形成されるか
+- その後、再び rift が局在し新しい ocean basin 候補が生まれるか
 
-### WC-2: 海洋の開閉
+補助指標の例:
 
-物理量の条件ベースで各フェーズの発生を確認する。
+- `continental_aggregation_index`
+- `major_collision_count`
+- `post_collision_rift_reuse`
+
+注:
+
+- `mantle_heat` や `plume_threshold` は breakup 機構の内部仮説であり、Earth 類似性の主証拠には使わない
+- WC-1 未観測は、直ちに FAIL ではなく「観測窓不足」または「長期サイクル未到達」の可能性を含む
+
+### WC-2: basin lifecycle の順序性
+
+WC-core の詳細観察として、各 basin でフェーズ順序が崩れていないかを確認する。
+ここでは内部 phase label ではなく、観測可能な地殻・年齢・境界配置から判定する。
 
 | フェーズ | 確認する物理量の状態 |
 |---|---|
 | pre-rift | `stress > 0`（引張）かつ `thickness` が減少傾向にある |
-| rift 進行 | `thickness` が閾値以下まで減少している |
-| 海洋誕生 | 発散境界で新生 oceanic crust が生成される。浸水そのものは必要条件ではない |
-| 海洋拡大 | 海嶺から両側に若い海洋地殻が付加され、時間とともに `age` と `density` が増加する |
-| 沈み込み開始 | 高密度化した海洋地殻で PassiveMargin から沈み込みへの移行が起きる |
-| 海洋消滅 | 海洋地殻がすべて沈み込み、Collision 境界へ移行する |
+| rift 進行 | `thickness` 低下が局在し、連続した rift 帯を形成する |
+| 海洋誕生 | 発散境界沿いに新生 oceanic crust corridor が形成される。浸水そのものは必要条件ではない |
+| 海洋拡大 | ridge から両側に若い海洋地殻が付加され、時間とともに `age` が増加する |
+| 海洋消費 | 収束帯で oceanic crust が preferentially に失われ、basin 面積が減少する |
+| 終末衝突 | basin の消滅に対応して `Collision` 境界または大陸接合帯が形成される |
 
-**NOTE: 沈み込み開始条件について**
-現行実装では、沈み込み開始は正規化済みの `age_norm > subduction_initiation_threshold` かつ `density_norm > subduction_density_threshold` を満たす場合、または `age_norm * subduction_age_coupling + density_norm > 1.0` を満たす場合に発生する。
-評価時はこの実装条件に従って「PassiveMargin から Subduction への移行」を判定する。
+判定上の注意:
+
+- `PassiveMargin -> Subduction` の直接遷移は Earth でも一般化しにくいため、必須条件にしない
+- basin closure の証拠は「海洋地殻消費」と「最終衝突シグナル」の組で評価する
+- 順序が頻繁に逆転する場合は、phase の実在ではなくノイズの可能性を疑う
 
 ### WC-3: 島弧・背弧の形成
 
-沈み込みに伴う火山・地形の変化を確認する。WC-1・WC-2 より短いタイムスケールで観察できる。
+沈み込み系の realism をみる拡張評価であり、Wilson cycle の主判定ではない。
+特に背弧盆形成は一部の沈み込み設定に限られるため、未観測でも直ちに FAIL にしない。
+
+沈み込みに伴う火山・地形の変化を確認する。WC-core より短いタイムスケールで観察できる。
 
 確認ポイント:
 
 - Subduction 境界の大陸側に `arc_volcanism > 0` のセルが分布するか
-- `rollback_fraction > rollback_threshold` の edge で背弧側に引張応力が発生するか
-- 背弧側で `backarc_volcanism > 0` が発生し、地形的な盆地形状が形成されるか
+- trench から arc までの距離が極端に乱れず、上盤側に偏在するか
+- `rollback_fraction > rollback_threshold` の edge がある場合に限り、背弧側で引張応力と `backarc_volcanism` が共起するか
+- 背弧側で伸張と盆地形状が出てもよいが、未観測は optional 扱いとする
+
+推奨指標:
+
+- `arc_on_overriding_plate_ratio`
+- `arc_trench_offset_stability`
+- `backarc_optional_score`
 
 ---
 
@@ -298,9 +399,14 @@ Q-4 ridge_age_gradient_consistency: PASS / FAIL / 要確認 → コメント
 境界形状: 許容 / 要調査 → コメント
 
 [ウィルソンサイクル]
-WC-1: 観察できた / 観察できなかった / 不明 → コメント
-WC-2: 各フェーズの達成状況 → コメント
-WC-3: 観察できた / 観察できなかった / 不明 → コメント
+WC-core basin lifecycle: PASS / FAIL / 要確認 → コメント
+opening evidence: あり / なし / 不明 → コメント
+mature spreading evidence: あり / なし / 不明 → コメント
+closure evidence: あり / なし / 不明 → コメント
+terminal collision evidence: あり / なし / 不明 → コメント
+WC-1 continental aggregation: 観察できた / 観察できなかった / 不明 → コメント
+WC-3 arc realism: PASS / FAIL / 要確認 → コメント
+WC-3 backarc realism: 観察できた / 観察できなかった / N/A → コメント
 
 所感・次のアクション:
 ```
@@ -315,6 +421,8 @@ WC-3: 観察できた / 観察できなかった / 不明 → コメント
 - 沈み込み傾斜角の定量的再現
 - 超大陸サイクル周期の定量的一致（現実の約 5 億年との比較）
 - 海洋熱沈降の絶対値精度
+- 受動縁辺での沈み込み開始の再現性そのもの
+- 背弧盆形成の普遍的再現
 - 海面変動そのものの妥当性評価（本書では地質構造の評価を優先する）
 
 ---
@@ -340,7 +448,10 @@ WC-3: 観察できた / 観察できなかった / 不明 → コメント
 - `docs/manage/bench/` 配下（Climate/Hydrology/Ecology のベンチ詳細）
 - `docs/manage/test.md`（回帰テスト・日常的な壊れ確認）
 - `docs/modules/geology.md`（Plate モジュール仕様）
+- Burke, K. (2011). Plate Tectonics, the Wilson Cycle, and Mantle Plumes: Geodynamics from the Top.
 - Cawood, P. A., & Hawkesworth, C. J. (2018). Continental crustal volume, thickness and area, and their geodynamic implications.
+- Zhong, S., & Li, Z.-X. (2021). Subduction initiation and the onset of plate tectonics.
 - Pedersen, V. K. et al. (2024). Earth's hypsometry and what it tells us about global sea level.
 - Seton, M. et al. (2020). A Global Data Set of Present-Day Oceanic Crustal Age and Seafloor Spreading Parameters.
+- Artemieva, I. M. (2023). Back-arc basins: A global view from geophysical synthesis and analysis.
 - NOAA Ocean Explorer. Mid-Ocean Ridge Activity.
