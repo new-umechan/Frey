@@ -1,6 +1,8 @@
 #[path = "generated/climate_params_defaults.rs"]
 mod climate_params_defaults;
 mod common;
+#[path = "generated/glaciology_params_defaults.rs"]
+mod glaciology_params_defaults;
 pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;

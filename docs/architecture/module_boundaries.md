@@ -25,6 +25,7 @@ Tier1までのモジュールについて、詳細を決定している。
 | --- | --- |
 | `Geology` | 地形変化（標高・プレート更新） |
 | `Climate` | 降水・気温・水循環 |
+| `Glaciology` | 氷河質量収支・氷厚・融解水・氷河侵食率 |
 | `Hydrology` | 流路・流量・集積、侵食・堆積率計算 |
 | `Ecology` | 植生 |
 | `Domesticates` | 作物・家畜の分布 |
@@ -58,7 +59,8 @@ Tier1までのモジュールについて、詳細を決定している。
 UPDATE_DAG = {
     Geology:      [],
     Climate:      [Geology],
-    Hydrology:    [Geology, Climate],
+    Glaciology:   [Geology, Climate],
+    Hydrology:    [Geology, Climate, Glaciology],
     Ecology:      [Geology, Climate, Hydrology],
     Domesticates: [Geology, Climate, Hydrology, Ecology],
     Subsistence:  [Geology, Hydrology, Ecology, Domesticates],
@@ -148,10 +150,43 @@ FEEDBACK_EDGES = {
 - 標高
 - 侵食量・堆積量
 - 流路・流量
+- 氷厚・氷河侵食率
 
 ### 補足
 
 局所水収支までを担当する。流量の集積は `Hydrology` が引き受ける。
+
+---
+
+## `Glaciology`
+
+### 読むもの
+
+- 標高（`geology.height`）
+- 気温（`climate.temperature`）
+- 降水（`climate.precipitation`）
+- 隣接情報（`geo.neighbors_offsets`、`geo.neighbors`）
+- `Clock`
+
+### 書くもの
+
+- 氷厚（`glaciology.ice_thickness`）
+- 堆積量（`glaciology.accumulation`）
+- 消耗量（`glaciology.ablation`）
+- 融解流出量（`glaciology.glacial_melt_runoff`）
+- 氷河侵食率（`glaciology.glacial_erosion_rate`）
+
+### 書かないもの
+
+- 標高（地形の最終反映は `Geology`）
+- 河川流路・河川流量（`Hydrology`）
+- 気温・降水（`Climate`）
+
+### 補足
+
+氷河固有の状態管理に責務を限定する。
+`glacial_melt_runoff` は `Hydrology` の流出入力へ加算される。
+`glacial_erosion_rate` の標高反映は `Geology` が担当する。
 
 ---
 
@@ -170,6 +205,7 @@ Systemは2つに分かれる。
 
 - 標高（`geology.height`）← `Geology` が書く
 - 流出量（`climate.runoff`）← `Climate` が書く
+- 氷河融解流出量（`glaciology.glacial_melt_runoff`）← `Glaciology` が書く
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
 
 ### 書くもの

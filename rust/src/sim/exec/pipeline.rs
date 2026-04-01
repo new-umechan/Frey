@@ -14,6 +14,7 @@ pub enum ExecWorldPhase {
     Feedback,
     Geology,
     Climate,
+    Glaciology,
     Hydrology,
     Ecology,
     Society,
@@ -44,6 +45,10 @@ pub(super) fn run_geology_stage(world: &mut World) {
 
 pub(super) fn run_climate_stage(world: &mut World) {
     crate::sim::climate::run_climate_step(world, world.clock.budgets.climate);
+}
+
+pub(super) fn run_glaciology_stage(world: &mut World) {
+    crate::sim::glaciology::run_glaciology_step(world, world.clock.budgets.climate);
 }
 
 pub(super) fn run_hydrology_stage(world: &mut World) {
@@ -106,6 +111,10 @@ pub fn exec_world_slice(
             }
             ExecWorldPhase::Climate => {
                 run_climate_stage(world);
+                next_phase = ExecWorldPhase::Glaciology;
+            }
+            ExecWorldPhase::Glaciology => {
+                run_glaciology_stage(world);
                 next_phase = ExecWorldPhase::Hydrology;
             }
             ExecWorldPhase::Hydrology => {
@@ -148,6 +157,7 @@ pub fn exec_world(world: &mut World) {
     run_feedback_stage(world);
     run_geology_stage(world);
     run_climate_stage(world);
+    run_glaciology_stage(world);
     run_hydrology_stage(world);
     run_ecology_stage(world);
     run_society_stage(world);

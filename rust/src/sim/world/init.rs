@@ -13,9 +13,9 @@ use super::era::EraKind;
 use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
-    EcologyInternal, EcologyState, EntitiesState, GeoState, GeologyState, HydrologyState,
-    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState, World,
-    WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    EcologyInternal, EcologyState, EntitiesState, GeoState, GeologyState, GlaciologyState,
+    HydrologyState, PolityState, PopulationState, SettlementState, SubsistenceMix,
+    SubsistenceState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
@@ -47,6 +47,13 @@ impl World {
                     wind_v: vec![0.0; cell_count],
                     moisture_flux_u: vec![0.0; cell_count],
                     moisture_flux_v: vec![0.0; cell_count],
+                },
+                glaciology: GlaciologyState {
+                    ice_thickness: vec![0.0; cell_count],
+                    accumulation: vec![0.0; cell_count],
+                    ablation: vec![0.0; cell_count],
+                    glacial_erosion_rate: vec![0.0; cell_count],
+                    glacial_melt_runoff: vec![0.0; cell_count],
                 },
                 hydrology: HydrologyState {
                     river_downstream: vec![SmallVec::new(); cell_count],

@@ -7,8 +7,10 @@
         "runtime:sync": "tsx tools/sync/sync-runtime-params.ts",
         "terrain:sync": "tsx tools/sync/sync-terrain-params.ts",
         "climate:sync": "tsx tools/sync/sync-climate-params.ts",
+        "glaciology:sync": "tsx tools/sync/sync-glaciology-params.ts",
         "runtime-params:sync": "pnpm runtime:sync",
         "terrain-params:sync": "pnpm terrain:sync",
+        "glaciology-params:sync": "pnpm glaciology:sync",
         "dev": "pnpm runtime:sync && pnpm terrain:sync && tsx tools/dev/dev-hotreload.ts",
         "build": "pnpm runtime:sync && pnpm wasm:build && vite build --config web/vite.config.ts",
         "preview": "vite preview --config web/vite.config.ts",
@@ -63,8 +65,8 @@
         "bench:resample:terrain": "python3 benches/scripts/resample.py --module terrain --centroids benches/data/cell_centroids.csv --output benches/data/terrain_ref.bin",
         "bench:raw:prune:recoverable:dry-run": "bash benches/scripts/prune-recoverable-raw.sh",
         "bench:raw:prune:recoverable": "bash benches/scripts/prune-recoverable-raw.sh --apply",
-        "wasm:build": "pnpm terrain:sync && pnpm climate:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
-        "wasm:build:dev": "pnpm terrain:sync && pnpm climate:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
+        "wasm:build": "pnpm terrain:sync && pnpm climate:sync && pnpm glaciology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
+        "wasm:build:dev": "pnpm terrain:sync && pnpm climate:sync && pnpm glaciology:sync && wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
         "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
     },
     "dependencies": {

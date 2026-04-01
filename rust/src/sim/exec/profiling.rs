@@ -4,7 +4,7 @@ use super::geology::{
 };
 use super::pipeline::{
     finalize_tick, prepare_step, run_climate_stage, run_ecology_stage, run_feedback_stage,
-    run_society_stage, run_transition_stage,
+    run_glaciology_stage, run_society_stage, run_transition_stage,
 };
 
 use crate::sim::world::World;
@@ -17,6 +17,7 @@ pub struct ExecWorldBreakdown {
     pub exec_feedback_ms: f64,
     pub exec_geology_terrain_ms: f64,
     pub exec_climate_ms: f64,
+    pub exec_glaciology_ms: f64,
     pub exec_hydrology_ms: f64,
     pub exec_ecology_ms: f64,
     pub exec_society_ms: f64,
@@ -97,6 +98,7 @@ impl ExecWorldBreakdown {
         self.exec_feedback_ms += other.exec_feedback_ms;
         self.exec_geology_terrain_ms += other.exec_geology_terrain_ms;
         self.exec_climate_ms += other.exec_climate_ms;
+        self.exec_glaciology_ms += other.exec_glaciology_ms;
         self.exec_hydrology_ms += other.exec_hydrology_ms;
         self.exec_ecology_ms += other.exec_ecology_ms;
         self.exec_society_ms += other.exec_society_ms;
@@ -163,6 +165,10 @@ pub fn exec_world_profiled_detailed(world: &mut World) -> ExecWorldBreakdownDeta
     let phase_start = profile_now();
     run_climate_stage(world);
     breakdown.exec_climate_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
+
+    let phase_start = profile_now();
+    run_glaciology_stage(world);
+    breakdown.exec_glaciology_ms = ExecWorldBreakdown::capture_elapsed(phase_start);
 
     let phase_start = profile_now();
     let run_mfd = should_run_hydrology_mfd(world);

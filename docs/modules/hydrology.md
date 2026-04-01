@@ -35,6 +35,7 @@ Hydrologyが読む主な値は次のとおり。
 
 - `geology.height`
 - `climate.runoff`
+- `glaciology.glacial_melt_runoff`
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
 
 ## 出力
@@ -120,3 +121,4 @@ x = a * slope + b
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
 - `docs/modules/climate.md`
+- `docs/modules/glaciology.md`

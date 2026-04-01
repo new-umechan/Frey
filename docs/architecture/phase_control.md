@@ -64,13 +64,16 @@ struct Clock {
 `SubsystemBudgets` は、各Moduleに与える内部更新回数の近似である。
 初版では整数回数として扱う。
 
-| 時代 | `Geology` | `Climate` | `Hydrology` | `Ecology` | `Domesticates` | `Subsistence` | `Population` | `Settlement` | `Polity` | `Conflict` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 地殻形成期 | 高 | 低 | なし | なし | なし | なし | なし | なし | なし | なし |
-| 環境形成期 | 中 | 高 | 高 | 低 | なし | なし | なし | なし | なし | なし |
-| 先史期 | 低 | 中 | 中 | 高 | 中 | 中 | 低 | なし | なし | なし |
-| 文明成立期 | 低 | 低 | 中 | 中 | 中 | 高 | 高 | 高 | 高 | 低 |
-| 歴史展開期 | 低 | 低 | 低 | 低 | 低 | 中 | 高 | 高 | 高 | 高 |
+| 時代 | `Geology` | `Climate` | `Glaciology` | `Hydrology` | `Ecology` | `Domesticates` | `Subsistence` | `Population` | `Settlement` | `Polity` | `Conflict` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 地殻形成期 | 高 | 低 | 低 | なし | なし | なし | なし | なし | なし | なし | なし |
+| 環境形成期 | 中 | 高 | 高 | 高 | 低 | なし | なし | なし | なし | なし | なし |
+| 先史期 | 低 | 中 | 中 | 中 | 高 | 中 | 中 | 低 | なし | なし | なし |
+| 文明成立期 | 低 | 低 | 低 | 中 | 中 | 中 | 高 | 高 | 高 | 高 | 低 |
+| 歴史展開期 | 低 | 低 | 低 | 低 | 低 | 低 | 中 | 高 | 高 | 高 | 高 |
+
+`Glaciology` は独立モジュールとして `Climate` と `Hydrology` の間で実行する。
+現行実装では `Climate` 予算を流用して更新する。
 
 歴史展開期のように活動量が低いModuleはスキップ可能とする。
 スキップ条件の閾値は後続バージョンで定義する。
@@ -113,16 +116,17 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 1. tick開始時に `ExecSystem` が `FeedbackQueue` の内容を一括で `CellStore` と `hecs::World` に適用する
 2. `Geology`
 3. `Climate`
-4. `Hydrology`
-5. `Ecology`
-6. `Domesticates`
-7. `Subsistence`
-8. `Population`
-9. `Settlement`
-10. `Polity`
-11. `Conflict`
-12. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
-13. 時代遷移判定（tick終了時に、次tickの `clock.tick + 1` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
+4. `Glaciology`
+5. `Hydrology`
+6. `Ecology`
+7. `Domesticates`
+8. `Subsistence`
+9. `Population`
+10. `Settlement`
+11. `Polity`
+12. `Conflict`
+13. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
+14. 時代遷移判定（tick終了時に、次tickの `clock.tick + 1` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
 
 補足:
 

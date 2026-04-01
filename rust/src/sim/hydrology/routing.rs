@@ -13,8 +13,18 @@ pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
             .climate
             .runoff
             .iter()
-            .copied()
-            .map(|runoff_mm_yr| runoff_mm_yr.max(0.0) * RUNOFF_MM_YR_TO_M3S)
+            .enumerate()
+            .map(|(i, runoff_mm_yr)| {
+                let melt_mm_yr = world
+                    .state
+                    .glaciology
+                    .glacial_melt_runoff
+                    .get(i)
+                    .copied()
+                    .unwrap_or(0.0);
+                (runoff_mm_yr + melt_mm_yr).max(0.0)
+            })
+            .map(|runoff_mm_yr| runoff_mm_yr * RUNOFF_MM_YR_TO_M3S)
             .collect();
     }
     world

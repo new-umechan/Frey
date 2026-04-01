@@ -99,6 +99,13 @@ struct GeologyState {
     moisture_flux_u:      Vec<f32>,
     moisture_flux_v:      Vec<f32>,
 
+    // --- Glaciology ---
+    ice_thickness:         Vec<f32>,
+    accumulation:          Vec<f32>,
+    ablation:              Vec<f32>,
+    glacial_erosion_rate:  Vec<f32>,
+    glacial_melt_runoff:   Vec<f32>,
+
     river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用

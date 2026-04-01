@@ -10,6 +10,7 @@ pub mod conflict;
 pub mod domesticates;
 pub mod ecology;
 pub mod geology;
+pub mod glaciology;
 pub mod hydrology;
 pub mod polity;
 pub mod population;

@@ -1,4 +1,5 @@
 use crate::sim::exec::HYDROLOGY_MFD_ACTIVITY_THRESHOLD;
+use crate::sim::glaciology::types::GlaciologyParams;
 use crate::sim::hydrology::{
     run_hydrology_flow_step, run_hydrology_step, HydrologyStepDetailBreakdown,
 };
@@ -47,6 +48,7 @@ pub(super) fn run_hydrology_step_profiled(
 
 pub(super) fn apply_hydrology_erosion_to_geology(world: &mut World) {
     let default_params = crate::GeologyParams::default();
+    let glaciology_params = GlaciologyParams::default();
     let (erosion_thickness_coupling, deposition_thickness_coupling) = world
         .runtime
         .hydrology_dynamics
@@ -68,12 +70,15 @@ pub(super) fn apply_hydrology_erosion_to_geology(world: &mut World) {
             .height
             .len()
             .min(geology.erosion_rate.len())
-            .min(geology.deposition_rate.len());
+            .min(geology.deposition_rate.len())
+            .min(world.state.glaciology.glacial_erosion_rate.len());
         deltas.reserve(count);
         for i in 0..count {
             let erosion = geology.erosion_rate[i].max(0.0);
             let deposition = geology.deposition_rate[i].max(0.0);
-            let delta = deposition - erosion;
+            let glacial_erosion = world.state.glaciology.glacial_erosion_rate[i].max(0.0)
+                * glaciology_params.glacial_erosion_coupling.max(0.0);
+            let delta = deposition - erosion - glacial_erosion;
             geology.height[i] =
                 (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
             deltas.push((erosion, deposition));

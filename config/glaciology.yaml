@@ -1,0 +1,14 @@
+temperature:
+  accum_temp_threshold_c: -2.0
+  ablation_temp_threshold_c: 0.5
+
+mass_balance:
+  accumulation_gain: 0.0012
+  accumulation_temp_sensitivity: 0.06
+  ablation_gain: 1.8
+  thickness_response_rate: 0.32
+  melt_runoff_gain: 0.85
+
+erosion:
+  erosion_gain: 0.00025
+  glacial_erosion_coupling: 0.9

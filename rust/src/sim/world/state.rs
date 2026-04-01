@@ -267,6 +267,8 @@ pub struct WorldState {
     pub geo: GeoState,
     pub geology: GeologyState,
     pub climate: ClimateState,
+    #[serde(default)]
+    pub glaciology: GlaciologyState,
     pub hydrology: HydrologyState,
     pub ecology: EcologyState,
     pub domesticates: DomesticatesState,
@@ -336,6 +338,20 @@ pub struct ClimateState {
     pub moisture_flux_u: Vec<f32>,
     #[serde(default)]
     pub moisture_flux_v: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct GlaciologyState {
+    #[serde(default)]
+    pub ice_thickness: Vec<f32>,
+    #[serde(default)]
+    pub accumulation: Vec<f32>,
+    #[serde(default)]
+    pub ablation: Vec<f32>,
+    #[serde(default)]
+    pub glacial_erosion_rate: Vec<f32>,
+    #[serde(default)]
+    pub glacial_melt_runoff: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

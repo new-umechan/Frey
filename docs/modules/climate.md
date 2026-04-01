@@ -235,3 +235,4 @@ Climateの補助入力として、各セルに次の固定地理量を持つ。
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
 - `docs/modules/hydrology.md`
+- `docs/modules/glaciology.md`
