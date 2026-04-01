@@ -136,7 +136,6 @@ function buildJsModule(parsed: Map<string, { raw: string; value: number }>) {
     }
 
     lines.push("});");
-    lines.push("");
     return `${lines.join("\n")}\n`;
 }
 
