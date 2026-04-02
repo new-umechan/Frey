@@ -106,28 +106,32 @@ Earth 類似の plate tectonics を定量評価するうえで、最低限みる
 - 本節の Q-1〜Q-4 は **参考値** 扱いに格下げする
 - pass/fail 判定を出してはならない
 
-#### Q-1: 大陸/海洋地殻面積比
+#### Q-1: 大陸・海洋地殻面積比
 
 指標:
 
 - `continental_crust_fraction`
+- `oceanic_crust_fraction`
 
 定義:
 
-- `crust_type == Continental` のセル面積比
+- `continental_crust_fraction`: `crust_type == Continental` のセル面積比
+- `oceanic_crust_fraction`: `crust_type == Oceanic` のセル面積比
+- 両者は地殻種別の面積収支をみるための対になる量として扱う
 - `land_ratio` は使わない
 - ただし `crust_type` が provenance を表す内部状態であることを前提とする
 
 判定:
 
-- 100 tick 観測窓で変動幅が **10 percentage points** を超えない
-- Earth preset では平均値が極端に片寄らないことを確認する
+- 100 tick 観測窓で、`continental_crust_fraction` と `oceanic_crust_fraction` の変動を記録する
+- Earth preset では、どちらか一方が極端に支配的になり続けないことを確認する
 - 長期平均は Earth の現世値に厳密一致させる必要はないが、全海洋化または全大陸化へ単調崩壊してはならない
+- **10 percentage points** は学術的な閾値ではなく、短期の崩壊や回帰を検出するための運用上の目安として扱う
 
 注:
 
-- 「大陸プレートと海洋プレートの面積割合が 10% 以上変動しない」という案は、この Q-1 に吸収する
 - ただし、plate 単位ではなく **地殻種別単位** で定義する
+- 学術的に安定なのは「プレート面積比」ではなく、`continental_crust_fraction` / `oceanic_crust_fraction` のような地殻面積比である
 
 #### Q-2: `crust_type` 条件付き hypsometry 分離
 
@@ -386,7 +390,7 @@ ticks または実行内容:
 
 [定量評価]
 前提ゲート crust_type independence: PASS / FAIL / 要確認 → コメント
-Q-1 continental_crust_fraction: PASS / FAIL / 要確認 → コメント
+Q-1 continental_crust_fraction / oceanic_crust_fraction: PASS / FAIL / 要確認 → コメント
 Q-2 crust_conditioned_hypsometry_separation: PASS / FAIL / 要確認 → コメント
 Q-3 oceanic_age_depth_consistency: PASS / FAIL / 要確認 → コメント
 Q-4 ridge_age_gradient_consistency: PASS / FAIL / 要確認 → コメント
