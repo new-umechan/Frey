@@ -22,6 +22,8 @@ pub struct ClockState {
 pub struct RuntimeState {
     #[serde(default = "default_target_sea_ratio")]
     pub target_sea_ratio: f32,
+    #[serde(default)]
+    pub sea_level_offset: f32,
     pub transition: TransitionState,
     #[serde(default)]
     pub geology_dynamics: Option<GeologyDynamicsState>,

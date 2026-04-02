@@ -59,7 +59,7 @@ WorldStateは複数のState構造体を含む。各StateはSoA構造を持つ。
 
 ```rust
 struct GeologyState {
-    // --- Geo（固定地理量）---
+    // --- Terrain（共有状態層）---
     latitude:             Vec<f32>,
     distance_from_ocean:  Vec<f32>,
     coast_side:           Vec<CoastSide>,
@@ -101,11 +101,14 @@ struct GeologyState {
 
     // --- Glaciology ---
     ice_thickness:         Vec<f32>,
+    ice_load:              Vec<f32>,           // 氷荷重。Geology が地盤応答計算に使用
     accumulation:          Vec<f32>,
     ablation:              Vec<f32>,
+    isostatic_adjustment:  Vec<f32>,           // 地盤応答目標量。Geology が height に反映
     glacial_erosion_rate:  Vec<f32>,
-    glacial_melt_runoff:   Vec<f32>,
+    glacial_melt_runoff:   Vec<f32>,           // 氷河融解流出量。Hydrology の流出入力へ加算
 
+    // --- Hydrology ---
     river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用
@@ -361,7 +364,7 @@ enum FeedbackPayload {
     SpawnEntity  { bundle: EntityBundle },
     DestroyEntity{ id: EntityId },
     MutateEntity { id: EntityId, patch: ComponentPatch },
-    // 型互換のため保持するが、固定tick遷移モードではExecSystemで無効化する
+    // 型互換のため保持するが、固定 tick 遷移モードでは ExecSystem で無効化する
     TriggerEpochTransition { to: Epoch },
 }
 ```
@@ -401,10 +404,12 @@ struct WorldMesh {
 ## RuntimeState
 
 実行時状態。シミュレーションの進行に伴うターゲット値や活動量の指数移動平均を保持する。
+全球海面基準は `Glaciology` が氷量から計算し、`Terrain` と `Climate` が参照する。
 
 ```rust
 struct RuntimeState {
     target_sea_ratio:        f32,              // 目標海比率
+    sea_level_offset:        f32,              // 全球海面基準。Glaciology が計算し、Terrain/Climate が参照
     transition: TransitionState,
     geology_dynamics:        Option<GeologyDynamicsState>,
     hydrology_dynamics:      Option<ErosionAutomatonState>,

@@ -119,14 +119,14 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut target_temperature = vec![0.0_f32; cell_count];
     let mut target_ocean_temperature = vec![0.0_f32; cell_count];
     for i in 0..cell_count {
-        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+        let latitude = world.state.terrain.latitude.get(i).copied().unwrap_or(0.0);
         let latitude_abs = latitude.abs();
         let elevation_m = world.state.geology.height[i].max(0.0) * climate_params.height_to_meters;
         target_temperature[i] = base_land_temperature(latitude)
             - climate_params.lapse_rate_c_per_km * elevation_m / 1_000.0;
         let coast_side = world
             .state
-            .geo
+            .terrain
             .coast_side
             .get(i)
             .copied()
@@ -208,15 +208,15 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let substeps = (climate_params.core_substeps.max(1) as usize + extra_substeps).min(24);
     for _ in 0..substeps {
         for i in 0..cell_count {
-            let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+            let latitude = world.state.terrain.latitude.get(i).copied().unwrap_or(0.0);
             let ocean_qsat = saturation_capacity_mm(target_ocean_temperature[i], &climate_params);
-            let is_ocean = world.state.geology.height[i] <= 0.0;
+            let is_ocean = world.state.geology.height[i] <= world.runtime.sea_level_offset;
             let source = if is_ocean {
                 climate_params.core_ocean_evaporation_gain * (ocean_qsat - humidity[i]).max(0.0)
             } else {
                 let distance = world
                     .state
-                    .geo
+                    .terrain
                     .distance_from_ocean
                     .get(i)
                     .copied()
@@ -297,7 +297,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     for i in 0..cell_count {
         let latitude_abs = world
             .state
-            .geo
+            .terrain
             .latitude
             .get(i)
             .copied()
@@ -308,7 +308,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let annualized = precip_column[i] * PRECIPITATION_TURNOVER;
         let distance = world
             .state
-            .geo
+            .terrain
             .distance_from_ocean
             .get(i)
             .copied()
@@ -424,8 +424,8 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut land_precip_sum = 0.0_f32;
 
     for i in 0..cell_count {
-        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
-        let is_land = world.state.geology.height[i] > 0.0;
+        let latitude = world.state.terrain.latitude.get(i).copied().unwrap_or(0.0);
+        let is_land = world.state.geology.height[i] > world.runtime.sea_level_offset;
 
         let target_precip = precipitation_target[i];
 
@@ -460,7 +460,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             let veg = vegetation_density_proxy(world, i);
             let distance_from_ocean = world
                 .state
-                .geo
+                .terrain
                 .distance_from_ocean
                 .get(i)
                 .copied()
@@ -617,7 +617,7 @@ fn build_wind_fields(
     let mut vertical_motion = vec![0.0_f32; cell_count];
 
     for i in 0..cell_count {
-        let latitude = world.state.geo.latitude.get(i).copied().unwrap_or(0.0);
+        let latitude = world.state.terrain.latitude.get(i).copied().unwrap_or(0.0);
         let (baroclinic_grad, thermal_contrast) = local_dynamic_forcing(
             world,
             lookup,
@@ -912,7 +912,7 @@ fn local_wind_convergence_proxy(
 fn onshore_weight(world: &World, index: usize, wind_u: f32, upwind_ocean: f32) -> f32 {
     let coast_side = world
         .state
-        .geo
+        .terrain
         .coast_side
         .get(index)
         .copied()
@@ -987,13 +987,13 @@ fn apply_cold_coast_factor(
         .get(index)
         .copied()
         .unwrap_or(0.0)
-        <= 0.0
+        <= world.runtime.sea_level_offset
     {
         return precipitation_mm;
     }
     if !world
         .state
-        .geo
+        .terrain
         .is_coastal
         .get(index)
         .copied()
@@ -1002,19 +1002,19 @@ fn apply_cold_coast_factor(
         return precipitation_mm;
     }
 
-    let latitude = world.state.geo.latitude.get(index).copied().unwrap_or(0.0);
+    let latitude = world.state.terrain.latitude.get(index).copied().unwrap_or(0.0);
     let baseline = base_ocean_temperature(latitude);
     let anomaly = (baseline - ocean_temperature).max(0.0);
     let coast_side = world
         .state
-        .geo
+        .terrain
         .coast_side
         .get(index)
         .copied()
         .unwrap_or(CoastSide::None);
     let distance = world
         .state
-        .geo
+        .terrain
         .distance_from_ocean
         .get(index)
         .copied()

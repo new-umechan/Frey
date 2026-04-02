@@ -117,16 +117,17 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 2. `Geology`
 3. `Climate`
 4. `Glaciology`
-5. `Hydrology`
-6. `Ecology`
-7. `Domesticates`
-8. `Subsistence`
-9. `Population`
-10. `Settlement`
-11. `Polity`
-12. `Conflict`
-13. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
-14. 時代遷移判定（tick終了時に、次tickの `clock.tick + 1` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
+5. `Terrain` 再構成（共有状態層の更新：緯度・海からの距離・海岸線・隣接情報）
+6. `Hydrology`
+7. `Ecology`
+8. `Domesticates`
+9. `Subsistence`
+10. `Population`
+11. `Settlement`
+12. `Polity`
+13. `Conflict`
+14. 各モジュールが次tick向けの影響を `FeedbackQueue` に格納する
+15. 時代遷移判定（tick終了時に、次tickの `clock.tick + 1` が `EPOCH_TRANSITIONS` の `at_tick` に一致する場合、Epochを更新する）
 
 補足:
 

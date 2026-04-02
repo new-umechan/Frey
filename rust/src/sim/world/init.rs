@@ -13,17 +13,17 @@ use super::era::EraKind;
 use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
-    EcologyInternal, EcologyState, EntitiesState, GeoState, GeologyState, GlaciologyState,
-    HydrologyState, PolityState, PopulationState, SettlementState, SubsistenceMix,
-    SubsistenceState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    EcologyInternal, EcologyState, EntitiesState, GeologyState, GlaciologyState, HydrologyState,
+    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState,
+    TerrainState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
     pub fn new(mesh: WorldMesh, geology: GeologyState) -> Self {
         let cell_count = geology.height.len();
         let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
-        let geo = build_geo_state(&mesh, &geology.height);
-        let ocean_temperature = geo
+        let terrain = build_terrain_state(&mesh, &geology.height, 0.0);
+        let ocean_temperature = terrain
             .latitude
             .iter()
             .map(|&latitude| base_ocean_temperature(latitude))
@@ -32,7 +32,7 @@ impl World {
         Self {
             mesh,
             state: WorldState {
-                geo,
+                terrain,
                 geology,
                 climate: ClimateState {
                     temperature: vec![15.0; cell_count],
@@ -50,8 +50,11 @@ impl World {
                 },
                 glaciology: GlaciologyState {
                     ice_thickness: vec![0.0; cell_count],
+                    ice_load: vec![0.0; cell_count],
                     accumulation: vec![0.0; cell_count],
                     ablation: vec![0.0; cell_count],
+                    isostatic_adjustment: vec![0.0; cell_count],
+                    applied_isostatic_adjustment: vec![0.0; cell_count],
                     glacial_erosion_rate: vec![0.0; cell_count],
                     glacial_melt_runoff: vec![0.0; cell_count],
                 },
@@ -109,6 +112,7 @@ impl World {
             feedback: FeedbackQueue::new(cell_count),
             runtime: RuntimeState {
                 target_sea_ratio,
+                sea_level_offset: 0.0,
                 transition: TransitionState {
                     era_enter_tick: 0,
                     stable_ticks_in_era: 0,
@@ -152,9 +156,18 @@ impl World {
             .hydrology
             .river_next
             .clone_from(&state.river_next);
+        self.refresh_terrain_state();
         rebuild_mfd_from_primary(&mut self.state.hydrology);
         self.runtime.hydrology_dynamics = Some(state);
         Ok(())
+    }
+
+    pub fn refresh_terrain_state(&mut self) {
+        self.state.terrain = build_terrain_state(
+            &self.mesh,
+            &self.state.geology.height,
+            self.runtime.sea_level_offset,
+        );
     }
 }
 
@@ -173,7 +186,7 @@ pub fn default_target_sea_ratio() -> f32 {
     0.62
 }
 
-fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
+fn build_terrain_state(mesh: &WorldMesh, height: &[f32], sea_level_offset: f32) -> TerrainState {
     let cell_count = height.len();
     let mut latitude = vec![0.0; cell_count];
     let mut is_coastal = vec![false; cell_count];
@@ -181,7 +194,7 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
     for i in 0..cell_count {
         let pos = mesh.positions.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
         latitude[i] = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
-        let is_land = height[i] > 0.0;
+        let is_land = is_land_height(height[i], sea_level_offset);
         let start = mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
         let end = mesh.nbr_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
         for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
@@ -189,23 +202,23 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
             if n >= cell_count {
                 continue;
             }
-            if (height[n] > 0.0) != is_land {
+            if is_land_height(height[n], sea_level_offset) != is_land {
                 is_coastal[i] = true;
                 break;
             }
         }
     }
 
-    let distance_from_ocean = build_distance_from_ocean(mesh, height);
+    let distance_from_ocean = build_distance_from_ocean(mesh, height, sea_level_offset);
     let mut coast_side = vec![CoastSide::None; cell_count];
     for i in 0..cell_count {
         if !is_coastal[i] {
             continue;
         }
-        coast_side[i] = classify_coast_side(mesh, height, i);
+        coast_side[i] = classify_coast_side(mesh, height, sea_level_offset, i);
     }
 
-    GeoState {
+    TerrainState {
         latitude,
         distance_from_ocean,
         coast_side,
@@ -215,13 +228,13 @@ fn build_geo_state(mesh: &WorldMesh, height: &[f32]) -> GeoState {
     }
 }
 
-fn build_distance_from_ocean(mesh: &WorldMesh, height: &[f32]) -> Vec<f32> {
+fn build_distance_from_ocean(mesh: &WorldMesh, height: &[f32], sea_level_offset: f32) -> Vec<f32> {
     let cell_count = height.len();
     let mut distance = vec![f32::INFINITY; cell_count];
     let mut heap = BinaryHeap::new();
 
     for (i, &elevation) in height.iter().enumerate() {
-        if elevation <= 0.0 {
+        if !is_land_height(elevation, sea_level_offset) {
             distance[i] = 0.0;
             heap.push(DistanceNode {
                 cost: 0.0,
@@ -279,7 +292,12 @@ fn build_distance_from_ocean(mesh: &WorldMesh, height: &[f32]) -> Vec<f32> {
         .collect()
 }
 
-fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastSide {
+fn classify_coast_side(
+    mesh: &WorldMesh,
+    height: &[f32],
+    sea_level_offset: f32,
+    index: usize,
+) -> CoastSide {
     let cell_count = height.len();
     if index >= cell_count {
         return CoastSide::None;
@@ -289,7 +307,7 @@ fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastS
         .get(index)
         .copied()
         .unwrap_or([0.0, 0.0, 1.0]);
-    let is_land = height[index] > 0.0;
+    let is_land = is_land_height(height[index], sea_level_offset);
     let seek_land = !is_land;
     let start = mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
     let end = mesh
@@ -304,7 +322,7 @@ fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastS
         if n >= cell_count {
             continue;
         }
-        if (height[n] > 0.0) != seek_land {
+        if is_land_height(height[n], sea_level_offset) != seek_land {
             continue;
         }
         let neighbor = mesh.positions.get(n).copied().unwrap_or([0.0, 0.0, 1.0]);
@@ -322,6 +340,11 @@ fn classify_coast_side(mesh: &WorldMesh, height: &[f32], index: usize) -> CoastS
     } else {
         CoastSide::None
     }
+}
+
+#[inline]
+fn is_land_height(height: f32, sea_level_offset: f32) -> bool {
+    height > sea_level_offset
 }
 
 fn base_ocean_temperature(latitude: f32) -> f32 {

@@ -1,6 +1,7 @@
 use super::feedback::apply_feedback_queue;
 use super::geology::{
-    apply_hydrology_erosion_to_geology, run_geology_step, run_hydrology_step_unprofiled,
+    apply_glaciology_forcing_to_geology, apply_hydrology_erosion_to_geology, run_geology_step,
+    run_hydrology_step_unprofiled,
     should_run_hydrology_mfd,
 };
 use super::transition::update_era_transition;
@@ -49,12 +50,15 @@ pub(super) fn run_climate_stage(world: &mut World) {
 
 pub(super) fn run_glaciology_stage(world: &mut World) {
     crate::sim::glaciology::run_glaciology_step(world, world.clock.budgets.climate);
+    apply_glaciology_forcing_to_geology(world);
+    world.refresh_terrain_state();
 }
 
 pub(super) fn run_hydrology_stage(world: &mut World) {
     let run_mfd = should_run_hydrology_mfd(world);
     run_hydrology_step_unprofiled(world, world.clock.budgets.geology, run_mfd);
     apply_hydrology_erosion_to_geology(world);
+    world.refresh_terrain_state();
 }
 
 pub(super) fn run_ecology_stage(world: &mut World) {

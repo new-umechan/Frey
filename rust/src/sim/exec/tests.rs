@@ -32,6 +32,25 @@ fn build_test_world() -> World {
 }
 
 #[test]
+fn glaciology_forcing_updates_geology_height_once_per_delta() {
+    let mut world = build_test_world();
+    world.state.glaciology.isostatic_adjustment = vec![-0.02, 0.0, 0.01, -0.03];
+    world.state.glaciology.applied_isostatic_adjustment = vec![0.0; 4];
+
+    super::geology::apply_glaciology_forcing_to_geology(&mut world);
+
+    assert!((world.state.geology.height[0] - 0.43).abs() < 1e-6);
+    assert!((world.state.geology.height[2] - -0.24).abs() < 1e-6);
+    assert_eq!(
+        world.state.glaciology.applied_isostatic_adjustment,
+        world.state.glaciology.isostatic_adjustment
+    );
+
+    super::geology::apply_glaciology_forcing_to_geology(&mut world);
+    assert!((world.state.geology.height[0] - 0.43).abs() < 1e-6);
+}
+
+#[test]
 fn exec_world_advances_tick_and_sets_budget_to_one() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::History;

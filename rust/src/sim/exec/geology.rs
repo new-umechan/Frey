@@ -12,6 +12,33 @@ pub(super) fn run_geology_step(world: &mut World, budget: u32) {
     crate::sim::geology::update_geology(world, budget);
 }
 
+pub(super) fn apply_glaciology_forcing_to_geology(world: &mut World) {
+    let count = world
+        .state
+        .geology
+        .height
+        .len()
+        .min(world.state.glaciology.isostatic_adjustment.len())
+        .min(world.state.glaciology.applied_isostatic_adjustment.len());
+    for i in 0..count {
+        let target = world.state.glaciology.isostatic_adjustment[i];
+        let applied = world.state.glaciology.applied_isostatic_adjustment[i];
+        let delta = target - applied;
+        if delta.abs() <= f32::EPSILON {
+            continue;
+        }
+        world.state.geology.height[i] =
+            (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+        world.state.glaciology.applied_isostatic_adjustment[i] = target;
+    }
+
+    if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
+        if state.height.len() == world.state.geology.height.len() {
+            state.height.clone_from(&world.state.geology.height);
+        }
+    }
+}
+
 pub(super) fn should_run_hydrology_mfd(world: &World) -> bool {
     match world.clock.epoch {
         EraKind::Crust | EraKind::Environment => true,

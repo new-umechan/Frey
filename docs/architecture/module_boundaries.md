@@ -12,6 +12,26 @@
 各モジュールは他モジュールへ直接依存しない。
 モジュール間の共有面は `CellStore` および `hecs::World` である。
 
+## `Module` と共有状態層の違い
+
+この文書でいう `Module` は、tick内で更新を実行する責務単位である。
+一方で、全モジュールが参照する共有状態層は `Module` ではない。
+
+現時点で `Terrain` は `Module` ではなく、共有状態層である。
+`Terrain` は地表の見え方を表す派生状態であり、少なくとも以下を含む。
+
+- 緯度（`terrain.latitude`）
+- 海からの距離（`terrain.distance_from_ocean`）
+- 海岸向き（`terrain.coast_side`）
+- 沿岸フラグ（`terrain.is_coastal`）
+- 近傍情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
+
+`Terrain` 自体は独立して世界を更新しない。
+`Geology` が標高を更新し、全球海面基準が与えられた後に、`Terrain` がその結果から再導出される。
+
+したがって、`Terrain` は `Common` ではない。
+`Common` は数学・乱数・メッシュなどの汎用処理であり、`Terrain` は明確なドメイン意味を持つ共有状態層である。
+
 ## 現状
 Tier1までのモジュールについて、詳細を決定している。
 
@@ -71,6 +91,9 @@ UPDATE_DAG = {
 }
 ```
 
+`Terrain` は `UPDATE_DAG` に含めない。
+理由は、`Terrain` が独立更新モジュールではなく、`Geology` と海面基準の結果から再構成される共有状態層だからである。
+
 ## フィードバック（FEEDBACK_EDGES）
 
 逆方向の影響は次tickへ遅延させる。
@@ -105,6 +128,7 @@ FEEDBACK_EDGES = {
 
 - 標高
 - プレートID
+- 氷荷重に対する地盤応答量（`glaciology.isostatic_adjustment`）
 - 流出量 ← `Climate` が書く
 - 侵食量・堆積量（`erosion_rate`、`deposition_rate`）← `Hydrology` が書く
 - FeedbackQueue（`Conflict` による焦土・地形破壊）
@@ -124,6 +148,7 @@ FEEDBACK_EDGES = {
 
 地形を書き換える責任は `Geology` に一本化する。
 `Hydrology` 切り出し以前は流路・流量も担当していたが、v2では `Hydrology` に移管する。
+氷荷重起点の地盤上下動も `Geology` が `height` に最終反映する。
 
 ---
 
@@ -132,7 +157,8 @@ FEEDBACK_EDGES = {
 ### 読むもの
 
 - 標高（`geology.height`）
-- 固定地理量（`geo.latitude`、`geo.distance_from_ocean`、`geo.coast_side`、`geo.is_coastal`）
+- 地表派生状態（`terrain.latitude`、`terrain.distance_from_ocean`、`terrain.coast_side`、`terrain.is_coastal`）
+- 全球海面基準（`runtime.sea_level_offset`）
 - 植生密度（`ecology.tree_cover`、`ecology.ground_cover` から算出）
 - `Clock`
 
@@ -165,16 +191,19 @@ FEEDBACK_EDGES = {
 - 標高（`geology.height`）
 - 気温（`climate.temperature`）
 - 降水（`climate.precipitation`）
-- 隣接情報（`geo.neighbors_offsets`、`geo.neighbors`）
+- 隣接情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
 - `Clock`
 
 ### 書くもの
 
 - 氷厚（`glaciology.ice_thickness`）
+- 氷荷重（`glaciology.ice_load`）
 - 堆積量（`glaciology.accumulation`）
 - 消耗量（`glaciology.ablation`）
+- 地盤応答目標量（`glaciology.isostatic_adjustment`）
 - 融解流出量（`glaciology.glacial_melt_runoff`）
 - 氷河侵食率（`glaciology.glacial_erosion_rate`）
+- 全球海面基準（`runtime.sea_level_offset`）
 
 ### 書かないもの
 
@@ -187,6 +216,38 @@ FEEDBACK_EDGES = {
 氷河固有の状態管理に責務を限定する。
 `glacial_melt_runoff` は `Hydrology` の流出入力へ加算される。
 `glacial_erosion_rate` の標高反映は `Geology` が担当する。
+氷量から海面基準と地盤応答目標量を計算するが、`height` 自体は書かない。
+
+---
+
+## `Terrain`（共有状態層、Moduleではない）
+
+### 読むもの
+
+- 標高（`geology.height`）
+- 全球海面基準（`runtime.sea_level_offset`）
+- メッシュ近傍
+
+### 書くもの
+
+- 緯度（`terrain.latitude`）
+- 海からの距離（`terrain.distance_from_ocean`）
+- 海岸向き（`terrain.coast_side`）
+- 沿岸フラグ（`terrain.is_coastal`）
+- 近傍情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
+
+### 書かないもの
+
+- 標高
+- 気温・降水
+- 氷厚
+- 流量・侵食量・堆積量
+
+### 補足
+
+`Terrain` は更新を主導しない。
+`Geology` による標高更新、`Glaciology` による海面基準更新の後に再計算される。
+海岸線そのものは `Terrain` が保持するが、海岸線を変化させる原因は `Geology` と `Glaciology` にある。
 
 ---
 

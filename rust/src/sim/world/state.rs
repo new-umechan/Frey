@@ -264,7 +264,8 @@ pub struct WorldMesh {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldState {
-    pub geo: GeoState,
+    #[serde(alias = "geo")]
+    pub terrain: TerrainState,
     pub geology: GeologyState,
     pub climate: ClimateState,
     #[serde(default)]
@@ -280,7 +281,7 @@ pub struct WorldState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct GeoState {
+pub struct TerrainState {
     #[serde(alias = "latitude_deg")]
     pub latitude: Vec<f32>,
     #[serde(alias = "distance_from_ocean_km")]
@@ -345,9 +346,15 @@ pub struct GlaciologyState {
     #[serde(default)]
     pub ice_thickness: Vec<f32>,
     #[serde(default)]
+    pub ice_load: Vec<f32>,
+    #[serde(default)]
     pub accumulation: Vec<f32>,
     #[serde(default)]
     pub ablation: Vec<f32>,
+    #[serde(default)]
+    pub isostatic_adjustment: Vec<f32>,
+    #[serde(default)]
+    pub applied_isostatic_adjustment: Vec<f32>,
     #[serde(default)]
     pub glacial_erosion_rate: Vec<f32>,
     #[serde(default)]
@@ -546,12 +553,12 @@ pub struct CivilizationIndicators {
 impl WorldState {
     pub fn cell_store(&self) -> CellStore<'_> {
         CellStore {
-            latitude: &self.geo.latitude,
-            distance_from_ocean: &self.geo.distance_from_ocean,
-            coast_side: &self.geo.coast_side,
-            is_coastal: &self.geo.is_coastal,
-            neighbors_offsets: &self.geo.neighbors_offsets,
-            neighbors: &self.geo.neighbors,
+            latitude: &self.terrain.latitude,
+            distance_from_ocean: &self.terrain.distance_from_ocean,
+            coast_side: &self.terrain.coast_side,
+            is_coastal: &self.terrain.is_coastal,
+            neighbors_offsets: &self.terrain.neighbors_offsets,
+            neighbors: &self.terrain.neighbors,
             height: &self.geology.height,
             lake_depth: &self.geology.lake_depth,
             plate_id: &self.geology.plate_id,
@@ -582,12 +589,12 @@ impl WorldState {
 
     pub fn cell_store_mut(&mut self) -> CellStoreMut<'_> {
         CellStoreMut {
-            latitude: &mut self.geo.latitude,
-            distance_from_ocean: &mut self.geo.distance_from_ocean,
-            coast_side: &mut self.geo.coast_side,
-            is_coastal: &mut self.geo.is_coastal,
-            neighbors_offsets: &mut self.geo.neighbors_offsets,
-            neighbors: &mut self.geo.neighbors,
+            latitude: &mut self.terrain.latitude,
+            distance_from_ocean: &mut self.terrain.distance_from_ocean,
+            coast_side: &mut self.terrain.coast_side,
+            is_coastal: &mut self.terrain.is_coastal,
+            neighbors_offsets: &mut self.terrain.neighbors_offsets,
+            neighbors: &mut self.terrain.neighbors,
             height: &mut self.geology.height,
             lake_depth: &mut self.geology.lake_depth,
             plate_id: &mut self.geology.plate_id,

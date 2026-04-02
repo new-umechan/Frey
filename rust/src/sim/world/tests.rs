@@ -261,6 +261,37 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
 }
 
 #[test]
+fn refresh_terrain_state_reclassifies_cells_with_sea_level_offset() {
+    let mut world = World::new(
+        WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]; 4],
+            nbr_offsets: vec![0, 1, 2, 3, 4],
+            nbrs: vec![1, 2, 3, 0],
+        },
+        GeologyState {
+            height: vec![0.18, 0.12, 0.08, -0.2],
+            lake_depth: vec![0.0; 4],
+            plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
+            erosion_rate: vec![0.0; 4],
+            deposition_rate: vec![0.0; 4],
+            volcanism: vec![0.0; 4],
+            vertex_buoyancy: vec![0.0; 4],
+            geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
+            boundary_condition: vec![0.0; 4],
+        },
+    );
+
+    world.runtime.sea_level_offset = 0.10;
+    world.refresh_terrain_state();
+
+    assert_eq!(world.state.terrain.is_coastal, vec![false, true, false, true]);
+    assert!(world.state.terrain.distance_from_ocean[0].is_finite());
+    assert!(world.state.terrain.distance_from_ocean[1].is_finite());
+    assert_eq!(world.state.terrain.distance_from_ocean[2], 0.0);
+    assert_eq!(world.state.terrain.distance_from_ocean[3], 0.0);
+}
+
+#[test]
 fn feedback_queue_sizes_match_world() {
     let queue = FeedbackQueue::new(8);
     assert!(queue.entries.is_empty());

@@ -11,6 +11,9 @@ pub struct GlaciologyParams {
     pub melt_runoff_gain: f32,
     pub erosion_gain: f32,
     pub glacial_erosion_coupling: f32,
+    pub sea_level_coupling: f32,
+    pub ice_load_to_bedrock_coupling: f32,
+    pub isostatic_adjustment_rate: f32,
 }
 
 impl Default for GlaciologyParams {

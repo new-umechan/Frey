@@ -17,10 +17,11 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     let heights = world.state.geology.height.clone();
     let temperatures = world.state.climate.temperature.clone();
     let precipitation = world.state.climate.precipitation.clone();
-    let nbr_offsets = world.state.geo.neighbors_offsets.clone();
-    let nbrs = world.state.geo.neighbors.clone();
+    let nbr_offsets = world.state.terrain.neighbors_offsets.clone();
+    let nbrs = world.state.terrain.neighbors.clone();
 
     let state = &mut world.state.glaciology;
+    let mut total_ice = 0.0f32;
     for i in 0..cell_count {
         let temp_c = temperatures.get(i).copied().unwrap_or(0.0);
         let precip_mm = precipitation.get(i).copied().unwrap_or(0.0).max(0.0);
@@ -40,12 +41,27 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
 
         let next_raw = (prev_ice + state.accumulation[i] - state.ablation[i]).max(0.0);
         state.ice_thickness[i] = lerp(prev_ice, next_raw, alpha).max(0.0);
+        state.ice_load[i] = state.ice_thickness[i];
+        let target_isostatic_adjustment =
+            -state.ice_load[i] * params.ice_load_to_bedrock_coupling.max(0.0);
+        let isostatic_alpha = blend_alpha(
+            budget,
+            params.isostatic_adjustment_rate.clamp(0.01, 0.95),
+        );
+        state.isostatic_adjustment[i] = lerp(
+            state.isostatic_adjustment[i],
+            target_isostatic_adjustment,
+            isostatic_alpha,
+        );
+        total_ice += state.ice_thickness[i];
 
         let melt_source = (state.ablation[i] - state.accumulation[i]).max(0.0);
         state.glacial_melt_runoff[i] = melt_source * params.melt_runoff_gain.max(0.0);
         state.glacial_erosion_rate[i] =
             state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
     }
+    world.runtime.sea_level_offset =
+        -(total_ice / cell_count.max(1) as f32) * params.sea_level_coupling.max(0.0);
 }
 
 fn ensure_state_len(world: &mut World, cell_count: usize) {
@@ -53,11 +69,20 @@ fn ensure_state_len(world: &mut World, cell_count: usize) {
     if state.ice_thickness.len() != cell_count {
         state.ice_thickness.resize(cell_count, 0.0);
     }
+    if state.ice_load.len() != cell_count {
+        state.ice_load.resize(cell_count, 0.0);
+    }
     if state.accumulation.len() != cell_count {
         state.accumulation.resize(cell_count, 0.0);
     }
     if state.ablation.len() != cell_count {
         state.ablation.resize(cell_count, 0.0);
+    }
+    if state.isostatic_adjustment.len() != cell_count {
+        state.isostatic_adjustment.resize(cell_count, 0.0);
+    }
+    if state.applied_isostatic_adjustment.len() != cell_count {
+        state.applied_isostatic_adjustment.resize(cell_count, 0.0);
     }
     if state.glacial_erosion_rate.len() != cell_count {
         state.glacial_erosion_rate.resize(cell_count, 0.0);
@@ -157,5 +182,24 @@ mod tests {
             .glacial_melt_runoff
             .iter()
             .any(|v| *v > 0.0));
+    }
+
+    #[test]
+    fn cold_growth_updates_sea_level_and_ice_load() {
+        let mut world = build_test_world();
+        world.clock.epoch = EraKind::Environment;
+        world.state.climate.temperature = vec![-12.0, -11.0, -10.0, -9.0];
+        world.state.climate.precipitation = vec![2000.0, 1800.0, 1600.0, 1400.0];
+
+        run_glaciology_step(&mut world, 1);
+
+        assert!(world.runtime.sea_level_offset < 0.0);
+        assert!(world.state.glaciology.ice_load.iter().any(|v| *v > 0.0));
+        assert!(world
+            .state
+            .glaciology
+            .isostatic_adjustment
+            .iter()
+            .any(|v| *v < 0.0));
     }
 }
