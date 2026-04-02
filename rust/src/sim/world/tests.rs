@@ -284,7 +284,10 @@ fn refresh_terrain_state_reclassifies_cells_with_sea_level_offset() {
     world.runtime.sea_level_offset = 0.10;
     world.refresh_terrain_state();
 
-    assert_eq!(world.state.terrain.is_coastal, vec![false, true, false, true]);
+    assert_eq!(
+        world.state.terrain.is_coastal,
+        vec![false, true, false, true]
+    );
     assert!(world.state.terrain.distance_from_ocean[0].is_finite());
     assert!(world.state.terrain.distance_from_ocean[1].is_finite());
     assert_eq!(world.state.terrain.distance_from_ocean[2], 0.0);

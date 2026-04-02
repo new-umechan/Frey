@@ -14,8 +14,8 @@ use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
     EcologyInternal, EcologyState, EntitiesState, GeologyState, GlaciologyState, HydrologyState,
-    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState,
-    TerrainState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState,
+    World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {

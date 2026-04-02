@@ -44,10 +44,8 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
         state.ice_load[i] = state.ice_thickness[i];
         let target_isostatic_adjustment =
             -state.ice_load[i] * params.ice_load_to_bedrock_coupling.max(0.0);
-        let isostatic_alpha = blend_alpha(
-            budget,
-            params.isostatic_adjustment_rate.clamp(0.01, 0.95),
-        );
+        let isostatic_alpha =
+            blend_alpha(budget, params.isostatic_adjustment_rate.clamp(0.01, 0.95));
         state.isostatic_adjustment[i] = lerp(
             state.isostatic_adjustment[i],
             target_isostatic_adjustment,

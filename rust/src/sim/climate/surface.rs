@@ -1002,7 +1002,13 @@ fn apply_cold_coast_factor(
         return precipitation_mm;
     }
 
-    let latitude = world.state.terrain.latitude.get(index).copied().unwrap_or(0.0);
+    let latitude = world
+        .state
+        .terrain
+        .latitude
+        .get(index)
+        .copied()
+        .unwrap_or(0.0);
     let baseline = base_ocean_temperature(latitude);
     let anomaly = (baseline - ocean_temperature).max(0.0);
     let coast_side = world
