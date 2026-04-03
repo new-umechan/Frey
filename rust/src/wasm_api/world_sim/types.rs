@@ -145,6 +145,7 @@ pub(super) struct FieldDeltaResponse {
     pub mode: String,
     pub ranges: Vec<DeltaRange>,
     pub f32_data: Option<Vec<f32>>,
+    pub u32_data: Option<Vec<u32>>,
     pub i32_data: Option<Vec<i32>>,
 }
 

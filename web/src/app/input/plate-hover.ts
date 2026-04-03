@@ -9,7 +9,7 @@ export interface PlateHoverController {
 }
 
 interface PlateHoverState {
-    currentTerrainData: Record<string, Float32Array | Int32Array> | null;
+    currentTerrainData: Record<string, Float32Array | Int32Array | Uint32Array> | null;
     currentViewMode: string;
     currentCellMetric: string;
     debugEnabled: boolean;
@@ -24,7 +24,7 @@ interface HoverDiagnostics {
 interface PendingPlateHover {
     clientX: number;
     clientY: number;
-    plateId: number;
+    vertexIndex: number;
     hoverDiagnostics: HoverDiagnostics;
 }
 
@@ -79,7 +79,7 @@ export function createPlateHover({
         onClimateHover?.(null);
     }
 
-    function showPlateHoverPopup(clientX: number, clientY: number, plateIdValue: number, hoverDiagnostics: HoverDiagnostics) {
+    function showPlateHoverPopup(clientX: number, clientY: number, vertexIndexValue: number, hoverDiagnostics: HoverDiagnostics) {
         const {
             currentTerrainData,
             currentViewMode,
@@ -91,17 +91,25 @@ export function createPlateHover({
             return;
         }
 
-        const metricHover = readMetricHoverValue(currentTerrainData, currentCellMetric, plateIdValue);
+        const metricHover = readMetricHoverValue(currentTerrainData, currentCellMetric, vertexIndexValue);
         if (!metricHover) {
             hidePopup();
             return;
         }
-        plateHoverPopup.textContent = [
-            metricHover.meta.label,
-            `cell: ${metricHover.vertexIndex}`,
-            `value: ${metricHover.formattedValue}`,
-            ...(debugEnabled ? (hoverDiagnostics?.debugLines ?? []) : []),
-        ].join("\n");
+        const popupLines = [metricHover.meta.label];
+        if (currentCellMetric === "plate_id") {
+            const heightValue = (currentTerrainData.heightData as Float32Array | undefined)?.[metricHover.vertexIndex];
+            popupLines.push(`plate: ${metricHover.formattedValue}`);
+            popupLines.push(`cell: ${metricHover.vertexIndex}`);
+            popupLines.push(`height: ${Number.isFinite(heightValue) ? Number(heightValue).toFixed(3) : "-"}`);
+        } else {
+            popupLines.push(`cell: ${metricHover.vertexIndex}`);
+            popupLines.push(`value: ${metricHover.formattedValue}`);
+        }
+        if (debugEnabled) {
+            popupLines.push(...(hoverDiagnostics?.debugLines ?? []));
+        }
+        plateHoverPopup.textContent = popupLines.join("\n");
         plateHoverPopup.hidden = false;
         positionPopup(clientX, clientY);
         visiblePlateHoverId = metricHover.vertexIndex;
@@ -129,22 +137,22 @@ export function createPlateHover({
         plateHoverPopup.style.top = `${top}px`;
     }
 
-    function schedulePlateHoverPopup(clientX: number, clientY: number, plateIdValue: number, hoverDiagnostics: HoverDiagnostics) {
-        const plateIndex = Number(plateIdValue);
-        if (!Number.isInteger(plateIndex)) {
+    function schedulePlateHoverPopup(clientX: number, clientY: number, vertexIndexValue: number, hoverDiagnostics: HoverDiagnostics) {
+        const vertexIndex = Number(vertexIndexValue);
+        if (!Number.isInteger(vertexIndex)) {
             hidePopup();
             return;
         }
 
-        if (visiblePlateHoverId === plateIndex && !plateHoverPopup.hidden) {
-            showPlateHoverPopup(clientX, clientY, plateIndex, hoverDiagnostics);
+        if (visiblePlateHoverId === vertexIndex && !plateHoverPopup.hidden) {
+            showPlateHoverPopup(clientX, clientY, vertexIndex, hoverDiagnostics);
             return;
         }
 
         pendingPlateHover = {
             clientX,
             clientY,
-            plateId: plateIndex,
+            vertexIndex,
             hoverDiagnostics,
         };
 
@@ -160,11 +168,11 @@ export function createPlateHover({
             const {
                 clientX: nextX,
                 clientY: nextY,
-                plateId: nextPlateId,
+                vertexIndex: nextVertexIndex,
                 hoverDiagnostics: nextHoverDiagnostics,
             } = pendingPlateHover;
             pendingPlateHover = null;
-            showPlateHoverPopup(nextX, nextY, nextPlateId, nextHoverDiagnostics);
+            showPlateHoverPopup(nextX, nextY, nextVertexIndex, nextHoverDiagnostics);
         }, PLATE_HOVER_POPUP_DELAY_MS);
     }
 
@@ -197,12 +205,12 @@ export function createPlateHover({
             hoverBarycoord,
         );
 
-        const weightA = (currentTerrainData.vertexWeight as Float32Array)?.[face.a];
-        const weightB = (currentTerrainData.vertexWeight as Float32Array)?.[face.b];
-        const weightC = (currentTerrainData.vertexWeight as Float32Array)?.[face.c];
-        const plateA = (currentTerrainData.plateId as Int32Array)?.[face.a];
-        const plateB = (currentTerrainData.plateId as Int32Array)?.[face.b];
-        const plateC = (currentTerrainData.plateId as Int32Array)?.[face.c];
+        const weightA = (currentTerrainData.vertexWeight as Float32Array | undefined)?.[face.a];
+        const weightB = (currentTerrainData.vertexWeight as Float32Array | undefined)?.[face.b];
+        const weightC = (currentTerrainData.vertexWeight as Float32Array | undefined)?.[face.c];
+        const plateA = (currentTerrainData.plateId as Uint32Array | undefined)?.[face.a];
+        const plateB = (currentTerrainData.plateId as Uint32Array | undefined)?.[face.b];
+        const plateC = (currentTerrainData.plateId as Uint32Array | undefined)?.[face.c];
         const fallbackVertexWeight = weightA;
 
         const baseDebugLines = [
@@ -370,7 +378,7 @@ export function createPlateHover({
             return;
         }
 
-        if (pendingPlateHover && pendingPlateHover.plateId !== hoveredVertexIndex) {
+        if (pendingPlateHover && pendingPlateHover.vertexIndex !== hoveredVertexIndex) {
             clearPlateHoverTimer();
             pendingPlateHover = null;
             plateHoverPopup.hidden = true;
@@ -378,22 +386,29 @@ export function createPlateHover({
             visiblePlateHoverId = null;
         }
 
-        const sampledWeightResult = sampleHoverWeight(hit, hoveredVertexIndex);
+        const hoveredPlateId = (currentTerrainData.plateId as Uint32Array | undefined)?.[hoveredVertexIndex];
+        const sampledWeightResult = sampleHoverWeight(
+            hit,
+            Number.isInteger(hoveredPlateId) ? Number(hoveredPlateId) : hoveredVertexIndex,
+        );
+        const fallbackFaceWeight = (currentTerrainData.vertexWeight as Float32Array | undefined)?.[hoveredVertexIndex];
         const sampledWeight = Number.isFinite(sampledWeightResult?.weight)
-            ? sampledWeightResult.weight
-            : (currentTerrainData.vertexWeight as Float32Array)?.[hoveredVertexIndex];
+            ? Number(sampledWeightResult.weight)
+            : Number.isFinite(fallbackFaceWeight)
+                ? Number(fallbackFaceWeight)
+                : null;
         const hoverDiagnostics: HoverDiagnostics = {
             weight: sampledWeight,
             debugLines: [
                 ...(sampledWeightResult?.debugLines ?? ["debug: source=unknown"]),
-                `debug: faceAWeight=${(currentTerrainData.vertexWeight as Float32Array)?.[hoveredVertexIndex].toFixed(3)}`,
+                `debug: faceAWeight=${Number.isFinite(fallbackFaceWeight) ? Number(fallbackFaceWeight).toFixed(3) : "-"}`,
             ],
         };
 
         pendingPlateHover = {
             clientX: event.clientX,
             clientY: event.clientY,
-            plateId: hoveredVertexIndex,
+            vertexIndex: hoveredVertexIndex,
             hoverDiagnostics,
         };
         schedulePlateHoverPopup(
@@ -404,10 +419,10 @@ export function createPlateHover({
         );
     }
 
-    function readMetricHoverValue(currentTerrainData: Record<string, Float32Array | Int32Array>, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
+    function readMetricHoverValue(currentTerrainData: Record<string, Float32Array | Int32Array | Uint32Array>, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
         const meta = getCellMetricMeta(currentCellMetric);
         const vertexIndex = Number(vertexIndexValue);
-        const values = currentTerrainData[meta.dataKey] as Float32Array | undefined;
+        const values = currentTerrainData[meta.dataKey] as Float32Array | Int32Array | Uint32Array | undefined;
         const value = values?.[vertexIndex];
         if (!Number.isInteger(vertexIndex) || value === undefined || !Number.isFinite(value)) {
             return null;
@@ -425,7 +440,7 @@ export function createPlateHover({
             showPlateHoverPopup(
                 pendingPlateHover.clientX,
                 pendingPlateHover.clientY,
-                pendingPlateHover.plateId,
+                pendingPlateHover.vertexIndex,
                 pendingPlateHover.hoverDiagnostics,
             );
             return;

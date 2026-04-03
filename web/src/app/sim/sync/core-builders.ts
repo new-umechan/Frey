@@ -43,6 +43,7 @@ export function buildCoreBuffers(controller: WorldSimController, worldId: string
     return {
         heightData,
         lakeDepth: getFieldData(controller, worldId, "lake_depth", cellCount),
+        plateId: getFieldData(controller, worldId, "plate_id", cellCount),
         riverFlux: getFieldData(controller, worldId, "river_flux", cellCount),
         riverNext: getFieldData(controller, worldId, "river_next", cellCount),
         mantleHeat: getFieldData(controller, worldId, "mantle_heat", cellCount),

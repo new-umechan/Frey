@@ -23,6 +23,7 @@ function metricKeyToNumber(metricKey: string): number {
         river_flux: 9,
         runoff: 10,
         river_transport_cost: 11,
+        plate_id: 12,
     };
     return kindByKey[metricKey] ?? 0;
 }
@@ -183,6 +184,20 @@ vec3 paletteCost(float value) {
     return mix(vec3(0.86, 0.90, 0.91), vec3(0.13, 0.18, 0.22), t);
 }
 
+vec3 palettePlateId(float value) {
+    float id = floor(max(value, 0.0) + 0.5);
+    float r = fract(sin(id * 12.9898 + 0.13) * 43758.5453);
+    float g = fract(sin(id * 78.233 + 0.57) * 24634.6345);
+    float b = fract(sin(id * 37.719 + 0.91) * 14375.9854);
+    vec3 randomColor = vec3(r, g, b);
+    vec3 anchorColor = mix(
+        vec3(0.22, 0.38, 0.74),
+        vec3(0.78, 0.46, 0.18),
+        fract(id * 0.17)
+    );
+    return mix(randomColor, anchorColor, 0.42);
+}
+
 vec3 paletteAmber(float value) {
     float t = clamp(value / 0.02, 0.0, 1.0);
     return mix(vec3(0.98, 0.93, 0.82), vec3(0.86, 0.42, 0.07), t);
@@ -205,7 +220,8 @@ vec3 freyMetricModeColor(float kind) {
     if (kind < 8.5) return paletteTemperature(vTerrainMetric);
     if (kind < 9.5) return paletteRiver(vTerrainMetric);
     if (kind < 10.5) return paletteRain(vTerrainMetric);
-    return paletteCost(vTerrainMetric);
+    if (kind < 11.5) return paletteCost(vTerrainMetric);
+    return palettePlateId(vTerrainMetric);
 }
 
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverMask) {

@@ -51,6 +51,16 @@ const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
         formatter: (value) => value.toFixed(4),
     },
     {
+        key: "plate_id",
+        fieldKind: "plate_id",
+        dataKey: "plateId",
+        label: "プレート",
+        unit: "plate",
+        category: "terrain",
+        palette: "plate",
+        formatter: (value) => `#${Math.trunc(value)}`,
+    },
+    {
         key: "temperature",
         fieldKind: "temperature",
         dataKey: "temperature",

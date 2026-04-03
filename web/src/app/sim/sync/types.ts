@@ -19,6 +19,7 @@ export interface CoreBuffers {
     [key: string]: TypedArray | TectonicDebugBuffers | undefined;
     heightData: TypedArray;
     lakeDepth: TypedArray;
+    plateId: TypedArray;
     riverFlux: TypedArray;
     riverNext: TypedArray;
     mantleHeat: TypedArray;

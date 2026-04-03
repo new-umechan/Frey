@@ -12,3 +12,10 @@ mass_balance:
 erosion:
   erosion_gain: 0.00025
   glacial_erosion_coupling: 0.9
+
+sea_level:
+  sea_level_coupling: 0.18
+
+isostasy:
+  ice_load_to_bedrock_coupling: 0.24
+  isostatic_adjustment_rate: 0.08

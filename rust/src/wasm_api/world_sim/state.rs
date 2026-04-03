@@ -31,11 +31,19 @@ pub(super) struct I32FieldTracker {
 }
 
 #[derive(Clone)]
+pub(super) struct U32FieldTracker {
+    pub shadow: Vec<u32>,
+    pub dirty_ranges: Vec<RangeDelta>,
+    pub force_full: bool,
+}
+
+#[derive(Clone)]
 pub(super) struct WorldSyncState {
     pub height: F32FieldTracker,
     pub lake_depth: F32FieldTracker,
     pub volcanism: F32FieldTracker,
     pub vertex_buoyancy: F32FieldTracker,
+    pub plate_id: U32FieldTracker,
     pub river_flux: F32FieldTracker,
     pub river_next: I32FieldTracker,
     pub mantle_heat: F32FieldTracker,
@@ -134,6 +142,7 @@ impl F32FieldTracker {
                     end: self.shadow.len() as u32,
                 }],
                 f32_data: Some(self.shadow.clone()),
+                u32_data: None,
                 i32_data: None,
             });
         }
@@ -158,6 +167,7 @@ impl F32FieldTracker {
             mode: "delta".to_string(),
             ranges,
             f32_data: Some(values),
+            u32_data: None,
             i32_data: None,
         })
     }
@@ -238,6 +248,7 @@ impl I32FieldTracker {
                     end: self.shadow.len() as u32,
                 }],
                 f32_data: None,
+                u32_data: None,
                 i32_data: Some(self.shadow.clone()),
             });
         }
@@ -262,6 +273,7 @@ impl I32FieldTracker {
             mode: "delta".to_string(),
             ranges,
             f32_data: None,
+            u32_data: None,
             i32_data: Some(values),
         })
     }
@@ -289,6 +301,122 @@ impl I32FieldTracker {
     }
 }
 
+impl U32FieldTracker {
+    pub fn new(values: &[u32]) -> Self {
+        Self {
+            shadow: values.to_vec(),
+            dirty_ranges: Vec::new(),
+            force_full: false,
+        }
+    }
+
+    pub fn observe(&mut self, values: &[u32]) {
+        if self.shadow.len() != values.len() {
+            self.shadow = values.to_vec();
+            self.force_full = true;
+            self.dirty_ranges.clear();
+            return;
+        }
+
+        let mut changed = 0usize;
+        let mut range_start: Option<usize> = None;
+        for (index, value) in values.iter().copied().enumerate() {
+            if self.shadow[index] == value {
+                if let Some(start) = range_start.take() {
+                    self.merge_dirty_range(start, index);
+                }
+                continue;
+            }
+            self.shadow[index] = value;
+            changed += 1;
+            if range_start.is_none() {
+                range_start = Some(index);
+            }
+        }
+        if let Some(start) = range_start {
+            self.merge_dirty_range(start, values.len());
+        }
+        if changed > 0 && (changed as f32) >= (values.len() as f32) * DELTA_FULL_THRESHOLD_RATIO {
+            self.force_full = true;
+            self.dirty_ranges.clear();
+        }
+    }
+
+    pub fn take_delta(&mut self, field_kind: &str) -> Option<FieldDeltaResponse> {
+        if self.force_full {
+            self.force_full = false;
+            self.dirty_ranges.clear();
+            return Some(FieldDeltaResponse {
+                field_kind: field_kind.to_string(),
+                mode: "full".to_string(),
+                ranges: vec![DeltaRange {
+                    start: 0,
+                    end: self.shadow.len() as u32,
+                }],
+                f32_data: None,
+                u32_data: Some(self.shadow.clone()),
+                i32_data: None,
+            });
+        }
+        if self.dirty_ranges.is_empty() {
+            return None;
+        }
+
+        let ranges = self
+            .dirty_ranges
+            .iter()
+            .map(|range| DeltaRange {
+                start: range.start,
+                end: range.end,
+            })
+            .collect::<Vec<_>>();
+        let mut values = Vec::new();
+        for range in self.dirty_ranges.drain(..) {
+            values.extend_from_slice(&self.shadow[range.start as usize..range.end as usize]);
+        }
+        Some(FieldDeltaResponse {
+            field_kind: field_kind.to_string(),
+            mode: "delta".to_string(),
+            ranges,
+            f32_data: None,
+            u32_data: Some(values),
+            i32_data: None,
+        })
+    }
+
+    pub fn discard_pending(&mut self) {
+        self.force_full = false;
+        self.dirty_ranges.clear();
+    }
+
+    fn merge_dirty_range(&mut self, start: usize, end: usize) {
+        if start >= end {
+            return;
+        }
+        let next = RangeDelta {
+            start: start as u32,
+            end: end as u32,
+        };
+        if let Some(last) = self.dirty_ranges.last_mut() {
+            if next.start <= last.end {
+                last.end = last.end.max(next.end);
+                return;
+            }
+        }
+        self.dirty_ranges.push(next);
+    }
+}
+
+fn collect_plate_ids(world: &world::World) -> Vec<u32> {
+    world
+        .state
+        .geology
+        .plate_id
+        .iter()
+        .map(|plate_id| plate_id.as_u32())
+        .collect()
+}
+
 impl WorldSyncState {
     pub fn from_world(world: &world::World) -> Self {
         let mantle_heat = world
@@ -303,6 +431,7 @@ impl WorldSyncState {
             lake_depth: F32FieldTracker::new(&world.state.geology.lake_depth),
             volcanism: F32FieldTracker::new(&world.state.geology.volcanism),
             vertex_buoyancy: F32FieldTracker::new(&world.state.geology.vertex_buoyancy),
+            plate_id: U32FieldTracker::new(&collect_plate_ids(world)),
             river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
             river_next: I32FieldTracker::new(&world.state.hydrology.river_next),
             mantle_heat: F32FieldTracker::new(&mantle_heat),
@@ -328,6 +457,7 @@ impl WorldSyncState {
         self.volcanism.observe(&world.state.geology.volcanism);
         self.vertex_buoyancy
             .observe(&world.state.geology.vertex_buoyancy);
+        self.plate_id.observe(&collect_plate_ids(world));
         self.river_flux.observe(&world.state.hydrology.river_flow);
         self.river_next.observe(&world.state.hydrology.river_next);
 
@@ -398,6 +528,13 @@ impl WorldSyncState {
             }
         } else {
             self.vertex_buoyancy.discard_pending();
+        }
+        if include_field("plate_id") {
+            if let Some(delta) = self.plate_id.take_delta("plate_id") {
+                deltas.push(delta);
+            }
+        } else {
+            self.plate_id.discard_pending();
         }
         if include_field("river_flux") {
             if let Some(delta) = self.river_flux.take_delta("river_flux") {
@@ -555,7 +692,7 @@ impl ManagedWorld {
 
 #[cfg(test)]
 mod tests {
-    use super::{F32FieldTracker, I32FieldTracker, WorldSyncState};
+    use super::{F32FieldTracker, I32FieldTracker, U32FieldTracker, WorldSyncState};
 
     #[test]
     fn f32_tracker_collects_delta_ranges_once() {
@@ -581,12 +718,26 @@ mod tests {
     }
 
     #[test]
+    fn u32_tracker_collects_plate_id_delta_ranges() {
+        let mut tracker = U32FieldTracker::new(&[0, 1, 2, 3, 4, 5]);
+        tracker.observe(&[0, 8, 2, 3, 9, 5]);
+
+        let delta = tracker.take_delta("plate_id").expect("plate_id delta");
+        assert_eq!(delta.field_kind, "plate_id");
+        assert_eq!(delta.mode, "delta");
+        assert_eq!(delta.ranges.len(), 2);
+        assert_eq!(delta.u32_data.expect("u32 data"), vec![8, 9]);
+        assert!(tracker.take_delta("plate_id").is_none());
+    }
+
+    #[test]
     fn world_sync_state_discards_pending_for_excluded_fields() {
         let mut state = WorldSyncState {
             height: F32FieldTracker::new(&[1.0, 1.0]),
             lake_depth: F32FieldTracker::new(&[0.0, 0.0]),
             volcanism: F32FieldTracker::new(&[0.0, 0.0]),
             vertex_buoyancy: F32FieldTracker::new(&[0.0, 0.0]),
+            plate_id: U32FieldTracker::new(&[0, 0]),
             river_flux: F32FieldTracker::new(&[0.0, 0.0]),
             river_next: I32FieldTracker::new(&[-1, -1]),
             mantle_heat: F32FieldTracker::new(&[0.5, 0.5]),

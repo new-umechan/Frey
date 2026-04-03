@@ -64,6 +64,8 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
             return currentTerrainData.erosionRate as Float32Array;
         case "deposition_rate":
             return currentTerrainData.depositionRate as Float32Array;
+        case "plate_id":
+            return currentTerrainData.plateId as Uint32Array;
         case "temperature":
             return currentTerrainData.temperature as Float32Array;
         case "precipitation":

@@ -1,6 +1,7 @@
 export type FieldKind =
     | "height"
     | "lake_depth"
+    | "plate_id"
     | "river_flux"
     | "river_next"
     | "mantle_heat"
@@ -74,6 +75,7 @@ export const DELTA_FIELD_KIND_BY_VIEW: Record<string, FieldKind[]> = Object.free
 export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     height: "heightData",
     lake_depth: "lakeDepth",
+    plate_id: "plateId",
     river_flux: "riverFlux",
     river_next: "riverNext",
     mantle_heat: "mantleHeat",
@@ -95,6 +97,7 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
 const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Object.freeze({
     height: "height",
     lake_depth: "height",
+    plate_id: "metric",
     river_flux: "river",
     river_next: "river",
     mantle_heat: "mantleHeat",
