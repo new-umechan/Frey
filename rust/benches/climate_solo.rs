@@ -1046,11 +1046,10 @@ fn print_precipitation_process_diagnostics(
 ) {
     println!("-- Main Diagnostics: Precipitation Process (land aggregate) --");
     println!(
-        "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%  cold_coast_reduction={:.1}%",
+        "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%",
         summary.continental_reduction_ratio * 100.0,
         summary.cap_reduction_ratio * 100.0,
-        summary.depletion_reduction_ratio * 100.0,
-        summary.cold_coast_reduction_ratio * 100.0
+        summary.depletion_reduction_ratio * 100.0
     );
     println!(
         "cap_hit_ratio={:.1}%  mean_monsoon_boost_mm={:.1}  mean_hotspot_boost_mm={:.1}",
@@ -1226,11 +1225,10 @@ fn append_score_record_jsonl(
         .map(|snapshot| {
             let summary = snapshot.precipitation_process;
             format!(
-                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cold_coast_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{},\"mean_budget_storage_change_mm\":{},\"mean_budget_residual_mm\":{},\"budget_residual_ratio\":{}}}",
+                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{},\"mean_budget_storage_change_mm\":{},\"mean_budget_residual_mm\":{},\"budget_residual_ratio\":{}}}",
                 format_json_number(summary.continental_reduction_ratio),
                 format_json_number(summary.cap_reduction_ratio),
                 format_json_number(summary.depletion_reduction_ratio),
-                format_json_number(summary.cold_coast_reduction_ratio),
                 format_json_number(summary.cap_hit_ratio),
                 format_json_number(summary.mean_monsoon_boost_mm),
                 format_json_number(summary.mean_hotspot_boost_mm),

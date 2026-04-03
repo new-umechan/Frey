@@ -28,7 +28,6 @@ pub struct PrecipDiagnosticsSummary {
     pub continental_reduction_ratio: f32,
     pub cap_reduction_ratio: f32,
     pub depletion_reduction_ratio: f32,
-    pub cold_coast_reduction_ratio: f32,
     pub cap_hit_ratio: f32,
     pub mean_monsoon_boost_mm: f32,
     pub mean_hotspot_boost_mm: f32,
@@ -120,7 +119,6 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut target_ocean_temperature = vec![0.0_f32; cell_count];
     for i in 0..cell_count {
         let latitude = world.state.terrain.latitude.get(i).copied().unwrap_or(0.0);
-        let latitude_abs = latitude.abs();
         let elevation_m = world.state.geology.height[i].max(0.0) * climate_params.height_to_meters;
         target_temperature[i] = base_land_temperature(latitude)
             - climate_params.lapse_rate_c_per_km * elevation_m / 1_000.0;
@@ -131,8 +129,15 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             .get(i)
             .copied()
             .unwrap_or(CoastSide::None);
-        target_ocean_temperature[i] =
-            base_ocean_temperature(latitude) + ocean_current_offset(latitude_abs, coast_side);
+        let prev_wind_u = world.state.climate.wind_u.get(i).copied().unwrap_or(0.0);
+        let prev_wind_v = world.state.climate.wind_v.get(i).copied().unwrap_or(0.0);
+        let has_prev_wind = prev_wind_u != 0.0 || prev_wind_v != 0.0;
+        let current_offset = if has_prev_wind {
+            ocean_current_offset_from_wind(world, i, prev_wind_u, prev_wind_v)
+        } else {
+            ocean_current_fallback(latitude, coast_side)
+        };
+        target_ocean_temperature[i] = base_ocean_temperature(latitude) + current_offset;
     }
 
     diffuse_scalar(
@@ -290,8 +295,6 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
     let mut continental_post_sum = 0.0_f32;
     let mut cap_pre_sum = 0.0_f32;
     let mut cap_post_sum = 0.0_f32;
-    let mut cold_pre_sum = 0.0_f32;
-    let mut cold_post_sum = 0.0_f32;
     let mut cap_hits = 0usize;
 
     for i in 0..cell_count {
@@ -387,18 +390,8 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         let after_cap = after_continental.min(cap.max(climate_params.precip_min_mm));
         cap_post_sum += after_cap.max(climate_params.precip_min_mm);
 
-        cold_pre_sum += after_cap.max(climate_params.precip_min_mm);
-        let after_cold = apply_cold_coast_factor(
-            world,
-            i,
-            after_cap,
-            target_ocean_temperature[i],
-            &climate_params,
-        );
-        cold_post_sum += after_cold.max(climate_params.precip_min_mm);
-
         precipitation_target[i] =
-            after_cold.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
+            after_cap.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
     }
 
     let mut precipitation_target_sum = 0.0_f32;
@@ -563,7 +556,6 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
         continental_reduction_ratio: reduction_ratio(continental_pre_sum, continental_post_sum),
         cap_reduction_ratio: reduction_ratio(cap_pre_sum, cap_post_sum),
         depletion_reduction_ratio: reduction_ratio(continental_post_sum, cap_post_sum),
-        cold_coast_reduction_ratio: reduction_ratio(cold_pre_sum, cold_post_sum),
         cap_hit_ratio: cap_hits as f32 / land_cells_f,
         mean_monsoon_boost_mm: 0.0,
         mean_hotspot_boost_mm: 0.0,
@@ -973,69 +965,6 @@ fn relaxation_factor(delta_years: f32, tau_years: f32) -> f32 {
     (1.0 - (-delta_years / tau).exp()).clamp(0.0, 1.0)
 }
 
-fn apply_cold_coast_factor(
-    world: &World,
-    index: usize,
-    precipitation_mm: f32,
-    ocean_temperature: f32,
-    params: &ClimateParams,
-) -> f32 {
-    if world
-        .state
-        .geology
-        .height
-        .get(index)
-        .copied()
-        .unwrap_or(0.0)
-        <= world.runtime.sea_level_offset
-    {
-        return precipitation_mm;
-    }
-    if !world
-        .state
-        .terrain
-        .is_coastal
-        .get(index)
-        .copied()
-        .unwrap_or(false)
-    {
-        return precipitation_mm;
-    }
-
-    let latitude = world
-        .state
-        .terrain
-        .latitude
-        .get(index)
-        .copied()
-        .unwrap_or(0.0);
-    let baseline = base_ocean_temperature(latitude);
-    let anomaly = (baseline - ocean_temperature).max(0.0);
-    let coast_side = world
-        .state
-        .terrain
-        .coast_side
-        .get(index)
-        .copied()
-        .unwrap_or(CoastSide::None);
-    let distance = world
-        .state
-        .terrain
-        .distance_from_ocean
-        .get(index)
-        .copied()
-        .unwrap_or(0.0)
-        .max(0.0);
-    let inland_decay = (-distance / 420.0).exp().clamp(0.2, 1.0);
-    let east_coast_bias = match coast_side {
-        CoastSide::East => 1.15,
-        _ => 1.0,
-    };
-    let effective_gain = params.cold_coast_gain * east_coast_bias * inland_decay;
-    let factor = 1.0 - effective_gain * anomaly / baseline.abs().max(1.0);
-    precipitation_mm * factor.clamp(0.35, 1.0)
-}
-
 fn base_land_temperature(latitude: f32) -> f32 {
     30.0 * latitude.to_radians().cos() - 5.0
 }
@@ -1136,15 +1065,107 @@ fn continentality_factor(distance_from_ocean: f32, params: &ClimateParams) -> f3
     (1.0 - inland_weight * params.continentality_gain).clamp(0.35, 1.0)
 }
 
-fn ocean_current_offset(latitude_abs: f32, coast_side: CoastSide) -> f32 {
-    match (latitude_abs, coast_side) {
-        (_, CoastSide::None) => 0.0,
-        (x, CoastSide::West) if x < 30.0 => 4.0,
-        (x, CoastSide::East) if x < 30.0 => -6.0,
-        (x, CoastSide::West) if x < 60.0 => -4.0,
-        (x, CoastSide::East) if x < 60.0 => 4.0,
-        (_, _) => -2.0,
+fn ocean_current_offset_from_wind(world: &World, index: usize, wind_u: f32, wind_v: f32) -> f32 {
+    let lat = world
+        .state
+        .terrain
+        .latitude
+        .get(index)
+        .copied()
+        .unwrap_or(0.0);
+    let lat_abs = lat.abs();
+    let coast_side = world
+        .state
+        .terrain
+        .coast_side
+        .get(index)
+        .copied()
+        .unwrap_or(CoastSide::None);
+
+    if coast_side == CoastSide::None {
+        return 0.0;
     }
+
+    let is_coastal = world
+        .state
+        .terrain
+        .is_coastal
+        .get(index)
+        .copied()
+        .unwrap_or(false);
+    if !is_coastal {
+        return 0.0;
+    }
+
+    let distance = world
+        .state
+        .terrain
+        .distance_from_ocean
+        .get(index)
+        .copied()
+        .unwrap_or(0.0)
+        .max(0.0);
+
+    let coastal_decay = (-distance / 600.0).exp().clamp(0.0, 1.0);
+
+    let hemisphere_sign = lat.signum();
+    let coriolis = lat_abs.to_radians().sin().abs().max(0.05);
+
+    let coast_sign = match coast_side {
+        CoastSide::East => 1.0,
+        CoastSide::West => -1.0,
+        CoastSide::None => 0.0,
+    };
+
+    let alongshore_wind = wind_v * coast_sign;
+    let offshore_wind = wind_u * coast_sign;
+
+    let ekman_along = alongshore_wind / coriolis;
+    let ekman_offshore = offshore_wind / coriolis;
+
+    let hemisphere_ekman = hemisphere_sign * (ekman_along + ekman_offshore * 0.3);
+
+    let upwelling_signal = -hemisphere_ekman.clamp(-8.0, 8.0) * 0.75;
+
+    let lat_mod = 1.0 + 0.3 * gaussian(lat_abs, 20.0, 15.0);
+
+    (upwelling_signal * lat_mod * coastal_decay).clamp(-8.0, 8.0)
+}
+
+fn ocean_current_fallback(latitude: f32, coast_side: CoastSide) -> f32 {
+    let lat_abs = latitude.abs();
+
+    if coast_side == CoastSide::None {
+        return 0.0;
+    }
+
+    let trade_wind_u = -0.9 * (1.0 - smoothstep(18.0, 36.0, lat_abs))
+        + 0.85 * smoothstep(24.0, 48.0, lat_abs) * (1.0 - smoothstep(56.0, 74.0, lat_abs))
+        - 0.55 * smoothstep(60.0, 80.0, lat_abs);
+    let trade_wind_v = -0.45 * latitude.signum() * (1.0 - smoothstep(18.0, 36.0, lat_abs));
+    let westerly_wind_v = 0.26
+        * latitude.signum()
+        * smoothstep(28.0, 44.0, lat_abs)
+        * (1.0 - smoothstep(54.0, 68.0, lat_abs));
+    let wind_v = trade_wind_v + westerly_wind_v;
+
+    let coast_sign = match coast_side {
+        CoastSide::East => 1.0,
+        CoastSide::West => -1.0,
+        CoastSide::None => 0.0,
+    };
+
+    let coriolis = lat_abs.to_radians().sin().abs().max(0.05);
+    let hemisphere_sign = latitude.signum();
+    let alongshore = wind_v * coast_sign;
+    let offshore = trade_wind_u * coast_sign;
+    let ekman_along = alongshore / coriolis;
+    let ekman_offshore = offshore / coriolis;
+    let hemisphere_ekman = hemisphere_sign * (ekman_along + ekman_offshore * 0.3);
+    let upwelling_signal = -hemisphere_ekman.clamp(-8.0, 8.0) * 0.75;
+    let lat_mod = 1.0 + 0.3 * gaussian(lat_abs, 20.0, 15.0);
+
+    (upwelling_signal * lat_mod).clamp(-8.0, 8.0)
 }
 
 fn reduction_ratio(before: f32, after: f32) -> f32 {

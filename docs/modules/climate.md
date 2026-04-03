@@ -102,14 +102,6 @@ P1 = min(P0, P_cap)
 - `F_continental`：大陸性係数（海からの距離で減衰）
 - `P_cap`：可用水蒸気上限（`humidity * precip_cap_from_moisture`）
 
-### 寒流沿岸補正
-
-海岸セルで海水温が緯度帯基準より低い場合、降水係数を減衰：
-```text
-factor = 1.0 - cold_coast_gain * (T_base - T_ocean)^+ / |T_base|
-P_final = P1 * factor.clamp(0.35, 1.0)
-```
-
 ### 大気水収支のスケール調整
 
 全セルの降水目標値合計が凝結供給量を超えないよう、グローバルスケールファクタを適用：
@@ -128,12 +120,20 @@ precipitation = (P_final * scale).clamp(precip_min, precip_max)
 T_land = 30 * cos(lat_rad) - 5 - lapse_rate * elev_km
 ```
 
-海水温は別式 `28 * cos(lat_rad) - 2` を基準に、海岸セルでは沿岸流補正を加える。
+海水温は別式 `28 * cos(lat_rad) - 2` を基準に、海岸セルでは風向・湧昇流ベースの補正を加える。
 
-沿岸流補正は緯度と海岸の東西岸で決定：
-- 低緯度（<30°）：西岸 +4℃（暖流）、東岸 -6℃（寒流）
-- 中緯度（30-60°）：西岸 -4℃（寒流）、東岸 +4℃（暖流）
-- 高緯度（≥60°）：-2℃
+湧昇流補正は沿岸風向とコリオリ力からエクマン輸送を計算:
+```text
+coriolis = |sin(lat_rad)|.max(0.05)
+alongshore_wind = wind_v
+ekman_transport = alongshore_wind / coriolis
+upwelling_signal = -sign(lat) * ekman_transport.clamp(-8, 8) * 0.75
+lat_mod = 1.0 + 0.3 * gaussian(|lat|, 20, 15)
+coastal_decay = exp(-distance_from_ocean / 600)
+offset = (upwelling_signal * lat_mod * coastal_decay).clamp(-8, 8)
+```
+
+初回tick（風向未初期化）では大気循環モデルに基づくフォールバック値を使用。
 
 ### 蒸発散
 
@@ -209,7 +209,6 @@ aridity = PET / max(precip, eps)
 
 - `continental_reduction_ratio`：大陸性補正による減衰率
 - `cap_reduction_ratio`：水蒸気上限による減衰率
-- `cold_coast_reduction_ratio`：寒流沿岸補正による減衰率
 - `cap_hit_ratio`：上限値に達した陸セルの比率
 - `budget_residual_ratio`：大気水収支の残差比率
 
