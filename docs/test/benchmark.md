@@ -47,6 +47,8 @@ Plateは実データとの定量比較になじまないため、ベンチマー
 | Climate単体 | 実地形 + 固定植生（0.5） | 1 tick | Climateモデル自体の評価 |
 | Hydrology単体 | 実地形 + 実気候データ | 1 tick | Hydrologyモデル自体の評価 |
 | Ecology単体 | 実気候データ + 実水文データ | 収束まで | Ecologyモデル自体の評価 |
+| Glaciology単体 | 実地形 + Climate出力 | 1 tick | Glaciologyモデル自体の評価 |
+| Glaciology海面時系列 | 実地形 + 実気候データ | short/mid/long | 海面寄与時系列の診断評価 |
 | Climate+Ecology | 実地形のみ | 収束まで | 植生フィードバックの効果確認 |
 | フルパイプライン | 実地形のみ | 収束まで | 統合評価 |
 
@@ -110,6 +112,15 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 | `ground_cover` | 中 | MODIS VCF 由来の non-tree vegetation との相関（開放系植生に限定） |
 | `soil_fertility` | 低 | SoilGrids 由来 proxy との相関。参考値扱い |
 
+### Glaciology
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `ice_thickness` | 中 | Millan et al. 2022 全球氷厚推定データとのSpearman相関 |
+| `accumulation` | 低 | 直接実測が困難。proxy評価 |
+| `ablation` | 低 | 直接実測が困難。proxy評価 |
+| `glacial_melt_runoff` | 低 | 水文データとの間接比較 |
+
 ---
 
 ## Phase 1：代表地域セットと評価軸（全モジュール共通）
@@ -139,6 +150,11 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 - `tree_cover`：代表地域の樹木被覆の大小関係が現実と一致しているか
 - `ground_cover`：代表地域の草本・低木被覆の大小関係が現実と一致しているか
 
+### Glaciologyの評価軸（Phase 1）
+
+- `ice_thickness`：グリーンランド・南極・パタゴニア・ヒマラヤ・アルプス等の氷厚の大小関係が現実と一致しているか
+- `glacial_melt_runoff`：融解流出の地域間比較（参考値・known-hard扱い）
+
 ---
 
 ## Phase 2：評価指標
@@ -155,9 +171,11 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 Climate単体ベンチで確立したリサンプリング基盤・出力フォーマット・診断集計（matched/coverage）の設計を他ベンチでも踏襲する。
 詳細仕様は次を参照する。
 
-- `docs/manage/bench/climate_solo_benchmark.md`
-- `docs/manage/bench/hydrology_solo_benchmark.md`
-- `docs/manage/bench/ecology_solo_benchmark.md`
+- `docs/test/bench/climate_solo_benchmark.md`
+- `docs/test/bench/hydrology_solo_benchmark.md`
+- `docs/test/bench/ecology_solo_benchmark.md`
+- `docs/test/bench/glaciology_solo_benchmark.md`
+- `docs/test/bench/glaciology_sea_level_series_benchmark.md`
 
 ### 収束判定
 

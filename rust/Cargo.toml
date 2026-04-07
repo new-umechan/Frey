@@ -29,3 +29,11 @@ harness = false
 [[bench]]
 name = "ecology_solo"
 harness = false
+
+[[bench]]
+name = "glaciology_solo"
+harness = false
+
+[[bench]]
+name = "glaciology_sea_level_series"
+harness = false
