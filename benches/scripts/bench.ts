@@ -4,6 +4,8 @@ const SUITES = [
     "climate_solo",
     "hydrology_solo",
     "ecology_solo",
+    "glaciology_solo",
+    "glaciology_sea_level_series",
 ];
 
 function parseArgs(argv: string[]) {
@@ -37,7 +39,7 @@ function parseArgs(argv: string[]) {
 
 function printHelp() {
     console.error("Usage: node benches/scripts/bench.mjs [options]");
-    console.error("  --suite <all|climate_solo|hydrology_solo|ecology_solo>");
+    console.error("  --suite <all|climate_solo|hydrology_solo|ecology_solo|glaciology_solo|glaciology_sea_level_series>");
     console.error("  --list");
 }
 
