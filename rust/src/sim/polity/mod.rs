@@ -58,9 +58,10 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
     polity_components.sort_by_key(|component| component.polity_id);
     world.entities.replace_polities(polity_components.clone());
 
-    let active_ids = polity_components
-        .iter()
-        .map(|component| component.polity_id)
+    let active_ids = world
+        .entities
+        .iter_polities()
+        .map(|record| record.id)
         .collect::<Vec<_>>();
     world
         .polity_relations

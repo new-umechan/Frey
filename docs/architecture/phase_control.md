@@ -113,7 +113,7 @@ const EPOCH_TRANSITIONS: &[(Epoch, EpochTransition)] = &[
 
 1tickの標準順序は次の通り。
 
-1. tick開始時に `ExecSystem` が `FeedbackQueue` の内容を一括で `CellStore` と `hecs::World` に適用する
+1. tick開始時に `ExecSystem` が `FeedbackQueue` の内容を一括で `CellStore` と `EntityStore` に適用する
 2. `Geology`
 3. `Climate`
 4. `Glaciology`

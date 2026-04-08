@@ -83,7 +83,10 @@ pub enum EntityBundle {
 pub enum ComponentPatch {
     Polity {
         capital_cell: Option<CellId>,
-        stability: Option<f32>,
+        legitimacy: Option<f32>,
+        centralization: Option<f32>,
+        military_tech: Option<f32>,
+        cells_cache: Option<Vec<CellId>>,
     },
     Settlement {
         cell: Option<CellId>,
@@ -103,6 +106,13 @@ pub enum TargetRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EntityRef {
+    Polity(PolityId),
+    Settlement(SettlementId),
+    Region(RegionId),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FeedbackPayload {
     DeltaF32 {
         field: CellFieldId,
@@ -118,10 +128,10 @@ pub enum FeedbackPayload {
         bundle: EntityBundle,
     },
     DestroyEntity {
-        id: u32,
+        entity: EntityRef,
     },
     MutateEntity {
-        id: u32,
+        entity: EntityRef,
         patch: ComponentPatch,
     },
     TriggerEpochTransition {

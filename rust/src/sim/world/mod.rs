@@ -1,3 +1,4 @@
+mod entity_store;
 mod era;
 mod exec;
 mod init;
@@ -7,11 +8,15 @@ mod state;
 #[cfg(test)]
 mod tests;
 
+pub use entity_store::{
+    EntityStore, EntityStoreError, PolityKey, PolityRecord, RegionKey, RegionRecord, SettlementKey,
+    SettlementRecord,
+};
 pub use era::EraKind;
 pub use exec::{
-    CellFieldId, ClockState, ComponentPatch, EntityBundle, FeedbackEntry, FeedbackPayload,
-    FeedbackQueue, FieldValue, ModuleId, RuntimeState, SubsystemBudgets, TargetRef,
-    TransitionState,
+    CellFieldId, ClockState, ComponentPatch, EntityBundle, EntityRef, FeedbackEntry,
+    FeedbackPayload, FeedbackQueue, FieldValue, ModuleId, RuntimeState, SubsystemBudgets,
+    TargetRef, TransitionState,
 };
 pub use init::default_target_sea_ratio;
 pub use metrics::WorldMetrics;

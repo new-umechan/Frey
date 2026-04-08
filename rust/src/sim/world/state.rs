@@ -4,7 +4,12 @@ use std::collections::HashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smallvec::SmallVec;
 
-use super::exec::{ClockState, FeedbackQueue, RuntimeState};
+use super::entity_store::{
+    EntityStore, EntityStoreError, PolityRecord, RegionRecord, SettlementRecord,
+};
+use super::exec::{
+    ClockState, ComponentPatch, EntityBundle, EntityRef, FeedbackQueue, RuntimeState, TargetRef,
+};
 use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, PlateRelation, StressTensor};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
@@ -118,7 +123,7 @@ pub struct EntitiesState {
     pub polity_components: Vec<PolityComponent>,
     pub settlement_components: Vec<SettlementComponent>,
     pub region_components: Vec<RegionComponent>,
-    pub world: hecs::World,
+    pub store: EntityStore,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -200,58 +205,222 @@ impl EntitiesState {
             polity_components,
             settlement_components,
             region_components,
-            world: hecs::World::new(),
+            store: EntityStore::default(),
         };
-        entities.sync_world_from_components();
+        entities.sync_store_from_components();
         entities
     }
 
-    pub fn sync_world_from_components(&mut self) {
-        self.world = hecs::World::new();
+    pub fn sync_store_from_components(&mut self) {
+        self.store = EntityStore::default();
+
         for component in &self.polity_components {
-            self.world.spawn((component.clone(),));
+            let _ = self.store.create_polity(component.clone().into());
         }
         for component in &self.settlement_components {
-            self.world.spawn((component.clone(),));
+            let _ = self.store.create_settlement(component.clone().into());
         }
         for component in &self.region_components {
-            self.world.spawn((component.clone(),));
+            let _ = self.store.create_region(component.clone().into());
         }
     }
 
-    pub fn sync_components_from_world(&mut self) {
-        self.polity_components.clear();
-        self.settlement_components.clear();
-        self.region_components.clear();
+    pub fn sync_components_from_store(&mut self) {
+        self.polity_components = self
+            .store
+            .iter_polities()
+            .cloned()
+            .map(PolityComponent::from)
+            .collect();
+        self.polity_components
+            .sort_by_key(|component| component.polity_id);
 
-        for (_, component) in self.world.query::<&PolityComponent>().iter() {
-            self.polity_components.push(component.clone());
-        }
-        for (_, component) in self.world.query::<&SettlementComponent>().iter() {
-            self.settlement_components.push(component.clone());
-        }
-        for (_, component) in self.world.query::<&RegionComponent>().iter() {
-            self.region_components.push(component.clone());
-        }
+        self.settlement_components = self
+            .store
+            .iter_settlements()
+            .cloned()
+            .map(SettlementComponent::from)
+            .collect();
+        self.settlement_components
+            .sort_by_key(|component| component.settlement_id);
 
-        self.polity_components.sort_by_key(|c| c.polity_id);
-        self.settlement_components.sort_by_key(|c| c.settlement_id);
-        self.region_components.sort_by_key(|c| c.region_id);
+        self.region_components = self
+            .store
+            .iter_regions()
+            .cloned()
+            .map(RegionComponent::from)
+            .collect();
+        self.region_components
+            .sort_by_key(|component| component.region_id);
+    }
+
+    pub fn sync_all_from_store(&mut self) {
+        self.sync_components_from_store();
     }
 
     pub fn replace_polities(&mut self, components: Vec<PolityComponent>) {
         self.polity_components = components;
-        self.sync_world_from_components();
+        self.sync_store_from_components();
     }
 
     pub fn replace_settlements(&mut self, components: Vec<SettlementComponent>) {
         self.settlement_components = components;
-        self.sync_world_from_components();
+        self.sync_store_from_components();
     }
 
     pub fn replace_regions(&mut self, components: Vec<RegionComponent>) {
         self.region_components = components;
-        self.sync_world_from_components();
+        self.sync_store_from_components();
+    }
+
+    pub fn to_entity_store(&self) -> Result<EntityStore, EntityStoreError> {
+        let mut store = EntityStore::default();
+        for component in &self.polity_components {
+            store.create_polity(component.clone().into())?;
+        }
+        for component in &self.settlement_components {
+            store.create_settlement(component.clone().into())?;
+        }
+        for component in &self.region_components {
+            store.create_region(component.clone().into())?;
+        }
+        store.validate()?;
+        Ok(store)
+    }
+
+    pub fn from_entity_store(store: &EntityStore) -> Self {
+        let mut entities = Self::default();
+        entities.store = store.clone();
+        entities.sync_all_from_store();
+        entities
+    }
+
+    pub fn iter_polities(&self) -> impl Iterator<Item = &PolityRecord> {
+        self.store.iter_polities()
+    }
+
+    pub fn iter_settlements(&self) -> impl Iterator<Item = &SettlementRecord> {
+        self.store.iter_settlements()
+    }
+
+    pub fn iter_regions(&self) -> impl Iterator<Item = &RegionRecord> {
+        self.store.iter_regions()
+    }
+
+    pub fn get_polity(&self, id: PolityId) -> Option<&PolityRecord> {
+        self.store.get_polity(id)
+    }
+
+    pub fn get_settlement(&self, id: SettlementId) -> Option<&SettlementRecord> {
+        self.store.get_settlement(id)
+    }
+
+    pub fn get_region(&self, id: RegionId) -> Option<&RegionRecord> {
+        self.store.get_region(id)
+    }
+
+    pub fn apply_entity_bundle(&mut self, bundle: EntityBundle) -> Result<(), EntityStoreError> {
+        match bundle {
+            EntityBundle::Polity(component) => {
+                self.store.create_polity(component.into())?;
+            }
+            EntityBundle::Settlement(component) => {
+                self.store.create_settlement(component.into())?;
+            }
+            EntityBundle::Region(component) => {
+                self.store.create_region(component.into())?;
+            }
+        }
+        self.sync_all_from_store();
+        Ok(())
+    }
+
+    pub fn destroy_entity(&mut self, entity: &EntityRef) {
+        match entity {
+            EntityRef::Polity(id) => {
+                self.store.remove_polity(*id);
+            }
+            EntityRef::Settlement(id) => {
+                self.store.remove_settlement(*id);
+            }
+            EntityRef::Region(id) => {
+                self.store.remove_region(*id);
+            }
+        }
+        self.sync_all_from_store();
+    }
+
+    pub fn mutate_entity(
+        &mut self,
+        target_ref: &TargetRef,
+        entity: &EntityRef,
+        patch: ComponentPatch,
+    ) {
+        match (target_ref, entity, patch) {
+            (
+                TargetRef::Polity(_),
+                EntityRef::Polity(id),
+                ComponentPatch::Polity {
+                    capital_cell,
+                    legitimacy,
+                    centralization,
+                    military_tech,
+                    cells_cache,
+                },
+            ) => {
+                if let Some(record) = self.store.get_polity_mut(*id) {
+                    if let Some(value) = capital_cell {
+                        record.capital_cell = value;
+                    }
+                    if let Some(value) = legitimacy {
+                        record.legitimacy = value;
+                    }
+                    if let Some(value) = centralization {
+                        record.centralization = value;
+                    }
+                    if let Some(value) = military_tech {
+                        record.military_tech = value;
+                    }
+                    if let Some(value) = cells_cache {
+                        record.cells_cache = value;
+                    }
+                }
+            }
+            (
+                TargetRef::Settlement(_),
+                EntityRef::Settlement(id),
+                ComponentPatch::Settlement { cell },
+            ) => {
+                if let Some(record) = self.store.get_settlement_mut(*id) {
+                    if let Some(value) = cell {
+                        record.cell = value;
+                    }
+                }
+            }
+            (TargetRef::Region(_), EntityRef::Region(id), ComponentPatch::Region { cells }) => {
+                if let Some(record) = self.store.get_region_mut(*id) {
+                    if let Some(value) = cells {
+                        record.cells = value;
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.sync_all_from_store();
+    }
+}
+
+impl TryFrom<&EntitiesState> for EntityStore {
+    type Error = EntityStoreError;
+
+    fn try_from(value: &EntitiesState) -> Result<Self, Self::Error> {
+        value.to_entity_store()
+    }
+}
+
+impl From<&EntityStore> for EntitiesState {
+    fn from(value: &EntityStore) -> Self {
+        Self::from_entity_store(value)
     }
 }
 

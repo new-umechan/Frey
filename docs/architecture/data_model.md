@@ -19,7 +19,7 @@
 struct World {
     mesh:             WorldMesh,
     state:            WorldState,      // 全セルの状態（Geology, Climate, Hydrology, etc.）
-    entities:         EntitiesState,   // 疎な Entity（hecs::World をラップ）
+    entities:         EntitiesState,   // 疎な Entity（EntityStore をラップ）
     clock:            ClockState,
     feedback:         FeedbackQueue,
     runtime:          RuntimeState,    // 実行時状態（ターゲット値、活動量 EMA など）
@@ -200,9 +200,36 @@ struct BoundaryDynamicsState {
 
 ## EntitiesState
 
-hecs::Worldをラップする。
+`EntityStore` をラップする。
 Polity・Settlement・Regionなど、数が少なく動的に生滅する疎なEntityを管理する。
-各EntityはComponentの組み合わせとして表現する。
+現在は互換のため `PolityComponent` / `SettlementComponent` / `RegionComponent` の配列も持つが、
+正本は `EntityStore` とする。
+
+```rust
+struct EntitiesState {
+    polity_components: Vec<PolityComponent>,
+    settlement_components: Vec<SettlementComponent>,
+    region_components: Vec<RegionComponent>,
+    store: EntityStore,
+}
+```
+
+`EntityStore` は `slotmap` ベースの専用ストアとし、各ドメインIDと内部キーを分離する。
+
+```rust
+new_key_type! { struct PolityKey; }
+new_key_type! { struct SettlementKey; }
+new_key_type! { struct RegionKey; }
+
+struct EntityStore {
+    polities: SlotMap<PolityKey, PolityRecord>,
+    settlements: SlotMap<SettlementKey, SettlementRecord>,
+    regions: SlotMap<RegionKey, RegionRecord>,
+    polity_by_id: BTreeMap<PolityId, PolityKey>,
+    settlement_by_id: BTreeMap<SettlementId, SettlementKey>,
+    region_by_id: BTreeMap<RegionId, RegionKey>,
+}
+```
 
 ```rust
 // Polity Entity
@@ -237,7 +264,7 @@ struct RegionComponent {
 ## polity_relations
 
 国家間の二者間関係グラフ。
-hecsのArchetype最適化の恩恵を受けにくいため、`Simulation` 直下に `HashMap` で保持する。
+`EntityStore` とは別に、`Simulation` 直下に `HashMap` で保持する。
 関係は有向であり、`(from, to)` と `(to, from)` は独立したエントリを持つ。
 
 ```rust

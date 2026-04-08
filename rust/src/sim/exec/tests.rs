@@ -1,8 +1,9 @@
 use super::*;
 use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
-    CellFieldId, CellId, FeedbackEntry, FeedbackPayload, FieldValue, GeologyState, ModuleId,
-    PolityId, TargetRef, World, WorldMesh,
+    CellFieldId, CellId, ComponentPatch, EntityBundle, EntityRef, FeedbackEntry, FeedbackPayload,
+    FieldValue, GeologyState, ModuleId, PolityComponent, PolityId, RegionComponent, RegionId,
+    SettlementComponent, SettlementId, TargetRef, World, WorldMesh,
 };
 use crate::PlateId;
 
@@ -237,16 +238,7 @@ fn conflict_generates_region_components_and_updates_relations() {
 
     exec_world(&mut world);
 
-    assert!(!world.entities.region_components.is_empty());
-    assert!(
-        world
-            .entities
-            .world
-            .query::<&crate::sim::world::RegionComponent>()
-            .iter()
-            .count()
-            >= 1
-    );
+    assert!(world.entities.iter_regions().count() >= 1);
     assert_eq!(
         world
             .polity_relations
@@ -278,6 +270,122 @@ fn polity_update_overwrites_stale_ids_with_none_for_low_population_cells() {
 }
 
 #[test]
+fn feedback_entity_payloads_use_entity_store() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::History;
+    world.clock.tick = 1;
+
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Polity,
+        target_ref: TargetRef::Polity(PolityId(9)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::SpawnEntity {
+            bundle: EntityBundle::Polity(PolityComponent {
+                polity_id: PolityId(9),
+                capital_cell: CellId(1),
+                legitimacy: 0.4,
+                centralization: 0.5,
+                military_tech: 0.6,
+                cells_cache: vec![CellId(1)],
+            }),
+        },
+    });
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Settlement,
+        target_ref: TargetRef::Settlement(SettlementId(3)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::SpawnEntity {
+            bundle: EntityBundle::Settlement(SettlementComponent {
+                settlement_id: SettlementId(3),
+                cell: CellId(2),
+            }),
+        },
+    });
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Conflict,
+        target_ref: TargetRef::Region(RegionId(5)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::SpawnEntity {
+            bundle: EntityBundle::Region(RegionComponent {
+                region_id: RegionId(5),
+                cells: vec![CellId(0), CellId(1)],
+            }),
+        },
+    });
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Polity,
+        target_ref: TargetRef::Polity(PolityId(9)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::MutateEntity {
+            entity: EntityRef::Polity(PolityId(9)),
+            patch: ComponentPatch::Polity {
+                capital_cell: Some(CellId(3)),
+                legitimacy: Some(0.9),
+                centralization: Some(0.8),
+                military_tech: Some(0.7),
+                cells_cache: Some(vec![CellId(3)]),
+            },
+        },
+    });
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Settlement,
+        target_ref: TargetRef::Settlement(SettlementId(3)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::MutateEntity {
+            entity: EntityRef::Settlement(SettlementId(3)),
+            patch: ComponentPatch::Settlement {
+                cell: Some(CellId(1)),
+            },
+        },
+    });
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Conflict,
+        target_ref: TargetRef::Region(RegionId(5)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::MutateEntity {
+            entity: EntityRef::Region(RegionId(5)),
+            patch: ComponentPatch::Region {
+                cells: Some(vec![CellId(2), CellId(3)]),
+            },
+        },
+    });
+
+    crate::sim::exec::feedback::apply_feedback_queue(&mut world);
+
+    let polity = world.entities.get_polity(PolityId(9)).unwrap();
+    assert_eq!(polity.capital_cell, CellId(3));
+    assert!((polity.legitimacy - 0.9).abs() < 1e-6);
+    assert!((polity.centralization - 0.8).abs() < 1e-6);
+    assert!((polity.military_tech - 0.7).abs() < 1e-6);
+    assert_eq!(polity.cells_cache, vec![CellId(3)]);
+
+    let settlement = world.entities.get_settlement(SettlementId(3)).unwrap();
+    assert_eq!(settlement.cell, CellId(1));
+
+    let region = world.entities.get_region(RegionId(5)).unwrap();
+    assert_eq!(region.cells, vec![CellId(2), CellId(3)]);
+
+    world.feedback.push(FeedbackEntry {
+        source: ModuleId::Conflict,
+        target_module: ModuleId::Polity,
+        target_ref: TargetRef::Polity(PolityId(9)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::DestroyEntity {
+            entity: EntityRef::Polity(PolityId(9)),
+        },
+    });
+    crate::sim::exec::feedback::apply_feedback_queue(&mut world);
+
+    assert!(world.entities.get_polity(PolityId(9)).is_none());
+}
+
+#[test]
 fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
     let mut world = build_test_world();
     world.state.polity.polity_id = vec![Some(PolityId(1)), None, Some(PolityId(2)), None];
@@ -304,7 +412,7 @@ fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
         world.state.conflict.conflict_intensity,
         vec![1.0, 0.0, 1.0, 0.0]
     );
-    assert_eq!(world.entities.region_components.len(), 3);
+    assert_eq!(world.entities.iter_regions().count(), 3);
     assert_eq!(
         world
             .polity_relations

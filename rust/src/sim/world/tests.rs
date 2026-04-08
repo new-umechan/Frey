@@ -1,4 +1,7 @@
-use super::{CellId, EraKind, FeedbackQueue, GeologyState, PolityId, World, WorldMesh};
+use super::{
+    CellId, EntitiesState, EraKind, FeedbackQueue, GeologyState, PolityComponent, PolityId,
+    RegionComponent, RegionId, SettlementComponent, SettlementId, World, WorldMesh,
+};
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::exec_world;
@@ -233,6 +236,72 @@ fn world_initializes_exec_state() {
     assert_eq!(world.runtime.transition.last_land_ratio, 0.5);
     assert!(world.feedback.entries.is_empty());
     assert!(world.polity_relations.is_empty());
+}
+
+#[test]
+fn entities_state_round_trips_through_entity_store() {
+    let entities = EntitiesState::from_components(
+        vec![
+            PolityComponent {
+                polity_id: PolityId(1),
+                capital_cell: CellId(3),
+                legitimacy: 0.5,
+                centralization: 0.4,
+                military_tech: 0.2,
+                cells_cache: vec![CellId(3)],
+            },
+            PolityComponent {
+                polity_id: PolityId(2),
+                capital_cell: CellId(8),
+                legitimacy: 0.8,
+                centralization: 0.6,
+                military_tech: 0.4,
+                cells_cache: vec![CellId(8), CellId(9)],
+            },
+        ],
+        vec![SettlementComponent {
+            settlement_id: SettlementId(4),
+            cell: CellId(5),
+        }],
+        vec![RegionComponent {
+            region_id: RegionId(7),
+            cells: vec![CellId(1), CellId(2)],
+        }],
+    );
+
+    let store = entities.to_entity_store().unwrap();
+    let restored = EntitiesState::from_entity_store(&store);
+
+    assert_eq!(restored, entities);
+}
+
+#[test]
+fn entities_state_to_entity_store_rejects_duplicate_ids() {
+    let entities = EntitiesState::from_components(
+        vec![
+            PolityComponent {
+                polity_id: PolityId(1),
+                capital_cell: CellId(1),
+                legitimacy: 0.5,
+                centralization: 0.5,
+                military_tech: 0.5,
+                cells_cache: vec![CellId(1)],
+            },
+            PolityComponent {
+                polity_id: PolityId(1),
+                capital_cell: CellId(2),
+                legitimacy: 0.6,
+                centralization: 0.6,
+                military_tech: 0.6,
+                cells_cache: vec![CellId(2)],
+            },
+        ],
+        Vec::new(),
+        Vec::new(),
+    );
+
+    let error = entities.to_entity_store().unwrap_err();
+    assert_eq!(error.to_string(), "duplicate polity id 1");
 }
 
 #[test]

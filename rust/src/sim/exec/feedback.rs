@@ -43,17 +43,16 @@ fn apply_payload_entries(world: &mut World) {
             FeedbackPayload::SpawnEntity { bundle } => {
                 apply_spawn_entity(world, bundle);
             }
-            FeedbackPayload::DestroyEntity { id } => {
-                apply_destroy_entity(world, &entry.target_ref, id);
+            FeedbackPayload::DestroyEntity { entity } => {
+                apply_destroy_entity(world, &entity);
             }
-            FeedbackPayload::MutateEntity { id, patch } => {
-                apply_mutate_entity(world, &entry.target_ref, id, patch);
+            FeedbackPayload::MutateEntity { entity, patch } => {
+                apply_mutate_entity(world, &entry.target_ref, &entity, patch);
             }
             FeedbackPayload::TriggerEpochTransition { .. } => {}
             _ => {}
         }
     }
-    world.entities.sync_world_from_components();
     world.feedback.entries = remaining;
 }
 
@@ -112,84 +111,20 @@ fn apply_feedback_f32_set(
 }
 
 fn apply_spawn_entity(world: &mut World, bundle: EntityBundle) {
-    match bundle {
-        EntityBundle::Polity(component) => world.entities.polity_components.push(component),
-        EntityBundle::Settlement(component) => world.entities.settlement_components.push(component),
-        EntityBundle::Region(component) => world.entities.region_components.push(component),
+    if let Err(error) = world.entities.apply_entity_bundle(bundle) {
+        debug_assert!(false, "failed to apply entity bundle: {error}");
     }
 }
 
-fn apply_destroy_entity(world: &mut World, target_ref: &TargetRef, id: u32) {
-    match target_ref {
-        TargetRef::Polity(_) => {
-            world
-                .entities
-                .polity_components
-                .retain(|component| component.polity_id.as_u32() != id);
-        }
-        TargetRef::Settlement(_) => {
-            world
-                .entities
-                .settlement_components
-                .retain(|component| component.settlement_id.as_u32() != id);
-        }
-        TargetRef::Region(_) => {
-            world
-                .entities
-                .region_components
-                .retain(|component| component.region_id.as_u32() != id);
-        }
-        _ => {}
-    }
+fn apply_destroy_entity(world: &mut World, entity: &crate::sim::world::EntityRef) {
+    world.entities.destroy_entity(entity);
 }
 
-fn apply_mutate_entity(world: &mut World, target_ref: &TargetRef, id: u32, patch: ComponentPatch) {
-    match (target_ref, patch) {
-        (
-            TargetRef::Polity(_),
-            ComponentPatch::Polity {
-                capital_cell,
-                stability,
-            },
-        ) => {
-            if let Some(component) = world
-                .entities
-                .polity_components
-                .iter_mut()
-                .find(|component| component.polity_id.as_u32() == id)
-            {
-                if let Some(value) = capital_cell {
-                    component.capital_cell = value;
-                }
-                if let Some(value) = stability {
-                    component.legitimacy = value;
-                }
-            }
-        }
-        (TargetRef::Settlement(_), ComponentPatch::Settlement { cell }) => {
-            if let Some(component) = world
-                .entities
-                .settlement_components
-                .iter_mut()
-                .find(|component| component.settlement_id.as_u32() == id)
-            {
-                if let Some(value) = cell {
-                    component.cell = value;
-                }
-            }
-        }
-        (TargetRef::Region(_), ComponentPatch::Region { cells }) => {
-            if let Some(component) = world
-                .entities
-                .region_components
-                .iter_mut()
-                .find(|component| component.region_id.as_u32() == id)
-            {
-                if let Some(value) = cells {
-                    component.cells = value;
-                }
-            }
-        }
-        _ => {}
-    }
+fn apply_mutate_entity(
+    world: &mut World,
+    target_ref: &TargetRef,
+    entity: &crate::sim::world::EntityRef,
+    patch: ComponentPatch,
+) {
+    world.entities.mutate_entity(target_ref, entity, patch);
 }

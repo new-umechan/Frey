@@ -12,20 +12,18 @@
 
 ## 全体構成
 
-実装基盤としてECS（`CellStore` のSoA + `hecs::World`）を採用する。
+実装基盤として、セル向けSoAと疎なEntity向け専用ストアの分離を採用する。
 
 ```text
 Simulation
 ├── CellStore         （全セルのComponent群、SoA配列）
-├── hecs::World       （Polity・Settlement・Region等の疎なEntity）
+├── EntityStore       （Polity・Settlement・Region等の疎なEntity）
 ├── polity_relations  （国家間の二者間関係）
 ├── polity_groups     （経済圏・軍事同盟・文化宗教圏などのグループ）
 ├── clock             （tick・epoch・予算）
 ├── feedback          （FeedbackQueue）
 └── archive           （履歴・スナップショット）
 ```
-
-`hecs::World` はクレート名で修飾することで `Simulation` との名前の衝突を避ける。
 
 ### 用語定義
 
@@ -60,12 +58,12 @@ ExecSystem（切り替えと実行制御）
 
 ---
 
-## ECSアーキテクチャの採用
+## SoA + EntityStore の採用
 
 ### 採用理由
 
 このシミュレータの処理の本質は「全セル（約4万）に対して、同じ計算を一斉に適用する」ことである。
-ECSのComponent-per-array構造（SoA）はこのパターンに適合し、CPUキャッシュ効率を最大化する。
+セル状態にはSoAが適合し、CPUキャッシュ効率を最大化できる。
 
 また、Tier2モジュール追加時に `Module` と必要な `System`・Componentを登録するだけで拡張できるため、
 複雑性の増加に対してアーキテクチャが崩れにくい。
@@ -76,8 +74,8 @@ ECSのComponent-per-array構造（SoA）はこのパターンに適合し、CPU�
 
 - `CellStore`（自前SoA）
   - 全セルの現在値Componentを保持する
-- `hecs::World`（疎なEntity）
-  - Polity・Settlement・Regionなど、動的に生滅するEntityを保持する
+- `EntityStore`（疎なEntity）
+  - `slotmap` ベースで Polity・Settlement・Region などを保持する
 - `polity_relations`（国家間関係）
   - 国家間の重み付き関係を保持する
 
@@ -88,7 +86,7 @@ ECSのComponent-per-array構造（SoA）はこのパターンに適合し、CPU�
 ## Systemの原則
 
 `System` は「更新を行う実行単位」として実装する。
-`CellStore`・`hecs::World`・`Clock`・`FeedbackQueue`（必要に応じて`Archive`）を入力に、次状態を書き戻す。
+`CellStore`・`EntityStore`・`Clock`・`FeedbackQueue`（必要に応じて`Archive`）を入力に、次状態を書き戻す。
 
 `System` 内部は複数 `Model` で構成してよい。
 ただし、対象 `Model` の構成自体が変わる場合（例: 川の侵食表現を時間段階で切り替える場合）は、
@@ -105,7 +103,7 @@ ECSのComponent-per-array構造（SoA）はこのパターンに適合し、CPU�
 
 - 時代・tick・予算・遷移
   - `docs/architecture/phase_control.md`
-- CellStore・hecs::World・Clock・FeedbackQueue・Archiveの構造と型定義
+- CellStore・EntityStore・Clock・FeedbackQueue・Archiveの構造と型定義
   - `docs/architecture/data_model.md`
 - 各Systemが何を読み、何を書くか
   - `docs/architecture/module_boundaries.md`
