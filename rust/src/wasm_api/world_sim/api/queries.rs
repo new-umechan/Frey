@@ -118,6 +118,24 @@ impl WorldSimController {
                 u32_data: None,
                 i32_data: None,
             },
+            "ice_pressure" => {
+                let default_ice_pressure = vec![0.0; world_ref.state.geology.height.len()];
+                let ice_pressure = world_ref.state.glaciology.ice_load.as_slice();
+                let ice_pressure = if ice_pressure.len() == world_ref.state.geology.height.len() {
+                    ice_pressure
+                } else {
+                    default_ice_pressure.as_slice()
+                };
+                FieldResponse {
+                    field_kind,
+                    stride,
+                    cell_count: ice_pressure.len() as u32,
+                    sampled_count: sampled_len(ice_pressure.len(), stride),
+                    f32_data: Some(sample_f32(ice_pressure, stride)),
+                    u32_data: None,
+                    i32_data: None,
+                }
+            }
             "evapotranspiration" => FieldResponse {
                 field_kind,
                 stride,

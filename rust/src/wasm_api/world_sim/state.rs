@@ -54,6 +54,7 @@ pub(super) struct WorldSyncState {
     pub evapotranspiration: F32FieldTracker,
     pub aridity: F32FieldTracker,
     pub runoff: F32FieldTracker,
+    pub ice_pressure: F32FieldTracker,
     pub ocean_temperature: F32FieldTracker,
     pub wind_u: F32FieldTracker,
     pub wind_v: F32FieldTracker,
@@ -426,6 +427,12 @@ impl WorldSyncState {
             .map(|dynamics| dynamics.mantle_heat.clone())
             .filter(|values| values.len() == world.state.geology.height.len())
             .unwrap_or_else(|| vec![0.5; world.state.geology.height.len()]);
+        let ice_pressure =
+            if world.state.glaciology.ice_load.len() == world.state.geology.height.len() {
+                world.state.glaciology.ice_load.clone()
+            } else {
+                vec![0.0; world.state.geology.height.len()]
+            };
         Self {
             height: F32FieldTracker::new(&world.state.geology.height),
             lake_depth: F32FieldTracker::new(&world.state.geology.lake_depth),
@@ -442,6 +449,7 @@ impl WorldSyncState {
             evapotranspiration: F32FieldTracker::new(&world.state.climate.evapotranspiration),
             aridity: F32FieldTracker::new(&world.state.climate.aridity),
             runoff: F32FieldTracker::new(&world.state.climate.runoff),
+            ice_pressure: F32FieldTracker::new(&ice_pressure),
             ocean_temperature: F32FieldTracker::new(&world.state.climate.ocean_temperature),
             wind_u: F32FieldTracker::new(&world.state.climate.wind_u),
             wind_v: F32FieldTracker::new(&world.state.climate.wind_v),
@@ -484,6 +492,12 @@ impl WorldSyncState {
             .observe(&world.state.climate.evapotranspiration);
         self.aridity.observe(&world.state.climate.aridity);
         self.runoff.observe(&world.state.climate.runoff);
+        if world.state.glaciology.ice_load.len() == world.state.geology.height.len() {
+            self.ice_pressure.observe(&world.state.glaciology.ice_load);
+        } else {
+            let fallback = vec![0.0; world.state.geology.height.len()];
+            self.ice_pressure.observe(&fallback);
+        }
         self.ocean_temperature
             .observe(&world.state.climate.ocean_temperature);
         self.wind_u.observe(&world.state.climate.wind_u);
@@ -605,6 +619,13 @@ impl WorldSyncState {
             }
         } else {
             self.runoff.discard_pending();
+        }
+        if include_field("ice_pressure") {
+            if let Some(delta) = self.ice_pressure.take_delta("ice_pressure") {
+                deltas.push(delta);
+            }
+        } else {
+            self.ice_pressure.discard_pending();
         }
         if include_field("ocean_temperature") {
             if let Some(delta) = self.ocean_temperature.take_delta("ocean_temperature") {
@@ -748,6 +769,7 @@ mod tests {
             evapotranspiration: F32FieldTracker::new(&[50.0, 50.0]),
             aridity: F32FieldTracker::new(&[1.0, 1.0]),
             runoff: F32FieldTracker::new(&[30.0, 30.0]),
+            ice_pressure: F32FieldTracker::new(&[0.0, 0.0]),
             ocean_temperature: F32FieldTracker::new(&[10.0, 10.0]),
             wind_u: F32FieldTracker::new(&[0.0, 0.0]),
             wind_v: F32FieldTracker::new(&[0.0, 0.0]),
@@ -766,5 +788,40 @@ mod tests {
         let no_pending_temperature =
             state.take_world_field_deltas(|field_kind| field_kind == "temperature");
         assert!(no_pending_temperature.is_empty());
+    }
+
+    #[test]
+    fn world_sync_state_tracks_ice_pressure_deltas() {
+        let mut state = WorldSyncState {
+            height: F32FieldTracker::new(&[1.0, 1.0]),
+            lake_depth: F32FieldTracker::new(&[0.0, 0.0]),
+            volcanism: F32FieldTracker::new(&[0.0, 0.0]),
+            vertex_buoyancy: F32FieldTracker::new(&[0.0, 0.0]),
+            plate_id: U32FieldTracker::new(&[0, 0]),
+            river_flux: F32FieldTracker::new(&[0.0, 0.0]),
+            river_next: I32FieldTracker::new(&[-1, -1]),
+            mantle_heat: F32FieldTracker::new(&[0.5, 0.5]),
+            erosion_rate: F32FieldTracker::new(&[0.0, 0.0]),
+            deposition_rate: F32FieldTracker::new(&[0.0, 0.0]),
+            temperature: F32FieldTracker::new(&[10.0, 10.0]),
+            precipitation: F32FieldTracker::new(&[100.0, 100.0]),
+            evapotranspiration: F32FieldTracker::new(&[50.0, 50.0]),
+            aridity: F32FieldTracker::new(&[1.0, 1.0]),
+            runoff: F32FieldTracker::new(&[30.0, 30.0]),
+            ice_pressure: F32FieldTracker::new(&[0.0, 0.0]),
+            ocean_temperature: F32FieldTracker::new(&[10.0, 10.0]),
+            wind_u: F32FieldTracker::new(&[0.0, 0.0]),
+            wind_v: F32FieldTracker::new(&[0.0, 0.0]),
+            moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
+            moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
+            river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
+        };
+
+        state.ice_pressure.observe(&[0.0, 0.7]);
+
+        let deltas = state.take_world_field_deltas(|field_kind| field_kind == "ice_pressure");
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].field_kind, "ice_pressure");
+        assert_eq!(deltas[0].mode, "full");
     }
 }

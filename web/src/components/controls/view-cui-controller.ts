@@ -62,7 +62,7 @@ export function createViewCuiController(options: {
     }
 
     function appendCurrentSuffix(label: string, isCurrent: boolean) {
-        return isCurrent ? `${label}（現在）` : label;
+        return isCurrent ? `${label} | now` : label;
     }
 
     function getCategoryByMenuKey(menuKey: string) {

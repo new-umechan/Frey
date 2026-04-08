@@ -80,6 +80,8 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
             return currentTerrainData.riverFlux as Float32Array;
         case "runoff":
             return currentTerrainData.runoff as Float32Array;
+        case "ice_pressure":
+            return currentTerrainData.icePressure as Float32Array;
         case "river_transport_cost":
             return currentTerrainData.riverTransportCost as Float32Array;
         case "height":

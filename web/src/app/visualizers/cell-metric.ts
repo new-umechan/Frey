@@ -131,6 +131,16 @@ const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
         formatter: (value) => `${value.toFixed(0)} mm/yr`,
     },
     {
+        key: "ice_pressure",
+        fieldKind: "ice_pressure",
+        dataKey: "icePressure",
+        label: "氷圧",
+        unit: "norm",
+        category: "glaciology",
+        palette: "icePressure",
+        formatter: (value) => value.toFixed(3),
+    },
+    {
         key: "river_transport_cost",
         fieldKind: "river_transport_cost",
         dataKey: "riverTransportCost",
@@ -148,17 +158,29 @@ export interface CategoryMeta {
 }
 
 const CATEGORY_META: Record<string, CategoryMeta> = Object.freeze({
-    terrain: {
-        key: "terrain",
-        label: "地形",
+    geology: {
+        key: "geology",
+        label: "地質",
     },
     climate: {
         key: "climate",
         label: "気候",
     },
-    hydrology: {
-        key: "hydrology",
-        label: "侵食",
+    river_glaciology: {
+        key: "river_glaciology",
+        label: "河川・氷河",
+    },
+    ecology_domesticates: {
+        key: "ecology_domesticates",
+        label: "生態・家畜",
+    },
+    population: {
+        key: "population",
+        label: "人口",
+    },
+    polity_system: {
+        key: "polity_system",
+        label: "政治体制",
     },
 });
 
@@ -181,7 +203,7 @@ export interface MetricCategory extends CategoryMeta {
 export function getMetricCategories(): MetricCategory[] {
     return [
         {
-            ...CATEGORY_META.terrain,
+            ...CATEGORY_META.geology,
             metrics: CELL_METRIC_DEFS.filter((metric) => metric.category === "terrain"),
         },
         {
@@ -189,8 +211,22 @@ export function getMetricCategories(): MetricCategory[] {
             metrics: CELL_METRIC_DEFS.filter((metric) => metric.category === "climate"),
         },
         {
-            ...CATEGORY_META.hydrology,
-            metrics: CELL_METRIC_DEFS.filter((metric) => metric.category === "hydrology"),
+            ...CATEGORY_META.river_glaciology,
+            metrics: CELL_METRIC_DEFS.filter(
+                (metric) => metric.category === "hydrology" || metric.category === "glaciology"
+            ),
+        },
+        {
+            ...CATEGORY_META.ecology_domesticates,
+            metrics: [],
+        },
+        {
+            ...CATEGORY_META.population,
+            metrics: [],
+        },
+        {
+            ...CATEGORY_META.polity_system,
+            metrics: [],
         },
     ];
 }

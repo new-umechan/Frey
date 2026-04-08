@@ -54,6 +54,7 @@ export function buildCoreBuffers(controller: WorldSimController, worldId: string
         evapotranspiration: getFieldData(controller, worldId, "evapotranspiration", cellCount),
         aridity: getFieldData(controller, worldId, "aridity", cellCount),
         runoff: getFieldData(controller, worldId, "runoff", cellCount),
+        icePressure: getFieldData(controller, worldId, "ice_pressure", cellCount),
         oceanTemperature: getFieldData(controller, worldId, "ocean_temperature", cellCount),
         windU: getFieldData(controller, worldId, "wind_u", cellCount),
         windV: getFieldData(controller, worldId, "wind_v", cellCount),

@@ -12,6 +12,7 @@ export type FieldKind =
     | "evapotranspiration"
     | "aridity"
     | "runoff"
+    | "ice_pressure"
     | "ocean_temperature"
     | "wind_u"
     | "wind_v"
@@ -31,6 +32,7 @@ export const FLOAT32_FIELDS = new Set<FieldKind>([
     "evapotranspiration",
     "aridity",
     "runoff",
+    "ice_pressure",
     "ocean_temperature",
     "wind_u",
     "wind_v",
@@ -46,6 +48,7 @@ export const OPTIONAL_FIELD_KINDS = new Set<FieldKind>([
     "aridity",
     "river_transport_cost",
     "runoff",
+    "ice_pressure",
     "ocean_temperature",
     "wind_u",
     "wind_v",
@@ -86,6 +89,7 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     evapotranspiration: "evapotranspiration",
     aridity: "aridity",
     runoff: "runoff",
+    ice_pressure: "icePressure",
     ocean_temperature: "oceanTemperature",
     wind_u: "windU",
     wind_v: "windV",
@@ -108,6 +112,7 @@ const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Objec
     evapotranspiration: "metric",
     aridity: "metric",
     runoff: "metric",
+    ice_pressure: "metric",
     ocean_temperature: "metric",
     wind_u: "metric",
     wind_v: "metric",

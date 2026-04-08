@@ -30,6 +30,7 @@ export interface CoreBuffers {
     evapotranspiration: TypedArray;
     aridity: TypedArray;
     runoff: TypedArray;
+    icePressure: TypedArray;
     oceanTemperature: TypedArray;
     windU: TypedArray;
     windV: TypedArray;

@@ -23,7 +23,8 @@ function metricKeyToNumber(metricKey: string): number {
         river_flux: 9,
         runoff: 10,
         river_transport_cost: 11,
-        plate_id: 12,
+        ice_pressure: 12,
+        plate_id: 13,
     };
     return kindByKey[metricKey] ?? 0;
 }
@@ -184,6 +185,19 @@ vec3 paletteCost(float value) {
     return mix(vec3(0.86, 0.90, 0.91), vec3(0.13, 0.18, 0.22), t);
 }
 
+vec3 paletteIcePressure(float value) {
+    float t = clamp(value, 0.0, 1.0);
+    vec3 c0 = vec3(0.09, 0.23, 0.55);
+    vec3 c1 = vec3(0.24, 0.58, 0.92);
+    vec3 c2 = vec3(0.88, 0.93, 0.97);
+    vec3 c3 = vec3(0.96, 0.69, 0.24);
+    vec3 c4 = vec3(0.73, 0.18, 0.05);
+    if (t < 0.25) return mix(c0, c1, t / 0.25);
+    if (t < 0.5) return mix(c1, c2, (t - 0.25) / 0.25);
+    if (t < 0.75) return mix(c2, c3, (t - 0.5) / 0.25);
+    return mix(c3, c4, (t - 0.75) / 0.25);
+}
+
 vec3 palettePlateId(float value) {
     float id = floor(max(value, 0.0) + 0.5);
     float r = fract(sin(id * 12.9898 + 0.13) * 43758.5453);
@@ -221,6 +235,7 @@ vec3 freyMetricModeColor(float kind) {
     if (kind < 9.5) return paletteRiver(vTerrainMetric);
     if (kind < 10.5) return paletteRain(vTerrainMetric);
     if (kind < 11.5) return paletteCost(vTerrainMetric);
+    if (kind < 12.5) return paletteIcePressure(vTerrainMetric);
     return palettePlateId(vTerrainMetric);
 }
 
