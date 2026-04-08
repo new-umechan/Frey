@@ -4,10 +4,13 @@
 
 ## 再取得容易（削除候補）
 
-- ERA5 monthly zip  
-  - ファイル: `benches/raw/climate/era5_land_monthly_1970_2000.zip`
-  - 再取得: `pnpm bench:fetch:era5`
-- ERA5 annual nc（zip から再生成）
+- ERA5 monthly yearly cache
+  - ディレクトリ: `benches/raw/climate/era5_land_monthly_yearly/`
+  - 再取得（中断再開対応）: `pnpm bench:fetch:era5`
+- ERA5 monthly merged nc
+  - ファイル: `benches/raw/climate/era5_land_monthly_1970_2000.nc`
+  - 再生成: `pnpm bench:fetch:era5`
+- ERA5 annual nc（monthly nc から再生成）
   - ファイル: `benches/raw/climate/era5_land_annual_1970_2000.nc`
   - 再生成: `pnpm bench:prepare:era5`
 - GloFAS raw 群
