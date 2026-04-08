@@ -292,7 +292,8 @@ fn main() {
         .fold(f32::NEG_INFINITY, f32::max);
 
     let final_ice = &sim_world.state.glaciology.ice_thickness;
-    let land_ice_volume_km3 = approximate_land_ice_volume_km3(final_ice, &sim_world.state.geology.height);
+    let land_ice_volume_km3 =
+        approximate_land_ice_volume_km3(final_ice, &sim_world.state.geology.height);
 
     let (grid_spearman, grid_rmse) = if let Some(reference) = modern_ref.as_ref() {
         (
@@ -344,7 +345,10 @@ fn main() {
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "none".to_string())
     );
-    println!("-- Runtime: median_ms={:.3} p95_ms={:.3} --", step_median_ms, step_p95_ms);
+    println!(
+        "-- Runtime: median_ms={:.3} p95_ms={:.3} --",
+        step_median_ms, step_p95_ms
+    );
     println!(
         "-- Sea Level Offset: start={:.6} end={:.6} mean={:.6} min={:.6} max={:.6} --",
         sea_level_start, sea_level_end, sea_level_mean, sea_level_min, sea_level_max
