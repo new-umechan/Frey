@@ -1,6 +1,6 @@
 use super::*;
 
-fn apply_hydraulic_erosion(
+pub(in crate::sim::geology) fn apply_hydraulic_erosion(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
@@ -94,7 +94,8 @@ fn apply_hydraulic_erosion(
                 0.15,
                 2.5,
             );
-            let capacity = params.sediment_capacity_gain * flux_term * slope_term * transport_context;
+            let capacity =
+                params.sediment_capacity_gain * flux_term * slope_term * transport_context;
 
             if h_i > 0.0 {
                 let competence = vertex_competence.get(i).copied().unwrap_or(0.5);
@@ -128,12 +129,15 @@ fn apply_hydraulic_erosion(
             let overload = (sediment - capacity).max(0.0);
             if overload > 0.0 {
                 let deposit_context = clamp(
-                    1.0
-                        + 0.85 * flattening
+                    1.0 + 0.85 * flattening
                         + 0.55 * openness
                         + 0.85 * estuary_factor
                         + 0.75 * shallow_factor
-                        + if next_idx.is_none() && h_i > 0.0 { 0.8 } else { 0.0 },
+                        + if next_idx.is_none() && h_i > 0.0 {
+                            0.8
+                        } else {
+                            0.0
+                        },
                     0.3,
                     4.0,
                 );
@@ -148,19 +152,24 @@ fn apply_hydraulic_erosion(
                     sediment.min(deposit_cap.max(0.0)),
                 );
                 if deposit_amount > 0.0 {
-                    distribute_deposition_by_context(
+                    let mut deposition_buffer = DepositionBuffer {
                         nbr_offsets,
                         nbrs,
                         height,
-                        &mut delta,
-                        &mut deposition_armor,
+                        delta: &mut delta,
+                        deposition_armor: &mut deposition_armor,
                         params,
+                    };
+                    distribute_deposition_by_context(
+                        &mut deposition_buffer,
                         i,
                         deposit_amount,
-                        flattening,
-                        openness,
-                        estuary_factor,
-                        shallow_factor,
+                        DepositionContext {
+                            flattening,
+                            openness,
+                            estuary_factor,
+                            shallow_factor,
+                        },
                     );
                     sediment -= deposit_amount;
                 }
@@ -170,22 +179,30 @@ fn apply_hydraulic_erosion(
                 let loss = sediment * deep_sea_loss_factor;
                 sediment = (sediment - loss).max(0.0);
                 if h_i <= params.shallow_sea_floor && sediment > 0.0 {
-                    let residual_deep_deposit =
-                        clamp(sediment * 0.20, 0.0, params.erosion_max_delta_per_iter * 0.75);
+                    let residual_deep_deposit = clamp(
+                        sediment * 0.20,
+                        0.0,
+                        params.erosion_max_delta_per_iter * 0.75,
+                    );
                     if residual_deep_deposit > 0.0 {
-                        distribute_deposition_by_context(
+                        let mut deposition_buffer = DepositionBuffer {
                             nbr_offsets,
                             nbrs,
                             height,
-                            &mut delta,
-                            &mut deposition_armor,
+                            delta: &mut delta,
+                            deposition_armor: &mut deposition_armor,
                             params,
+                        };
+                        distribute_deposition_by_context(
+                            &mut deposition_buffer,
                             i,
                             residual_deep_deposit,
-                            0.2,
-                            0.1,
-                            0.0,
-                            0.0,
+                            DepositionContext {
+                                flattening: 0.2,
+                                openness: 0.1,
+                                estuary_factor: 0.0,
+                                shallow_factor: 0.0,
+                            },
                         );
                         sediment -= residual_deep_deposit;
                     }
@@ -204,7 +221,7 @@ fn apply_hydraulic_erosion(
     }
 }
 
-fn sorted_vertices_by_height_desc(height: &[f32]) -> Vec<usize> {
+pub(in crate::sim::geology) fn sorted_vertices_by_height_desc(height: &[f32]) -> Vec<usize> {
     let mut order = (0..height.len()).collect::<Vec<_>>();
     order.sort_by(|&a, &b| {
         height[b]
@@ -215,7 +232,12 @@ fn sorted_vertices_by_height_desc(height: &[f32]) -> Vec<usize> {
     order
 }
 
-fn is_coastal_cell(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32], v: usize) -> bool {
+pub(in crate::sim::geology) fn is_coastal_cell(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    v: usize,
+) -> bool {
     let h = height[v];
     let start = nbr_offsets[v] as usize;
     let end = nbr_offsets[v + 1] as usize;
@@ -225,7 +247,12 @@ fn is_coastal_cell(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32], v: usize) 
     })
 }
 
-fn local_open_basin_factor(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32], v: usize) -> f32 {
+pub(in crate::sim::geology) fn local_open_basin_factor(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    height: &[f32],
+    v: usize,
+) -> f32 {
     let start = nbr_offsets[v] as usize;
     let end = nbr_offsets[v + 1] as usize;
     if end <= start {
@@ -246,7 +273,7 @@ fn local_open_basin_factor(nbr_offsets: &[u32], nbrs: &[u32], height: &[f32], v:
     clamp(openness_sum / (count as f32), 0.0, 1.0)
 }
 
-fn apply_deposit_to_cell(
+pub(in crate::sim::geology) fn apply_deposit_to_cell(
     delta: &mut [f32],
     deposition_armor: &mut [f32],
     params: &GeologyParams,
@@ -265,20 +292,40 @@ fn apply_deposit_to_cell(
     deposition_armor[v] = clamp(deposition_armor[v] + 0.55 * armor_gain, 0.0, 1.0);
 }
 
-fn distribute_deposition_by_context(
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
-    height: &[f32],
-    delta: &mut [f32],
-    deposition_armor: &mut [f32],
-    params: &GeologyParams,
+#[derive(Clone, Copy)]
+pub(in crate::sim::geology) struct DepositionContext {
+    pub flattening: f32,
+    pub openness: f32,
+    pub estuary_factor: f32,
+    pub shallow_factor: f32,
+}
+
+pub(in crate::sim::geology) struct DepositionBuffer<'a> {
+    pub nbr_offsets: &'a [u32],
+    pub nbrs: &'a [u32],
+    pub height: &'a [f32],
+    pub delta: &'a mut [f32],
+    pub deposition_armor: &'a mut [f32],
+    pub params: &'a GeologyParams,
+}
+
+pub(in crate::sim::geology) fn distribute_deposition_by_context(
+    buffer: &mut DepositionBuffer<'_>,
     center: usize,
     amount: f32,
-    flattening: f32,
-    openness: f32,
-    estuary_factor: f32,
-    shallow_factor: f32,
+    context: DepositionContext,
 ) {
+    let nbr_offsets = buffer.nbr_offsets;
+    let nbrs = buffer.nbrs;
+    let height = buffer.height;
+    let delta = &mut *buffer.delta;
+    let deposition_armor = &mut *buffer.deposition_armor;
+    let params = buffer.params;
+    let flattening = context.flattening;
+    let openness = context.openness;
+    let estuary_factor = context.estuary_factor;
+    let shallow_factor = context.shallow_factor;
+
     if amount <= 0.0 {
         return;
     }
@@ -291,12 +338,17 @@ fn distribute_deposition_by_context(
     let center_share = 1.0 - spread_strength;
     let mut center_amount = amount * center_share;
 
-    // 河口遷移では核を残しつつ、背後の海岸セルにも少量返す。
     if estuary_factor > 0.0 && height[center] <= 0.0 {
         center_amount += amount * 0.08 * estuary_factor;
     }
 
-    apply_deposit_to_cell(delta, deposition_armor, params, center, center_amount.min(amount));
+    apply_deposit_to_cell(
+        delta,
+        deposition_armor,
+        params,
+        center,
+        center_amount.min(amount),
+    );
 
     let spread_pool = (amount - center_amount.min(amount)).max(0.0);
     if spread_pool <= 1e-8 {
@@ -347,7 +399,12 @@ fn distribute_deposition_by_context(
     }
 
     for (m, w) in weights {
-        apply_deposit_to_cell(delta, deposition_armor, params, m, spread_pool * (w / weight_sum));
+        apply_deposit_to_cell(
+            delta,
+            deposition_armor,
+            params,
+            m,
+            spread_pool * (w / weight_sum),
+        );
     }
 }
-

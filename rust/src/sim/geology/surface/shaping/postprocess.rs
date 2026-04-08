@@ -1,17 +1,22 @@
 use super::*;
+use crate::sim::geology_types::PlateId;
 
-fn postprocess_height(
+pub(in crate::sim::geology) fn postprocess_height(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &mut [f32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     target_sea_ratio: f32,
 ) {
     let mut adjusted = Vec::with_capacity(height.len());
     for v in 0..height.len() {
-        let pid = plate_id[v] as usize;
-        let buoyancy_bias = if attributes[pid].is_ocean { -0.09 } else { 0.09 };
+        let pid = plate_id[v].as_usize();
+        let buoyancy_bias = if attributes[pid].is_ocean {
+            -0.09
+        } else {
+            0.09
+        };
         adjusted.push(height[v] + buoyancy_bias);
     }
 
@@ -53,18 +58,18 @@ fn postprocess_height(
     }
 }
 
-fn apply_hotspot_island_chains(
+pub(in crate::sim::geology) fn apply_hotspot_island_chains(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
-    plate_id: &[u32],
+    plate_id: &[PlateId],
     attributes: &[PlateAttr],
     height: &mut [f32],
     rng: &mut DeterministicRng,
 ) {
     let mut ocean_interior = Vec::new();
     for v in 0..positions.len() {
-        let pid = plate_id[v] as usize;
+        let pid = plate_id[v].as_usize();
         if pid >= attributes.len() || !attributes[pid].is_ocean {
             continue;
         }
@@ -115,7 +120,7 @@ fn apply_hotspot_island_chains(
     }
 
     for &source in &chosen_sources {
-        let pid = plate_id[source] as usize;
+        let pid = plate_id[source].as_usize();
         let source_pos = positions[source];
 
         let mut tangent = local_plate_velocity(&attributes[pid], pid, source_pos);
@@ -126,8 +131,6 @@ fn apply_hotspot_island_chains(
             continue;
         }
         tangent = normalize3(tangent);
-        // ホットスポットは固定、プレート移動で島列が伸びる想定なので、
-        // 進行方向を一方に固定して直線性を高める。
         tangent = mul3(tangent, -1.0);
 
         let segment_count = rng.gen_range_u32_inclusive(7, 13) as usize;
@@ -159,7 +162,7 @@ fn apply_hotspot_island_chains(
         }
 
         for v in 0..positions.len() {
-            if plate_id[v] as usize != pid {
+            if plate_id[v].as_usize() != pid {
                 continue;
             }
             if height[v] > 0.20 {
@@ -205,4 +208,3 @@ fn apply_hotspot_island_chains(
         }
     }
 }
-

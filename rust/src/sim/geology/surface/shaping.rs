@@ -1,7 +1,9 @@
 use super::*;
 
+#[path = "shaping/erosion.rs"]
 mod erosion;
-use erosion::*;
+pub(in crate::sim::geology) use erosion::*;
 
+#[path = "shaping/postprocess.rs"]
 mod postprocess;
-use postprocess::*;
+pub(in crate::sim::geology) use postprocess::*;
