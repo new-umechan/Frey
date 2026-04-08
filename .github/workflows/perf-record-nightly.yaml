@@ -1,0 +1,52 @@
+name: Perf Record Nightly
+
+on:
+    schedule:
+        # 03:00 JST = 18:00 UTC (previous day)
+        - cron: "0 18 * * *"
+    workflow_dispatch:
+
+jobs:
+    perf-record:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: pnpm
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Install wasm-pack
+              run: cargo install wasm-pack --version 0.13.1 --locked
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Record performance history
+              run: pnpm perf:record
+              continue-on-error: true
+
+            - name: Show latest history snapshot
+              run: pnpm perf:history -- --limit 5
+              if: always()
+              continue-on-error: true
+
+            - name: Upload history artifact
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: perf-history-nightly
+                  path: tests/perf/history/perf-history.jsonl
+                  if-no-files-found: warn
+                  retention-days: 30

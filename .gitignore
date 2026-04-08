@@ -16,6 +16,7 @@ benches/data
 benches/results/
 rust/benches/result/
 rust/benches/results/
+tests/perf/history/
 
 .pnpm-store/
 .worktrees

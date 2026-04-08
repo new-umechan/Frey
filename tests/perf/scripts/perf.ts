@@ -1,5 +1,7 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import initWasm, {
     WorldSimController,
@@ -11,6 +13,21 @@ import { createPerfRunner } from "../../../web/src/app/perf/runner";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
 
 const DEFAULT_THRESHOLD = 0.10;
+const execFileAsync = promisify(execFile);
+const HISTORY_FILE_PATH = resolve("tests/perf/history/perf-history.jsonl");
+
+interface GitMeta {
+    commit: string;
+    branch: string;
+}
+
+interface InitWasmOutputLike {
+    memory?: {
+        buffer?: {
+            byteLength?: number;
+        };
+    };
+}
 
 function parseNumber(value: unknown, flagName: string): number {
     const parsed = Number(value);
@@ -39,6 +56,7 @@ function parseArgs(argv: string[]) {
         noGeometry: false,
         profileEveryTick: false,
         geometryUpdateMinChangedRatio: 0,
+        record: false,
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -116,6 +134,9 @@ function parseArgs(argv: string[]) {
             );
             i += 1;
             break;
+        case "--record":
+            args.record = true;
+            break;
         case "--help":
             printHelp();
             process.exit(0);
@@ -147,6 +168,7 @@ function printHelp() {
     console.error("  --no-geometry");
     console.error("  --profile-every-tick");
     console.error("  --geometry-update-min-changed-ratio <0..1>");
+    console.error("  --record");
 }
 
 function getPathValue(obj: Record<string, unknown>, path: string): unknown {
@@ -255,16 +277,53 @@ async function initWasmForNode() {
     const wasmPath = new URL("../../../generated/wasm/web/frey_wasm_bg.wasm", import.meta.url);
     const wasmBytes = await readFile(wasmPath);
     try {
-        await initWasm({ module_or_path: wasmBytes });
+        return await initWasm({ module_or_path: wasmBytes });
     } catch {
-        await initWasm(wasmBytes);
+        return await initWasm(wasmBytes);
     }
+}
+
+async function getGitMeta(): Promise<GitMeta> {
+    const fallback = {
+        commit: "unknown",
+        branch: "unknown",
+    };
+    try {
+        const [{ stdout: commitOut }, { stdout: branchOut }] = await Promise.all([
+            execFileAsync("git", ["rev-parse", "--short", "HEAD"]),
+            execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
+        ]);
+        const commit = commitOut.trim();
+        const branch = branchOut.trim();
+        return {
+            commit: commit.length > 0 ? commit : fallback.commit,
+            branch: branch.length > 0 ? branch : fallback.branch,
+        };
+    } catch {
+        return fallback;
+    }
+}
+
+function getWasmLinearMemoryMb(initOutput: InitWasmOutputLike | undefined): number {
+    const byteLength = initOutput?.memory?.buffer?.byteLength;
+    if (!Number.isFinite(byteLength)) {
+        return 0;
+    }
+    return Math.round(((byteLength as number) / (1024 * 1024)) * 1000) / 1000;
+}
+
+async function appendHistoryRecord(record: Record<string, unknown>) {
+    const historyDir = resolve("tests/perf/history");
+    await mkdir(historyDir, { recursive: true });
+    await appendFile(HISTORY_FILE_PATH, `${JSON.stringify(record)}\n`, "utf8");
 }
 
 async function main() {
     const args = parseArgs(process.argv.slice(2));
 
-    await initWasmForNode();
+    const wasmInitStarted = performance.now();
+    const wasmInitOutput = await initWasmForNode();
+    const wasmInitMs = Math.round((performance.now() - wasmInitStarted) * 1000) / 1000;
 
     const runner = createPerfRunner({
         WorldSimController,
@@ -307,6 +366,28 @@ async function main() {
 
     if (args.out) {
         await writeFile(resolve(args.out), output);
+    }
+
+    if (args.record) {
+        const timestamp = result?.meta?.generated_at ?? new Date().toISOString();
+        const gitMeta = await getGitMeta();
+        const wasmLinearMemoryMb = getWasmLinearMemoryMb(wasmInitOutput as InitWasmOutputLike);
+        const record = {
+            timestamp,
+            commit: gitMeta.commit,
+            branch: gitMeta.branch,
+            profile: result.profile ?? {},
+            totals: result.totals ?? {},
+            metrics: result.metrics ?? {},
+            diagnostics: result.diagnostics ?? {},
+            memory: {
+                wasm_linear_memory_mb: wasmLinearMemoryMb,
+            },
+            runtime: {
+                wasm_init_ms: wasmInitMs,
+            },
+        };
+        await appendHistoryRecord(record as Record<string, unknown>);
     }
 
     if (args.baseline) {

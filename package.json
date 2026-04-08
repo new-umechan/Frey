@@ -39,6 +39,8 @@
         "bench:tune:ecology": "python3 benches/scripts/tune-ecology-params.py",
         "perf:run": "tsx tests/perf/scripts/perf.ts",
         "perf:run:dev": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts",
+        "perf:record": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts --ticks 16 --seed alpha --no-geometry --sample-interval 4 --record",
+        "perf:history": "pnpm exec tsx tests/perf/scripts/show-history.ts",
         "perf:baseline": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts --ticks 16 --seed alpha --no-geometry --sample-interval 4 --out tests/perf/bench-baseline.json",
         "perf:gate": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/perf/scripts/perf.ts --ticks 16 --seed alpha --no-geometry --sample-interval 4 --baseline tests/perf/bench-baseline.json --threshold 0.1",
         "perf:baseline:climate": "pnpm run bench:run:climate-series -- --runs 5 --write-baseline tests/perf/climate-bench-baseline.json",
