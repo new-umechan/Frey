@@ -123,6 +123,10 @@ pub fn build_hydrology_state_for_bench(
     }
 }
 
+pub fn run_glaciology_step_for_bench(world: &mut world::World, glaciology_budget: u32) {
+    glaciology::run_glaciology_step(world, glaciology_budget);
+}
+
 pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u32, run_mfd: bool) {
     if run_mfd {
         hydrology::run_hydrology_step(world, geology_budget);

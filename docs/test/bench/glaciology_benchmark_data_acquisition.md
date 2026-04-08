@@ -64,11 +64,16 @@ pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N9
 
 3-1. WorldClim 月次 tif 群と `ai_et0.tif` を手動で `benches/raw/climate/` に配置する。
 
-3-2. ERA5 月次 zip を取得（再取得容易）。
+3-2. ERA5 月次を年単位で取得（再取得容易・中断再開対応）。
 
 ```sh
 pnpm bench:fetch:era5
 ```
+
+補足:
+- 年別キャッシュ: `benches/raw/climate/era5_land_monthly_yearly/era5_land_monthly_<YEAR>.nc`
+- 統合出力: `benches/raw/climate/era5_land_monthly_1970_2000.nc`
+- 再実行時は、既に存在して読める年ファイルを自動スキップする（続きから再開）。
 
 3-3. 年平均/年積算へ前処理。
 

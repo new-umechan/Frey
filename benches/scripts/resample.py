@@ -15,6 +15,7 @@ TERRAIN_MAGIC = b"TERRREF1"
 HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
 ECOLOGY_REF_MAGIC = b"ECOREF01"
+GLACIOLOGY_REF_MAGIC = b"GLACREF1"
 VERSION = 1
 CLIMATE_VARIABLES = [
     "temperature",
@@ -44,7 +45,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--module",
         required=True,
-        choices=["climate", "terrain", "hydro-input", "hydro-ref", "ecology-ref"],
+        choices=[
+            "climate",
+            "terrain",
+            "hydro-input",
+            "hydro-ref",
+            "ecology-ref",
+            "glaciology-ref",
+        ],
     )
     parser.add_argument(
         "--centroids",
@@ -63,7 +71,9 @@ def parse_args() -> argparse.Namespace:
         help="Resampling method.",
     )
     parser.add_argument("--temperature", help="Input raster/NetCDF for temperature.")
-    parser.add_argument("--precipitation", help="Input raster/NetCDF for precipitation.")
+    parser.add_argument(
+        "--precipitation", help="Input raster/NetCDF for precipitation."
+    )
     parser.add_argument(
         "--evapotranspiration",
         help="Input raster/NetCDF for evapotranspiration.",
@@ -183,6 +193,9 @@ def parse_args() -> argparse.Namespace:
         help="Minimum internal terrain height after conversion.",
     )
     parser.add_argument(
+        "--ice-thickness", help="Input raster/NetCDF for ice thickness."
+    )
+    parser.add_argument(
         "--height-clip-max",
         type=float,
         default=1.5,
@@ -206,7 +219,9 @@ def load_centroids(path: Path) -> Tuple[np.ndarray, np.ndarray]:
             longitudes.append(float(row["longitude"]))
     if not latitudes:
         raise ValueError(f"centroid csv is empty: {path}")
-    return np.asarray(latitudes, dtype=np.float64), np.asarray(longitudes, dtype=np.float64)
+    return np.asarray(latitudes, dtype=np.float64), np.asarray(
+        longitudes, dtype=np.float64
+    )
 
 
 def parse_var_map(raw_items: Iterable[str]) -> Dict[str, str]:
@@ -270,7 +285,9 @@ def sample_geotiff_projected_nearest(
         import rasterio
         from rasterio.warp import transform
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError("rasterio is required to read projected GeoTIFF inputs") from exc
+        raise RuntimeError(
+            "rasterio is required to read projected GeoTIFF inputs"
+        ) from exc
 
     with rasterio.open(path) as ds:
         crs = ds.crs
@@ -368,7 +385,9 @@ def detect_data_var_name(ds, lat_name: str, lon_name: str) -> str:
     raise ValueError("failed to detect suitable data variable in NetCDF")
 
 
-def normalize_grid_axes(lat: np.ndarray, lon: np.ndarray, values: np.ndarray) -> GridData:
+def normalize_grid_axes(
+    lat: np.ndarray, lon: np.ndarray, values: np.ndarray
+) -> GridData:
     lat = np.asarray(lat, dtype=np.float64).reshape(-1)
     lon = np.asarray(lon, dtype=np.float64).reshape(-1)
     values = np.asarray(values, dtype=np.float64)
@@ -420,14 +439,18 @@ def interpolate_grid(
     if np.nanmin(grid.lon) >= 0.0 and np.nanmax(grid.lon) > 180.0:
         query_lon_norm = np.mod(query_lon, 360.0)
     else:
-        query_lon_norm = np.asarray([normalize_lon(v) for v in query_lon], dtype=np.float64)
+        query_lon_norm = np.asarray(
+            [normalize_lon(v) for v in query_lon], dtype=np.float64
+        )
 
     if method == "nearest":
         return interpolate_nearest(grid, query_lat, query_lon_norm)
     return interpolate_bilinear(grid, query_lat, query_lon_norm)
 
 
-def interpolate_nearest(grid: GridData, query_lat: np.ndarray, query_lon: np.ndarray) -> np.ndarray:
+def interpolate_nearest(
+    grid: GridData, query_lat: np.ndarray, query_lon: np.ndarray
+) -> np.ndarray:
     lat_idx = np.searchsorted(grid.lat, query_lat, side="left")
     lon_idx = np.searchsorted(grid.lon, query_lon, side="left")
 
@@ -448,7 +471,9 @@ def interpolate_nearest(grid: GridData, query_lat: np.ndarray, query_lon: np.nda
     return grid.values[lat_idx, lon_idx]
 
 
-def interpolate_bilinear(grid: GridData, query_lat: np.ndarray, query_lon: np.ndarray) -> np.ndarray:
+def interpolate_bilinear(
+    grid: GridData, query_lat: np.ndarray, query_lon: np.ndarray
+) -> np.ndarray:
     lat_hi = np.searchsorted(grid.lat, query_lat, side="right")
     lon_hi = np.searchsorted(grid.lon, query_lon, side="right")
     lat_lo = lat_hi - 1
@@ -540,7 +565,9 @@ def write_hydro_input_bin(path: Path, runoff: np.ndarray) -> None:
         handle.write(values.tobytes(order="C"))
 
 
-def write_hydro_ref_bin(path: Path, river_flow: np.ndarray, is_lake: np.ndarray) -> None:
+def write_hydro_ref_bin(
+    path: Path, river_flow: np.ndarray, is_lake: np.ndarray
+) -> None:
     flow_values = np.asarray(river_flow, dtype="<f4")
     lake_values = np.asarray(is_lake, dtype=np.uint8)
     if flow_values.size != lake_values.size:
@@ -582,7 +609,9 @@ def write_ecology_ref_bin(
         ("open_canopy_mask", open_canopy_values),
     ):
         if int(values.size) != length:
-            raise ValueError(f"length mismatch for {name}: expected {length}, got {values.size}")
+            raise ValueError(
+                f"length mismatch for {name}: expected {length}, got {values.size}"
+            )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
@@ -693,7 +722,11 @@ def rasterize_lake_polygons(
         if candidates.size == 0:
             continue
         for index in candidates:
-            if shape_contains_point(float(centroid_lon[index]), float(centroid_lat[index]), shape_record.shape):
+            if shape_contains_point(
+                float(centroid_lon[index]),
+                float(centroid_lat[index]),
+                shape_record.shape,
+            ):
                 is_lake[index] = 1
     return is_lake
 
@@ -709,7 +742,9 @@ def transform_aridity(values: np.ndarray, source: str) -> np.ndarray:
     raise ValueError(f"unknown aridity source: {source}")
 
 
-def transform_terrain_height(values: np.ndarray, args: argparse.Namespace) -> np.ndarray:
+def transform_terrain_height(
+    values: np.ndarray, args: argparse.Namespace
+) -> np.ndarray:
     if args.height_source == "meters":
         if args.height_to_meters <= 0.0:
             raise ValueError("--height-to-meters must be > 0")
@@ -733,6 +768,16 @@ def write_terrain_ref_bin(path: Path, heights: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
         handle.write(TERRAIN_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_glaciology_ref_bin(path: Path, ice_thickness: np.ndarray) -> None:
+    values = np.asarray(ice_thickness, dtype="<f4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GLACIOLOGY_REF_MAGIC)
         handle.write(struct.pack("<I", VERSION))
         handle.write(struct.pack("<Q", int(values.size)))
         handle.write(values.tobytes(order="C"))
@@ -811,9 +856,15 @@ def load_weighted_soil_from_depths(
         if not path.exists():
             raise FileNotFoundError(f"missing SoilGrids depth raster: {path}")
 
-    depth_0_5 = sample_input_at_centroids(paths[0], None, centroid_lat, centroid_lon, method)
-    depth_5_15 = sample_input_at_centroids(paths[1], None, centroid_lat, centroid_lon, method)
-    depth_15_30 = sample_input_at_centroids(paths[2], None, centroid_lat, centroid_lon, method)
+    depth_0_5 = sample_input_at_centroids(
+        paths[0], None, centroid_lat, centroid_lon, method
+    )
+    depth_5_15 = sample_input_at_centroids(
+        paths[1], None, centroid_lat, centroid_lon, method
+    )
+    depth_15_30 = sample_input_at_centroids(
+        paths[2], None, centroid_lat, centroid_lon, method
+    )
 
     denom = w_0_5 + w_5_15 + w_15_30
     if denom <= 0.0:
@@ -855,21 +906,65 @@ def classify_biome_ref(
         return biome
 
     river_valid = np.isfinite(river_flow)
-    river_q98 = np.nanquantile(river_flow[river_valid], 0.98) if np.any(river_valid) else np.nan
+    river_q98 = (
+        np.nanquantile(river_flow[river_valid], 0.98) if np.any(river_valid) else np.nan
+    )
 
-    tundra = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature <= -2.0) & (tree_cover < 0.25)
-    alpine = natural & np.isfinite(height_m) & np.isfinite(tree_cover) & (height_m >= 2500.0) & (tree_cover < 0.20)
-    desert = natural & np.isfinite(bare_cover) & np.isfinite(precipitation) & (bare_cover >= 0.60) & (precipitation < 300.0)
+    tundra = (
+        natural
+        & np.isfinite(temperature)
+        & np.isfinite(tree_cover)
+        & (temperature <= -2.0)
+        & (tree_cover < 0.25)
+    )
+    alpine = (
+        natural
+        & np.isfinite(height_m)
+        & np.isfinite(tree_cover)
+        & (height_m >= 2500.0)
+        & (tree_cover < 0.20)
+    )
+    desert = (
+        natural
+        & np.isfinite(bare_cover)
+        & np.isfinite(precipitation)
+        & (bare_cover >= 0.60)
+        & (precipitation < 300.0)
+    )
     wetland = natural & np.isfinite(lc_type1) & (lc_type1 == 11.0)
     if np.isfinite(river_q98):
         lowland = np.isfinite(height_m) & (height_m <= 300.0)
         high_flow = np.isfinite(river_flow) & (river_flow >= river_q98)
         wetland = wetland | (natural & lowland & high_flow)
 
-    tropical_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 22.0) & (tree_cover >= 0.60)
-    savanna = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 22.0) & (tree_cover >= 0.10)
-    temperate_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature >= 6.0) & (tree_cover >= 0.55)
-    boreal_forest = natural & np.isfinite(temperature) & np.isfinite(tree_cover) & (temperature < 6.0) & (tree_cover >= 0.35)
+    tropical_forest = (
+        natural
+        & np.isfinite(temperature)
+        & np.isfinite(tree_cover)
+        & (temperature >= 22.0)
+        & (tree_cover >= 0.60)
+    )
+    savanna = (
+        natural
+        & np.isfinite(temperature)
+        & np.isfinite(tree_cover)
+        & (temperature >= 22.0)
+        & (tree_cover >= 0.10)
+    )
+    temperate_forest = (
+        natural
+        & np.isfinite(temperature)
+        & np.isfinite(tree_cover)
+        & (temperature >= 6.0)
+        & (tree_cover >= 0.55)
+    )
+    boreal_forest = (
+        natural
+        & np.isfinite(temperature)
+        & np.isfinite(tree_cover)
+        & (temperature < 6.0)
+        & (tree_cover >= 0.35)
+    )
 
     # Biome encoding aligned with rust enum:
     # 0 TropicalForest, 1 Savanna, 2 Desert, 3 Grassland, 4 TemperateForest,
@@ -914,7 +1009,7 @@ def main() -> None:
         elif args.module == "ecology-ref":
             output_path = Path("benches/data/ecology_ref.bin")
         else:
-            output_path = Path("benches/data/terrain_ref.bin")
+            output_path = Path("benches/data/glaciology_ref.bin")
     else:
         output_path = Path(args.output)
     centroid_lat, centroid_lon = load_centroids(centroids_path)
@@ -1060,7 +1155,9 @@ def main() -> None:
         )
 
         natural_mask = build_natural_mask(lc_type1, lc_prop2)
-        open_canopy_mask = ((natural_mask == 1) & np.isfinite(tree_cover) & (tree_cover <= 0.40)).astype(np.uint8)
+        open_canopy_mask = (
+            (natural_mask == 1) & np.isfinite(tree_cover) & (tree_cover <= 0.40)
+        ).astype(np.uint8)
         biome = classify_biome_ref(
             tree_cover=tree_cover,
             bare_cover=bare_cover,
@@ -1206,6 +1303,25 @@ def main() -> None:
         print(f"CELL_COUNT {len(tree_cover)}")
         return
 
+    if args.module == "glaciology-ref":
+        if not args.ice_thickness:
+            raise ValueError(
+                "missing required arg for glaciology-ref module: --ice-thickness"
+            )
+
+        grid = load_input_grid(Path(args.ice_thickness), None)
+        ice_thickness = interpolate_grid(
+            grid=grid,
+            query_lat=centroid_lat,
+            query_lon=centroid_lon,
+            method=args.method,
+        ).astype(np.float32, copy=False)
+        print(summarize("ice_thickness", ice_thickness))
+        write_glaciology_ref_bin(output_path, ice_thickness)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(ice_thickness)}")
+        return
+
     if not args.height:
         raise ValueError("missing required arg for terrain module: --height")
     grid = load_input_grid(Path(args.height), args.height_var_name)
@@ -1215,7 +1331,9 @@ def main() -> None:
         query_lon=centroid_lon,
         method=args.method,
     )
-    terrain_height = transform_terrain_height(sampled, args).astype(np.float32, copy=False)
+    terrain_height = transform_terrain_height(sampled, args).astype(
+        np.float32, copy=False
+    )
     print(summarize("terrain_height", terrain_height))
     write_terrain_ref_bin(output_path, terrain_height)
     print(f"WROTE {output_path}")
