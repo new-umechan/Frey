@@ -17,3 +17,16 @@ pub(super) fn sync_erosion_rain(state: &mut crate::ErosionAutomatonState, runoff
         *dst = src.max(0.0);
     }
 }
+
+pub(crate) fn sync_erosion_height(
+    state: Option<&mut crate::ErosionAutomatonState>,
+    height: &[f32],
+) {
+    let Some(state) = state else {
+        return;
+    };
+    if state.height.len() != height.len() {
+        return;
+    }
+    state.height.clone_from_slice(height);
+}

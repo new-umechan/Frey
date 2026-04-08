@@ -112,10 +112,10 @@ fn local_topographic_wetness(i: usize, height: &[f32], nbr_offsets: &[u32], nbrs
     (sum_relief / (count * 0.08)).clamp(0.0, 1.0)
 }
 
-pub(super) fn river_rebuild_driver(world: &World) -> f32 {
-    world
-        .runtime
-        .geology_dynamics
+pub(super) fn river_rebuild_driver_for_geology(
+    geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
+) -> f32 {
+    geology_state
         .as_ref()
         .map(|state| {
             state
@@ -125,6 +125,10 @@ pub(super) fn river_rebuild_driver(world: &World) -> f32 {
                 .max(0.0)
         })
         .unwrap_or(1.0)
+}
+
+pub(super) fn river_rebuild_driver(world: &World) -> f32 {
+    river_rebuild_driver_for_geology(world.matched_geology_dynamics())
 }
 
 pub(super) fn compute_rebuild_interval(params: &GeologyParams, driver: f32) -> u32 {

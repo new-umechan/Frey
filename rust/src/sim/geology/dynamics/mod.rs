@@ -49,192 +49,15 @@ fn debug_assert_river_next_no_cycle(river_next: &[i32], label: &str) {
     }
 }
 
-fn debug_validate_geology_state(world: &World, params: &GeologyParams, stage: &str) {
-    let cell_count = world.state.geology.height.len();
-    debug_assert_eq!(
-        world.mesh.nbr_offsets.len(),
-        cell_count.saturating_add(1),
-        "{stage}: mesh neighbor offsets length mismatch"
-    );
-    debug_assert_eq!(
-        world.state.geology.plate_id.len(),
-        cell_count,
-        "{stage}: geology.plate_id length mismatch"
-    );
-    debug_assert_eq!(
-        world.state.geology.volcanism.len(),
-        cell_count,
-        "{stage}: geology.volcanism length mismatch"
-    );
-    debug_assert_eq!(
-        world.state.geology.vertex_buoyancy.len(),
-        cell_count,
-        "{stage}: geology.vertex_buoyancy length mismatch"
-    );
-    debug_assert_eq!(
-        world.state.geology.geology_internal.len(),
-        cell_count,
-        "{stage}: geology.geology_internal length mismatch"
-    );
-    debug_assert_eq!(
-        world.state.geology.boundary_condition.len(),
-        cell_count,
-        "{stage}: geology.boundary_condition length mismatch"
-    );
-
-    for (i, &height) in world.state.geology.height.iter().enumerate() {
-        debug_assert!(
-            height.is_finite() && (-1.5..=1.5).contains(&height),
-            "{stage}: height[{i}] must be finite and in [-1.5, 1.5], got {height}"
-        );
-    }
-    for (i, &volcanism) in world.state.geology.volcanism.iter().enumerate() {
-        debug_assert_finite_non_negative(volcanism, "geology.volcanism", i);
-    }
-
-    if world.state.hydrology.river_next.len() == cell_count {
-        debug_assert_river_next_no_cycle(&world.state.hydrology.river_next, "hydrology.river_next");
-    }
-
-    let Some(dynamics) = world.runtime.geology_dynamics.as_ref() else {
-        return;
-    };
-
-    debug_assert_eq!(
-        dynamics.vertex_states.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.vertex_states length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.mantle_heat.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.mantle_heat length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.dominant_type.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.dominant_type length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.activity.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.activity length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.rollback_fraction.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.rollback_fraction length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.backarc_tension.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.backarc_tension length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.slab_convergence_component.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.slab_convergence_component length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.slab_rollback_component.len(),
-        cell_count,
-        "{stage}: runtime.geology_dynamics.boundary_state.slab_rollback_component length mismatch"
-    );
-    debug_assert_eq!(
-        dynamics.boundary_state.edge_pairs.len(),
-        dynamics.boundary_state.edge_internal.len(),
-        "{stage}: boundary_state edge_pairs/edge_internal length mismatch"
-    );
-    for (i, &plate_id) in world.state.geology.plate_id.iter().enumerate() {
-        debug_assert!(
-            plate_id.as_usize() < dynamics.plate_states.len(),
-            "{stage}: plate_id[{i}]={} is out of range for plate_states={}",
-            plate_id.as_u32(),
-            dynamics.plate_states.len()
-        );
-    }
-
-    for (i, &mantle_heat) in dynamics.mantle_heat.iter().enumerate() {
-        debug_assert_finite_unit_interval(mantle_heat, "runtime.geology_dynamics.mantle_heat", i);
-    }
-    for (i, state) in dynamics.vertex_states.iter().enumerate() {
-        debug_assert_finite_non_negative(state.thickness, "vertex_states.thickness", i);
-        debug_assert_finite_non_negative(state.density, "vertex_states.density", i);
-        debug_assert_finite_non_negative(state.age, "vertex_states.age", i);
-        debug_assert!(
-            state.stress.is_finite(),
-            "vertex_states.stress[{i}] must be finite"
-        );
-        debug_assert!(
-            state.temperature.is_finite(),
-            "vertex_states.temperature[{i}] must be finite"
-        );
-        debug_assert_finite_non_negative(state.rigidity, "vertex_states.rigidity", i);
-        debug_assert_finite_non_negative(state.arc_volcanism, "vertex_states.arc_volcanism", i);
-        debug_assert_finite_non_negative(state.ridge_volcanism, "vertex_states.ridge_volcanism", i);
-        debug_assert_finite_non_negative(
-            state.hotspot_volcanism,
-            "vertex_states.hotspot_volcanism",
-            i,
-        );
-        debug_assert_finite_non_negative(
-            state.backarc_volcanism,
-            "vertex_states.backarc_volcanism",
-            i,
-        );
-        debug_assert!(
-            state.stress_tensor.xx.is_finite()
-                && state.stress_tensor.yy.is_finite()
-                && state.stress_tensor.xy.is_finite(),
-            "vertex_states.stress_tensor[{i}] must be finite"
-        );
-    }
-    for (i, edge) in dynamics.boundary_state.edge_internal.iter().enumerate() {
-        debug_assert_finite_unit_interval(
-            edge.convergence_memory,
-            "boundary_state.edge_internal.convergence_memory",
-            i,
-        );
-    }
-    for (i, &rollback_fraction) in dynamics.boundary_state.rollback_fraction.iter().enumerate() {
-        debug_assert!(
-            rollback_fraction.is_finite()
-                && rollback_fraction >= 0.0
-                && rollback_fraction <= params.rollback_fraction_max,
-            "rollback_fraction[{i}] must be finite and in [0, {}], got {rollback_fraction}",
-            params.rollback_fraction_max
-        );
-    }
-    for (i, &value) in dynamics
-        .boundary_state
-        .slab_convergence_component
-        .iter()
-        .enumerate()
-    {
-        debug_assert!(
-            value.is_finite(),
-            "boundary_state.slab_convergence_component[{i}] must be finite"
-        );
-    }
-    for (i, &value) in dynamics
-        .boundary_state
-        .slab_rollback_component
-        .iter()
-        .enumerate()
-    {
-        debug_assert!(
-            value.is_finite(),
-            "boundary_state.slab_rollback_component[{i}] must be finite"
-        );
-    }
-}
-
 #[inline]
 fn should_run_debug_validation() -> bool {
     cfg!(test)
 }
 
-pub(crate) fn run_geology_dynamics_step(world: &mut World) {
+pub(crate) fn run_geology_dynamics_step_with_state(
+    world: &mut World,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+) {
     if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
         return;
     }
@@ -243,18 +66,13 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
     }
 
     let cell_count = world.state.geology.height.len();
-    let params = world
-        .runtime
-        .hydrology_dynamics
-        .as_ref()
-        .map(|state| state.params.clone())
-        .unwrap_or_default();
-    ensure_geology_dynamics(world);
+    let params = world.control.geology_params.clone();
+    ensure_geology_dynamics(world, geology_state);
     if should_run_debug_validation() {
-        debug_validate_geology_state(world, &params, "pre-step");
+        debug_validate_geology_state_with_state(world, geology_state.as_ref(), &params, "pre-step");
     }
 
-    let Some(dynamics) = world.runtime.geology_dynamics.as_mut() else {
+    let Some(dynamics) = geology_state.as_mut() else {
         return;
     };
 
@@ -393,18 +211,16 @@ pub(crate) fn run_geology_dynamics_step(world: &mut World) {
         &dynamics.vertex_states,
     );
 
-    if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
-        if state.height.len() == world.state.geology.height.len() {
-            state.height.clone_from(&world.state.geology.height);
-        }
-    }
     let _ = dynamics;
     if should_run_debug_validation() {
-        debug_validate_geology_state(world, &params, "post-step");
+        debug_validate_geology_state_with_state(world, geology_state.as_ref(), &params, "post-step");
     }
 }
 
-fn ensure_geology_dynamics(world: &mut World) {
+fn ensure_geology_dynamics(
+    world: &mut World,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+) {
     let cell_count = world.state.geology.height.len();
     let plate_count = world
         .state
@@ -415,7 +231,7 @@ fn ensure_geology_dynamics(world: &mut World) {
         .max()
         .map(|v| v.as_usize() + 1)
         .unwrap_or(0);
-    let needs_rebuild = match world.runtime.geology_dynamics.as_ref() {
+    let needs_rebuild = match geology_state.as_ref() {
         Some(state) => {
             state.vertex_states.len() != cell_count
                 || state.mantle_heat.len() != cell_count
@@ -460,30 +276,10 @@ fn ensure_geology_dynamics(world: &mut World) {
         } else {
             0.65 + h.clamp(0.0, 0.6) * 0.20
         };
-        let age_ref = world
-            .runtime
-            .hydrology_dynamics
-            .as_ref()
-            .map(|s| s.params.age_ref.max(1e-4))
-            .unwrap_or(1.0);
-        let oceanic_base_density = world
-            .runtime
-            .hydrology_dynamics
-            .as_ref()
-            .map(|s| s.params.oceanic_base_density)
-            .unwrap_or(2.90);
-        let continental_density = world
-            .runtime
-            .hydrology_dynamics
-            .as_ref()
-            .map(|s| s.params.continental_crust_density)
-            .unwrap_or(2.70);
-        let age_density_gain = world
-            .runtime
-            .hydrology_dynamics
-            .as_ref()
-            .map(|s| s.params.age_density_gain.max(0.0))
-            .unwrap_or(0.25);
+        let age_ref = world.control.geology_params.age_ref.max(1e-4);
+        let oceanic_base_density = world.control.geology_params.oceanic_base_density;
+        let continental_density = world.control.geology_params.continental_crust_density;
+        let age_density_gain = world.control.geology_params.age_density_gain.max(0.0);
         vertex_states[i].age = if is_oceanic {
             (0.08 + (-h).clamp(0.0, 0.5) * 0.5).clamp(0.0, 1.0) * age_ref
         } else {
@@ -500,7 +296,7 @@ fn ensure_geology_dynamics(world: &mut World) {
         vertex_states[i].temperature = mantle_heat[i];
     }
 
-    world.runtime.geology_dynamics = Some(GeologyDynamicsState {
+    *geology_state = Some(GeologyDynamicsState {
         update_index: 0,
         plate_states,
         vertex_states,
@@ -522,10 +318,195 @@ fn ensure_geology_dynamics(world: &mut World) {
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
     }
-    if let Some(dynamics) = world.runtime.geology_dynamics.as_ref() {
+    if let Some(dynamics) = geology_state.as_ref() {
         sync_geology_internal(
             &mut world.state.geology.geology_internal,
             &dynamics.vertex_states,
+        );
+    }
+}
+
+fn debug_validate_geology_state_with_state(
+    world: &World,
+    dynamics: Option<&GeologyDynamicsState>,
+    params: &GeologyParams,
+    stage: &str,
+) {
+    let cell_count = world.state.geology.height.len();
+    debug_assert_eq!(
+        world.mesh.nbr_offsets.len(),
+        cell_count.saturating_add(1),
+        "{stage}: mesh neighbor offsets length mismatch"
+    );
+    debug_assert_eq!(
+        world.state.geology.plate_id.len(),
+        cell_count,
+        "{stage}: geology.plate_id length mismatch"
+    );
+    debug_assert_eq!(
+        world.state.geology.volcanism.len(),
+        cell_count,
+        "{stage}: geology.volcanism length mismatch"
+    );
+    debug_assert_eq!(
+        world.state.geology.vertex_buoyancy.len(),
+        cell_count,
+        "{stage}: geology.vertex_buoyancy length mismatch"
+    );
+    debug_assert_eq!(
+        world.state.geology.geology_internal.len(),
+        cell_count,
+        "{stage}: geology.geology_internal length mismatch"
+    );
+    debug_assert_eq!(
+        world.state.geology.boundary_condition.len(),
+        cell_count,
+        "{stage}: geology.boundary_condition length mismatch"
+    );
+
+    for (i, &height) in world.state.geology.height.iter().enumerate() {
+        debug_assert!(
+            height.is_finite() && (-1.5..=1.5).contains(&height),
+            "{stage}: height[{i}] must be finite and in [-1.5, 1.5], got {height}"
+        );
+    }
+    for (i, &volcanism) in world.state.geology.volcanism.iter().enumerate() {
+        debug_assert_finite_non_negative(volcanism, "geology.volcanism", i);
+    }
+
+    if world.state.hydrology.river_next.len() == cell_count {
+        debug_assert_river_next_no_cycle(&world.state.hydrology.river_next, "hydrology.river_next");
+    }
+
+    let Some(dynamics) = dynamics else {
+        return;
+    };
+
+    debug_assert_eq!(
+        dynamics.vertex_states.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.vertex_states length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.mantle_heat.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.mantle_heat length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.dominant_type.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.dominant_type length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.activity.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.activity length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.rollback_fraction.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.rollback_fraction length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.backarc_tension.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.backarc_tension length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.slab_convergence_component.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.slab_convergence_component length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.slab_rollback_component.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.slab_rollback_component length mismatch"
+    );
+    debug_assert_eq!(
+        dynamics.boundary_state.edge_pairs.len(),
+        dynamics.boundary_state.edge_internal.len(),
+        "{stage}: boundary_state edge_pairs/edge_internal length mismatch"
+    );
+    for (i, &plate_id) in world.state.geology.plate_id.iter().enumerate() {
+        debug_assert!(
+            plate_id.as_usize() < dynamics.plate_states.len(),
+            "{stage}: plate_id[{i}]={} is out of range for plate_states={}",
+            plate_id.as_u32(),
+            dynamics.plate_states.len()
+        );
+    }
+
+    for (i, &mantle_heat) in dynamics.mantle_heat.iter().enumerate() {
+        debug_assert_finite_unit_interval(mantle_heat, "runtime.geology_dynamics.mantle_heat", i);
+    }
+    for (i, state) in dynamics.vertex_states.iter().enumerate() {
+        debug_assert_finite_non_negative(state.thickness, "vertex_states.thickness", i);
+        debug_assert_finite_non_negative(state.density, "vertex_states.density", i);
+        debug_assert_finite_non_negative(state.age, "vertex_states.age", i);
+        debug_assert!(
+            state.stress.is_finite(),
+            "vertex_states.stress[{i}] must be finite"
+        );
+        debug_assert!(
+            state.temperature.is_finite(),
+            "vertex_states.temperature[{i}] must be finite"
+        );
+        debug_assert_finite_non_negative(state.rigidity, "vertex_states.rigidity", i);
+        debug_assert_finite_non_negative(state.arc_volcanism, "vertex_states.arc_volcanism", i);
+        debug_assert_finite_non_negative(state.ridge_volcanism, "vertex_states.ridge_volcanism", i);
+        debug_assert_finite_non_negative(
+            state.hotspot_volcanism,
+            "vertex_states.hotspot_volcanism",
+            i,
+        );
+        debug_assert_finite_non_negative(
+            state.backarc_volcanism,
+            "vertex_states.backarc_volcanism",
+            i,
+        );
+        debug_assert!(
+            state.stress_tensor.xx.is_finite()
+                && state.stress_tensor.yy.is_finite()
+                && state.stress_tensor.xy.is_finite(),
+            "vertex_states.stress_tensor[{i}] must be finite"
+        );
+    }
+    for (i, edge) in dynamics.boundary_state.edge_internal.iter().enumerate() {
+        debug_assert_finite_unit_interval(
+            edge.convergence_memory,
+            "boundary_state.edge_internal.convergence_memory",
+            i,
+        );
+    }
+    for (i, &rollback_fraction) in dynamics.boundary_state.rollback_fraction.iter().enumerate() {
+        debug_assert!(
+            rollback_fraction.is_finite()
+                && rollback_fraction >= 0.0
+                && rollback_fraction <= params.rollback_fraction_max,
+            "rollback_fraction[{i}] must be finite and in [0, {}], got {rollback_fraction}",
+            params.rollback_fraction_max
+        );
+    }
+    for (i, &value) in dynamics
+        .boundary_state
+        .slab_convergence_component
+        .iter()
+        .enumerate()
+    {
+        debug_assert!(
+            value.is_finite(),
+            "boundary_state.slab_convergence_component[{i}] must be finite"
+        );
+    }
+    for (i, &value) in dynamics
+        .boundary_state
+        .slab_rollback_component
+        .iter()
+        .enumerate()
+    {
+        debug_assert!(
+            value.is_finite(),
+            "boundary_state.slab_rollback_component[{i}] must be finite"
         );
     }
 }

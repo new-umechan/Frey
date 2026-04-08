@@ -35,10 +35,11 @@ fn build_test_world() -> World {
 #[test]
 fn glaciology_forcing_updates_geology_height_once_per_delta() {
     let mut world = build_test_world();
+    let mut hydrology_state: HydrologyExecState = None;
     world.state.glaciology.isostatic_adjustment = vec![-0.02, 0.0, 0.01, -0.03];
     world.state.glaciology.applied_isostatic_adjustment = vec![0.0; 4];
 
-    super::geology::apply_glaciology_forcing_to_geology(&mut world);
+    super::geology::apply_glaciology_forcing_to_geology(&mut world, &mut hydrology_state);
 
     assert!((world.state.geology.height[0] - 0.43).abs() < 1e-6);
     assert!((world.state.geology.height[2] - -0.24).abs() < 1e-6);
@@ -47,7 +48,7 @@ fn glaciology_forcing_updates_geology_height_once_per_delta() {
         world.state.glaciology.isostatic_adjustment
     );
 
-    super::geology::apply_glaciology_forcing_to_geology(&mut world);
+    super::geology::apply_glaciology_forcing_to_geology(&mut world, &mut hydrology_state);
     assert!((world.state.geology.height[0] - 0.43).abs() < 1e-6);
 }
 
@@ -79,6 +80,7 @@ fn climate_water_budget_residual_stays_bounded() {
 fn exec_world_slice_matches_full_tick_execution() {
     let mut full_world = build_test_world();
     let mut sliced_world = build_test_world();
+    let mut sliced_feedback = crate::sim::world::FeedbackQueue::new(sliced_world.cell_count());
     full_world.clock.epoch = EraKind::Environment;
     sliced_world.clock.epoch = EraKind::Environment;
 
@@ -87,7 +89,7 @@ fn exec_world_slice_matches_full_tick_execution() {
     let mut phase = ExecWorldPhase::Prepare;
     let mut completed = 0;
     while completed == 0 {
-        let result = exec_world_slice(&mut sliced_world, phase, 1);
+        let result = exec_world_slice(&mut sliced_world, &mut sliced_feedback, phase, 1);
         phase = result.next_phase;
         completed = result.ticks_completed;
     }
@@ -116,10 +118,11 @@ fn exec_world_slice_matches_full_tick_execution() {
 #[test]
 fn feedback_queue_applies_entries_on_next_tick() {
     let mut world = build_test_world();
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 1;
 
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Subsistence,
         target_module: ModuleId::Hydrology,
         target_ref: TargetRef::Cell(CellId(0)),
@@ -130,7 +133,7 @@ fn feedback_queue_applies_entries_on_next_tick() {
             value: FieldValue::F32(0.42),
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Subsistence,
         target_module: ModuleId::Hydrology,
         target_ref: TargetRef::Cell(CellId(0)),
@@ -141,7 +144,7 @@ fn feedback_queue_applies_entries_on_next_tick() {
             value: FieldValue::F32(0.31),
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Population,
         target_module: ModuleId::Ecology,
         target_ref: TargetRef::Cell(CellId(2)),
@@ -153,7 +156,7 @@ fn feedback_queue_applies_entries_on_next_tick() {
         },
     });
 
-    exec_world(&mut world);
+    exec_world_with_feedback(&mut world, &mut feedback);
 
     assert!((world.state.domesticates.crop_adoption[0][0] - 0.42).abs() < 1e-6);
     assert!((world.state.domesticates.livestock_adoption[0][0] - 0.31).abs() < 1e-6);
@@ -163,9 +166,10 @@ fn feedback_queue_applies_entries_on_next_tick() {
 #[test]
 fn feedback_payload_trigger_epoch_transition_is_ignored() {
     let mut world = build_test_world();
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 1;
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Exec,
         target_module: ModuleId::Exec,
         target_ref: TargetRef::Global,
@@ -175,7 +179,7 @@ fn feedback_payload_trigger_epoch_transition_is_ignored() {
         },
     });
 
-    exec_world(&mut world);
+    exec_world_with_feedback(&mut world, &mut feedback);
     assert_eq!(world.clock.epoch, EraKind::Crust);
 }
 
@@ -272,10 +276,11 @@ fn polity_update_overwrites_stale_ids_with_none_for_low_population_cells() {
 #[test]
 fn feedback_entity_payloads_use_entity_store() {
     let mut world = build_test_world();
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::History;
     world.clock.tick = 1;
 
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Polity,
         target_ref: TargetRef::Polity(PolityId(9)),
@@ -291,7 +296,7 @@ fn feedback_entity_payloads_use_entity_store() {
             }),
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Settlement,
         target_ref: TargetRef::Settlement(SettlementId(3)),
@@ -303,7 +308,7 @@ fn feedback_entity_payloads_use_entity_store() {
             }),
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Conflict,
         target_ref: TargetRef::Region(RegionId(5)),
@@ -315,7 +320,7 @@ fn feedback_entity_payloads_use_entity_store() {
             }),
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Polity,
         target_ref: TargetRef::Polity(PolityId(9)),
@@ -331,7 +336,7 @@ fn feedback_entity_payloads_use_entity_store() {
             },
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Settlement,
         target_ref: TargetRef::Settlement(SettlementId(3)),
@@ -343,7 +348,7 @@ fn feedback_entity_payloads_use_entity_store() {
             },
         },
     });
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Conflict,
         target_ref: TargetRef::Region(RegionId(5)),
@@ -356,7 +361,7 @@ fn feedback_entity_payloads_use_entity_store() {
         },
     });
 
-    crate::sim::exec::feedback::apply_feedback_queue(&mut world);
+    crate::sim::exec::feedback::apply_feedback_queue(&mut world, &mut feedback);
 
     let polity = world.entities.get_polity(PolityId(9)).unwrap();
     assert_eq!(polity.capital_cell, CellId(3));
@@ -371,7 +376,7 @@ fn feedback_entity_payloads_use_entity_store() {
     let region = world.entities.get_region(RegionId(5)).unwrap();
     assert_eq!(region.cells, vec![CellId(2), CellId(3)]);
 
-    world.feedback.push(FeedbackEntry {
+    feedback.push(FeedbackEntry {
         source: ModuleId::Conflict,
         target_module: ModuleId::Polity,
         target_ref: TargetRef::Polity(PolityId(9)),
@@ -380,7 +385,7 @@ fn feedback_entity_payloads_use_entity_store() {
             entity: EntityRef::Polity(PolityId(9)),
         },
     });
-    crate::sim::exec::feedback::apply_feedback_queue(&mut world);
+    crate::sim::exec::feedback::apply_feedback_queue(&mut world, &mut feedback);
 
     assert!(world.entities.get_polity(PolityId(9)).is_none());
 }

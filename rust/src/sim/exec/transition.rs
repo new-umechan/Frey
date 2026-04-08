@@ -9,10 +9,7 @@ pub(super) fn update_era_transition(world: &mut World) {
         world.clock.budgets = next_era.budgets();
         world.clock.real_years_per_tick = next_era.real_years_per_tick();
         world.clock.runtime_tick_ms = next_era.runtime_tick_ms();
-        world
-            .runtime
-            .transition
-            .reset_for_era(next_tick, next_era, land_ratio);
+        world.clock.transition.reset_for_era(next_tick, next_era, land_ratio);
     }
 }
 

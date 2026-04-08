@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::sim::erosion::ErosionAutomatonState;
-
 use super::era::EraKind;
-use super::init::default_target_sea_ratio;
 use super::state::{
     CellId, GeologyDynamicsState, PolityComponent, PolityId, RegionComponent, RegionId,
     SettlementComponent, SettlementId,
@@ -16,19 +13,13 @@ pub struct ClockState {
     pub real_years_per_tick: f32,
     pub runtime_tick_ms: u32,
     pub budgets: SubsystemBudgets,
+    pub transition: TransitionState,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RuntimeState {
-    #[serde(default = "default_target_sea_ratio")]
-    pub target_sea_ratio: f32,
-    #[serde(default)]
-    pub sea_level_offset: f32,
-    pub transition: TransitionState,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ExecScratchState {
     #[serde(default)]
     pub geology_dynamics: Option<GeologyDynamicsState>,
-    #[serde(default)]
-    pub hydrology_dynamics: Option<ErosionAutomatonState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

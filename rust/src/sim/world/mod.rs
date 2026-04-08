@@ -15,7 +15,7 @@ pub use entity_store::{
 pub use era::EraKind;
 pub use exec::{
     CellFieldId, ClockState, ComponentPatch, EntityBundle, EntityRef, FeedbackEntry,
-    FeedbackPayload, FeedbackQueue, FieldValue, ModuleId, RuntimeState, SubsystemBudgets,
+    FeedbackPayload, FeedbackQueue, ExecScratchState, FieldValue, ModuleId, SubsystemBudgets,
     TargetRef, TransitionState,
 };
 pub use init::default_target_sea_ratio;
@@ -28,5 +28,6 @@ pub use state::{
     GlaciologyState, HydrologyState, LivestockBitmap, PlateKinematicsState, PolityComponent,
     PolityGroupId, PolityId, PolityState, PopulationState, RegionComponent, RegionId,
     SettlementComponent, SettlementId, SettlementState, SubsistenceMix, SubsistenceState,
-    TerrainState, VertexCrustState, World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    TerrainState, VertexCrustState, World, WorldControlState, WorldMesh, WorldState, N_CROPS,
+    N_LIVESTOCK,
 };

@@ -1,20 +1,19 @@
 use super::*;
 use crate::sim::hydrology::downstream_from_csr;
+use crate::sim::erosion::ErosionAutomatonState;
 
-pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
+pub(super) fn run_river_fallback(
+    world: &mut World,
+    runoff: &[f32],
+    state: Option<&mut ErosionAutomatonState>,
+) {
     let cell_count = world.state.geology.height.len();
     if cell_count == 0 || world.mesh.nbr_offsets.len() != cell_count + 1 {
         return;
     }
 
     let previous_flux = vec![0.0; cell_count];
-    let default_params = GeologyParams::default();
-    let params = world
-        .runtime
-        .hydrology_dynamics
-        .as_ref()
-        .map(|state| &state.params)
-        .unwrap_or(&default_params);
+    let params = &world.control.geology_params;
 
     let mut rebuilt = build_river_network(
         &world.mesh.positions,
@@ -59,7 +58,7 @@ pub(super) fn run_river_fallback(world: &mut World, runoff: &[f32]) {
         &rebuilt.downstream_weights,
     );
     world.state.hydrology.is_lake.fill(false);
-    if let Some(state) = world.runtime.hydrology_dynamics.as_mut() {
+    if let Some(state) = state {
         if state.river_flux.len() == world.state.hydrology.river_flow.len() {
             sync_erosion_rain(state, runoff);
             state.prev_river_next.clone_from(&state.river_next);

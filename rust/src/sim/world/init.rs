@@ -1,21 +1,19 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geo::{
     add3, dot3, east_direction, edge_distance_km, normalize3, project_to_tangent, sub3,
     EARTH_RADIUS_KM,
 };
-use crate::sim::hydrology::rebuild_mfd_from_primary;
 use smallvec::SmallVec;
 
 use super::era::EraKind;
-use super::exec::{ClockState, FeedbackQueue, RuntimeState, TransitionState};
+use super::exec::{ClockState, ExecScratchState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
     EcologyInternal, EcologyState, EntitiesState, GeologyState, GlaciologyState, HydrologyState,
     PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState,
-    World, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    World, WorldControlState, WorldMesh, WorldProjectionState, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
@@ -29,10 +27,10 @@ impl World {
             .map(|&latitude| base_ocean_temperature(latitude))
             .collect::<Vec<_>>();
         let era = EraKind::Crust;
+        let default_geology_params = crate::GeologyParams::default();
         Self {
             mesh,
             state: WorldState {
-                terrain,
                 geology,
                 climate: ClimateState {
                     temperature: vec![15.0; cell_count],
@@ -101,6 +99,7 @@ impl World {
                     occupier_id: vec![None; cell_count],
                 },
             },
+            projections: WorldProjectionState { terrain },
             entities: EntitiesState::default(),
             clock: ClockState {
                 tick: 0,
@@ -108,11 +107,6 @@ impl World {
                 real_years_per_tick: era.real_years_per_tick(),
                 runtime_tick_ms: era.runtime_tick_ms(),
                 budgets: era.budgets(),
-            },
-            feedback: FeedbackQueue::new(cell_count),
-            runtime: RuntimeState {
-                target_sea_ratio,
-                sea_level_offset: 0.0,
                 transition: TransitionState {
                     era_enter_tick: 0,
                     stable_ticks_in_era: 0,
@@ -122,13 +116,21 @@ impl World {
                     ema_ecology_activity: 1.0,
                     ema_civilization_activity: 1.0,
                 },
+            },
+            control: WorldControlState {
+                geology_params: default_geology_params.clone(),
+                target_sea_ratio,
+                sea_level_offset: 0.0,
+                erosion_thickness_coupling: default_geology_params.erosion_thickness_coupling,
+                deposition_thickness_coupling: default_geology_params
+                    .deposition_thickness_coupling,
+            },
+            exec_scratch: ExecScratchState {
                 geology_dynamics: None,
-                hydrology_dynamics: None,
             },
             polity_relations: std::collections::HashMap::new(),
             polity_groups: Vec::new(),
             plate_relations: std::collections::HashMap::new(),
-            archive: super::state::ArchiveState::default(),
         }
     }
 
@@ -136,37 +138,11 @@ impl World {
         self.state.geology.height.len()
     }
 
-    pub fn attach_hydrology_dynamics(
-        &mut self,
-        state: ErosionAutomatonState,
-    ) -> Result<(), String> {
-        let expected = self.state.geology.height.len();
-        if state.height.len() != expected
-            || state.river_flux.len() != expected
-            || state.river_next.len() != expected
-        {
-            return Err("river erosion state length does not match core cell count".to_string());
-        }
-        self.state.geology.height = state.height.clone();
-        self.state
-            .hydrology
-            .river_flow
-            .clone_from(&state.river_flux);
-        self.state
-            .hydrology
-            .river_next
-            .clone_from(&state.river_next);
-        self.refresh_terrain_state();
-        rebuild_mfd_from_primary(&mut self.state.hydrology);
-        self.runtime.hydrology_dynamics = Some(state);
-        Ok(())
-    }
-
     pub fn refresh_terrain_state(&mut self) {
-        self.state.terrain = build_terrain_state(
+        self.projections.terrain = build_terrain_state(
             &self.mesh,
             &self.state.geology.height,
-            self.runtime.sea_level_offset,
+            self.control.sea_level_offset,
         );
     }
 }
@@ -192,12 +168,10 @@ fn build_terrain_state(mesh: &WorldMesh, height: &[f32], sea_level_offset: f32) 
     let mut is_coastal = vec![false; cell_count];
 
     for i in 0..cell_count {
-        let pos = mesh.positions.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
+        let pos = mesh.position(i).unwrap_or([0.0, 0.0, 1.0]);
         latitude[i] = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
         let is_land = is_land_height(height[i], sea_level_offset);
-        let start = mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
-        let end = mesh.nbr_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
-        for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
+        for &n_u32 in mesh.cell_neighbors(i) {
             let n = n_u32 as usize;
             if n >= cell_count {
                 continue;
@@ -223,8 +197,6 @@ fn build_terrain_state(mesh: &WorldMesh, height: &[f32], sea_level_offset: f32) 
         distance_from_ocean,
         coast_side,
         is_coastal,
-        neighbors_offsets: mesh.nbr_offsets.clone(),
-        neighbors: mesh.nbrs.clone(),
     }
 }
 
@@ -251,23 +223,14 @@ fn build_distance_from_ocean(mesh: &WorldMesh, height: &[f32], sea_level_offset:
         if cost > distance[index] {
             continue;
         }
-        let start = mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-        let end = mesh
-            .nbr_offsets
-            .get(index + 1)
-            .copied()
-            .unwrap_or(start as u32) as usize;
-        for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
+        for &n_u32 in mesh.cell_neighbors(index) {
             let n = n_u32 as usize;
             if n >= cell_count {
                 continue;
             }
             let edge_cost = edge_distance_km(
-                mesh.positions
-                    .get(index)
-                    .copied()
-                    .unwrap_or([0.0, 0.0, 1.0]),
-                mesh.positions.get(n).copied().unwrap_or([0.0, 0.0, 1.0]),
+                mesh.position(index).unwrap_or([0.0, 0.0, 1.0]),
+                mesh.position(n).unwrap_or([0.0, 0.0, 1.0]),
             );
             let next_cost = cost + edge_cost;
             if next_cost < distance[n] {
@@ -303,21 +266,13 @@ fn classify_coast_side(
         return CoastSide::None;
     }
     let pos = mesh
-        .positions
-        .get(index)
-        .copied()
+        .position(index)
         .unwrap_or([0.0, 0.0, 1.0]);
     let is_land = is_land_height(height[index], sea_level_offset);
     let seek_land = !is_land;
-    let start = mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-    let end = mesh
-        .nbr_offsets
-        .get(index + 1)
-        .copied()
-        .unwrap_or(start as u32) as usize;
     let mut dir_sum = [0.0_f32; 3];
 
-    for &n_u32 in mesh.nbrs.get(start..end).unwrap_or(&[]) {
+    for &n_u32 in mesh.cell_neighbors(index) {
         let n = n_u32 as usize;
         if n >= cell_count {
             continue;
@@ -325,7 +280,7 @@ fn classify_coast_side(
         if is_land_height(height[n], sea_level_offset) != seek_land {
             continue;
         }
-        let neighbor = mesh.positions.get(n).copied().unwrap_or([0.0, 0.0, 1.0]);
+        let neighbor = mesh.position(n).unwrap_or([0.0, 0.0, 1.0]);
         let tangent = normalize3(project_to_tangent(sub3(neighbor, pos), pos));
         dir_sum = add3(dir_sum, tangent);
     }

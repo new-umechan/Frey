@@ -5,8 +5,9 @@ use wasm_bindgen::prelude::*;
 use crate::sim;
 use crate::sim::geology_types::GeologyInternal;
 use crate::sim::{
-    exec_world, exec_world_profiled, exec_world_profiled_detailed, exec_world_slice, world,
-    ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase,
+    exec_world_profiled_detailed_with_feedback_and_states, exec_world_slice_with_states,
+    exec_world_with_feedback_and_states, world, ExecWorldBreakdown,
+    ExecWorldBreakdownDetailed, ExecWorldPhase,
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
@@ -40,7 +41,7 @@ fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
 }
 
 fn run_post_step(managed: &mut ManagedWorld) {
-    post_step_sync_light(&mut managed.world, &managed.geology_params);
+    post_step_sync_light(managed);
     managed.observe_after_world_change();
     managed.save_history_snapshot_if_needed();
 }
@@ -134,16 +135,26 @@ impl WorldSimController {
         sim_world.state.hydrology.river_next = river_next;
         crate::sim::hydrology::rebuild_mfd_from_primary(&mut sim_world.state.hydrology);
         if let Some(target) = config.target_sea_ratio {
-            sim_world.runtime.target_sea_ratio = target.clamp(0.02, 0.98);
+            sim_world.control.target_sea_ratio = target.clamp(0.02, 0.98);
         }
+        sim_world.control.geology_params = geology_params.clone();
+        sim_world.control.erosion_thickness_coupling = geology_params.erosion_thickness_coupling;
+        sim_world.control.deposition_thickness_coupling =
+            geology_params.deposition_thickness_coupling;
         sim_world.clock.epoch = world::EraKind::Crust;
 
         let erosion_state = build_erosion_state(&sim_world, geology_params.clone());
-        let _ = sim_world.attach_hydrology_dynamics(erosion_state);
-        let sync_state = WorldSyncState::from_world(&sim_world);
+        let _ = crate::sim::hydrology::apply_hydrology_state_view(&mut sim_world, &erosion_state);
+        let geology_dynamics = sim_world.exec_scratch.geology_dynamics.take();
+        let sync_state = WorldSyncState::from_world(&sim_world, geology_dynamics.as_ref());
+        let hydrology_dynamics = Some(erosion_state);
 
+        let feedback = world::FeedbackQueue::new(sim_world.cell_count());
         let mut managed = ManagedWorld {
             world: sim_world,
+            hydrology_dynamics,
+            geology_dynamics,
+            feedback,
             simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
             geology_params,
             sync_state,
@@ -151,13 +162,8 @@ impl WorldSimController {
             exec_state: ManagedWorldExecState::default(),
         };
         managed
-            .world
-            .archive
-            .history_ticks
-            .insert(managed.world.clock.tick, "init".to_string());
-        managed
             .history
-            .insert(managed.world.clock.tick, managed.world.clone());
+            .insert(managed.world.clock.tick, managed.snapshot_world());
 
         let world_id = self.next_world_id();
         let output = InitWorldOutput {
@@ -186,7 +192,7 @@ impl WorldSimController {
         let steps = scaled_step_count(managed.simulation_rate, tick_count);
 
         for _ in 0..steps {
-            exec_world(&mut managed.world);
+            managed.with_exec_states(exec_world_with_feedback_and_states);
             run_post_step(managed);
         }
 
@@ -232,11 +238,13 @@ impl WorldSimController {
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
-            let step_breakdown = exec_world_profiled(&mut managed.world);
+            let step_breakdown = managed
+                .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states)
+                .breakdown;
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
-            post_step_sync_light(&mut managed.world, &managed.geology_params);
+            post_step_sync_light(managed);
             step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
@@ -323,11 +331,12 @@ impl WorldSimController {
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
-            let step_breakdown = exec_world_profiled_detailed(&mut managed.world);
+            let step_breakdown = managed
+                .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
-            post_step_sync_light(&mut managed.world, &managed.geology_params);
+            post_step_sync_light(managed);
             step_sync_erosion_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
@@ -411,11 +420,17 @@ impl WorldSimController {
                 continue;
             }
 
-            let slice = exec_world_slice(
-                &mut managed.world,
-                managed.exec_state.next_phase,
-                remaining_budget,
-            );
+            let next_phase = managed.exec_state.next_phase;
+            let slice = managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
+                exec_world_slice_with_states(
+                    world,
+                    feedback,
+                    geology_state,
+                    hydrology_state,
+                    next_phase,
+                    remaining_budget,
+                )
+            });
             managed.exec_state.next_phase = slice.next_phase;
             remaining_budget = remaining_budget.saturating_sub(slice.work_units_consumed);
             if slice.ticks_completed > 0 {

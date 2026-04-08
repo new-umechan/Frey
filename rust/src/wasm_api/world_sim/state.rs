@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 use crate::sim::ExecWorldPhase;
@@ -66,11 +67,21 @@ pub(super) struct WorldSyncState {
 #[derive(Clone)]
 pub(super) struct ManagedWorld {
     pub world: world::World,
+    pub hydrology_dynamics: Option<ErosionAutomatonState>,
+    pub geology_dynamics: Option<world::GeologyDynamicsState>,
+    pub feedback: world::FeedbackQueue,
     pub simulation_rate: f32,
     pub geology_params: GeologyParams,
     pub sync_state: WorldSyncState,
-    pub history: BTreeMap<u64, world::World>,
+    pub history: BTreeMap<u64, WorldHistorySnapshot>,
     pub exec_state: ManagedWorldExecState,
+}
+
+#[derive(Clone)]
+pub(super) struct WorldHistorySnapshot {
+    pub world: world::World,
+    pub hydrology_dynamics: Option<ErosionAutomatonState>,
+    pub geology_dynamics: Option<world::GeologyDynamicsState>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -419,11 +430,11 @@ fn collect_plate_ids(world: &world::World) -> Vec<u32> {
 }
 
 impl WorldSyncState {
-    pub fn from_world(world: &world::World) -> Self {
-        let mantle_heat = world
-            .runtime
-            .geology_dynamics
-            .as_ref()
+    pub fn from_world(
+        world: &world::World,
+        geology_dynamics: Option<&world::GeologyDynamicsState>,
+    ) -> Self {
+        let mantle_heat = geology_dynamics
             .map(|dynamics| dynamics.mantle_heat.clone())
             .filter(|values| values.len() == world.state.geology.height.len())
             .unwrap_or_else(|| vec![0.5; world.state.geology.height.len()]);
@@ -459,7 +470,11 @@ impl WorldSyncState {
         }
     }
 
-    pub fn observe_world(&mut self, world: &world::World) {
+    pub fn observe_world(
+        &mut self,
+        world: &world::World,
+        geology_dynamics: Option<&world::GeologyDynamicsState>,
+    ) {
         self.height.observe(&world.state.geology.height);
         self.lake_depth.observe(&world.state.geology.lake_depth);
         self.volcanism.observe(&world.state.geology.volcanism);
@@ -469,10 +484,7 @@ impl WorldSyncState {
         self.river_flux.observe(&world.state.hydrology.river_flow);
         self.river_next.observe(&world.state.hydrology.river_next);
 
-        let mantle_heat = world
-            .runtime
-            .geology_dynamics
-            .as_ref()
+        let mantle_heat = geology_dynamics
             .map(|dynamics| dynamics.mantle_heat.as_slice())
             .filter(|values| values.len() == world.state.geology.height.len());
         if let Some(values) = mantle_heat {
@@ -674,12 +686,50 @@ impl WorldSyncState {
 }
 
 impl ManagedWorld {
+    pub fn matched_geology_dynamics(&self) -> Option<&world::GeologyDynamicsState> {
+        self.geology_dynamics
+            .as_ref()
+            .filter(|state| state.vertex_states.len() == self.world.state.geology.height.len())
+    }
+
+    pub fn matched_hydrology_dynamics(&self) -> Option<&ErosionAutomatonState> {
+        self.hydrology_dynamics
+            .as_ref()
+            .filter(|state| state.sink_id.len() == self.world.state.geology.height.len())
+    }
+
+    pub fn with_exec_states<R>(
+        &mut self,
+        run: impl FnOnce(
+            &mut world::World,
+            &mut world::FeedbackQueue,
+            &mut Option<world::GeologyDynamicsState>,
+            &mut Option<ErosionAutomatonState>,
+        ) -> R,
+    ) -> R {
+        run(
+            &mut self.world,
+            &mut self.feedback,
+            &mut self.geology_dynamics,
+            &mut self.hydrology_dynamics,
+        )
+    }
+
+    pub fn snapshot_world(&self) -> WorldHistorySnapshot {
+        WorldHistorySnapshot {
+            world: self.world.clone(),
+            hydrology_dynamics: self.hydrology_dynamics.clone(),
+            geology_dynamics: self.geology_dynamics.clone(),
+        }
+    }
+
     pub fn reset_exec_state(&mut self) {
         self.exec_state = ManagedWorldExecState::default();
     }
 
     pub fn observe_after_world_change(&mut self) {
-        self.sync_state.observe_world(&self.world);
+        self.sync_state
+            .observe_world(&self.world, self.geology_dynamics.as_ref());
     }
 
     pub fn save_history_snapshot_if_needed(&mut self) {
@@ -691,12 +741,7 @@ impl ManagedWorld {
         {
             return;
         }
-        self.world
-            .archive
-            .history_ticks
-            .insert(self.world.clock.tick, "auto".to_string());
-        self.history
-            .insert(self.world.clock.tick, self.world.clone());
+        self.history.insert(self.world.clock.tick, self.snapshot_world());
         while self.history.len() > DEFAULT_HISTORY_LIMIT {
             if let Some(oldest) = self.history.keys().next().copied() {
                 self.history.remove(&oldest);

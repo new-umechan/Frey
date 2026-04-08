@@ -20,8 +20,14 @@ pub(crate) use crate::common::geo;
 pub use state::erosion;
 
 pub use exec::{
-    exec_world, exec_world_profiled, exec_world_profiled_detailed, exec_world_slice,
+    exec_world, exec_world_profiled, exec_world_profiled_detailed,
+    exec_world_profiled_detailed_with_feedback,
+    exec_world_profiled_detailed_with_feedback_and_hydrology,
+    exec_world_profiled_detailed_with_feedback_and_states, exec_world_slice,
+    exec_world_slice_with_hydrology, exec_world_slice_with_states, exec_world_with_feedback,
+    exec_world_with_feedback_and_hydrology, exec_world_with_feedback_and_states,
     ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase, ExecWorldSliceResult,
+    GeologyExecState, HydrologyExecState,
 };
 
 use crate::common::mesh::{flatten_positions, generate_icosphere};
@@ -128,10 +134,11 @@ pub fn run_glaciology_step_for_bench(world: &mut world::World, glaciology_budget
 }
 
 pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u32, run_mfd: bool) {
+    let mut hydrology_state: HydrologyExecState = None;
     if run_mfd {
-        hydrology::run_hydrology_step(world, geology_budget);
+        hydrology::run_hydrology_step(world, &mut hydrology_state, geology_budget);
     } else {
-        hydrology::run_hydrology_flow_step(world, geology_budget);
+        hydrology::run_hydrology_flow_step(world, &mut hydrology_state, geology_budget);
     }
 }
 

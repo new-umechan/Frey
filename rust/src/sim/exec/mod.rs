@@ -8,10 +8,19 @@ mod transition;
 #[cfg(test)]
 mod tests;
 
-pub use pipeline::exec_world;
-pub use pipeline::{exec_world_slice, ExecWorldPhase, ExecWorldSliceResult};
+pub type HydrologyExecState = Option<crate::sim::erosion::ErosionAutomatonState>;
+pub type GeologyExecState = Option<crate::sim::world::GeologyDynamicsState>;
+
+pub use pipeline::{
+    exec_world, exec_world_slice, exec_world_slice_with_hydrology, exec_world_slice_with_states,
+    exec_world_with_feedback, exec_world_with_feedback_and_hydrology,
+    exec_world_with_feedback_and_states, ExecWorldPhase, ExecWorldSliceResult,
+};
 pub use profiling::{
-    exec_world_profiled, exec_world_profiled_detailed, ExecWorldBreakdown,
+    exec_world_profiled, exec_world_profiled_detailed,
+    exec_world_profiled_detailed_with_feedback,
+    exec_world_profiled_detailed_with_feedback_and_hydrology,
+    exec_world_profiled_detailed_with_feedback_and_states, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed,
 };
 

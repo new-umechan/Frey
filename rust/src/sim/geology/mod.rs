@@ -37,11 +37,15 @@ pub(super) fn generate_with_mesh(
     pipeline::generate_with_mesh(seed, params)
 }
 
-pub(crate) fn update_geology(world: &mut crate::sim::world::World, budget: u32) {
+pub(crate) fn update_geology(
+    world: &mut crate::sim::world::World,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+    budget: u32,
+) {
     if budget == 0 {
         return;
     }
-    dynamics::run_geology_dynamics_step(world);
+    dynamics::run_geology_dynamics_step_with_state(world, geology_state);
 }
 
 pub(crate) fn step_async_erosion_automaton(

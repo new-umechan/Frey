@@ -2,6 +2,7 @@ use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim;
 use crate::sim::world::{EraKind, World};
 use crate::GeologyParams;
@@ -25,6 +26,7 @@ use profiling::{profile_elapsed_ms, profile_now};
 use routing::{
     apply_baseflow_storage, build_runoff_for_routing, river_rebuild_driver, should_rebuild_network,
 };
+pub(crate) use sync::sync_erosion_height;
 use sync::{erosion_state_matches_world, sync_erosion_rain};
 
 const NETWORK_BLEND_ALPHA: f32 = 0.38;
@@ -51,6 +53,7 @@ pub(crate) struct HydrologyStepDetailBreakdown {
 
 pub(crate) fn run_hydrology_step(
     world: &mut World,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
     geology_budget: u32,
 ) -> HydrologyStepDetailBreakdown {
     let mut detail = HydrologyStepDetailBreakdown::default();
@@ -63,9 +66,16 @@ pub(crate) fn run_hydrology_step(
     let runoff = build_runoff_for_routing(world);
     detail.river_prepare_ms += profile_elapsed_ms(phase_start);
     let river_driver = river_rebuild_driver(world);
-    if !run_river_step_with_erosion_state(world, budget, &runoff, river_driver, &mut detail) {
+    if !run_river_step_with_erosion_state(
+        world,
+        hydrology_state.as_mut(),
+        budget,
+        &runoff,
+        river_driver,
+        &mut detail,
+    ) {
         let phase_start = profile_now();
-        run_river_fallback(world, &runoff);
+        run_river_fallback(world, &runoff, hydrology_state.as_mut());
         world.state.geology.erosion_rate.fill(0.0);
         world.state.geology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
@@ -74,8 +84,22 @@ pub(crate) fn run_hydrology_step(
     detail
 }
 
+pub fn apply_hydrology_state_view(
+    world: &mut World,
+    state: &ErosionAutomatonState,
+) -> Result<(), String> {
+    {
+        let mut cells = world.cell_store_mut();
+        cells.apply_hydrology_view(state)?;
+    }
+    world.refresh_terrain_state();
+    rebuild_mfd_from_primary(&mut world.state.hydrology);
+    Ok(())
+}
+
 pub(crate) fn run_hydrology_flow_step(
     world: &mut World,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
     geology_budget: u32,
 ) -> HydrologyStepDetailBreakdown {
     let mut detail = HydrologyStepDetailBreakdown::default();
@@ -87,9 +111,9 @@ pub(crate) fn run_hydrology_flow_step(
     let phase_start = profile_now();
     let runoff = build_runoff_for_routing(world);
     detail.river_prepare_ms += profile_elapsed_ms(phase_start);
-    if !run_river_flow_only_with_state(world, &runoff, &mut detail) {
+    if !run_river_flow_only_with_state(world, hydrology_state.as_mut(), &runoff, &mut detail) {
         let phase_start = profile_now();
-        run_river_fallback(world, &runoff);
+        run_river_fallback(world, &runoff, hydrology_state.as_mut());
         world.state.geology.erosion_rate.fill(0.0);
         world.state.geology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
@@ -100,22 +124,24 @@ pub(crate) fn run_hydrology_flow_step(
 
 fn run_river_step_with_erosion_state(
     world: &mut World,
+    state: Option<&mut ErosionAutomatonState>,
     budget: u32,
     runoff: &[f32],
     river_driver: f32,
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
     let tick = world.clock.tick;
-    let mesh_positions = &world.mesh.positions;
-    let mesh_nbr_offsets = &world.mesh.nbr_offsets;
-    let mesh_nbrs = &world.mesh.nbrs;
+    let mesh = &world.mesh;
+    let mesh_positions = &mesh.positions;
+    let mesh_nbr_offsets = &mesh.nbr_offsets;
+    let mesh_nbrs = &mesh.nbrs;
     let geology = &mut world.state.geology;
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
     let expected_flux = hydrology.river_flow.len();
     let expected_next = hydrology.river_next.len();
 
-    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
+    let Some(state) = state else {
         return false;
     };
     if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
@@ -230,18 +256,20 @@ fn run_river_step_with_erosion_state(
 
 fn run_river_flow_only_with_state(
     world: &mut World,
+    state: Option<&mut ErosionAutomatonState>,
     runoff: &[f32],
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
-    let mesh_nbr_offsets = &world.mesh.nbr_offsets;
-    let mesh_nbrs = &world.mesh.nbrs;
+    let mesh = &world.mesh;
+    let mesh_nbr_offsets = &mesh.nbr_offsets;
+    let mesh_nbrs = &mesh.nbrs;
     let geology = &mut world.state.geology;
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
     let expected_flux = hydrology.river_flow.len();
     let expected_next = hydrology.river_next.len();
 
-    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
+    let Some(state) = state else {
         return false;
     };
     if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {

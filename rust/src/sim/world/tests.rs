@@ -4,7 +4,7 @@ use super::{
 };
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
-use crate::sim::exec_world;
+use crate::sim::{exec_world, exec_world_with_feedback_and_hydrology};
 use crate::GeologyParams;
 use crate::PlateId;
 
@@ -105,14 +105,10 @@ fn assert_geology_runtime_close(lhs: &World, rhs: &World, eps: f32) {
     );
 
     let lhs_runtime = lhs
-        .runtime
-        .geology_dynamics
-        .as_ref()
+        .matched_geology_dynamics()
         .expect("lhs geology runtime is missing");
     let rhs_runtime = rhs
-        .runtime
-        .geology_dynamics
-        .as_ref()
+        .matched_geology_dynamics()
         .expect("rhs geology runtime is missing");
 
     assert_eq!(
@@ -233,8 +229,8 @@ fn world_initializes_exec_state() {
         EraKind::Crust.real_years_per_tick()
     );
     assert_eq!(world.clock.budgets, EraKind::Crust.budgets());
-    assert_eq!(world.runtime.transition.last_land_ratio, 0.5);
-    assert!(world.feedback.entries.is_empty());
+    assert_eq!(world.clock.transition.last_land_ratio, 0.5);
+    assert!(world.matched_geology_dynamics().is_none());
     assert!(world.polity_relations.is_empty());
 }
 
@@ -325,8 +321,8 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
         },
     );
 
-    assert_eq!(world.runtime.target_sea_ratio, 0.25);
-    assert_eq!(world.runtime.transition.last_land_ratio, 0.75);
+    assert_eq!(world.control.target_sea_ratio, 0.25);
+    assert_eq!(world.clock.transition.last_land_ratio, 0.75);
 }
 
 #[test]
@@ -350,17 +346,15 @@ fn refresh_terrain_state_reclassifies_cells_with_sea_level_offset() {
         },
     );
 
-    world.runtime.sea_level_offset = 0.10;
+    world.control.sea_level_offset = 0.10;
     world.refresh_terrain_state();
 
-    assert_eq!(
-        world.state.terrain.is_coastal,
-        vec![false, true, false, true]
-    );
-    assert!(world.state.terrain.distance_from_ocean[0].is_finite());
-    assert!(world.state.terrain.distance_from_ocean[1].is_finite());
-    assert_eq!(world.state.terrain.distance_from_ocean[2], 0.0);
-    assert_eq!(world.state.terrain.distance_from_ocean[3], 0.0);
+    assert_eq!(world.coastal_flags(), [false, true, false, true]);
+    let distance_from_ocean = world.distance_from_ocean_values();
+    assert!(distance_from_ocean[0].is_finite());
+    assert!(distance_from_ocean[1].is_finite());
+    assert_eq!(distance_from_ocean[2], 0.0);
+    assert_eq!(distance_from_ocean[3], 0.0);
 }
 
 #[test]
@@ -399,7 +393,7 @@ fn civilization_indicators_aggregate_population_and_polity() {
 #[test]
 fn cell_store_view_exposes_geo_geology_climate_hydrology() {
     let world = build_world();
-    let store = world.state.cell_store();
+    let store = world.cell_store();
 
     assert_eq!(store.height.len(), 4);
     assert_eq!(store.plate_id.len(), 4);
@@ -412,7 +406,7 @@ fn cell_store_view_exposes_geo_geology_climate_hydrology() {
 fn cell_store_mut_updates_underlying_world_state() {
     let mut world = build_world();
     {
-        let store = world.state.cell_store_mut();
+        let store = world.cell_store_mut();
         store.height[0] = 2.5;
         store.temperature[0] = -8.0;
         store.river_flow[0] = 42.0;
@@ -623,15 +617,18 @@ fn river_network_persists_without_early_collapse() {
         sink_dirty: vec![1; world.cell_count()],
         params,
     };
-    let _ = world.attach_hydrology_dynamics(erosion);
+    crate::sim::hydrology::apply_hydrology_state_view(&mut world, &erosion)
+        .expect("hydrology state should match world");
+    let mut hydrology_state = Some(erosion);
+    let mut feedback = FeedbackQueue::new(world.cell_count());
 
     for _ in 0..2 {
-        exec_world(&mut world);
+        exec_world_with_feedback_and_hydrology(&mut world, &mut feedback, &mut hydrology_state);
     }
     let metrics_t2 = world.metrics();
 
     for _ in 2..28 {
-        exec_world(&mut world);
+        exec_world_with_feedback_and_hydrology(&mut world, &mut feedback, &mut hydrology_state);
     }
     let metrics_t28 = world.metrics();
 

@@ -3,32 +3,34 @@ use crate::sim::geology_types::{GeologyParams, PlateId};
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
+use super::state::ManagedWorld;
+
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
 
 pub(super) fn build_erosion_state(
     world: &world::World,
     params: GeologyParams,
 ) -> ErosionAutomatonState {
-    let cell_count = world.state.geology.height.len();
+    let cells = world.cell_store();
+    let cell_count = cells.len();
+    let mesh = &world.mesh;
     ErosionAutomatonState {
-        positions: world.mesh.positions.clone(),
-        nbr_offsets: world.mesh.nbr_offsets.clone(),
-        nbrs: world.mesh.nbrs.clone(),
-        height: world.state.geology.height.clone(),
+        positions: mesh.positions.clone(),
+        nbr_offsets: mesh.nbr_offsets.clone(),
+        nbrs: mesh.nbrs.clone(),
+        height: cells.height.to_vec(),
         water: vec![0.0; cell_count],
         sediment: vec![0.0; cell_count],
         armor: vec![0.0; cell_count],
-        rain: world
-            .state
-            .climate
+        rain: cells
             .runoff
             .iter()
             .copied()
             .map(|value| (value.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0))
             .collect(),
-        river_flux: world.state.hydrology.river_flow.clone(),
+        river_flux: cells.river_flow.to_vec(),
         raw_river_flux: Vec::new(),
-        river_next: world.state.hydrology.river_next.clone(),
+        river_next: cells.river_next.to_vec(),
         active_queue: (0..cell_count as u32).collect(),
         active_head: 0,
         in_queue: vec![1; cell_count],
@@ -38,7 +40,7 @@ pub(super) fn build_erosion_state(
         last_sink_full_rebuild_tick: world.clock.tick.saturating_sub(8),
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
-        prev_river_next: world.state.hydrology.river_next.clone(),
+        prev_river_next: cells.river_next.to_vec(),
         flow_heading: vec![[0.0, 0.0, 0.0]; cell_count],
         groundwater_storage: vec![0.0; cell_count],
         scratch_effective_runoff: vec![0.0; cell_count],
@@ -59,62 +61,59 @@ pub(super) fn build_erosion_state(
     }
 }
 
-pub(super) fn sync_erosion_state(world: &mut world::World, params: &GeologyParams) {
-    sync_erosion_state_full(world, params);
+pub(super) fn sync_erosion_state(managed: &mut ManagedWorld) {
+    sync_erosion_state_full(managed);
 }
 
-pub(super) fn sync_erosion_state_full(world: &mut world::World, params: &GeologyParams) {
-    let expected = world.state.geology.height.len();
-    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
-        let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_hydrology_dynamics(state);
+pub(super) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
+    let params = managed.geology_params.clone();
+    let world = &mut managed.world;
+    let hydrology_dynamics = &mut managed.hydrology_dynamics;
+    let cells = world.cell_store();
+    let expected = cells.len();
+    let Some(state) = hydrology_dynamics.as_mut() else {
+        *hydrology_dynamics = Some(build_erosion_state(world, params));
         return;
     };
     if !erosion_state_shape_matches(state, expected) {
-        let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_hydrology_dynamics(state);
+        *hydrology_dynamics = Some(build_erosion_state(world, params));
         return;
     }
-    state.height.clone_from(&world.state.geology.height);
-    state
-        .river_flux
-        .clone_from(&world.state.hydrology.river_flow);
-    state
-        .prev_river_next
-        .clone_from(&world.state.hydrology.river_next);
-    state
-        .river_next
-        .clone_from(&world.state.hydrology.river_next);
+    state.height.clone_from_slice(cells.height);
+    state.river_flux.clone_from_slice(cells.river_flow);
+    state.prev_river_next.clone_from_slice(cells.river_next);
+    state.river_next.clone_from_slice(cells.river_next);
     for (rain, runoff) in state
         .rain
         .iter_mut()
-        .zip(world.state.climate.runoff.iter().copied())
+        .zip(cells.runoff.iter().copied())
     {
         *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
     }
     state.tick = world.clock.tick;
     state.last_river_driver = 1.0;
-    state.params = params.clone();
+    state.params = params;
     state.recent_changed.clear();
     ensure_hydrology_mfd(&mut world.state.hydrology);
     ensure_sink_buffers(state, expected);
 }
 
-pub(super) fn post_step_sync_light(world: &mut world::World, params: &GeologyParams) {
-    let expected = world.state.geology.height.len();
-    let Some(state) = world.runtime.hydrology_dynamics.as_mut() else {
-        let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_hydrology_dynamics(state);
+pub(super) fn post_step_sync_light(managed: &mut ManagedWorld) {
+    let params = managed.geology_params.clone();
+    let world = &mut managed.world;
+    let hydrology_dynamics = &mut managed.hydrology_dynamics;
+    let expected = world.cell_store().len();
+    let Some(state) = hydrology_dynamics.as_mut() else {
+        *hydrology_dynamics = Some(build_erosion_state(world, params));
         return;
     };
     if !erosion_state_shape_matches(state, expected) {
-        let state = build_erosion_state(world, params.clone());
-        let _ = world.attach_hydrology_dynamics(state);
+        *hydrology_dynamics = Some(build_erosion_state(world, params));
         return;
     }
     state.tick = world.clock.tick;
     state.last_river_driver = 1.0;
-    state.params = params.clone();
+    state.params = params;
     state.recent_changed.clear();
     ensure_hydrology_mfd(&mut world.state.hydrology);
     ensure_sink_buffers(state, expected);

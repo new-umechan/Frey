@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 use crate::sim::hydrology::rebuild_mfd_from_primary;
+use crate::sim::world;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
 use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldSyncState};
@@ -79,7 +80,7 @@ impl WorldSimController {
             rebuild_mfd_from_primary(&mut managed.world.state.hydrology);
         }
 
-        sync_erosion_state(&mut managed.world, &managed.geology_params);
+        sync_erosion_state(managed);
         managed.reset_exec_state();
         managed.observe_after_world_change();
         managed.save_history_snapshot_if_needed();
@@ -115,23 +116,23 @@ impl WorldSimController {
                 source.geology_params.clone(),
             )
         };
+        let snapshot = snapshot;
         let new_world_id = self.next_world_id();
         let mut history = BTreeMap::new();
-        history.insert(snapshot.clock.tick, snapshot.clone());
-        let sync_state = WorldSyncState::from_world(&snapshot);
-        let mut forked = ManagedWorld {
-            world: snapshot,
+        history.insert(snapshot.world.clock.tick, snapshot.clone());
+        let sync_state =
+            WorldSyncState::from_world(&snapshot.world, snapshot.geology_dynamics.as_ref());
+        let forked = ManagedWorld {
+            world: snapshot.world,
+            hydrology_dynamics: snapshot.hydrology_dynamics,
+            geology_dynamics: snapshot.geology_dynamics,
+            feedback: world::FeedbackQueue::new(sync_state.height.shadow.len()),
             simulation_rate: source_rate,
             geology_params: source_params,
             sync_state,
             history,
             exec_state: ManagedWorldExecState::default(),
         };
-        forked
-            .world
-            .archive
-            .history_ticks
-            .insert(tick_u64, "fork".to_string());
         self.worlds.insert(new_world_id.clone(), forked);
 
         let result = ForkWorldResult {
@@ -158,24 +159,24 @@ impl WorldSimController {
             .worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
-        let restored_world = managed
+        let restored_snapshot = managed
             .history
             .get(&tick_u64)
             .cloned()
             .ok_or_else(|| history_tick_not_available_error(tick_u64))?;
 
-        managed.world = restored_world;
-        sync_erosion_state(&mut managed.world, &managed.geology_params);
-        managed.sync_state = WorldSyncState::from_world(&managed.world);
+        managed.world = restored_snapshot.world;
+        managed.hydrology_dynamics = restored_snapshot.hydrology_dynamics;
+        managed.geology_dynamics = restored_snapshot.geology_dynamics;
+        if managed.hydrology_dynamics.is_none() {
+            sync_erosion_state(managed);
+        }
+        managed.sync_state =
+            WorldSyncState::from_world(&managed.world, managed.geology_dynamics.as_ref());
         managed.reset_exec_state();
         managed
-            .world
-            .archive
-            .history_ticks
-            .insert(managed.world.clock.tick, "restore".to_string());
-        managed
             .history
-            .insert(managed.world.clock.tick, managed.world.clone());
+            .insert(managed.world.clock.tick, managed.snapshot_world());
 
         let result = RestoreWorldResult {
             world_id,

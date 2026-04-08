@@ -1,11 +1,12 @@
 use super::feedback::apply_feedback_queue;
 use super::geology::{
-    apply_glaciology_forcing_to_geology, apply_hydrology_erosion_to_geology, run_geology_step,
-    run_hydrology_step_unprofiled, should_run_hydrology_mfd,
+    apply_glaciology_forcing_to_geology, apply_hydrology_erosion_to_geology,
+    run_geology_step_with_state, run_hydrology_step_unprofiled,
+    should_run_hydrology_mfd_for_geology,
 };
 use super::transition::update_era_transition;
 
-use crate::sim::world::World;
+use crate::sim::world::{FeedbackQueue, World};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ExecWorldPhase {
@@ -35,28 +36,38 @@ pub(super) fn prepare_step(world: &mut World) {
     world.clock.runtime_tick_ms = world.clock.epoch.runtime_tick_ms();
 }
 
-pub(super) fn run_feedback_stage(world: &mut World) {
-    apply_feedback_queue(world);
+pub(super) fn run_feedback_stage(world: &mut World, feedback: &mut FeedbackQueue) {
+    apply_feedback_queue(world, feedback);
 }
 
-pub(super) fn run_geology_stage(world: &mut World) {
-    run_geology_step(world, world.clock.budgets.geology);
+pub(super) fn run_geology_stage_with_geology(
+    world: &mut World,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+) {
+    run_geology_step_with_state(world, geology_state, world.clock.budgets.geology);
 }
 
 pub(super) fn run_climate_stage(world: &mut World) {
     crate::sim::climate::run_climate_step(world, world.clock.budgets.climate);
 }
 
-pub(super) fn run_glaciology_stage(world: &mut World) {
+pub(super) fn run_glaciology_stage_with_hydrology(
+    world: &mut World,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+) {
     crate::sim::glaciology::run_glaciology_step(world, world.clock.budgets.climate);
-    apply_glaciology_forcing_to_geology(world);
+    apply_glaciology_forcing_to_geology(world, hydrology_state);
     world.refresh_terrain_state();
 }
 
-pub(super) fn run_hydrology_stage(world: &mut World) {
-    let run_mfd = should_run_hydrology_mfd(world);
-    run_hydrology_step_unprofiled(world, world.clock.budgets.geology, run_mfd);
-    apply_hydrology_erosion_to_geology(world);
+pub(super) fn run_hydrology_stage_with_hydrology(
+    world: &mut World,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+) {
+    let run_mfd = should_run_hydrology_mfd_for_geology(world, geology_state.as_ref());
+    run_hydrology_step_unprofiled(world, hydrology_state, world.clock.budgets.geology, run_mfd);
+    apply_hydrology_erosion_to_geology(world, geology_state, hydrology_state);
     world.refresh_terrain_state();
 }
 
@@ -83,6 +94,44 @@ pub(super) fn finalize_tick(world: &mut World) {
 
 pub fn exec_world_slice(
     world: &mut World,
+    feedback: &mut FeedbackQueue,
+    starting_phase: ExecWorldPhase,
+    work_budget: u32,
+) -> ExecWorldSliceResult {
+    let mut hydrology_state = None;
+    exec_world_slice_with_hydrology(
+        world,
+        feedback,
+        &mut hydrology_state,
+        starting_phase,
+        work_budget,
+    )
+}
+
+pub fn exec_world_slice_with_hydrology(
+    world: &mut World,
+    feedback: &mut FeedbackQueue,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+    starting_phase: ExecWorldPhase,
+    work_budget: u32,
+) -> ExecWorldSliceResult {
+    world.with_geology_exec_state(|world, geology_state| {
+        exec_world_slice_with_states(
+            world,
+            feedback,
+            geology_state,
+            hydrology_state,
+            starting_phase,
+            work_budget,
+        )
+    })
+}
+
+pub fn exec_world_slice_with_states(
+    world: &mut World,
+    feedback: &mut FeedbackQueue,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
     starting_phase: ExecWorldPhase,
     work_budget: u32,
 ) -> ExecWorldSliceResult {
@@ -105,11 +154,11 @@ pub fn exec_world_slice(
                 next_phase = ExecWorldPhase::Feedback;
             }
             ExecWorldPhase::Feedback => {
-                run_feedback_stage(world);
+                run_feedback_stage(world, feedback);
                 next_phase = ExecWorldPhase::Geology;
             }
             ExecWorldPhase::Geology => {
-                run_geology_stage(world);
+                run_geology_stage_with_geology(world, geology_state);
                 next_phase = ExecWorldPhase::Climate;
             }
             ExecWorldPhase::Climate => {
@@ -117,11 +166,11 @@ pub fn exec_world_slice(
                 next_phase = ExecWorldPhase::Glaciology;
             }
             ExecWorldPhase::Glaciology => {
-                run_glaciology_stage(world);
+                run_glaciology_stage_with_hydrology(world, hydrology_state);
                 next_phase = ExecWorldPhase::Hydrology;
             }
             ExecWorldPhase::Hydrology => {
-                run_hydrology_stage(world);
+                run_hydrology_stage_with_hydrology(world, geology_state, hydrology_state);
                 next_phase = ExecWorldPhase::Ecology;
             }
             ExecWorldPhase::Ecology => {
@@ -156,12 +205,37 @@ pub fn exec_world_slice(
 }
 
 pub fn exec_world(world: &mut World) {
+    let mut feedback = FeedbackQueue::new(world.cell_count());
+    exec_world_with_feedback(world, &mut feedback);
+}
+
+pub fn exec_world_with_feedback(world: &mut World, feedback: &mut FeedbackQueue) {
+    let mut hydrology_state: crate::sim::exec::HydrologyExecState = None;
+    exec_world_with_feedback_and_hydrology(world, feedback, &mut hydrology_state);
+}
+
+pub fn exec_world_with_feedback_and_hydrology(
+    world: &mut World,
+    feedback: &mut FeedbackQueue,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+) {
+    world.with_geology_exec_state(|world, geology_state| {
+        exec_world_with_feedback_and_states(world, feedback, geology_state, hydrology_state)
+    });
+}
+
+pub fn exec_world_with_feedback_and_states(
+    world: &mut World,
+    feedback: &mut FeedbackQueue,
+    geology_state: &mut crate::sim::exec::GeologyExecState,
+    hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+) {
     prepare_step(world);
-    run_feedback_stage(world);
-    run_geology_stage(world);
+    run_feedback_stage(world, feedback);
+    run_geology_stage_with_geology(world, geology_state);
     run_climate_stage(world);
-    run_glaciology_stage(world);
-    run_hydrology_stage(world);
+    run_glaciology_stage_with_hydrology(world, hydrology_state);
+    run_hydrology_stage_with_hydrology(world, geology_state, hydrology_state);
     run_ecology_stage(world);
     run_society_stage(world);
     run_transition_stage(world);

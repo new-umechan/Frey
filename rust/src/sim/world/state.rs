@@ -8,7 +8,7 @@ use super::entity_store::{
     EntityStore, EntityStoreError, PolityRecord, RegionRecord, SettlementRecord,
 };
 use super::exec::{
-    ClockState, ComponentPatch, EntityBundle, EntityRef, FeedbackQueue, RuntimeState, TargetRef,
+    ClockState, ComponentPatch, EntityBundle, EntityRef, ExecScratchState, TargetRef,
 };
 use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, PlateRelation, StressTensor};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
@@ -17,18 +17,28 @@ use crate::sim::polity::types::{PolityGroup, PolityRelation};
 pub struct World {
     pub mesh: WorldMesh,
     pub state: WorldState,
+    #[serde(default)]
+    pub projections: WorldProjectionState,
     pub entities: EntitiesState,
     pub clock: ClockState,
-    pub feedback: FeedbackQueue,
-    pub runtime: RuntimeState,
+    pub control: WorldControlState,
+    #[serde(alias = "runtime", default)]
+    pub exec_scratch: ExecScratchState,
     #[serde(default)]
     pub polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     #[serde(default)]
     pub polity_groups: Vec<PolityGroup>,
     #[serde(default)]
     pub plate_relations: HashMap<(PlateId, PlateId), PlateRelation>,
-    #[serde(default)]
-    pub archive: ArchiveState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldControlState {
+    pub geology_params: crate::sim::geology_types::GeologyParams,
+    pub target_sea_ratio: f32,
+    pub sea_level_offset: f32,
+    pub erosion_thickness_coupling: f32,
+    pub deposition_thickness_coupling: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -120,9 +130,6 @@ pub struct RegionComponent {
 }
 
 pub struct EntitiesState {
-    pub polity_components: Vec<PolityComponent>,
-    pub settlement_components: Vec<SettlementComponent>,
-    pub region_components: Vec<RegionComponent>,
     pub store: EntityStore,
 }
 
@@ -135,35 +142,36 @@ struct EntitiesSerde {
 
 impl std::fmt::Debug for EntitiesState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let polity_components = self.polity_components();
+        let settlement_components = self.settlement_components();
+        let region_components = self.region_components();
         f.debug_struct("EntitiesState")
-            .field("polity_components", &self.polity_components)
-            .field("settlement_components", &self.settlement_components)
-            .field("region_components", &self.region_components)
+            .field("polity_components", &polity_components)
+            .field("settlement_components", &settlement_components)
+            .field("region_components", &region_components)
             .finish()
     }
 }
 
 impl Clone for EntitiesState {
     fn clone(&self) -> Self {
-        Self::from_components(
-            self.polity_components.clone(),
-            self.settlement_components.clone(),
-            self.region_components.clone(),
-        )
+        Self {
+            store: self.store.clone(),
+        }
     }
 }
 
 impl PartialEq for EntitiesState {
     fn eq(&self, other: &Self) -> bool {
-        self.polity_components == other.polity_components
-            && self.settlement_components == other.settlement_components
-            && self.region_components == other.region_components
+        self.store == other.store
     }
 }
 
 impl Default for EntitiesState {
     fn default() -> Self {
-        Self::from_components(Vec::new(), Vec::new(), Vec::new())
+        Self {
+            store: EntityStore::default(),
+        }
     }
 }
 
@@ -173,9 +181,9 @@ impl Serialize for EntitiesState {
         S: Serializer,
     {
         EntitiesSerde {
-            polity_components: self.polity_components.clone(),
-            settlement_components: self.settlement_components.clone(),
-            region_components: self.region_components.clone(),
+            polity_components: self.polity_components(),
+            settlement_components: self.settlement_components(),
+            region_components: self.region_components(),
         }
         .serialize(serializer)
     }
@@ -201,98 +209,79 @@ impl EntitiesState {
         settlement_components: Vec<SettlementComponent>,
         region_components: Vec<RegionComponent>,
     ) -> Self {
-        let mut entities = Self {
-            polity_components,
-            settlement_components,
-            region_components,
-            store: EntityStore::default(),
-        };
-        entities.sync_store_from_components();
-        entities
+        let mut store = EntityStore::default();
+        for component in polity_components {
+            let _ = store.create_polity(component.into());
+        }
+        for component in settlement_components {
+            let _ = store.create_settlement(component.into());
+        }
+        for component in region_components {
+            let _ = store.create_region(component.into());
+        }
+        Self { store }
     }
 
-    pub fn sync_store_from_components(&mut self) {
-        self.store = EntityStore::default();
-
-        for component in &self.polity_components {
-            let _ = self.store.create_polity(component.clone().into());
-        }
-        for component in &self.settlement_components {
-            let _ = self.store.create_settlement(component.clone().into());
-        }
-        for component in &self.region_components {
-            let _ = self.store.create_region(component.clone().into());
-        }
-    }
-
-    pub fn sync_components_from_store(&mut self) {
-        self.polity_components = self
+    pub fn polity_components(&self) -> Vec<PolityComponent> {
+        let mut components = self
             .store
             .iter_polities()
             .cloned()
             .map(PolityComponent::from)
-            .collect();
-        self.polity_components
-            .sort_by_key(|component| component.polity_id);
+            .collect::<Vec<_>>();
+        components.sort_by_key(|component| component.polity_id);
+        components
+    }
 
-        self.settlement_components = self
+    pub fn settlement_components(&self) -> Vec<SettlementComponent> {
+        let mut components = self
             .store
             .iter_settlements()
             .cloned()
             .map(SettlementComponent::from)
-            .collect();
-        self.settlement_components
-            .sort_by_key(|component| component.settlement_id);
+            .collect::<Vec<_>>();
+        components.sort_by_key(|component| component.settlement_id);
+        components
+    }
 
-        self.region_components = self
+    pub fn region_components(&self) -> Vec<RegionComponent> {
+        let mut components = self
             .store
             .iter_regions()
             .cloned()
             .map(RegionComponent::from)
-            .collect();
-        self.region_components
-            .sort_by_key(|component| component.region_id);
-    }
-
-    pub fn sync_all_from_store(&mut self) {
-        self.sync_components_from_store();
+            .collect::<Vec<_>>();
+        components.sort_by_key(|component| component.region_id);
+        components
     }
 
     pub fn replace_polities(&mut self, components: Vec<PolityComponent>) {
-        self.polity_components = components;
-        self.sync_store_from_components();
+        let settlements = self.settlement_components();
+        let regions = self.region_components();
+        *self = Self::from_components(components, settlements, regions);
     }
 
     pub fn replace_settlements(&mut self, components: Vec<SettlementComponent>) {
-        self.settlement_components = components;
-        self.sync_store_from_components();
+        let polities = self.polity_components();
+        let regions = self.region_components();
+        *self = Self::from_components(polities, components, regions);
     }
 
     pub fn replace_regions(&mut self, components: Vec<RegionComponent>) {
-        self.region_components = components;
-        self.sync_store_from_components();
+        let polities = self.polity_components();
+        let settlements = self.settlement_components();
+        *self = Self::from_components(polities, settlements, components);
     }
 
     pub fn to_entity_store(&self) -> Result<EntityStore, EntityStoreError> {
-        let mut store = EntityStore::default();
-        for component in &self.polity_components {
-            store.create_polity(component.clone().into())?;
-        }
-        for component in &self.settlement_components {
-            store.create_settlement(component.clone().into())?;
-        }
-        for component in &self.region_components {
-            store.create_region(component.clone().into())?;
-        }
-        store.validate()?;
-        Ok(store)
+        self.store.validate()?;
+        Ok(self.store.clone())
     }
 
     pub fn from_entity_store(store: &EntityStore) -> Self {
-        let mut entities = Self::default();
-        entities.store = store.clone();
-        entities.sync_all_from_store();
-        entities
+        Self {
+            store: store.clone(),
+        }
     }
 
     pub fn iter_polities(&self) -> impl Iterator<Item = &PolityRecord> {
@@ -331,7 +320,6 @@ impl EntitiesState {
                 self.store.create_region(component.into())?;
             }
         }
-        self.sync_all_from_store();
         Ok(())
     }
 
@@ -347,7 +335,6 @@ impl EntitiesState {
                 self.store.remove_region(*id);
             }
         }
-        self.sync_all_from_store();
     }
 
     pub fn mutate_entity(
@@ -406,7 +393,6 @@ impl EntitiesState {
             }
             _ => {}
         }
-        self.sync_all_from_store();
     }
 }
 
@@ -431,10 +417,24 @@ pub struct WorldMesh {
     pub nbrs: Vec<u32>,
 }
 
+impl WorldMesh {
+    pub fn position(&self, index: usize) -> Option<[f32; 3]> {
+        self.positions.get(index).copied()
+    }
+
+    pub fn cell_neighbors(&self, index: usize) -> &[u32] {
+        let start = self.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+        let end = self
+            .nbr_offsets
+            .get(index + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
+        self.nbrs.get(start..end).unwrap_or(&[])
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldState {
-    #[serde(alias = "geo")]
-    pub terrain: TerrainState,
     pub geology: GeologyState,
     pub climate: ClimateState,
     #[serde(default)]
@@ -450,6 +450,12 @@ pub struct WorldState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct WorldProjectionState {
+    #[serde(alias = "geo")]
+    pub terrain: TerrainState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TerrainState {
     #[serde(alias = "latitude_deg")]
     pub latitude: Vec<f32>,
@@ -457,10 +463,6 @@ pub struct TerrainState {
     pub distance_from_ocean: Vec<f32>,
     pub coast_side: Vec<CoastSide>,
     pub is_coastal: Vec<bool>,
-    #[serde(default)]
-    pub neighbors_offsets: Vec<u32>,
-    #[serde(default)]
-    pub neighbors: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -631,10 +633,6 @@ pub struct ConflictState {
 }
 
 pub struct CellStore<'a> {
-    pub latitude: &'a [f32],
-    pub distance_from_ocean: &'a [f32],
-    pub coast_side: &'a [CoastSide],
-    pub is_coastal: &'a [bool],
     pub neighbors_offsets: &'a [u32],
     pub neighbors: &'a [u32],
     pub height: &'a [f32],
@@ -665,12 +663,6 @@ pub struct CellStore<'a> {
 }
 
 pub struct CellStoreMut<'a> {
-    pub latitude: &'a mut Vec<f32>,
-    pub distance_from_ocean: &'a mut Vec<f32>,
-    pub coast_side: &'a mut Vec<CoastSide>,
-    pub is_coastal: &'a mut Vec<bool>,
-    pub neighbors_offsets: &'a mut Vec<u32>,
-    pub neighbors: &'a mut Vec<u32>,
     pub height: &'a mut Vec<f32>,
     pub lake_depth: &'a mut Vec<f32>,
     pub plate_id: &'a mut Vec<PlateId>,
@@ -719,79 +711,175 @@ pub struct CivilizationIndicators {
     pub state_cells: usize,
 }
 
-impl WorldState {
+impl World {
     pub fn cell_store(&self) -> CellStore<'_> {
         CellStore {
-            latitude: &self.terrain.latitude,
-            distance_from_ocean: &self.terrain.distance_from_ocean,
-            coast_side: &self.terrain.coast_side,
-            is_coastal: &self.terrain.is_coastal,
-            neighbors_offsets: &self.terrain.neighbors_offsets,
-            neighbors: &self.terrain.neighbors,
-            height: &self.geology.height,
-            lake_depth: &self.geology.lake_depth,
-            plate_id: &self.geology.plate_id,
-            erosion_rate: &self.geology.erosion_rate,
-            deposition_rate: &self.geology.deposition_rate,
-            volcanism: &self.geology.volcanism,
-            vertex_buoyancy: &self.geology.vertex_buoyancy,
-            geology_internal: &self.geology.geology_internal,
-            temperature: &self.climate.temperature,
-            precipitation: &self.climate.precipitation,
-            evapotranspiration: &self.climate.evapotranspiration,
-            runoff: &self.climate.runoff,
-            aridity: &self.climate.aridity,
-            ocean_temperature: &self.climate.ocean_temperature,
-            precipitable_water: &self.climate.precipitable_water,
-            cloud_water: &self.climate.cloud_water,
-            wind_u: &self.climate.wind_u,
-            wind_v: &self.climate.wind_v,
-            moisture_flux_u: &self.climate.moisture_flux_u,
-            moisture_flux_v: &self.climate.moisture_flux_v,
-            river_downstream: &self.hydrology.river_downstream,
-            river_next: &self.hydrology.river_next,
-            river_flow: &self.hydrology.river_flow,
-            river_transport_cost: &self.hydrology.river_transport_cost,
-            is_lake: &self.hydrology.is_lake,
+            neighbors_offsets: &self.mesh.nbr_offsets,
+            neighbors: &self.mesh.nbrs,
+            height: &self.state.geology.height,
+            lake_depth: &self.state.geology.lake_depth,
+            plate_id: &self.state.geology.plate_id,
+            erosion_rate: &self.state.geology.erosion_rate,
+            deposition_rate: &self.state.geology.deposition_rate,
+            volcanism: &self.state.geology.volcanism,
+            vertex_buoyancy: &self.state.geology.vertex_buoyancy,
+            geology_internal: &self.state.geology.geology_internal,
+            temperature: &self.state.climate.temperature,
+            precipitation: &self.state.climate.precipitation,
+            evapotranspiration: &self.state.climate.evapotranspiration,
+            runoff: &self.state.climate.runoff,
+            aridity: &self.state.climate.aridity,
+            ocean_temperature: &self.state.climate.ocean_temperature,
+            precipitable_water: &self.state.climate.precipitable_water,
+            cloud_water: &self.state.climate.cloud_water,
+            wind_u: &self.state.climate.wind_u,
+            wind_v: &self.state.climate.wind_v,
+            moisture_flux_u: &self.state.climate.moisture_flux_u,
+            moisture_flux_v: &self.state.climate.moisture_flux_v,
+            river_downstream: &self.state.hydrology.river_downstream,
+            river_next: &self.state.hydrology.river_next,
+            river_flow: &self.state.hydrology.river_flow,
+            river_transport_cost: &self.state.hydrology.river_transport_cost,
+            is_lake: &self.state.hydrology.is_lake,
         }
     }
 
     pub fn cell_store_mut(&mut self) -> CellStoreMut<'_> {
         CellStoreMut {
-            latitude: &mut self.terrain.latitude,
-            distance_from_ocean: &mut self.terrain.distance_from_ocean,
-            coast_side: &mut self.terrain.coast_side,
-            is_coastal: &mut self.terrain.is_coastal,
-            neighbors_offsets: &mut self.terrain.neighbors_offsets,
-            neighbors: &mut self.terrain.neighbors,
-            height: &mut self.geology.height,
-            lake_depth: &mut self.geology.lake_depth,
-            plate_id: &mut self.geology.plate_id,
-            erosion_rate: &mut self.geology.erosion_rate,
-            deposition_rate: &mut self.geology.deposition_rate,
-            volcanism: &mut self.geology.volcanism,
-            vertex_buoyancy: &mut self.geology.vertex_buoyancy,
-            geology_internal: &mut self.geology.geology_internal,
-            temperature: &mut self.climate.temperature,
-            precipitation: &mut self.climate.precipitation,
-            evapotranspiration: &mut self.climate.evapotranspiration,
-            runoff: &mut self.climate.runoff,
-            aridity: &mut self.climate.aridity,
-            ocean_temperature: &mut self.climate.ocean_temperature,
-            precipitable_water: &mut self.climate.precipitable_water,
-            cloud_water: &mut self.climate.cloud_water,
-            wind_u: &mut self.climate.wind_u,
-            wind_v: &mut self.climate.wind_v,
-            moisture_flux_u: &mut self.climate.moisture_flux_u,
-            moisture_flux_v: &mut self.climate.moisture_flux_v,
-            river_downstream: &mut self.hydrology.river_downstream,
-            river_next: &mut self.hydrology.river_next,
-            river_flow: &mut self.hydrology.river_flow,
-            river_transport_cost: &mut self.hydrology.river_transport_cost,
-            is_lake: &mut self.hydrology.is_lake,
+            height: &mut self.state.geology.height,
+            lake_depth: &mut self.state.geology.lake_depth,
+            plate_id: &mut self.state.geology.plate_id,
+            erosion_rate: &mut self.state.geology.erosion_rate,
+            deposition_rate: &mut self.state.geology.deposition_rate,
+            volcanism: &mut self.state.geology.volcanism,
+            vertex_buoyancy: &mut self.state.geology.vertex_buoyancy,
+            geology_internal: &mut self.state.geology.geology_internal,
+            temperature: &mut self.state.climate.temperature,
+            precipitation: &mut self.state.climate.precipitation,
+            evapotranspiration: &mut self.state.climate.evapotranspiration,
+            runoff: &mut self.state.climate.runoff,
+            aridity: &mut self.state.climate.aridity,
+            ocean_temperature: &mut self.state.climate.ocean_temperature,
+            precipitable_water: &mut self.state.climate.precipitable_water,
+            cloud_water: &mut self.state.climate.cloud_water,
+            wind_u: &mut self.state.climate.wind_u,
+            wind_v: &mut self.state.climate.wind_v,
+            moisture_flux_u: &mut self.state.climate.moisture_flux_u,
+            moisture_flux_v: &mut self.state.climate.moisture_flux_v,
+            river_downstream: &mut self.state.hydrology.river_downstream,
+            river_next: &mut self.state.hydrology.river_next,
+            river_flow: &mut self.state.hydrology.river_flow,
+            river_transport_cost: &mut self.state.hydrology.river_transport_cost,
+            is_lake: &mut self.state.hydrology.is_lake,
         }
     }
 
+    pub fn with_geology_exec_state<R>(
+        &mut self,
+        run: impl FnOnce(&mut World, &mut crate::sim::exec::GeologyExecState) -> R,
+    ) -> R {
+        let mut geology_state = self.exec_scratch.geology_dynamics.take();
+        let result = run(self, &mut geology_state);
+        self.exec_scratch.geology_dynamics = geology_state;
+        result
+    }
+
+    pub fn matched_geology_dynamics(&self) -> Option<&GeologyDynamicsState> {
+        self.exec_scratch
+            .geology_dynamics
+            .as_ref()
+            .filter(|state| state.vertex_states.len() == self.state.geology.height.len())
+    }
+
+    pub fn position(&self, index: usize) -> Option<[f32; 3]> {
+        self.mesh.positions.get(index).copied()
+    }
+
+    pub fn latitude(&self, index: usize) -> f32 {
+        self.projections
+            .terrain
+            .latitude
+            .get(index)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    pub fn distance_from_ocean(&self, index: usize) -> f32 {
+        self.projections
+            .terrain
+            .distance_from_ocean
+            .get(index)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    pub fn coast_side(&self, index: usize) -> CoastSide {
+        self.projections
+            .terrain
+            .coast_side
+            .get(index)
+            .copied()
+            .unwrap_or(CoastSide::None)
+    }
+
+    pub fn is_coastal(&self, index: usize) -> bool {
+        self.projections
+            .terrain
+            .is_coastal
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    pub fn coastal_flags(&self) -> &[bool] {
+        &self.projections.terrain.is_coastal
+    }
+
+    pub fn distance_from_ocean_values(&self) -> &[f32] {
+        &self.projections.terrain.distance_from_ocean
+    }
+
+    pub fn cell_neighbors(&self, index: usize) -> &[u32] {
+        let start = self.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+        let end = self
+            .mesh
+            .nbr_offsets
+            .get(index + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
+        self.mesh.nbrs.get(start..end).unwrap_or(&[])
+    }
+
+    pub fn heights(&self) -> &[f32] {
+        &self.state.geology.height
+    }
+
+    pub fn sea_level_offset(&self) -> f32 {
+        self.control.sea_level_offset
+    }
+
+    pub fn is_land_cell(&self, index: usize) -> bool {
+        self.heights()
+            .get(index)
+            .copied()
+            .map(|height| height > self.sea_level_offset())
+            .unwrap_or(false)
+    }
+
+    pub fn runoff(&self) -> &[f32] {
+        &self.state.climate.runoff
+    }
+
+    pub fn river_flow(&self) -> &[f32] {
+        &self.state.hydrology.river_flow
+    }
+
+    pub fn river_next(&self) -> &[i32] {
+        &self.state.hydrology.river_next
+    }
+}
+
+impl WorldState {
     pub fn civilization_state(&self) -> CivilizationState<'_> {
         CivilizationState {
             population: &self.population,
@@ -808,6 +896,57 @@ impl WorldState {
             polity: &mut self.polity,
             conflict: &mut self.conflict,
         }
+    }
+}
+
+impl<'a> CellStore<'a> {
+    pub fn len(&self) -> usize {
+        self.height.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.height.is_empty()
+    }
+
+    pub fn is_land_cell(&self, index: usize, sea_level_offset: f32) -> bool {
+        self.height
+            .get(index)
+            .copied()
+            .map(|height| height > sea_level_offset)
+            .unwrap_or(false)
+    }
+
+    pub fn cell_neighbors(&self, index: usize) -> &[u32] {
+        let start = self.neighbors_offsets.get(index).copied().unwrap_or(0) as usize;
+        let end = self
+            .neighbors_offsets
+            .get(index + 1)
+            .copied()
+            .unwrap_or(start as u32) as usize;
+        self.neighbors.get(start..end).unwrap_or(&[])
+    }
+}
+
+impl<'a> CellStoreMut<'a> {
+    pub fn len(&self) -> usize {
+        self.height.len()
+    }
+
+    pub fn apply_hydrology_view(
+        &mut self,
+        state: &crate::sim::erosion::ErosionAutomatonState,
+    ) -> Result<(), String> {
+        let expected = self.len();
+        if state.height.len() != expected
+            || state.river_flux.len() != expected
+            || state.river_next.len() != expected
+        {
+            return Err("river erosion state length does not match core cell count".to_string());
+        }
+        self.height.clone_from(&state.height);
+        self.river_flow.clone_from(&state.river_flux);
+        self.river_next.clone_from(&state.river_next);
+        Ok(())
     }
 }
 

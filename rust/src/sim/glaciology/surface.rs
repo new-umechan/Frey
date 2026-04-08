@@ -17,8 +17,8 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     let heights = world.state.geology.height.clone();
     let temperatures = world.state.climate.temperature.clone();
     let precipitation = world.state.climate.precipitation.clone();
-    let nbr_offsets = world.state.terrain.neighbors_offsets.clone();
-    let nbrs = world.state.terrain.neighbors.clone();
+    let nbr_offsets = world.mesh.nbr_offsets.clone();
+    let nbrs = world.mesh.nbrs.clone();
 
     let state = &mut world.state.glaciology;
     let mut total_ice = 0.0f32;
@@ -58,7 +58,7 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
         state.glacial_erosion_rate[i] =
             state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
     }
-    world.runtime.sea_level_offset =
+    world.control.sea_level_offset =
         -(total_ice / cell_count.max(1) as f32) * params.sea_level_coupling.max(0.0);
 }
 
@@ -191,7 +191,7 @@ mod tests {
 
         run_glaciology_step(&mut world, 1);
 
-        assert!(world.runtime.sea_level_offset < 0.0);
+        assert!(world.control.sea_level_offset < 0.0);
         assert!(world.state.glaciology.ice_load.iter().any(|v| *v > 0.0));
         assert!(world
             .state

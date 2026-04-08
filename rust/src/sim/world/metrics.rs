@@ -27,10 +27,9 @@ pub struct WorldMetrics {
 
 impl World {
     pub fn metrics(&self) -> WorldMetrics {
-        let height = &self.state.geology.height;
-        let river_flux = &self.state.hydrology.river_flow;
-        let cell_count = height.len();
-        if cell_count == 0 {
+        let cells = self.cell_store();
+        let cell_count = cells.len();
+        if cells.is_empty() {
             return WorldMetrics::default();
         }
 
@@ -44,9 +43,9 @@ impl World {
         let mut top_fluxes = [0.0f32; 10];
         let mut top_fluxes_len = 0usize;
 
-        for (i, &h) in height.iter().enumerate().take(cell_count) {
-            let flux = river_flux.get(i).copied().unwrap_or(0.0).max(0.0);
-            if h > 0.0 {
+        for (i, &h) in cells.height.iter().enumerate().take(cell_count) {
+            let flux = cells.river_flow.get(i).copied().unwrap_or(0.0).max(0.0);
+            if cells.is_land_cell(i, self.sea_level_offset()) {
                 land_cells += 1;
             }
             min_height = min_height.min(h);
@@ -72,9 +71,9 @@ impl World {
             river_mainstem_persistence,
             river_flux_concentration,
         ) = river_network_metrics(
-            &self.state.geology.height,
-            &self.state.hydrology.river_flow,
-            &self.state.hydrology.river_next,
+            cells.height,
+            cells.river_flow,
+            cells.river_next,
             top10_river_flux_sum,
             sum_flux,
             max_flux,
@@ -131,9 +130,9 @@ fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {
 }
 
 fn continent_stats(world: &World) -> (usize, usize) {
-    let height = &world.state.geology.height;
-    let cell_count = height.len();
-    if cell_count == 0 {
+    let cells = world.cell_store();
+    let cell_count = cells.len();
+    if cells.is_empty() {
         return (0, 0);
     }
     let min_continent_cells = ((cell_count as f32) * 0.01).ceil().max(1.0) as usize;
@@ -143,7 +142,7 @@ fn continent_stats(world: &World) -> (usize, usize) {
     let mut largest_continent_cells = 0usize;
 
     for start_index in 0..cell_count {
-        if visited[start_index] || height[start_index] <= 0.0 {
+        if visited[start_index] || !cells.is_land_cell(start_index, world.sea_level_offset()) {
             continue;
         }
         visited[start_index] = true;
@@ -153,18 +152,11 @@ fn continent_stats(world: &World) -> (usize, usize) {
 
         while let Some(index) = queue.pop_front() {
             component_size += 1;
-            let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-            let end = world
-                .mesh
-                .nbr_offsets
-                .get(index + 1)
-                .copied()
-                .unwrap_or(start as u32) as usize;
-            for &neighbor in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
+            for &neighbor in cells.cell_neighbors(index) {
                 let neighbor_index = neighbor as usize;
                 if neighbor_index >= cell_count
                     || visited[neighbor_index]
-                    || height[neighbor_index] <= 0.0
+                    || !cells.is_land_cell(neighbor_index, world.sea_level_offset())
                 {
                     continue;
                 }

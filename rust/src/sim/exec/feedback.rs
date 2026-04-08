@@ -1,14 +1,15 @@
 use crate::sim::world::{
-    CellFieldId, ComponentPatch, EntityBundle, FeedbackPayload, FieldValue, TargetRef, World,
+    CellFieldId, ComponentPatch, EntityBundle, FeedbackPayload, FeedbackQueue, FieldValue,
+    TargetRef, World,
 };
 
-pub(super) fn apply_feedback_queue(world: &mut World) {
-    apply_payload_entries(world);
+pub(super) fn apply_feedback_queue(world: &mut World, feedback: &mut FeedbackQueue) {
+    apply_payload_entries(world, feedback);
 }
 
-fn apply_payload_entries(world: &mut World) {
+fn apply_payload_entries(world: &mut World, feedback: &mut FeedbackQueue) {
     let cell_count = world.cell_count();
-    let entries = std::mem::take(&mut world.feedback.entries);
+    let entries = std::mem::take(&mut feedback.entries);
     let mut remaining = Vec::new();
     for entry in entries {
         if entry.enqueued_tick >= world.clock.tick {
@@ -53,7 +54,7 @@ fn apply_payload_entries(world: &mut World) {
             _ => {}
         }
     }
-    world.feedback.entries = remaining;
+    feedback.entries = remaining;
 }
 
 fn apply_feedback_f32_delta(
