@@ -148,7 +148,7 @@ python3 benches/scripts/tune-hydrology-params.py --grid-json hydro_grid.json --m
 ## 注意事項
 
 - **実行時間**: 1 試行あたり 30-60 秒程度（環境依存）
-- **WASM ビルド**: パラメータ変更ごとに `terrain:sync` が実行されます
+- **WASM ビルド**: パラメータ変更ごとに `config:sync`（統合同期）が実行されます
 - **制約条件**: `min-flow-rho` と `min-lake-f1` を下回る設定は「実行不可」として除外されます
 
 ## 関連コマンド
