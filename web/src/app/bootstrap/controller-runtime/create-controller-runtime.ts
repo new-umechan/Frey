@@ -1,8 +1,3 @@
-import {
-    getExecModuleGraph,
-    getExecModules,
-    WorldSimController,
-} from "../../../interface/wasm";
 import { createRuntimeControllers } from "./controller-factories";
 import { DEFAULT_ERA_SCALE } from "../../../shared/constants";
 import { runInitialWorldAndUiSync } from "../post-init-sync";
@@ -19,6 +14,8 @@ import {
     describeExecModuleGraph,
     getDefaultExecDisplayPhase,
 } from "../../runtime/state";
+import { createEngineWorkerClient } from "../../engine/engine-worker-client";
+import { type EngineClient } from "../../engine/engine-client";
 
 export interface ControllerDeps {
     elements: AppElements;
@@ -55,7 +52,7 @@ export interface RuntimeContext extends ControllerDeps {
     perfControls: any;
     perfStatFields: PerfStatFields | null;
     viewportPanel: HTMLElement;
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
 }
 
 function createRuntimeContext(options: ControllerDeps): RuntimeContext {
@@ -158,11 +155,14 @@ function shouldAdvanceWorld(context: RuntimeContext) {
     return context.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
 }
 
-export function createControllerRuntime(options: ControllerDeps) {
+export async function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
-    context.worldSimController = new WorldSimController();
-    context.worldState.execModules = getExecModules(context.worldSimController);
-    context.worldState.execModuleGraph = getExecModuleGraph(context.worldSimController);
+    context.worldSimController = createEngineWorkerClient();
+    context.worldState.execModules = [];
+    context.worldState.execModuleGraph = null;
+    context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
+    context.worldState.execModules = await context.worldSimController.get_exec_modules();
+    context.worldState.execModuleGraph = await context.worldSimController.get_exec_module_graph();
     context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
 
     const runtimeControllers = createRuntimeControllers(context);

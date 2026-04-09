@@ -27,7 +27,7 @@ export async function runInitialWorldAndUiSync({
     setEraScale: (scale: string, metrics: EraMetrics) => void;
     syncClimateUi: () => void;
     playbackController: {
-        refreshHistoryTicks: () => void;
+        refreshHistoryTicks: () => Promise<void>;
         syncPlaybackUi: () => void;
         notePlaybackOverlayActivity: () => void;
         bindOverlayActivityEvents: (element: HTMLElement) => void;
@@ -52,7 +52,7 @@ export async function runInitialWorldAndUiSync({
     setEraScale(currentEraScale, currentEraMetrics);
     syncClimateUi();
 
-    playbackController.refreshHistoryTicks();
+    await playbackController.refreshHistoryTicks();
     playbackController.syncPlaybackUi();
     playbackController.notePlaybackOverlayActivity();
     playbackController.bindOverlayActivityEvents(viewportPanel);

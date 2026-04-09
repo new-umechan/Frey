@@ -59,6 +59,47 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                 post({ id: request.id, ok: true, kind: request.kind, payload: result });
                 return;
             }
+            case "get_field": {
+                const result = runtime.get_field(
+                    request.payload.worldId,
+                    request.payload.fieldKind,
+                    request.payload.window,
+                );
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
+            case "list_history_ticks": {
+                const result = runtime.list_history_ticks(request.payload.worldId);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
+            case "restore_world_to_tick": {
+                runtime.restore_world_to_tick(request.payload.worldId, request.payload.tick);
+                post({ id: request.id, ok: true, kind: request.kind, payload: null });
+                return;
+            }
+            case "exec_world_profiled": {
+                const result = runtime.exec_world_profiled(
+                    request.payload.worldId,
+                    request.payload.tickCount,
+                );
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
+            case "get_exec_modules": {
+                const result = (runtime as WorldSimController & {
+                    exec_modules(): unknown[];
+                }).exec_modules();
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
+            case "get_exec_module_graph": {
+                const result = (runtime as WorldSimController & {
+                    exec_module_graph(): unknown;
+                }).exec_module_graph();
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
             default: {
                 const neverKind: never = request;
                 throw new Error(`unsupported worker request: ${String(neverKind)}`);

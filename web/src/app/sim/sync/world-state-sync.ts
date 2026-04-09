@@ -3,7 +3,7 @@ import { applyWorldDeltaToCore } from "./delta-sync";
 import { refreshWorldStatsFromController } from "./stats-sync";
 import { type SyncOptions, type SyncDeltaOptions, type SyncVisibleOptions } from "./types";
 
-export function syncWorldFromController(options: SyncOptions) {
+export async function syncWorldFromController(options: SyncOptions) {
     const {
         worldSimController,
         worldId,
@@ -17,10 +17,10 @@ export function syncWorldFromController(options: SyncOptions) {
         level,
     } = options;
 
-    const core = buildCoreBuffers(worldSimController, worldId);
+    const core = await buildCoreBuffers(worldSimController, worldId);
     setCurrentTerrainData(core);
 
-    const metrics = worldSimController.get_metrics(worldId);
+    const metrics = await worldSimController.get_metrics(worldId);
     if (!metrics) {
         return null;
     }
@@ -29,7 +29,7 @@ export function syncWorldFromController(options: SyncOptions) {
     const eraMetrics = buildEraMetricsFromRuntime(era, metrics);
     setEraScale(era);
 
-    refreshWorldStatsFromController({
+    await refreshWorldStatsFromController({
         worldSimController,
         worldId,
         world,
@@ -45,7 +45,7 @@ export function syncWorldFromController(options: SyncOptions) {
     };
 }
 
-export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
+export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     const {
         worldSimController,
         worldId,
@@ -63,11 +63,11 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
 
     let worldDelta = null;
     if (perfRecorder) {
-        worldDelta = perfRecorder.measure("get_world_delta", () =>
-            worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds })
-        );
+        const start = performance.now();
+        worldDelta = await worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
+        perfRecorder.pushSample("get_world_delta", performance.now() - start);
     } else {
-        worldDelta = worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
+        worldDelta = await worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
     }
 
     const changes = applyWorldDeltaToCore(core, worldDelta);
@@ -75,8 +75,8 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     let eraMetrics = null;
     let statsRefreshed = false;
     if (refreshStats) {
-        statsRefreshed = refreshWorldStats();
-        const metrics = worldSimController.get_metrics(worldId);
+        statsRefreshed = await refreshWorldStats();
+        const metrics = await worldSimController.get_metrics(worldId);
         if (metrics) {
             const era = String(metrics.era_scale ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);
@@ -93,9 +93,9 @@ export function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     };
 }
 
-export function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions) {
+export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions) {
     const { worldSimController, worldId, core, fieldKinds } = options;
-    const worldDelta = worldSimController.get_world_delta(worldId, {
+    const worldDelta = await worldSimController.get_world_delta(worldId, {
         include_fields: fieldKinds,
     });
     return applyWorldDeltaToCore(core, worldDelta);

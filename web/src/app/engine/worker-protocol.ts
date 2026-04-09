@@ -23,6 +23,36 @@ export type EngineWorkerRequest =
         id: number;
         kind: "get_metrics";
         payload: { worldId: string };
+    }
+    | {
+        id: number;
+        kind: "get_field";
+        payload: { worldId: string; fieldKind: string; window: number };
+    }
+    | {
+        id: number;
+        kind: "list_history_ticks";
+        payload: { worldId: string };
+    }
+    | {
+        id: number;
+        kind: "restore_world_to_tick";
+        payload: { worldId: string; tick: number };
+    }
+    | {
+        id: number;
+        kind: "exec_world_profiled";
+        payload: { worldId: string; tickCount: number };
+    }
+    | {
+        id: number;
+        kind: "get_exec_modules";
+        payload: Record<string, never>;
+    }
+    | {
+        id: number;
+        kind: "get_exec_module_graph";
+        payload: Record<string, never>;
     };
 
 export type EngineWorkerResponse =

@@ -10,7 +10,7 @@ import {
 } from "./tick-utils";
 import { type PlaybackControlsElements } from "../../components/dom";
 import { type PlaybackState, type RuntimeState } from "../runtime/state";
-import { type WorldSimController } from "../../interface/wasm";
+import { type EngineClient } from "../engine/engine-client";
 import { type CoreBuffers } from "../sim/sync/types";
 
 const PLAYBACK_OVERLAY_IDLE_MS = 3600;
@@ -27,7 +27,7 @@ export interface PlaybackController {
     handleStepForward: () => void;
     handleTogglePlay: () => void;
     notePlaybackOverlayActivity: () => void;
-    refreshHistoryTicks: () => void;
+    refreshHistoryTicks: () => Promise<void>;
     setPlaybackRunning: (nextPlaying: boolean) => void;
     syncAfterWorldStep: (stepInfo?: { previousTick?: number; nextTick?: number }) => void;
     syncAfterWorldSync: () => void;
@@ -51,12 +51,12 @@ export function createPlaybackController({
     eventLogList: HTMLUListElement;
     playbackState: PlaybackState;
     worldState: RuntimeState;
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     getActiveWorldId: () => string | null;
     getCurrentTerrainData: () => CoreBuffers | null;
     getWorldTick: () => number;
-    syncWorldFromActiveController: () => void;
-    stepWorldTick: () => void;
+    syncWorldFromActiveController: () => Promise<any>;
+    stepWorldTick: () => Promise<any>;
     setStatus: (msg: string) => void;
 }): PlaybackController {
     const overlayController = createPlaybackOverlayController({
@@ -193,7 +193,7 @@ export function createPlaybackController({
         syncPlaybackUi();
     }
 
-    function refreshHistoryTicks() {
+    async function refreshHistoryTicks() {
         const activeWorldId = getActiveWorldId();
         if (!activeWorldId) {
             playbackState.availableTicks = [];
@@ -204,7 +204,7 @@ export function createPlaybackController({
             return;
         }
 
-        const response = worldSimController.list_history_ticks(activeWorldId);
+        const response = await worldSimController.list_history_ticks(activeWorldId);
         const ticks: unknown[] = Array.isArray(response?.ticks) ? response.ticks : [];
         const normalized = normalizeTicks(ticks);
         playbackState.availableTicks = normalized;
@@ -226,7 +226,7 @@ export function createPlaybackController({
         updateMaxTickLabel();
     }
 
-    function restoreWorldToTick(targetTick: number | null) {
+    async function restoreWorldToTick(targetTick: number | null) {
         const activeWorldId = getActiveWorldId();
         if (!activeWorldId || worldState.sliceBusy) {
             return;
@@ -238,9 +238,9 @@ export function createPlaybackController({
         }
 
         try {
-            worldSimController.restore_world_to_tick(activeWorldId, normalizedTick);
+            await worldSimController.restore_world_to_tick(activeWorldId, normalizedTick);
             setPlaybackRunning(false);
-            syncWorldFromActiveController();
+            await syncWorldFromActiveController();
             playbackState.selectedTick = normalizedTick;
             renderHistorySeekSlider();
             syncPlaybackUi();
@@ -290,36 +290,39 @@ export function createPlaybackController({
         if (playbackState.isPlaying || worldState.sliceBusy || !getActiveWorldId()) {
             return;
         }
-        stepWorldTick();
+        void stepWorldTick();
     }
 
-    function withHistoryRestore(callback: () => void) {
+    function withHistoryRestore(callback: () => Promise<void>) {
         if (!getActiveWorldId()) {
             return;
         }
         setPlaybackRunning(false);
-        callback();
+        void callback().catch((error) => {
+            setStatus(`History restore failed: ${String(error)}`);
+            console.error(error);
+        });
     }
 
     function handleRewind() {
-        withHistoryRestore(() => {
+        withHistoryRestore(async () => {
             const targetTick = getPreviousHistoryTick(getWorldTick());
-            restoreWorldToTick(targetTick);
+            await restoreWorldToTick(targetTick);
         });
     }
 
     function handleHistoryJump(tickText: string) {
-        withHistoryRestore(() => {
+        withHistoryRestore(async () => {
             const targetTick = sanitizeTick(tickText);
             if (targetTick === null) {
                 return;
             }
-            restoreWorldToTick(targetTick);
+            await restoreWorldToTick(targetTick);
         });
     }
 
     function handleHistorySeek(indexText: string) {
-        withHistoryRestore(() => {
+        withHistoryRestore(async () => {
             const historyIndex = sanitizeTick(indexText);
             if (historyIndex === null) {
                 return;
@@ -334,12 +337,12 @@ export function createPlaybackController({
             if (targetTick === getWorldTick()) {
                 return;
             }
-            restoreWorldToTick(targetTick);
+            await restoreWorldToTick(targetTick);
         });
     }
 
     function handleHistoryStepDirection(direction: number) {
-        withHistoryRestore(() => {
+        withHistoryRestore(async () => {
             const normalizedDirection = direction >= 0 ? 1 : -1;
             const targetTick = normalizedDirection < 0
                 ? getPreviousHistoryTick(getWorldTick())
@@ -347,7 +350,7 @@ export function createPlaybackController({
             if (targetTick === null) {
                 return;
             }
-            restoreWorldToTick(targetTick);
+            await restoreWorldToTick(targetTick);
         });
     }
 
@@ -370,13 +373,13 @@ export function createPlaybackController({
         const previousTick = stepInfo?.previousTick;
         const nextTick = stepInfo?.nextTick ?? worldTick;
         if (shouldRefreshHistoryOnAdvance(previousTick, nextTick)) {
-            refreshHistoryTicks();
+            void refreshHistoryTicks();
         }
         syncPlaybackUi();
     }
 
     function syncAfterWorldSync() {
-        refreshHistoryTicks();
+        void refreshHistoryTicks();
         syncPlaybackUi();
     }
 

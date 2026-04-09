@@ -59,7 +59,7 @@ export async function createApp() {
     setStatus("Preparing mesh...");
     const mesh = generate_mesh(LEVEL);
     const { basePositions, indices } = createMeshBuffers(mesh);
-    const runtime = bootstrapAppRuntime({
+    const runtime = await bootstrapAppRuntime({
         elements,
         isPerfEnabled,
         setStatus,

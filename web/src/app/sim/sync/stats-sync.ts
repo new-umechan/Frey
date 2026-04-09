@@ -7,7 +7,7 @@ function formatPercent(ratio: number): string {
     return `${(ratio * 100).toFixed(1)}%`;
 }
 
-export function refreshWorldStatsFromController(options: {
+export async function refreshWorldStatsFromController(options: {
     worldSimController: any;
     worldId: string | null;
     world: any;
@@ -20,7 +20,7 @@ export function refreshWorldStatsFromController(options: {
         return false;
     }
 
-    const metrics = worldSimController.get_metrics(worldId);
+    const metrics = await worldSimController.get_metrics(worldId);
     if (!metrics) {
         return false;
     }

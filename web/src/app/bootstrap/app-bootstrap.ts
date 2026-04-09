@@ -106,7 +106,7 @@ interface BootstrapAppRuntimeOptions {
     indices: Uint32Array;
 }
 
-export function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
+export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
     const {
         elements,
         isPerfEnabled,
@@ -129,7 +129,7 @@ export function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         getState: runtimeStore.getState,
     });
 
-    const controllerRuntime = createControllerRuntime(createControllerDeps({
+    const controllerRuntime = await createControllerRuntime(createControllerDeps({
         elements,
         isPerfEnabled,
         setStatus,

@@ -1,4 +1,4 @@
-import { type WorldSimController } from "../../../interface/wasm";
+import { type EngineClient } from "../../engine/engine-client";
 import { type FieldKind } from "./constants";
 import { type TerrainRenderer } from "../../visualizers/terrain-renderer";
 import { type WorldState } from "../../state/app-state";
@@ -41,7 +41,7 @@ export interface CoreBuffers {
 }
 
 export interface SyncOptions {
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     worldId: string;
     world: WorldState;
     currentSeed: string;
@@ -56,7 +56,7 @@ export interface SyncOptions {
 }
 
 export interface SyncDeltaOptions {
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     worldId: string;
     world: WorldState;
     core: CoreBuffers;
@@ -72,7 +72,7 @@ export interface SyncDeltaOptions {
 }
 
 export interface SyncVisibleOptions {
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     worldId: string;
     core: CoreBuffers;
     fieldKinds: FieldKind[];

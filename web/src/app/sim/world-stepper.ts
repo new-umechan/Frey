@@ -2,23 +2,23 @@ import { type WorldState, type AppState } from "../state/app-state";
 import { getDefaultExecDisplayPhase, type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
-import { type WorldSimController } from "../../interface/wasm";
+import { type EngineClient } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from "../sim/sync/types";
 import { type FieldKind } from "../sim/sync/constants";
 
 export interface WorldStepperOptions {
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     world: WorldState;
     worldState: RuntimeState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
     buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldDeltaFromController: (options: SyncDeltaOptions) => { changes: any; statsRefreshed: boolean };
-    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => any;
+    syncWorldDeltaFromController: (options: SyncDeltaOptions) => Promise<{ changes: any; statsRefreshed: boolean }>;
+    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<any>;
     getDeltaFieldKindsForView: (options: { viewMode: string; cellMetric: string }) => FieldKind[];
-    refreshWorldStats: () => boolean;
+    refreshWorldStats: () => Promise<boolean>;
     syncClimateUi: () => void;
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
@@ -65,12 +65,12 @@ export function createWorldStepper(options: WorldStepperOptions) {
         });
     };
 
-    const syncVisibleFieldsForCurrentView = () => {
+    const syncVisibleFieldsForCurrentView = async () => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             return;
         }
-        const changes = syncVisibleCoreFieldsFromController({
+        const changes = await syncVisibleCoreFieldsFromController({
             worldSimController,
             worldId: state.activeWorldId,
             core: state.currentTerrainData as CoreBuffers,
@@ -79,7 +79,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         terrainRenderer.applyCoreChanges(state.currentTerrainData as CoreBuffers, changes, state.currentSurfaceMode, world.tick);
     };
 
-    const syncCompletedWorldStep = (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {
+    const syncCompletedWorldStep = async (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {
         const liveState = getCurrentState();
         if (!liveState.activeWorldId || !liveState.currentTerrainData) {
             return false;
@@ -89,7 +89,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         const previousTick = Math.max(0, Math.floor(tickOptions?.previousTick ?? world.tick));
         const nextTick = previousTick + batchCount;
         const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
-        const { changes, statsRefreshed } = syncWorldDeltaFromController({
+        const { changes, statsRefreshed } = await syncWorldDeltaFromController({
             worldSimController,
             worldId: liveState.activeWorldId,
             world,
@@ -125,44 +125,47 @@ export function createWorldStepper(options: WorldStepperOptions) {
         return true;
     };
 
-    const stepWorldTick = (perfRecorder: TickPerfRecorder | null = null, tickOptions: { sampleStepBreakdown?: boolean; batchCount?: number; benchmarkMode?: boolean; batched?: boolean } = {}) => {
+    const stepWorldTick = async (perfRecorder: TickPerfRecorder | null = null, tickOptions: { sampleStepBreakdown?: boolean; batchCount?: number; benchmarkMode?: boolean; batched?: boolean } = {}) => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             return false;
         }
 
-        const runTick = () => {
+        const runTick = async () => {
             const liveState = getCurrentState();
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
             const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
             const previousTick = world.tick;
 
             if (perfRecorder) {
-                perfRecorder.measure("exec_world", () => {
-                    if (sampleStepBreakdown) {
-                        const profiled = worldSimController.exec_world_profiled(liveState.activeWorldId!, batchCount);
-                        pushStepBreakdownSamples(perfRecorder, profiled);
-                        return;
-                    }
-                    worldSimController.exec_world(liveState.activeWorldId!, batchCount);
-                });
+                const start = performance.now();
+                if (sampleStepBreakdown) {
+                    const profiled = await worldSimController.exec_world_profiled(liveState.activeWorldId!, batchCount);
+                    pushStepBreakdownSamples(perfRecorder, profiled);
+                } else {
+                    await worldSimController.exec_world(liveState.activeWorldId!, batchCount);
+                }
+                perfRecorder.pushSample("exec_world", performance.now() - start);
             } else {
-                worldSimController.exec_world(liveState.activeWorldId!, batchCount);
+                await worldSimController.exec_world(liveState.activeWorldId!, batchCount);
             }
 
-            return syncCompletedWorldStep({
+            return await syncCompletedWorldStep({
                 ...tickOptions,
                 previousTick,
             }, perfRecorder);
         };
 
         if (perfRecorder) {
-            return perfRecorder.measure("tick_total", runTick);
+            const start = performance.now();
+            const result = await runTick();
+            perfRecorder.pushSample("tick_total", performance.now() - start);
+            return result;
         }
-        return runTick();
+        return await runTick();
     };
 
-    const stepWorldPlayback = () => {
+    const stepWorldPlayback = async () => {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             worldState.sliceBusy = false;
@@ -174,7 +177,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             };
         }
 
-        const response = worldSimController.exec_world_slice(
+        const response = await worldSimController.exec_world_slice(
             state.activeWorldId,
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
         );
@@ -184,7 +187,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             : getDefaultExecDisplayPhase(worldState);
         const processedTicks = Math.max(0, Math.floor(response?.processed_ticks ?? 0));
         if (processedTicks > 0) {
-            syncCompletedWorldStep({
+            await syncCompletedWorldStep({
                 previousTick: Math.max(0, world.tick - processedTicks),
                 batchCount: processedTicks,
                 batched: false,

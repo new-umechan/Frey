@@ -1,4 +1,4 @@
-import { type WorldSimController } from "../../../interface/wasm";
+import { type EngineClient } from "../../engine/engine-client";
 import { FLOAT32_FIELDS, OPTIONAL_FIELD_KINDS, type FieldKind } from "./constants";
 import { type CoreBuffers, type TypedArray } from "./types";
 
@@ -13,15 +13,15 @@ function createFieldData(fieldKind: FieldKind, cellCount: number): TypedArray {
     return new Int32Array(count);
 }
 
-function getFieldData(
-    controller: WorldSimController,
+async function getFieldData(
+    controller: EngineClient,
     worldId: string,
     fieldKind: FieldKind,
     fallbackCellCount = 0
-): TypedArray {
+): Promise<TypedArray> {
     let response: any = null;
     try {
-        response = controller.get_field(worldId, fieldKind, 1);
+        response = await controller.get_field(worldId, fieldKind, 1);
     } catch (error) {
         if (OPTIONAL_FIELD_KINDS.has(fieldKind)) {
             return createFieldData(fieldKind, fallbackCellCount);
@@ -37,29 +37,29 @@ function getFieldData(
     return new Int32Array(response?.i32_data ?? []);
 }
 
-export function buildCoreBuffers(controller: WorldSimController, worldId: string): CoreBuffers {
-    const heightData = getFieldData(controller, worldId, "height");
+export async function buildCoreBuffers(controller: EngineClient, worldId: string): Promise<CoreBuffers> {
+    const heightData = await getFieldData(controller, worldId, "height");
     const cellCount = heightData.length;
     return {
         heightData,
-        lakeDepth: getFieldData(controller, worldId, "lake_depth", cellCount),
-        plateId: getFieldData(controller, worldId, "plate_id", cellCount),
-        riverFlux: getFieldData(controller, worldId, "river_flux", cellCount),
-        riverNext: getFieldData(controller, worldId, "river_next", cellCount),
-        mantleHeat: getFieldData(controller, worldId, "mantle_heat", cellCount),
-        erosionRate: getFieldData(controller, worldId, "erosion_rate", cellCount),
-        depositionRate: getFieldData(controller, worldId, "deposition_rate", cellCount),
-        temperature: getFieldData(controller, worldId, "temperature", cellCount),
-        precipitation: getFieldData(controller, worldId, "precipitation", cellCount),
-        evapotranspiration: getFieldData(controller, worldId, "evapotranspiration", cellCount),
-        aridity: getFieldData(controller, worldId, "aridity", cellCount),
-        runoff: getFieldData(controller, worldId, "runoff", cellCount),
-        icePressure: getFieldData(controller, worldId, "ice_pressure", cellCount),
-        oceanTemperature: getFieldData(controller, worldId, "ocean_temperature", cellCount),
-        windU: getFieldData(controller, worldId, "wind_u", cellCount),
-        windV: getFieldData(controller, worldId, "wind_v", cellCount),
-        moistureFluxU: getFieldData(controller, worldId, "moisture_flux_u", cellCount),
-        moistureFluxV: getFieldData(controller, worldId, "moisture_flux_v", cellCount),
-        riverTransportCost: getFieldData(controller, worldId, "river_transport_cost", cellCount),
+        lakeDepth: await getFieldData(controller, worldId, "lake_depth", cellCount),
+        plateId: await getFieldData(controller, worldId, "plate_id", cellCount),
+        riverFlux: await getFieldData(controller, worldId, "river_flux", cellCount),
+        riverNext: await getFieldData(controller, worldId, "river_next", cellCount),
+        mantleHeat: await getFieldData(controller, worldId, "mantle_heat", cellCount),
+        erosionRate: await getFieldData(controller, worldId, "erosion_rate", cellCount),
+        depositionRate: await getFieldData(controller, worldId, "deposition_rate", cellCount),
+        temperature: await getFieldData(controller, worldId, "temperature", cellCount),
+        precipitation: await getFieldData(controller, worldId, "precipitation", cellCount),
+        evapotranspiration: await getFieldData(controller, worldId, "evapotranspiration", cellCount),
+        aridity: await getFieldData(controller, worldId, "aridity", cellCount),
+        runoff: await getFieldData(controller, worldId, "runoff", cellCount),
+        icePressure: await getFieldData(controller, worldId, "ice_pressure", cellCount),
+        oceanTemperature: await getFieldData(controller, worldId, "ocean_temperature", cellCount),
+        windU: await getFieldData(controller, worldId, "wind_u", cellCount),
+        windV: await getFieldData(controller, worldId, "wind_v", cellCount),
+        moistureFluxU: await getFieldData(controller, worldId, "moisture_flux_u", cellCount),
+        moistureFluxV: await getFieldData(controller, worldId, "moisture_flux_v", cellCount),
+        riverTransportCost: await getFieldData(controller, worldId, "river_transport_cost", cellCount),
     };
 }

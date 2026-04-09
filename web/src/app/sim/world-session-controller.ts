@@ -1,19 +1,19 @@
 import { type WorldState } from "../state/app-state";
 import { type EraMetrics } from "../state/era-presets";
 import { type StatFields } from "../../components/dom";
-import { type WorldSimController } from "../../interface/wasm";
+import { type EngineClient } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { type SyncOptions, type CoreBuffers } from "../sim/sync/types";
 
 export interface WorldSessionControllerOptions {
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     world: WorldState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
     buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldFromController: (options: SyncOptions) => any;
-    refreshWorldStatsFromController: (options: any) => any;
+    syncWorldFromController: (options: SyncOptions) => Promise<any>;
+    refreshWorldStatsFromController: (options: any) => Promise<any>;
     setCurrentTerrainData: (data: CoreBuffers) => void;
     syncClimateUi: () => void;
     hidePlateHover: () => void;
@@ -46,12 +46,12 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
         level,
     } = options;
 
-    const syncWorldFromActiveController = () => {
+    const syncWorldFromActiveController = async () => {
         const worldId = getActiveWorldId();
         if (!worldId) {
             return null;
         }
-        const result = syncWorldFromController({
+        const result = await syncWorldFromController({
             worldSimController,
             worldId,
             world,
@@ -71,7 +71,7 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
         return result;
     };
 
-    const refreshActiveWorldStats = () => {
+    const refreshActiveWorldStats = async () => {
         const worldId = getActiveWorldId();
         if (!worldId) {
             return null;

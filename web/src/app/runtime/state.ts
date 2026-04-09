@@ -108,6 +108,7 @@ export interface RuntimeState {
     maxTicksPerFrame: number;
     sliceWorkBudget: number;
     sliceBusy: boolean;
+    sliceRequestInFlight: boolean;
     slicePhase: string;
     maxRiverStepsPerFrame: number;
     erosionAutomatonState: any | null; // TODO: define automaton state type
@@ -132,6 +133,7 @@ export function createInitialRuntimeState(defaultRuntimeTickMs: number): Runtime
         maxTicksPerFrame: 20,
         sliceWorkBudget: 1,
         sliceBusy: false,
+        sliceRequestInFlight: false,
         slicePhase: "feedback",
         maxRiverStepsPerFrame: 4,
         erosionAutomatonState: null,

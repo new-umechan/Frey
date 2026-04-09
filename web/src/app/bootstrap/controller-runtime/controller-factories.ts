@@ -104,7 +104,7 @@ function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRe
     });
 }
 
-function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void, refreshWorldStats: () => boolean) {
+function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void, refreshWorldStats: () => Promise<boolean>) {
     return createWorldStepper({
         worldSimController: context.worldSimController,
         world: context.world,
@@ -184,7 +184,7 @@ function createTerrainGenerationRuntime(context: RuntimeContext, playbackControl
     });
 }
 
-function createPlaybackRuntime(context: RuntimeContext, syncWorldFromActiveController: () => any, stepWorldTick: (perfRecorder?: any) => any) {
+function createPlaybackRuntime(context: RuntimeContext, syncWorldFromActiveController: () => Promise<any>, stepWorldTick: (perfRecorder?: any) => Promise<any>) {
     return createPlaybackController({
         playbackControls: context.playbackControls,
         eventLogList: context.eventLogList,

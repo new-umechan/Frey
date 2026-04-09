@@ -1,4 +1,4 @@
-import { type WorldSimController } from "../../interface/wasm";
+import { type EngineClient } from "../engine/engine-client";
 import { type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
@@ -10,7 +10,7 @@ export interface TerrainGenerationController {
 export interface TerrainGenerationControllerOptions {
     seedForm: HTMLFormElement;
     seedInput: HTMLInputElement;
-    worldSimController: WorldSimController;
+    worldSimController: EngineClient;
     level: number;
     terrainParams: any;
     world: WorldState;
@@ -25,7 +25,7 @@ export interface TerrainGenerationControllerOptions {
     ) => EraMetrics;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
     setStatus: (msg: string) => void;
-    syncWorldFromActiveController: () => Promise<void>;
+    syncWorldFromActiveController: () => Promise<any>;
     getCurrentEraScale: () => string;
     getCurrentSeed: () => string;
     setCurrentState: (patch: any) => void;
@@ -70,7 +70,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
 
         try {
             await onInitWorldStart();
-            const initResult = worldSimController.init_world(nextSeed, level, {
+            const initResult = await worldSimController.init_world(nextSeed, level, {
                 geology_params: terrainParams,
             });
             if (token !== generationToken) {
@@ -90,7 +90,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             });
 
             setPlaybackRunning(true);
-            syncWorldFromActiveController();
+            await syncWorldFromActiveController();
             appendPlaybackEvent("world-generated", "地形生成", `seed=${nextSeed}`);
 
             const eraPreset = getEraScalePreset(getCurrentEraScale());

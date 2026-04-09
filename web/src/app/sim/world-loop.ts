@@ -15,6 +15,7 @@ export function resetWorldProgress(
     worldState.accumulatorMs = 0;
     worldState.lastFrameTimeMs = null;
     worldState.sliceBusy = false;
+    worldState.sliceRequestInFlight = false;
     worldState.slicePhase = getDefaultExecDisplayPhase(worldState);
     worldState.pendingRiverSteps = 0;
     worldState.terrainErosionDirty = false;
@@ -44,7 +45,7 @@ export function advanceWorldLoop(
     nowMs: number,
     worldState: RuntimeState,
     canRunTick: () => boolean,
-    stepWorldPlayback: () => { processedTicks: number } | undefined
+    stepWorldPlayback: () => Promise<{ processedTicks: number } | undefined>
 ): void {
     if (!Number.isFinite(nowMs)) {
         return;
@@ -69,15 +70,27 @@ export function advanceWorldLoop(
     if (!worldState.sliceBusy && worldState.accumulatorMs < worldState.runtimeTickMs) {
         return;
     }
+    if (worldState.sliceRequestInFlight) {
+        return;
+    }
 
-    const result = stepWorldPlayback();
-    if (result && result.processedTicks > 0) {
-        worldState.accumulatorMs = Math.max(
-            0,
-            worldState.accumulatorMs - (worldState.runtimeTickMs * result.processedTicks),
-        );
-    }
-    if (playbackActive || worldState.sliceBusy) {
-        worldState.accumulatorMs = Math.min(worldState.accumulatorMs, worldState.runtimeTickMs);
-    }
+    worldState.sliceRequestInFlight = true;
+    void stepWorldPlayback()
+        .then((result) => {
+            if (result && result.processedTicks > 0) {
+                worldState.accumulatorMs = Math.max(
+                    0,
+                    worldState.accumulatorMs - (worldState.runtimeTickMs * result.processedTicks),
+                );
+            }
+            if (playbackActive || worldState.sliceBusy) {
+                worldState.accumulatorMs = Math.min(worldState.accumulatorMs, worldState.runtimeTickMs);
+            }
+        })
+        .catch((error) => {
+            console.error(error);
+        })
+        .finally(() => {
+            worldState.sliceRequestInFlight = false;
+        });
 }
