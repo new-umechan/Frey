@@ -3,6 +3,8 @@ dist/
 generated/wasm/web/
 
 rust/target/
+benches/rust/target/
+benches/rust/Cargo.lock
 
 todo.md
 .cdsapirc
