@@ -1,7 +1,5 @@
 use wasm_bindgen::JsValue;
 
-use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
-
 pub(super) fn world_not_found_error(world_id: &str) -> JsValue {
     JsValue::from_str(&format!("world not found: {world_id}"))
 }
@@ -18,15 +16,6 @@ pub(super) fn validate_non_negative_tick(tick: f64) -> Result<u64, JsValue> {
 pub(super) fn validate_integer_tick(tick: f64, rounded: u64) -> Result<(), JsValue> {
     if (tick - rounded as f64).abs() > f64::EPSILON {
         return Err(JsValue::from_str("tick must be an integer value"));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_history_tick(tick: u64) -> Result<(), JsValue> {
-    if !tick.is_multiple_of(HISTORY_SNAPSHOT_INTERVAL) {
-        return Err(JsValue::from_str(&format!(
-            "tick {tick} is not aligned with history interval {HISTORY_SNAPSHOT_INTERVAL}"
-        )));
     }
     Ok(())
 }
