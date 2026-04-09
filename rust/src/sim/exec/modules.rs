@@ -365,7 +365,7 @@ pub const MODULE_DECLARATIONS: &[ModuleDeclaration] = &[
     },
     ModuleDeclaration {
         phase: ExecWorldPhase::Glaciology,
-        module_id: ModuleId::Climate,
+        module_id: ModuleId::Glaciology,
         reads: GLACIOLOGY_READS,
         writes: GLACIOLOGY_WRITES,
         feedback: &[ModuleId::Geology, ModuleId::Hydrology],
@@ -679,32 +679,54 @@ pub fn declared_dependencies() -> Vec<ModuleDependency> {
     dependencies
 }
 
-pub fn validate_module_declarations() {
+pub fn validate_module_declarations() -> Result<(), String> {
     let phases = declared_phase_order();
-    debug_assert!(!phases.is_empty(), "module declarations must not be empty");
-    debug_assert_eq!(
-        phases.first().copied(),
-        Some(first_phase()),
-        "module declarations must start with Prepare"
-    );
-    debug_assert_eq!(
-        phases.last().copied(),
-        MODULE_DECLARATIONS
+    if phases.is_empty() {
+        return Err("module declarations must not be empty".to_string());
+    }
+    if phases.first().copied() != Some(first_phase()) {
+        return Err("module declarations must start with Prepare".to_string());
+    }
+    if phases.last().copied()
+        != MODULE_DECLARATIONS
             .iter()
             .find(|declaration| declaration.completes_tick)
-            .map(|declaration| declaration.phase),
-        "module declarations must end with Finalize"
-    );
+            .map(|declaration| declaration.phase)
+    {
+        return Err("module declarations must end with Finalize".to_string());
+    }
     for expected in MODULE_DECLARATIONS
         .iter()
         .map(|declaration| declaration.phase)
     {
-        debug_assert_eq!(
-            phases.iter().filter(|phase| **phase == expected).count(),
-            1,
-            "module declaration count mismatch for {expected:?}"
-        );
+        let count = phases.iter().filter(|phase| **phase == expected).count();
+        if count != 1 {
+            return Err(format!(
+                "module declaration count mismatch for {expected:?}: expected 1, got {count}"
+            ));
+        }
     }
+    for declaration in MODULE_DECLARATIONS {
+        let mut duplicated_reads = declaration.reads.to_vec();
+        duplicated_reads.sort_unstable_by_key(|resource| *resource as u8);
+        duplicated_reads.dedup();
+        if duplicated_reads.len() != declaration.reads.len() {
+            return Err(format!(
+                "duplicate reads in declaration for phase {:?}",
+                declaration.phase
+            ));
+        }
+        let mut duplicated_writes = declaration.writes.to_vec();
+        duplicated_writes.sort_unstable_by_key(|resource| *resource as u8);
+        duplicated_writes.dedup();
+        if duplicated_writes.len() != declaration.writes.len() {
+            return Err(format!(
+                "duplicate writes in declaration for phase {:?}",
+                declaration.phase
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn topologically_sorted_phases() -> Vec<ExecWorldPhase> {
@@ -766,7 +788,7 @@ fn topologically_sorted_phases() -> Vec<ExecWorldPhase> {
         }
     }
 
-    debug_assert_eq!(
+    assert_eq!(
         ordered.len(),
         declarations.len(),
         "module declarations must form an acyclic graph"
@@ -816,6 +838,7 @@ pub fn module_key(module_id: ModuleId) -> &'static str {
         ModuleId::Exec => "exec",
         ModuleId::Geology => "geology",
         ModuleId::Climate => "climate",
+        ModuleId::Glaciology => "glaciology",
         ModuleId::Hydrology => "hydrology",
         ModuleId::Ecology => "ecology",
         ModuleId::Domesticates => "domesticates",

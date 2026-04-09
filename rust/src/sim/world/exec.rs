@@ -40,6 +40,7 @@ pub enum ModuleId {
     Exec,
     Geology,
     Climate,
+    Glaciology,
     Hydrology,
     Ecology,
     Domesticates,

@@ -159,7 +159,7 @@ pub fn exec_world_slice_with_states(
     starting_phase: ExecWorldPhase,
     work_budget: u32,
 ) -> ExecWorldSliceResult {
-    validate_module_declarations();
+    validate_module_declarations().expect("invalid module declarations");
     if work_budget == 0 {
         return ExecWorldSliceResult {
             next_phase: starting_phase,
@@ -227,7 +227,7 @@ pub fn exec_world_with_feedback_and_states(
     geology_state: &mut crate::sim::exec::GeologyExecState,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
 ) {
-    validate_module_declarations();
+    validate_module_declarations().expect("invalid module declarations");
     let mut ctx = ModuleExecContext {
         feedback,
         geology_state,
