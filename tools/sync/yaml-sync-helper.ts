@@ -89,6 +89,36 @@ export function parseYamlNumericScalars(text: string): ParsedYaml {
     return result;
 }
 
+export function loadSchemaFromJson(schemaPath: string): SchemaEntry[] {
+    const raw = fs.readFileSync(schemaPath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+        throw new Error(`Invalid schema file: ${schemaPath} (expected array)`);
+    }
+    return parsed.map((entry, index) => {
+        if (!Array.isArray(entry) || entry.length < 2 || entry.length > 3) {
+            throw new Error(
+                `Invalid schema entry at index ${index} in ${schemaPath}: expected tuple [pathKey, outKey, typeHint?]`,
+            );
+        }
+        const [pathKey, outKey, typeHint] = entry;
+        if (typeof pathKey !== "string" || pathKey.length === 0) {
+            throw new Error(`Invalid pathKey at index ${index} in ${schemaPath}`);
+        }
+        if (typeof outKey !== "string" || outKey.length === 0) {
+            throw new Error(`Invalid outKey at index ${index} in ${schemaPath}`);
+        }
+        if (
+            typeHint !== undefined
+            && typeHint !== "u32"
+            && typeHint !== "f32"
+        ) {
+            throw new Error(`Invalid typeHint at index ${index} in ${schemaPath}: ${String(typeHint)}`);
+        }
+        return [pathKey, outKey, typeHint] as SchemaEntry;
+    });
+}
+
 export function validateAgainstSchema(parsed: ParsedYaml, schema: SchemaEntry[]): void {
     const schemaKeys = new Set(schema.map(([pathKey]) => pathKey));
     const parsedKeys = new Set(parsed.keys());
