@@ -1,6 +1,11 @@
 export type EngineWorkerRequest =
     | {
         id: number;
+        kind: "generate_mesh";
+        payload: { level: number };
+    }
+    | {
+        id: number;
         kind: "init_world";
         payload: { seed: string; meshLevel: number; config: unknown };
     }

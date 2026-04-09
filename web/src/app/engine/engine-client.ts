@@ -1,6 +1,7 @@
 import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../interface/wasm";
 
 export interface EngineClient {
+    generate_mesh: (level: number) => Promise<any>;
     init_world: (seed: string, meshLevel: number, config: unknown) => Promise<any>;
     exec_world: (worldId: string, tickCount: number) => Promise<void>;
     exec_world_slice: (worldId: string, workBudget: number) => Promise<any>;

@@ -1,4 +1,4 @@
-import initWasm, { WorldSimController } from "../../interface/wasm";
+import initWasm, { WorldSimController, generate_mesh } from "../../interface/wasm";
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
@@ -24,6 +24,11 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
     try {
         const runtime = await ensureController();
         switch (request.kind) {
+            case "generate_mesh": {
+                const result = generate_mesh(request.payload.level);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
             case "init_world": {
                 const result = runtime.init_world(
                     request.payload.seed,

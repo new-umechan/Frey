@@ -18,6 +18,13 @@ export class EngineWorkerClient implements EngineClient {
         this.worker.addEventListener("error", this.handleError);
     }
 
+    close() {
+        this.worker.removeEventListener("message", this.handleMessage);
+        this.worker.removeEventListener("error", this.handleError);
+        this.worker.terminate();
+        this.pending.clear();
+    }
+
     private handleMessage = (event: MessageEvent<EngineWorkerResponse>) => {
         const response = event.data;
         const request = this.pending.get(response.id);
@@ -54,6 +61,10 @@ export class EngineWorkerClient implements EngineClient {
 
     init_world(seed: string, meshLevel: number, config: unknown): Promise<any> {
         return this.request("init_world", { seed, meshLevel, config });
+    }
+
+    generate_mesh(level: number): Promise<any> {
+        return this.request("generate_mesh", { level });
     }
 
     async exec_world(worldId: string, tickCount: number): Promise<void> {
