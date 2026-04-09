@@ -137,7 +137,7 @@ pub(super) struct ManagedWorld {
 
 #[derive(Clone)]
 pub(super) struct WorldHistorySnapshot {
-    pub world: world::World,
+    pub core: world::WorldCore,
     pub hydrology_dynamics: Option<ErosionAutomatonState>,
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
 }
@@ -892,11 +892,8 @@ impl ManagedWorld {
     }
 
     pub fn snapshot_world(&self) -> WorldHistorySnapshot {
-        let mut snapshot_world = self.world.clone();
-        snapshot_world.clear_projections();
-        snapshot_world.clear_runtime_scratch();
         WorldHistorySnapshot {
-            world: snapshot_world,
+            core: self.world.core_owned(),
             hydrology_dynamics: self.hydrology_dynamics.clone(),
             geology_dynamics: self.geology_dynamics.clone(),
         }
@@ -1094,7 +1091,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_world_strips_projection_state() {
+    fn snapshot_world_captures_core_only() {
         let geology = world::GeologyState {
             height: vec![0.2],
             lake_depth: vec![0.0],
@@ -1126,7 +1123,8 @@ mod tests {
         };
 
         let snapshot = managed.snapshot_world();
-        assert!(snapshot.world.projections.is_empty());
-        assert!(snapshot.world.exec_scratch.is_empty());
+        assert_eq!(snapshot.core.cells.geology.height, vec![0.2]);
+        assert_eq!(snapshot.core.clock.tick, sim_world.clock.tick);
+        assert_eq!(snapshot.core.entities.polity_count(), sim_world.entities.polity_count());
     }
 }

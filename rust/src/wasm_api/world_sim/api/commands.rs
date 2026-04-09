@@ -90,7 +90,7 @@ fn replay_world_to_tick(
         .map(|(tick, snapshot)| (*tick, snapshot.clone()))
         .ok_or_else(|| history_tick_not_available_error(target_tick))?;
 
-    managed.world = checkpoint.world;
+    managed.world.apply_core(checkpoint.core);
     managed.world.refresh_terrain_state();
     managed.hydrology_dynamics = checkpoint.hydrology_dynamics;
     managed.geology_dynamics = checkpoint.geology_dynamics;
