@@ -10,17 +10,14 @@ const configDir = path.join(rootDir, "config");
 
 let buildRunning = false;
 let buildQueued = false;
-let syncTerrainRunning = false;
-let syncTerrainQueued = false;
-let syncRuntimeRunning = false;
-let syncRuntimeQueued = false;
+let syncConfigRunning = false;
+let syncConfigQueued = false;
 let viteProcess: ChildProcess | null = null;
 let shutdownRequested = false;
 let debounceTimer: NodeJS.Timeout | null = null;
-let syncTerrainDebounceTimer: NodeJS.Timeout | null = null;
-let syncRuntimeDebounceTimer: NodeJS.Timeout | null = null;
+let syncConfigDebounceTimer: NodeJS.Timeout | null = null;
 
-function runCommand(command: string, args: string[], options: any = {}): Promise<{ code: number | null; signal: string | null }> {
+function runCommand(command: string, args: string[], options: Record<string, unknown> = {}): Promise<{ code: number | null; signal: string | null }> {
     return new Promise((resolve) => {
         const child = spawn(command, args, {
             cwd: rootDir,
@@ -59,51 +56,27 @@ async function buildWasm() {
     }
 }
 
-async function syncTerrainParams() {
-    if (syncTerrainRunning) {
-        syncTerrainQueued = true;
+async function syncConfig() {
+    if (syncConfigRunning) {
+        syncConfigQueued = true;
         return;
     }
 
-    syncTerrainRunning = true;
-    console.log("[dev] syncing terrain params...");
-    const result = await runCommand("pnpm", ["run", "terrain:sync"]);
+    syncConfigRunning = true;
+    console.log("[dev] syncing config...");
+    const result = await runCommand("pnpm", ["run", "config:sync"]);
 
     if (result.code !== 0) {
-        console.error(`[dev] terrain params sync failed (code: ${result.code ?? "null"})`);
+        console.error(`[dev] config sync failed (code: ${result.code ?? "null"})`);
     } else {
-        console.log("[dev] terrain params sync complete");
+        console.log("[dev] config sync complete");
     }
 
-    syncTerrainRunning = false;
+    syncConfigRunning = false;
 
-    if (syncTerrainQueued && !shutdownRequested) {
-        syncTerrainQueued = false;
-        await syncTerrainParams();
-    }
-}
-
-async function syncRuntimeParams() {
-    if (syncRuntimeRunning) {
-        syncRuntimeQueued = true;
-        return;
-    }
-
-    syncRuntimeRunning = true;
-    console.log("[dev] syncing runtime params...");
-    const result = await runCommand("pnpm", ["run", "runtime:sync"]);
-
-    if (result.code !== 0) {
-        console.error(`[dev] runtime params sync failed (code: ${result.code ?? "null"})`);
-    } else {
-        console.log("[dev] runtime params sync complete");
-    }
-
-    syncRuntimeRunning = false;
-
-    if (syncRuntimeQueued && !shutdownRequested) {
-        syncRuntimeQueued = false;
-        await syncRuntimeParams();
+    if (syncConfigQueued && !shutdownRequested) {
+        syncConfigQueued = false;
+        await syncConfig();
     }
 }
 
@@ -146,36 +119,19 @@ function scheduleBuild(filename: string) {
     }, 150);
 }
 
-function scheduleTerrainParamsSync(filename: string) {
-    if (filename !== "terrain.yaml") {
+function scheduleConfigSync(filename: string) {
+    if (!filename.endsWith(".yaml")) {
         return;
     }
 
-    if (syncTerrainDebounceTimer) {
-        clearTimeout(syncTerrainDebounceTimer);
+    if (syncConfigDebounceTimer) {
+        clearTimeout(syncConfigDebounceTimer);
     }
 
-    syncTerrainDebounceTimer = setTimeout(() => {
-        syncTerrainDebounceTimer = null;
+    syncConfigDebounceTimer = setTimeout(() => {
+        syncConfigDebounceTimer = null;
         if (!shutdownRequested) {
-            void syncTerrainParams();
-        }
-    }, 150);
-}
-
-function scheduleRuntimeParamsSync(filename: string) {
-    if (filename !== "runtime.yaml") {
-        return;
-    }
-
-    if (syncRuntimeDebounceTimer) {
-        clearTimeout(syncRuntimeDebounceTimer);
-    }
-
-    syncRuntimeDebounceTimer = setTimeout(() => {
-        syncRuntimeDebounceTimer = null;
-        if (!shutdownRequested) {
-            void syncRuntimeParams();
+            void syncConfig();
         }
     }, 150);
 }
@@ -197,8 +153,7 @@ function startRustWatcher() {
 function startConfigWatcher() {
     const watcher = watch(configDir, { recursive: true }, (_eventType, filename) => {
         if (typeof filename === "string") {
-            scheduleTerrainParamsSync(filename);
-            scheduleRuntimeParamsSync(filename);
+            scheduleConfigSync(filename);
         }
     });
 
@@ -218,12 +173,7 @@ function stopChild(child: ChildProcess | null) {
 }
 
 async function main() {
-    const runtimeSyncInitial = await runCommand("pnpm", ["run", "runtime:sync"]);
-    if (runtimeSyncInitial.code !== 0) {
-        process.exit(runtimeSyncInitial.code ?? 1);
-    }
-
-    const syncInitial = await runCommand("pnpm", ["run", "terrain:sync"]);
+    const syncInitial = await runCommand("pnpm", ["run", "config:sync"]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }
@@ -247,13 +197,9 @@ async function main() {
             clearTimeout(debounceTimer);
             debounceTimer = null;
         }
-        if (syncTerrainDebounceTimer) {
-            clearTimeout(syncTerrainDebounceTimer);
-            syncTerrainDebounceTimer = null;
-        }
-        if (syncRuntimeDebounceTimer) {
-            clearTimeout(syncRuntimeDebounceTimer);
-            syncRuntimeDebounceTimer = null;
+        if (syncConfigDebounceTimer) {
+            clearTimeout(syncConfigDebounceTimer);
+            syncConfigDebounceTimer = null;
         }
         rustWatcher.close();
         configWatcher.close();
