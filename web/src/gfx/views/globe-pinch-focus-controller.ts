@@ -21,6 +21,13 @@ interface PointerState {
     clientY: number;
 }
 
+interface GlobePinchControls {
+    noRotate: boolean;
+    minDistance: number;
+    maxDistance: number;
+    target: THREE.Vector3;
+}
+
 export function createGlobePinchFocusController({
     canvas,
     sphere,
@@ -31,7 +38,7 @@ export function createGlobePinchFocusController({
     canvas: HTMLCanvasElement;
     sphere: THREE.Mesh;
     globeCamera: THREE.PerspectiveCamera;
-    globeControls: any;
+    globeControls: GlobePinchControls;
     getCurrentSurfaceMode: () => string;
 }): GlobePinchFocusController {
     const activePointers = new Map<number, PointerState>();

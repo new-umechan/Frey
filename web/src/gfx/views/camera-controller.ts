@@ -1,10 +1,21 @@
 import * as THREE from "three";
 
+interface OrbitLikeControls {
+    enabled: boolean;
+    target: THREE.Vector3;
+    update: () => void;
+    handleResize?: () => void;
+}
+
+interface MapLikeControls extends OrbitLikeControls {
+    enablePan: boolean;
+}
+
 interface CameraControllerOptions {
     globeCamera: THREE.PerspectiveCamera;
     mapCamera: THREE.OrthographicCamera;
-    globeControls: any;
-    mapControls: any;
+    globeControls: OrbitLikeControls;
+    mapControls: MapLikeControls;
     sphere: THREE.Mesh;
     wireframe: THREE.Mesh;
     halo: THREE.Mesh;
