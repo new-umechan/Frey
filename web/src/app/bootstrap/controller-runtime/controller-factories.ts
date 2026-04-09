@@ -62,6 +62,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
         defaultEraScale: DEFAULT_ERA_SCALE,
         getState: context.store.getState,
         getCurrentTerrainData: context.store.getCurrentTerrainData,
+        getActiveWorldId: context.store.getActiveWorldId,
         setState: context.store.setState,
         getWorldTick: () => context.store.world.tick,
         setStatus: context.setStatus,
@@ -108,7 +109,7 @@ function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRe
         },
         getCurrentSeed: () => context.store.getState().currentSeed,
         getCurrentSurfaceMode: () => context.store.getState().currentSurfaceMode,
-        getActiveWorldId: () => context.store.getState().activeWorldId,
+        getActiveWorldId: context.store.getActiveWorldId,
         statFields: context.dom.statFields,
         level: LEVEL,
     });
@@ -133,6 +134,8 @@ function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRe
         },
         setStatus: context.setStatus,
         getCurrentState: context.store.getState,
+        getActiveWorldId: context.store.getActiveWorldId,
+        getCurrentTerrainData: context.store.getCurrentTerrainData,
         pushStepBreakdownSamples,
         getEraScalePreset,
     });
@@ -179,6 +182,7 @@ function createTerrainGenerationRuntime(
         syncWorldFromActiveController,
         getCurrentEraScale: () => context.store.getState().currentEraScale,
         getCurrentSeed: () => context.store.getState().currentSeed,
+        setActiveWorldId: context.store.setActiveWorldId,
         setCurrentState: context.store.setState,
         setPlaybackRunning: (isPlaying: boolean) => {
             playbackControllerRef.current?.setPlaybackRunning(isPlaying);
@@ -209,7 +213,7 @@ function createPlaybackRuntime(
         playbackState: context.store.worldState.playback,
         worldState: context.store.worldState,
         engineClient: context.engineClient,
-        getActiveWorldId: () => context.store.getState().activeWorldId,
+        getActiveWorldId: context.store.getActiveWorldId,
         getCurrentTerrainData: context.store.getCurrentTerrainData,
         getWorldTick: () => context.store.world.tick,
         syncWorldFromActiveController,
@@ -234,8 +238,7 @@ function createPerfControllers(context: RuntimeContext, playbackControllerRef: P
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
         canRunBenchmark: () => {
-            const state = context.store.getState();
-            return Boolean(state.activeWorldId && context.store.getCurrentTerrainData());
+            return Boolean(context.store.getActiveWorldId() && context.store.getCurrentTerrainData());
         },
         setPlaybackRunning: (nextPlaying: boolean) => {
             const wasPlaying = context.store.worldState.playback.isPlaying;

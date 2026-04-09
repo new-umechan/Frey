@@ -19,6 +19,8 @@ export interface RuntimeStore {
     getCurrentEraMetrics: () => EraMetrics;
     getCurrentTerrainData: () => CoreBuffers | null;
     setCurrentTerrainData: (nextData: CoreBuffers | null) => void;
+    getActiveWorldId: () => string | null;
+    setActiveWorldId: (nextWorldId: string | null) => void;
 }
 
 export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
@@ -58,6 +60,10 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         getCurrentTerrainData: mutableStateStore.getCurrentTerrainData,
         setCurrentTerrainData: (nextData: CoreBuffers | null) => {
             mutableStateStore.setCurrentTerrainData(nextData);
+        },
+        getActiveWorldId: mutableStateStore.getActiveWorldId,
+        setActiveWorldId: (nextWorldId: string | null) => {
+            mutableStateStore.setActiveWorldId(nextWorldId);
         },
     };
 }

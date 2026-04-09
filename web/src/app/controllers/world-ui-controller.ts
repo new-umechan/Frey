@@ -39,6 +39,7 @@ export interface WorldUiControllerOptions {
     defaultEraScale: string;
     getState: () => AppState;
     getCurrentTerrainData: () => CoreBuffers | null;
+    getActiveWorldId: () => string | null;
     setState: (patch: Partial<AppState>) => void;
     getWorldTick: () => number;
     setStatus: (msg: string) => void;
@@ -63,6 +64,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         defaultEraScale,
         getState,
         getCurrentTerrainData,
+        getActiveWorldId,
         setState,
         getWorldTick,
         setStatus,
@@ -122,7 +124,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         const preset = getEraScalePreset(currentEraScale);
         statusEraLabel.textContent = `時代: ${preset.label}`;
         setStatus(`Ready (${state.currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
-        if (state.activeWorldId && previousEra !== currentEraScale) {
+        if (getActiveWorldId() && previousEra !== currentEraScale) {
             const previousLabel = getEraScalePreset(previousEra).label;
             appendPlaybackEvent(
                 "era-changed",

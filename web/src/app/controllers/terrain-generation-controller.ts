@@ -29,6 +29,7 @@ export interface TerrainGenerationControllerOptions {
     syncWorldFromActiveController: () => Promise<SyncWorldResult | null>;
     getCurrentEraScale: () => string;
     getCurrentSeed: () => string;
+    setActiveWorldId: (worldId: string | null) => void;
     setCurrentState: (patch: Partial<AppState>) => void;
     setPlaybackRunning: (isPlaying: boolean) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
@@ -53,6 +54,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
         syncWorldFromActiveController,
         getCurrentEraScale,
         getCurrentSeed,
+        setActiveWorldId,
         setCurrentState,
         setPlaybackRunning,
         appendPlaybackEvent,
@@ -84,9 +86,9 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
                 createInitialBudgets,
                 createEraMetrics,
             );
+            setActiveWorldId(initResult.world_id);
             setCurrentState({
                 currentSeed: nextSeed,
-                activeWorldId: initResult.world_id,
                 currentEraMetrics,
             });
 

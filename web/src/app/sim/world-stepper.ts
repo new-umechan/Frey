@@ -28,6 +28,8 @@ export interface WorldStepperOptions {
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
     getCurrentState: () => AppState;
+    getActiveWorldId: () => string | null;
+    getCurrentTerrainData: () => CoreBuffers | null;
     pushStepBreakdownSamples: (recorder: TickPerfRecorder | null, profiled: Record<string, unknown>) => void;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
 }
@@ -49,6 +51,8 @@ export function createWorldStepper(options: WorldStepperOptions) {
         syncAfterWorldStep,
         setStatus,
         getCurrentState,
+        getActiveWorldId,
+        getCurrentTerrainData,
         pushStepBreakdownSamples,
         getEraScalePreset,
     } = options;
@@ -72,21 +76,25 @@ export function createWorldStepper(options: WorldStepperOptions) {
 
     const syncVisibleFieldsForCurrentView = async () => {
         const state = getCurrentState();
-        if (!state.activeWorldId || !state.currentTerrainData) {
+        const activeWorldId = getActiveWorldId();
+        const currentTerrainData = getCurrentTerrainData();
+        if (!activeWorldId || !currentTerrainData) {
             return;
         }
         const changes = await syncVisibleCoreFieldsFromController({
             engineClient,
-            worldId: state.activeWorldId,
-            core: state.currentTerrainData as CoreBuffers,
+            worldId: activeWorldId,
+            core: currentTerrainData,
             fieldKinds: getCurrentDeltaFieldKinds(),
         });
-        terrainRenderer.applyCoreChanges(state.currentTerrainData as CoreBuffers, changes, state.currentSurfaceMode, world.tick);
+        terrainRenderer.applyCoreChanges(currentTerrainData, changes, state.currentSurfaceMode, world.tick);
     };
 
     const syncCompletedWorldStep = async (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {
         const liveState = getCurrentState();
-        if (!liveState.activeWorldId || !liveState.currentTerrainData) {
+        const activeWorldId = getActiveWorldId();
+        const currentTerrainData = getCurrentTerrainData();
+        if (!activeWorldId || !currentTerrainData) {
             return false;
         }
         const benchmarkMode = tickOptions?.benchmarkMode === true;
@@ -96,9 +104,9 @@ export function createWorldStepper(options: WorldStepperOptions) {
         const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
         const { changes, statsRefreshed } = await syncWorldDeltaFromController({
             engineClient,
-            worldId: liveState.activeWorldId,
+            worldId: activeWorldId,
             world,
-            core: liveState.currentTerrainData as CoreBuffers,
+            core: currentTerrainData,
             currentSurfaceMode: liveState.currentSurfaceMode,
             terrainRenderer,
             createEraMetrics,
@@ -131,13 +139,12 @@ export function createWorldStepper(options: WorldStepperOptions) {
     };
 
     const stepWorldTick = async (perfRecorder: TickPerfRecorder | null = null, tickOptions: { sampleStepBreakdown?: boolean; batchCount?: number; benchmarkMode?: boolean; batched?: boolean } = {}) => {
-        const state = getCurrentState();
-        if (!state.activeWorldId || !state.currentTerrainData) {
+        const activeWorldId = getActiveWorldId();
+        if (!activeWorldId || !getCurrentTerrainData()) {
             return false;
         }
 
         const runTick = async () => {
-            const liveState = getCurrentState();
             const sampleStepBreakdown = tickOptions?.sampleStepBreakdown === true;
             const batchCount = Math.max(1, Math.floor(tickOptions?.batchCount ?? 1));
             const previousTick = world.tick;
@@ -145,14 +152,14 @@ export function createWorldStepper(options: WorldStepperOptions) {
             if (perfRecorder) {
                 const start = performance.now();
                 if (sampleStepBreakdown) {
-                    const profiled = await engineClient.exec_world_profiled(liveState.activeWorldId!, batchCount);
+                    const profiled = await engineClient.exec_world_profiled(activeWorldId, batchCount);
                     pushStepBreakdownSamples(perfRecorder, profiled);
                 } else {
-                    await engineClient.exec_world(liveState.activeWorldId!, batchCount);
+                    await engineClient.exec_world(activeWorldId, batchCount);
                 }
                 perfRecorder.pushSample("exec_world", performance.now() - start);
             } else {
-                await engineClient.exec_world(liveState.activeWorldId!, batchCount);
+                await engineClient.exec_world(activeWorldId, batchCount);
             }
 
             return await syncCompletedWorldStep({
@@ -171,8 +178,8 @@ export function createWorldStepper(options: WorldStepperOptions) {
     };
 
     const stepWorldPlayback = async () => {
-        const state = getCurrentState();
-        if (!state.activeWorldId || !state.currentTerrainData) {
+        const activeWorldId = getActiveWorldId();
+        if (!activeWorldId || !getCurrentTerrainData()) {
             worldState.sliceBusy = false;
             worldState.slicePhase = getDefaultExecDisplayPhase(worldState);
             return {
@@ -183,7 +190,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         }
 
         const response = await engineClient.exec_world_slice(
-            state.activeWorldId,
+            activeWorldId,
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
         );
         worldState.sliceBusy = response?.busy === true;

@@ -63,7 +63,6 @@ export function createWorldState(options: {
 }
 
 export interface AppState {
-    activeWorldId: string | null;
     currentSeed: string;
     currentSurfaceMode: string;
     currentViewMode: string;
@@ -88,9 +87,6 @@ export function createMutableStateStore(options: {
     let debugEnabled = Boolean(options.debugEnabled);
 
     const stateSetters: Record<string, (value: unknown) => void> = {
-        activeWorldId: (value) => {
-            activeWorldId = value;
-        },
         currentSeed: (value) => {
             currentSeed = value;
         },
@@ -116,7 +112,6 @@ export function createMutableStateStore(options: {
 
     const getState = (): AppState => {
         return {
-            activeWorldId,
             currentSeed,
             currentSurfaceMode,
             currentViewMode,
@@ -139,6 +134,10 @@ export function createMutableStateStore(options: {
         getCurrentTerrainData: () => currentTerrainData,
         setCurrentTerrainData: (nextTerrainData: CoreBuffers | null) => {
             currentTerrainData = nextTerrainData;
+        },
+        getActiveWorldId: () => activeWorldId,
+        setActiveWorldId: (nextWorldId: string | null) => {
+            activeWorldId = nextWorldId;
         },
     };
 }

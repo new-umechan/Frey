@@ -118,8 +118,9 @@ async function runInitialSync(context: RuntimeContext, runtimeControllers: Runti
 }
 
 function shouldAdvanceWorld(context: RuntimeContext) {
-    const state = context.store.getState();
-    return context.store.worldState.playback.isPlaying && Boolean(context.store.getCurrentTerrainData()) && Boolean(state.activeWorldId);
+    return context.store.worldState.playback.isPlaying
+        && Boolean(context.store.getCurrentTerrainData())
+        && Boolean(context.store.getActiveWorldId());
 }
 
 export async function createControllerRuntime(options: ControllerDeps) {
