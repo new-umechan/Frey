@@ -73,7 +73,6 @@ pub(super) struct ManagedWorld {
     pub simulation_rate: f32,
     pub geology_params: GeologyParams,
     pub sync_state: WorldSyncState,
-    pub history: BTreeMap<u64, WorldHistorySnapshot>,
     pub exec_state: ManagedWorldExecState,
 }
 
@@ -82,6 +81,11 @@ pub(super) struct WorldHistorySnapshot {
     pub world: world::World,
     pub hydrology_dynamics: Option<ErosionAutomatonState>,
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
+}
+
+#[derive(Clone)]
+pub(super) struct WorldArchive {
+    pub history: BTreeMap<u64, WorldHistorySnapshot>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -732,8 +736,24 @@ impl ManagedWorld {
             .observe_world(&self.world, self.geology_dynamics.as_ref());
     }
 
-    pub fn save_history_snapshot_if_needed(&mut self) {
-        if !self
+    pub fn exec_is_busy(&self) -> bool {
+        self.exec_state.pending_post_step || self.exec_state.remaining_steps > 0
+    }
+}
+
+impl WorldArchive {
+    pub fn new() -> Self {
+        Self {
+            history: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert_snapshot(&mut self, tick: u64, snapshot: WorldHistorySnapshot) {
+        self.history.insert(tick, snapshot);
+    }
+
+    pub fn save_snapshot_if_needed(&mut self, managed: &ManagedWorld) {
+        if !managed
             .world
             .clock
             .tick
@@ -741,8 +761,7 @@ impl ManagedWorld {
         {
             return;
         }
-        self.history
-            .insert(self.world.clock.tick, self.snapshot_world());
+        self.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
         while self.history.len() > DEFAULT_HISTORY_LIMIT {
             if let Some(oldest) = self.history.keys().next().copied() {
                 self.history.remove(&oldest);
@@ -750,10 +769,6 @@ impl ManagedWorld {
                 break;
             }
         }
-    }
-
-    pub fn exec_is_busy(&self) -> bool {
-        self.exec_state.pending_post_step || self.exec_state.remaining_steps > 0
     }
 }
 

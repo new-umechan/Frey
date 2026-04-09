@@ -517,11 +517,11 @@ impl WorldSimController {
 
     #[wasm_bindgen(js_name = list_history_ticks)]
     pub fn list_history_ticks_js(&self, world_id: String) -> Result<JsValue, JsValue> {
-        let managed = self
-            .worlds
+        let archive = self
+            .archives
             .get(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
-        let ticks = managed
+        let ticks = archive
             .history
             .keys()
             .copied()

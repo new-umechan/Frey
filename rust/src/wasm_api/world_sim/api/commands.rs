@@ -1,12 +1,10 @@
-use std::collections::BTreeMap;
-
 use wasm_bindgen::prelude::*;
 
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
-use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldSyncState};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldSyncState};
 use super::super::types::{
     ForkWorldResult, InterventionField, InterventionOp, InterventionResult, RestoreWorldResult,
 };
@@ -27,8 +25,8 @@ impl WorldSimController {
         let ops = serde_wasm_bindgen::from_value::<Vec<InterventionOp>>(op_batch_js)
             .map_err(|err| JsValue::from_str(&format!("invalid intervention batch: {err}")))?;
 
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
 
@@ -83,7 +81,9 @@ impl WorldSimController {
         sync_erosion_state(managed);
         managed.reset_exec_state();
         managed.observe_after_world_change();
-        managed.save_history_snapshot_if_needed();
+        if let Some(archive) = archives.get_mut(&world_id) {
+            archive.save_snapshot_if_needed(managed);
+        }
 
         let result = InterventionResult {
             world_id,
@@ -104,8 +104,12 @@ impl WorldSimController {
                 .worlds
                 .get(&world_id)
                 .ok_or_else(|| world_not_found_error(&world_id))?;
+            let source_archive = self
+                .archives
+                .get(&world_id)
+                .ok_or_else(|| world_not_found_error(&world_id))?;
             validate_history_tick(tick_u64)?;
-            let snapshot = if let Some(found) = source.history.get(&tick_u64) {
+            let snapshot = if let Some(found) = source_archive.history.get(&tick_u64) {
                 found.clone()
             } else {
                 return Err(history_tick_not_available_error(tick_u64));
@@ -117,9 +121,9 @@ impl WorldSimController {
             )
         };
         let snapshot = snapshot;
+        let archive_snapshot = snapshot.clone();
+        let snapshot_tick = snapshot.world.clock.tick;
         let new_world_id = self.next_world_id();
-        let mut history = BTreeMap::new();
-        history.insert(snapshot.world.clock.tick, snapshot.clone());
         let sync_state =
             WorldSyncState::from_world(&snapshot.world, snapshot.geology_dynamics.as_ref());
         let forked = ManagedWorld {
@@ -130,10 +134,12 @@ impl WorldSimController {
             simulation_rate: source_rate,
             geology_params: source_params,
             sync_state,
-            history,
             exec_state: ManagedWorldExecState::default(),
         };
         self.worlds.insert(new_world_id.clone(), forked);
+        let mut archive = WorldArchive::new();
+        archive.insert_snapshot(snapshot_tick, archive_snapshot);
+        self.archives.insert(new_world_id.clone(), archive);
 
         let result = ForkWorldResult {
             source_world_id: world_id,
@@ -155,11 +161,14 @@ impl WorldSimController {
         validate_integer_tick(tick, tick_u64)?;
         validate_history_tick(tick_u64)?;
 
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
-        let restored_snapshot = managed
+        let archive = archives
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let restored_snapshot = archive
             .history
             .get(&tick_u64)
             .cloned()
@@ -174,9 +183,7 @@ impl WorldSimController {
         managed.sync_state =
             WorldSyncState::from_world(&managed.world, managed.geology_dynamics.as_ref());
         managed.reset_exec_state();
-        managed
-            .history
-            .insert(managed.world.clock.tick, managed.snapshot_world());
+        archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
 
         let result = RestoreWorldResult {
             world_id,

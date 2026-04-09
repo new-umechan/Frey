@@ -7,11 +7,12 @@ mod helpers;
 mod state;
 mod types;
 
-use state::ManagedWorld;
+use state::{ManagedWorld, WorldArchive};
 
 #[wasm_bindgen]
 pub struct WorldSimController {
     worlds: HashMap<String, ManagedWorld>,
+    archives: HashMap<String, WorldArchive>,
     next_world_seq: u64,
 }
 
@@ -27,6 +28,7 @@ impl WorldSimController {
     pub fn new() -> WorldSimController {
         WorldSimController {
             worlds: HashMap::new(),
+            archives: HashMap::new(),
             next_world_seq: 1,
         }
     }

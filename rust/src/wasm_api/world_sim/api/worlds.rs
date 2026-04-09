@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use wasm_bindgen::prelude::*;
 
 use crate::sim;
@@ -12,7 +10,7 @@ use crate::sim::{
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldSyncState};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldSyncState};
 use super::super::types::ExecWorldSliceResponse;
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
@@ -41,10 +39,10 @@ fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
     start.elapsed().as_secs_f64() * 1000.0
 }
 
-fn run_post_step(managed: &mut ManagedWorld) {
+fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
     post_step_sync_light(managed);
     managed.observe_after_world_change();
-    managed.save_history_snapshot_if_needed();
+    archive.save_snapshot_if_needed(managed);
 }
 
 fn scaled_step_count(simulation_rate: f32, tick_count: u32) -> u32 {
@@ -154,7 +152,7 @@ impl WorldSimController {
         let hydrology_dynamics = Some(erosion_state);
 
         let feedback = world::FeedbackQueue::new(sim_world.cell_count());
-        let mut managed = ManagedWorld {
+        let managed = ManagedWorld {
             world: sim_world,
             hydrology_dynamics,
             geology_dynamics,
@@ -162,12 +160,10 @@ impl WorldSimController {
             simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
             geology_params,
             sync_state,
-            history: BTreeMap::new(),
             exec_state: ManagedWorldExecState::default(),
         };
-        managed
-            .history
-            .insert(managed.world.clock.tick, managed.snapshot_world());
+        let mut archive = WorldArchive::new();
+        archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
 
         let world_id = self.next_world_id();
         let output = InitWorldOutput {
@@ -176,6 +172,7 @@ impl WorldSimController {
             era: managed.world.clock.epoch.as_key().to_string(),
             cell_count: managed.world.state.geology.height.len() as u32,
         };
+        self.archives.insert(world_id.clone(), archive);
         self.worlds.insert(world_id, managed);
 
         serde_wasm_bindgen::to_value(&output)
@@ -187,8 +184,11 @@ impl WorldSimController {
         if tick_count == 0 {
             return Ok(());
         }
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
         reset_pending_slice(managed);
@@ -197,7 +197,7 @@ impl WorldSimController {
 
         for _ in 0..steps {
             managed.with_exec_states(exec_world_with_feedback_and_states);
-            run_post_step(managed);
+            run_post_step(managed, archive);
         }
 
         Ok(())
@@ -229,8 +229,11 @@ impl WorldSimController {
                 JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}"))
             });
         }
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
         reset_pending_slice(managed);
@@ -256,7 +259,7 @@ impl WorldSimController {
             step_observe_world_change_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
-            managed.save_history_snapshot_if_needed();
+            archive.save_snapshot_if_needed(managed);
             step_history_snapshot_ms += profile_elapsed_ms(phase_start);
         }
 
@@ -322,8 +325,11 @@ impl WorldSimController {
                 ))
             });
         }
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
         reset_pending_slice(managed);
@@ -348,7 +354,7 @@ impl WorldSimController {
             step_observe_world_change_ms += profile_elapsed_ms(phase_start);
 
             let phase_start = profile_now_ms();
-            managed.save_history_snapshot_if_needed();
+            archive.save_snapshot_if_needed(managed);
             step_history_snapshot_ms += profile_elapsed_ms(phase_start);
         }
 
@@ -400,8 +406,11 @@ impl WorldSimController {
         world_id: String,
         work_budget: u32,
     ) -> Result<JsValue, JsValue> {
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
 
@@ -415,7 +424,7 @@ impl WorldSimController {
         let mut processed_ticks = 0u32;
         while remaining_budget > 0 && managed.exec_is_busy() {
             if managed.exec_state.pending_post_step {
-                run_post_step(managed);
+                run_post_step(managed, archive);
                 managed.exec_state.pending_post_step = false;
                 managed.exec_state.remaining_steps =
                     managed.exec_state.remaining_steps.saturating_sub(1);
