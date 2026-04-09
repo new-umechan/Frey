@@ -8,7 +8,7 @@
         "terrain:sync": "tsx tools/sync/sync-terrain-params.ts",
         "climate:sync": "tsx tools/sync/sync-climate-params.ts",
         "glaciology:sync": "tsx tools/sync/sync-glaciology-params.ts",
-        "config:sync": "pnpm runtime:sync && pnpm terrain:sync && pnpm climate:sync && pnpm glaciology:sync && pnpm config:types && pnpm config:docs",
+        "config:sync": "tsx tools/sync/config-sync.ts",
         "config:docs": "tsx tools/sync/generate-config-docs.ts",
         "config:types": "tsx tools/sync/generate-config-types.ts",
         "module:docs": "cargo run --manifest-path rust/Cargo.toml --bin generate_module_dag_docs -- docs/architecture/module_boundaries.generated.md",
