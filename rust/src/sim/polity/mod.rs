@@ -63,15 +63,15 @@ pub(crate) fn update_polity(world: &mut World, budget: u32) {
         .iter_polities()
         .map(|record| record.id)
         .collect::<Vec<_>>();
-    world
-        .polity_relations
-        .retain(|(from, to), _| active_ids.contains(from) && active_ids.contains(to) && from != to);
+    world.relations.polity_relations.retain(|(from, to), _| {
+        active_ids.contains(from) && active_ids.contains(to) && from != to
+    });
     for from in &active_ids {
         for to in &active_ids {
             if from == to {
                 continue;
             }
-            let relation = world.polity_relations.entry((*from, *to)).or_default();
+            let relation = world.relations.polity_relations.entry((*from, *to)).or_default();
             relation.trade = relation.trade.clamp(0.0, 1.0).max(0.2);
             relation.alliance = relation.alliance.clamp(-1.0, 1.0);
             relation.at_war = false;

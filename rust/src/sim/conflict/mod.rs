@@ -19,10 +19,15 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     let mut polity_cells: HashMap<PolityId, Vec<CellId>> = HashMap::new();
     let mut frontline_cells = Vec::new();
     let mut hostile_pairs = HashSet::new();
-    let mut relation_pairs = world.polity_relations.keys().copied().collect::<Vec<_>>();
+    let mut relation_pairs = world
+        .relations
+        .polity_relations
+        .keys()
+        .copied()
+        .collect::<Vec<_>>();
     relation_pairs.sort_unstable();
     for pair in relation_pairs {
-        if let Some(relation) = world.polity_relations.get_mut(&pair) {
+        if let Some(relation) = world.relations.polity_relations.get_mut(&pair) {
             relation.at_war = false;
         }
     }
@@ -67,11 +72,11 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     }
 
     for (a, b) in hostile_pairs {
-        if let Some(rel) = world.polity_relations.get_mut(&(a, b)) {
+                if let Some(rel) = world.relations.polity_relations.get_mut(&(a, b)) {
             rel.at_war = true;
             rel.alliance = rel.alliance.min(-0.6);
         }
-        if let Some(rel) = world.polity_relations.get_mut(&(b, a)) {
+                if let Some(rel) = world.relations.polity_relations.get_mut(&(b, a)) {
             rel.at_war = true;
             rel.alliance = rel.alliance.min(-0.6);
         }

@@ -524,6 +524,7 @@ fn conflict_generates_region_components_and_updates_relations() {
     assert!(world.entities.iter_regions().count() >= 1);
     assert_eq!(
         world
+            .relations
             .polity_relations
             .get(&(PolityId(1), PolityId(2)))
             .map(|relation| relation.at_war),
@@ -698,9 +699,11 @@ fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
         Some(PolityId(9)),
     ];
     world
+        .relations
         .polity_relations
         .insert((PolityId(1), PolityId(2)), PolityRelation::default());
     world
+        .relations
         .polity_relations
         .insert((PolityId(2), PolityId(1)), PolityRelation::default());
 
@@ -717,6 +720,7 @@ fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
     assert_eq!(world.entities.iter_regions().count(), 3);
     assert_eq!(
         world
+            .relations
             .polity_relations
             .get(&(PolityId(1), PolityId(2)))
             .map(|relation| relation.at_war),
@@ -724,6 +728,7 @@ fn conflict_update_treats_none_polity_as_unclaimed_and_clears_occupiers() {
     );
     assert_eq!(
         world
+            .relations
             .polity_relations
             .get(&(PolityId(2), PolityId(1)))
             .map(|relation| relation.at_war),

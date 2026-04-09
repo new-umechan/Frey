@@ -231,7 +231,7 @@ fn world_initializes_exec_state() {
     assert_eq!(world.clock.budgets, EraKind::Crust.budgets());
     assert_eq!(world.clock.transition.last_land_ratio, 0.5);
     assert!(world.matched_geology_dynamics().is_none());
-    assert!(world.polity_relations.is_empty());
+    assert!(world.relations.polity_relations.is_empty());
 }
 
 #[test]

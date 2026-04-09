@@ -22,6 +22,12 @@ pub struct World {
     pub control: WorldControlState,
     #[serde(alias = "runtime", default)]
     pub exec_scratch: ExecScratchState,
+    #[serde(default, flatten)]
+    pub relations: WorldRelations,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct WorldRelations {
     #[serde(default)]
     pub polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     #[serde(default)]
@@ -576,6 +582,9 @@ pub struct CivilizationStateMut<'a> {
     pub conflict: &'a mut ConflictState,
 }
 
+pub type EntityStore = EntityState;
+pub type RelationsStore = WorldRelations;
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CivilizationIndicators {
     pub settled_cells: usize,
@@ -584,6 +593,22 @@ pub struct CivilizationIndicators {
 }
 
 impl World {
+    pub fn entity_store(&self) -> &EntityStore {
+        &self.entities
+    }
+
+    pub fn entity_store_mut(&mut self) -> &mut EntityStore {
+        &mut self.entities
+    }
+
+    pub fn relations_store(&self) -> &RelationsStore {
+        &self.relations
+    }
+
+    pub fn relations_store_mut(&mut self) -> &mut RelationsStore {
+        &mut self.relations
+    }
+
     pub fn cell_store(&self) -> CellStore<'_> {
         CellStore {
             neighbors_offsets: &self.mesh.nbr_offsets,

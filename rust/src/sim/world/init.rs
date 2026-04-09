@@ -14,7 +14,8 @@ use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
     EcologyInternal, EcologyState, GeologyState, GlaciologyState, HydrologyState, PolityState,
     PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState, World,
-    WorldControlState, WorldMesh, WorldProjectionState, WorldState, N_CROPS, N_LIVESTOCK,
+    WorldControlState, WorldMesh, WorldProjectionState, WorldRelations, WorldState, N_CROPS,
+    N_LIVESTOCK,
 };
 
 impl World {
@@ -128,9 +129,7 @@ impl World {
             exec_scratch: ExecScratchState {
                 geology_dynamics: None,
             },
-            polity_relations: std::collections::HashMap::new(),
-            polity_groups: Vec::new(),
-            plate_relations: std::collections::HashMap::new(),
+            relations: WorldRelations::default(),
         }
     }
 
