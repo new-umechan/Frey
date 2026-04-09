@@ -38,12 +38,14 @@ struct AssertionOutcome {
 }
 
 #[derive(Debug, Clone)]
+struct GlaciologyRef {
+    ice_thickness: Vec<f32>,
+}
+
+#[derive(Debug, Clone)]
 struct ClimateRef {
     temperature: Vec<f32>,
     precipitation: Vec<f32>,
-    evapotranspiration: Vec<f32>,
-    runoff: Vec<f32>,
-    aridity: Vec<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,22 +63,6 @@ struct Phase1MetricSummary {
 struct Phase2MetricResult {
     name: &'static str,
     rho: f32,
-}
-
-struct LatBandMetricResult {
-    name: &'static str,
-    rho: f32,
-}
-
-struct BenchDiagnosticsSnapshot {
-    precipitation_process: sim::climate::surface::PrecipDiagnosticsSummary,
-    precipitation_lat_bands: Vec<LatBandMetricResult>,
-}
-
-struct LatBand {
-    name: &'static str,
-    lat_min: f32,
-    lat_max: f32,
 }
 
 enum Phase2State {
@@ -98,212 +84,143 @@ struct BenchRunMetadata {
 
 const REGIONS: &[Region] = &[
     Region {
+        id: "greenland_center",
+        lat: 75.0,
+        lon: -40.0,
+    },
+    Region {
+        id: "antarctica_inland",
+        lat: -80.0,
+        lon: 0.0,
+    },
+    Region {
+        id: "patagonia",
+        lat: -50.0,
+        lon: -73.0,
+    },
+    Region {
+        id: "alaska_range",
+        lat: 63.0,
+        lon: -150.0,
+    },
+    Region {
+        id: "himalaya_core",
+        lat: 28.0,
+        lon: 86.0,
+    },
+    Region {
+        id: "karakoram",
+        lat: 36.0,
+        lon: 76.0,
+    },
+    Region {
+        id: "alps",
+        lat: 46.5,
+        lon: 8.0,
+    },
+    Region {
+        id: "rockies",
+        lat: 51.0,
+        lon: -116.0,
+    },
+    Region {
+        id: "andes_tropical",
+        lat: -8.0,
+        lon: -77.0,
+    },
+    Region {
         id: "sahara",
         lat: 23.0,
         lon: 13.0,
     },
-    Region {
-        id: "arabia",
-        lat: 23.0,
-        lon: 45.0,
-    },
-    Region {
-        id: "amazon",
-        lat: -3.0,
-        lon: -60.0,
-    },
-    Region {
-        id: "congo",
-        lat: -1.0,
-        lon: 24.0,
-    },
-    Region {
-        id: "mediterranean",
-        lat: 40.0,
-        lon: 0.0,
-    },
-    Region {
-        id: "monsoon_india",
-        lat: 20.0,
-        lon: 77.0,
-    },
-    Region {
-        id: "maritime_europe",
-        lat: 47.0,
-        lon: 2.0,
-    },
-    Region {
-        id: "siberia",
-        lat: 62.0,
-        lon: 105.0,
-    },
-    Region {
-        id: "tropics_maritime",
-        lat: 5.0,
-        lon: 160.0,
-    },
-    Region {
-        id: "andes_high",
-        lat: -15.0,
-        lon: -70.0,
-    },
-    Region {
-        id: "arctic",
-        lat: 80.0,
-        lon: 0.0,
-    },
-    Region {
-        id: "equator_africa",
-        lat: 0.0,
-        lon: 37.0,
-    },
 ];
 
-const TEMP_ASSERTIONS: &[Assertion] = &[
+const ICE_THICKNESS_ASSERTIONS: &[Assertion] = &[
     Assertion {
-        id: "T-01",
-        left: "amazon",
-        right: "arctic",
+        id: "ICE-01",
+        left: "greenland_center",
+        right: "himalaya_core",
         known_hard: false,
     },
     Assertion {
-        id: "T-02",
-        left: "sahara",
-        right: "siberia",
+        id: "ICE-02",
+        left: "antarctica_inland",
+        right: "patagonia",
         known_hard: false,
     },
     Assertion {
-        id: "T-03",
-        left: "congo",
-        right: "mediterranean",
+        id: "ICE-03",
+        left: "alps",
+        right: "andes_tropical",
         known_hard: false,
     },
     Assertion {
-        id: "T-04",
-        left: "mediterranean",
-        right: "siberia",
+        id: "ICE-04",
+        left: "himalaya_core",
+        right: "alps",
         known_hard: false,
     },
     Assertion {
-        id: "T-05",
-        left: "amazon",
-        right: "andes_high",
+        id: "ICE-05",
+        left: "alaska_range",
+        right: "rockies",
         known_hard: false,
     },
     Assertion {
-        id: "T-06",
-        left: "amazon",
-        right: "equator_africa",
+        id: "ICE-06",
+        left: "patagonia",
+        right: "alaska_range",
         known_hard: false,
     },
     Assertion {
-        id: "T-07",
-        left: "sahara",
-        right: "arctic",
+        id: "ICE-07",
+        left: "karakoram",
+        right: "andes_tropical",
+        known_hard: false,
+    },
+    Assertion {
+        id: "ICE-08",
+        left: "greenland_center",
+        right: "alps",
+        known_hard: false,
+    },
+    Assertion {
+        id: "ICE-09",
+        left: "antarctica_inland",
+        right: "himalaya_core",
+        known_hard: false,
+    },
+    Assertion {
+        id: "ICE-10",
+        left: "greenland_center",
+        right: "sahara",
         known_hard: false,
     },
 ];
 
-const PRECIP_ASSERTIONS: &[Assertion] = &[
+const MELT_RUNOFF_ASSERTIONS: &[Assertion] = &[
     Assertion {
-        id: "P-01",
-        left: "amazon",
-        right: "sahara",
-        known_hard: false,
-    },
-    Assertion {
-        id: "P-02",
-        left: "congo",
-        right: "arabia",
-        known_hard: false,
-    },
-    Assertion {
-        id: "P-03",
-        left: "tropics_maritime",
-        right: "sahara",
-        known_hard: false,
-    },
-    Assertion {
-        id: "P-04",
-        left: "amazon",
-        right: "siberia",
-        known_hard: false,
-    },
-    Assertion {
-        id: "P-05",
-        left: "congo",
-        right: "mediterranean",
-        known_hard: false,
-    },
-    Assertion {
-        id: "P-06",
-        left: "maritime_europe",
-        right: "siberia",
+        id: "MELT-01",
+        left: "alps",
+        right: "greenland_center",
         known_hard: true,
     },
     Assertion {
-        id: "P-07",
-        left: "monsoon_india",
-        right: "arabia",
+        id: "MELT-02",
+        left: "andes_tropical",
+        right: "antarctica_inland",
+        known_hard: true,
+    },
+    Assertion {
+        id: "MELT-03",
+        left: "patagonia",
+        right: "himalaya_core",
         known_hard: true,
     },
 ];
 
-const ARIDITY_ASSERTIONS: &[Assertion] = &[
-    Assertion {
-        id: "A-01",
-        left: "sahara",
-        right: "amazon",
-        known_hard: false,
-    },
-    Assertion {
-        id: "A-02",
-        left: "arabia",
-        right: "congo",
-        known_hard: false,
-    },
-    Assertion {
-        id: "A-03",
-        left: "siberia",
-        right: "amazon",
-        known_hard: false,
-    },
-    Assertion {
-        id: "A-04",
-        left: "sahara",
-        right: "mediterranean",
-        known_hard: false,
-    },
-    Assertion {
-        id: "A-05",
-        left: "arabia",
-        right: "tropics_maritime",
-        known_hard: false,
-    },
-];
-
-const PRECIP_LAT_BANDS: &[LatBand] = &[
-    LatBand {
-        name: "tropics",
-        lat_min: 0.0,
-        lat_max: 23.5,
-    },
-    LatBand {
-        name: "subtropics",
-        lat_min: 23.5,
-        lat_max: 35.0,
-    },
-    LatBand {
-        name: "midlat",
-        lat_min: 35.0,
-        lat_max: 55.0,
-    },
-    LatBand {
-        name: "highlat",
-        lat_min: 55.0,
-        lat_max: 90.0,
-    },
-];
+const GLACIOLOGY_MAGIC: &[u8; 8] = b"GLACREF1";
+const TERRAIN_MAGIC: &[u8; 8] = b"TERRREF1";
 
 fn main() {
     let geology_params = GeologyParams {
@@ -313,13 +230,13 @@ fn main() {
     let mesh_level = geology_params.level;
 
     let seed = "earth";
-    let run_id = env::var("CLIMATE_BENCH_RUN_ID")
+    let run_id = env::var("GLACIOLOGY_BENCH_RUN_ID")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(default_run_id);
-    let repeat_index = parse_env_u32("CLIMATE_BENCH_REPEAT_INDEX");
-    let repeat_total = parse_env_u32("CLIMATE_BENCH_REPEAT_TOTAL");
-    let git_commit = env::var("CLIMATE_BENCH_GIT_COMMIT")
+    let repeat_index = parse_env_u32("GLACIOLOGY_BENCH_REPEAT_INDEX");
+    let repeat_total = parse_env_u32("GLACIOLOGY_BENCH_REPEAT_TOTAL");
+    let git_commit = env::var("GLACIOLOGY_BENCH_GIT_COMMIT")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .or_else(resolve_git_commit);
@@ -331,7 +248,7 @@ fn main() {
         Some(path) => match load_terrain_ref(&path) {
             Ok(reference) => (path, reference),
             Err(error) => {
-                println!("=== Climate Solo Bench ===");
+                println!("=== Glaciology Solo Bench ===");
                 println!();
                 println!("-- Terrain Input: ERROR --");
                 println!("{}", error);
@@ -339,7 +256,7 @@ fn main() {
             }
         },
         None => {
-            println!("=== Climate Solo Bench ===");
+            println!("=== Glaciology Solo Bench ===");
             println!();
             println!("-- Terrain Input: SKIPPED (benches/data/terrain_ref.bin not found) --");
             println!("To generate:");
@@ -349,7 +266,7 @@ fn main() {
         }
     };
     if terrain_ref.height.len() != cell_count {
-        println!("=== Climate Solo Bench ===");
+        println!("=== Glaciology Solo Bench ===");
         println!();
         println!(
             "-- Terrain Input: ERROR (cell_count mismatch: mesh={}, terrain_ref={}) --",
@@ -359,6 +276,40 @@ fn main() {
         return;
     }
     terrain.height = terrain_ref.height;
+
+    let (climate_ref_path, climate_ref) = match find_climate_ref_cache_path() {
+        Some(path) => match load_climate_ref(&path) {
+            Ok(reference) => (path, reference),
+            Err(error) => {
+                println!("=== Glaciology Solo Bench ===");
+                println!();
+                println!("-- Climate Input: ERROR --");
+                println!("{}", error);
+                return;
+            }
+        },
+        None => {
+            println!("=== Glaciology Solo Bench ===");
+            println!();
+            println!("-- Climate Input: SKIPPED (benches/data/climate_ref.bin not found) --");
+            println!("To generate:");
+            println!("  1) pnpm bench:dump-centroids");
+            println!("  2) pnpm bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>");
+            return;
+        }
+    };
+    if climate_ref.temperature.len() != cell_count || climate_ref.precipitation.len() != cell_count
+    {
+        println!("=== Glaciology Solo Bench ===");
+        println!();
+        println!(
+            "-- Climate Input: ERROR (cell_count mismatch: mesh={}, temperature={}, precipitation={}) --",
+            cell_count,
+            climate_ref.temperature.len(),
+            climate_ref.precipitation.len(),
+        );
+        return;
+    }
 
     let plate_id = terrain.plate_id.clone();
 
@@ -381,25 +332,32 @@ fn main() {
     };
 
     let mut sim_world = world::World::new(mesh, geology);
+    sim_world.clock.epoch = world::EraKind::Environment;
+    sim_world.clock.real_years_per_tick = world::EraKind::Environment.real_years_per_tick();
+    sim_world.clock.runtime_tick_ms = world::EraKind::Environment.runtime_tick_ms();
+    sim_world.clock.budgets = world::EraKind::Environment.budgets();
+    sim_world.state.climate.temperature = climate_ref.temperature;
+    sim_world.state.climate.precipitation = climate_ref.precipitation;
     sim_world.state.ecology.tree_cover.fill(0.5);
     sim_world.state.ecology.ground_cover.fill(0.5);
 
-    let climate_budget = world::EraKind::Environment.budgets().climate;
-    let climate_started_at = Instant::now();
-    sim::run_climate_step_for_bench(&mut sim_world, climate_budget);
-    let climate_step_ms = climate_started_at.elapsed().as_secs_f64() * 1000.0;
+    let glaciology_budget = sim_world.clock.budgets.climate;
+    let glaciology_started_at = Instant::now();
+    sim::run_glaciology_step_for_bench(&mut sim_world, glaciology_budget);
+    let glaciology_step_ms = glaciology_started_at.elapsed().as_secs_f64() * 1000.0;
 
-    println!("=== Climate Solo Bench ===");
+    println!("=== Glaciology Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
+    println!("-- Climate Source: {} --", climate_ref_path.display());
     println!(
-        "-- Runtime Diagnostics: climate_step_ms={:.3} --",
-        climate_step_ms
+        "-- Runtime Diagnostics: glaciology_step_ms={:.3} --",
+        glaciology_step_ms
     );
     println!();
     println!("-- Main Evaluation: Spearman Correlation (land cells only) --");
 
-    let phase2_state = match find_climate_ref_cache_path() {
-        Some(path) => match load_climate_ref(&path) {
+    let phase2_state = match find_glaciology_ref_cache_path() {
+        Some(path) => match load_glaciology_ref(&path) {
             Ok(reference) => {
                 let results = evaluate_phase2(&sim_world, &reference);
                 for metric in &results {
@@ -410,9 +368,6 @@ fn main() {
                     "-- Main Evaluation Summary: metrics_reported={} --",
                     results.len()
                 );
-                let diagnostics = collect_bench_diagnostics(&sim_world, &reference);
-                print_precipitation_process_diagnostics(&diagnostics.precipitation_process);
-                print_precipitation_diagnostics(&sim_world, &reference, &diagnostics);
                 Phase2State::Ready {
                     reference_path: path,
                     metrics: results,
@@ -424,38 +379,32 @@ fn main() {
             }
         },
         None => {
-            println!("SKIPPED  (benches/data/climate_ref.bin not found)");
+            println!("SKIPPED  (benches/data/glaciology_ref.bin not found)");
             println!("To generate:");
             println!("  1) pnpm bench:dump-centroids");
-            println!("  2) pnpm bench:resample:climate -- --temperature <path> --precipitation <path> --evapotranspiration <path> --runoff <path> --aridity <path>");
+            println!("  2) pnpm bench:prepare:glaciology -- --ice-thickness <path>");
             Phase2State::Skipped
         }
     };
 
-    let selection = build_region_selection(&sim_world.mesh.positions);
-    let temperature_results = run_assertions(
+    let selection = build_region_selection(&sim_world.mesh().positions);
+    let ice_thickness_results = run_assertions(
         &selection,
-        &sim_world.state.climate.temperature,
-        TEMP_ASSERTIONS,
+        &sim_world.state.glaciology.ice_thickness,
+        ICE_THICKNESS_ASSERTIONS,
     );
-    let precipitation_results = run_assertions(
+    let melt_runoff_results = run_assertions(
         &selection,
-        &sim_world.state.climate.precipitation,
-        PRECIP_ASSERTIONS,
-    );
-    let aridity_results = run_assertions(
-        &selection,
-        &sim_world.state.climate.aridity,
-        ARIDITY_ASSERTIONS,
+        &sim_world.state.glaciology.glacial_melt_runoff,
+        MELT_RUNOFF_ASSERTIONS,
     );
 
     println!();
     println!("-- Diagnostic Evaluation: Ranking Assertions --");
-    print_assertion_summary("temperature", &temperature_results);
-    print_assertion_summary("precipitation", &precipitation_results);
-    print_assertion_summary("aridity", &aridity_results);
+    print_assertion_summary("ice_thickness", &ice_thickness_results);
+    print_assertion_summary("glacial_melt_runoff", &melt_runoff_results);
 
-    let known_hard = precipitation_results
+    let known_hard = melt_runoff_results
         .iter()
         .filter(|outcome| outcome.known_hard)
         .collect::<Vec<_>>();
@@ -465,7 +414,7 @@ fn main() {
         for outcome in known_hard {
             let relation = if outcome.passed { "match" } else { "mismatch" };
             println!(
-                "{}  {} > {}:  {}  ({:.1} vs {:.1})",
+                "{}  {} > {}:  {}  ({:.4} vs {:.4})",
                 outcome.id,
                 outcome.left,
                 outcome.right,
@@ -476,17 +425,14 @@ fn main() {
         }
     }
 
-    let temperature_summary = summarize_phase1_metric(&temperature_results);
-    let precipitation_summary = summarize_phase1_metric(&precipitation_results);
-    let aridity_summary = summarize_phase1_metric(&aridity_results);
+    let ice_thickness_summary = summarize_phase1_metric(&ice_thickness_results);
+    let melt_runoff_summary = summarize_phase1_metric(&melt_runoff_results);
 
     println!();
-    let mean_coverage_ratio = (temperature_summary.coverage_ratio
-        + precipitation_summary.coverage_ratio
-        + aridity_summary.coverage_ratio)
-        / 3.0;
+    let mean_coverage_ratio =
+        (ice_thickness_summary.coverage_ratio + melt_runoff_summary.coverage_ratio) / 2.0;
     println!(
-        "-- Diagnostic Evaluation Summary: metrics=3 mean_coverage_ratio={:.3} (excl. known-hard) --",
+        "-- Diagnostic Evaluation Summary: metrics=2 mean_coverage_ratio={:.3} (excl. known-hard) --",
         mean_coverage_ratio
     );
 
@@ -496,19 +442,13 @@ fn main() {
         Phase2State::Error(_) => println!("-- Main Evaluation State: ERROR --"),
     }
 
-    let diagnostics_snapshot = match &phase2_state {
-        Phase2State::Ready { .. } => find_climate_ref_cache_path()
-            .and_then(|path| load_climate_ref(&path).ok())
-            .map(|reference| collect_bench_diagnostics(&sim_world, &reference)),
-        Phase2State::Skipped | Phase2State::Error(_) => None,
-    };
-    let climate_ref_fallback = match &phase2_state {
+    let glaciology_ref_fallback = match &phase2_state {
         Phase2State::Ready { .. } => None,
-        Phase2State::Skipped | Phase2State::Error(_) => find_climate_ref_cache_path(),
+        Phase2State::Skipped | Phase2State::Error(_) => find_glaciology_ref_cache_path(),
     };
-    let climate_ref_for_fingerprint = match &phase2_state {
+    let glaciology_ref_for_fingerprint = match &phase2_state {
         Phase2State::Ready { reference_path, .. } => Some(reference_path.as_path()),
-        Phase2State::Skipped | Phase2State::Error(_) => climate_ref_fallback.as_deref(),
+        Phase2State::Skipped | Phase2State::Error(_) => glaciology_ref_fallback.as_deref(),
     };
     let run_metadata = BenchRunMetadata {
         run_id,
@@ -517,21 +457,20 @@ fn main() {
         git_commit,
         cache_fingerprint: build_cache_fingerprint(
             Some(terrain_ref_path.as_path()),
-            climate_ref_for_fingerprint,
+            Some(climate_ref_path.as_path()),
+            glaciology_ref_for_fingerprint,
         ),
     };
 
     if let Err(error) = append_score_record_jsonl(
         &phase2_state,
-        diagnostics_snapshot.as_ref(),
         &run_metadata,
-        climate_step_ms as f32,
+        glaciology_step_ms as f32,
         seed,
         mesh_level,
         cell_count,
-        &temperature_summary,
-        &precipitation_summary,
-        &aridity_summary,
+        &ice_thickness_summary,
+        &melt_runoff_summary,
     ) {
         println!("-- Score Save: ERROR ({}) --", error);
     } else {
@@ -539,37 +478,16 @@ fn main() {
     }
 }
 
-fn evaluate_phase2(world: &world::World, reference: &ClimateRef) -> Vec<Phase2MetricResult> {
-    let climate = &world.state.climate;
+fn evaluate_phase2(world: &world::World, reference: &GlaciologyRef) -> Vec<Phase2MetricResult> {
+    let glaciology = &world.state.glaciology;
     let geology_height = &world.state.geology.height;
 
-    vec![
-        evaluate_phase2_metric(
-            "temperature",
-            &climate.temperature,
-            &reference.temperature,
-            geology_height,
-        ),
-        evaluate_phase2_metric(
-            "precipitation",
-            &climate.precipitation,
-            &reference.precipitation,
-            geology_height,
-        ),
-        evaluate_phase2_metric(
-            "aridity",
-            &climate.aridity,
-            &reference.aridity,
-            geology_height,
-        ),
-        evaluate_phase2_metric(
-            "evapotranspiration",
-            &climate.evapotranspiration,
-            &reference.evapotranspiration,
-            geology_height,
-        ),
-        evaluate_phase2_metric("runoff", &climate.runoff, &reference.runoff, geology_height),
-    ]
+    vec![evaluate_phase2_metric(
+        "ice_thickness",
+        &glaciology.ice_thickness,
+        &reference.ice_thickness,
+        geology_height,
+    )]
 }
 
 fn evaluate_phase2_metric(
@@ -595,43 +513,6 @@ fn spearman_on_land(model_field: &[f32], ref_field: &[f32], geology_height: &[f3
     let mut ref_values = Vec::with_capacity(len);
     for i in 0..len {
         if geology_height[i] <= 0.0 {
-            continue;
-        }
-        let model = model_field[i];
-        let reference = ref_field[i];
-        if !model.is_finite() || !reference.is_finite() {
-            continue;
-        }
-        model_values.push(model);
-        ref_values.push(reference);
-    }
-    if model_values.len() < 3 {
-        return None;
-    }
-    spearman(&model_values, &ref_values)
-}
-
-fn spearman_on_land_with_filter<F>(
-    model_field: &[f32],
-    ref_field: &[f32],
-    geology_height: &[f32],
-    mut include: F,
-) -> Option<f32>
-where
-    F: FnMut(usize) -> bool,
-{
-    let len = model_field
-        .len()
-        .min(ref_field.len())
-        .min(geology_height.len());
-    if len < 3 {
-        return None;
-    }
-
-    let mut model_values = Vec::with_capacity(len);
-    let mut ref_values = Vec::with_capacity(len);
-    for i in 0..len {
-        if !include(i) || geology_height[i] <= 0.0 {
             continue;
         }
         let model = model_field[i];
@@ -709,6 +590,17 @@ fn pearson_corr(a: &[f32], b: &[f32]) -> Option<f32> {
     Some((numerator / denom).clamp(-1.0, 1.0))
 }
 
+fn find_glaciology_ref_cache_path() -> Option<PathBuf> {
+    let candidates = [
+        Path::new("benches/data/glaciology_ref.bin"),
+        Path::new("../benches/data/glaciology_ref.bin"),
+    ];
+    candidates
+        .iter()
+        .find(|path| path.exists())
+        .map(|path| (*path).to_path_buf())
+}
+
 fn find_climate_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
         Path::new("benches/data/climate_ref.bin"),
@@ -731,6 +623,14 @@ fn find_terrain_ref_cache_path() -> Option<PathBuf> {
         .map(|path| (*path).to_path_buf())
 }
 
+fn load_glaciology_ref(path: &Path) -> Result<GlaciologyRef, String> {
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let mut reader = BufReader::new(file);
+    decode_glaciology_ref_custom(&mut reader)
+        .map_err(|error| format!("failed to decode {}: {}", path.display(), error))
+}
+
 fn load_climate_ref(path: &Path) -> Result<ClimateRef, String> {
     let file = File::open(path)
         .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
@@ -748,12 +648,11 @@ fn load_terrain_ref(path: &Path) -> Result<TerrainRef, String> {
 }
 
 fn decode_climate_ref_custom<R: Read>(reader: &mut R) -> Result<ClimateRef, String> {
-    const MAGIC: &[u8; 8] = b"CLIMREF1";
     let mut magic = [0_u8; 8];
     reader
         .read_exact(&mut magic)
         .map_err(|error| format!("failed to read magic: {}", error))?;
-    if &magic != MAGIC {
+    if &magic != b"CLIMREF1" {
         return Err("invalid magic (expected CLIMREF1)".to_string());
     }
 
@@ -765,26 +664,42 @@ fn decode_climate_ref_custom<R: Read>(reader: &mut R) -> Result<ClimateRef, Stri
     let cell_count = read_u64_le(reader)? as usize;
     let temperature = read_f32_vec(reader, cell_count)?;
     let precipitation = read_f32_vec(reader, cell_count)?;
-    let evapotranspiration = read_f32_vec(reader, cell_count)?;
-    let runoff = read_f32_vec(reader, cell_count)?;
-    let aridity = read_f32_vec(reader, cell_count)?;
+    let _evapotranspiration = read_f32_vec(reader, cell_count)?;
+    let _runoff = read_f32_vec(reader, cell_count)?;
+    let _aridity = read_f32_vec(reader, cell_count)?;
 
     Ok(ClimateRef {
         temperature,
         precipitation,
-        evapotranspiration,
-        runoff,
-        aridity,
     })
 }
 
-fn decode_terrain_ref_custom<R: Read>(reader: &mut R) -> Result<TerrainRef, String> {
-    const MAGIC: &[u8; 8] = b"TERRREF1";
+fn decode_glaciology_ref_custom<R: Read>(reader: &mut R) -> Result<GlaciologyRef, String> {
     let mut magic = [0_u8; 8];
     reader
         .read_exact(&mut magic)
         .map_err(|error| format!("failed to read magic: {}", error))?;
-    if &magic != MAGIC {
+    if &magic != GLACIOLOGY_MAGIC {
+        return Err("invalid magic (expected GLACREF1)".to_string());
+    }
+
+    let version = read_u32_le(reader)?;
+    if version != 1 {
+        return Err(format!("unsupported version: {}", version));
+    }
+
+    let cell_count = read_u64_le(reader)? as usize;
+    let ice_thickness = read_f32_vec(reader, cell_count)?;
+
+    Ok(GlaciologyRef { ice_thickness })
+}
+
+fn decode_terrain_ref_custom<R: Read>(reader: &mut R) -> Result<TerrainRef, String> {
+    let mut magic = [0_u8; 8];
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| format!("failed to read magic: {}", error))?;
+    if &magic != TERRAIN_MAGIC {
         return Err("invalid magic (expected TERRREF1)".to_string());
     }
 
@@ -943,140 +858,10 @@ fn print_assertion_summary(name: &str, outcomes: &[AssertionOutcome]) {
     }
 }
 
-fn collect_bench_diagnostics(
-    world: &world::World,
-    reference: &ClimateRef,
-) -> BenchDiagnosticsSnapshot {
-    let model_precip = &world.state.climate.precipitation;
-    let ref_precip = &reference.precipitation;
-    let geology_height = &world.state.geology.height;
-    let positions = &world.mesh.positions;
-
-    let precipitation_lat_bands = PRECIP_LAT_BANDS
-        .iter()
-        .map(|band| LatBandMetricResult {
-            name: band.name,
-            rho: spearman_on_land_with_filter(model_precip, ref_precip, geology_height, |idx| {
-                let lat = positions
-                    .get(idx)
-                    .map(|pos| pos[1].clamp(-1.0, 1.0).asin().to_degrees().abs())
-                    .unwrap_or(0.0);
-                lat >= band.lat_min && lat < band.lat_max
-            })
-            .unwrap_or(f32::NAN),
-        })
-        .collect::<Vec<_>>();
-
-    BenchDiagnosticsSnapshot {
-        precipitation_process: sim::climate::surface::last_precip_diagnostics_summary(),
-        precipitation_lat_bands,
-    }
-}
-
-fn print_precipitation_diagnostics(
-    world: &world::World,
-    reference: &ClimateRef,
-    diagnostics: &BenchDiagnosticsSnapshot,
-) {
-    let model_precip = &world.state.climate.precipitation;
-    let ref_precip = &reference.precipitation;
-    let geology_height = &world.state.geology.height;
-    let positions = &world.mesh.positions;
-
-    println!("-- Main Diagnostics: Precipitation by Latitude Band (land only) --");
-    for band in &diagnostics.precipitation_lat_bands {
-        println!(
-            "[{} {:>4.1}-{:<4.1}] rho={:.3}",
-            band.name,
-            PRECIP_LAT_BANDS
-                .iter()
-                .find(|candidate| candidate.name == band.name)
-                .map(|candidate| candidate.lat_min)
-                .unwrap_or(0.0),
-            PRECIP_LAT_BANDS
-                .iter()
-                .find(|candidate| candidate.name == band.name)
-                .map(|candidate| candidate.lat_max)
-                .unwrap_or(0.0),
-            band.rho
-        );
-    }
-
-    let len = model_precip
-        .len()
-        .min(ref_precip.len())
-        .min(geology_height.len())
-        .min(positions.len());
-    let mut residuals = Vec::<(usize, f32, f32, f32)>::new();
-    for i in 0..len {
-        if geology_height[i] <= 0.0 {
-            continue;
-        }
-        let model = model_precip[i];
-        let reference = ref_precip[i];
-        if !model.is_finite() || !reference.is_finite() {
-            continue;
-        }
-        residuals.push((i, (model - reference).abs(), model, reference));
-    }
-    residuals.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    println!();
-    println!("-- Main Diagnostics: Top Precipitation Residual Cells (land only) --");
-    for (rank, (idx, abs_err, model, reference)) in residuals.iter().take(8).enumerate() {
-        let pos = positions[*idx];
-        let lat = pos[1].clamp(-1.0, 1.0).asin().to_degrees();
-        let lon = pos[2].atan2(pos[0]).to_degrees();
-        println!(
-            "#{:<2} cell={:<6} lat={:>7.2} lon={:>8.2} model={:>8.1} ref={:>8.1} abs_err={:>8.1}",
-            rank + 1,
-            idx,
-            lat,
-            lon,
-            model,
-            reference,
-            abs_err
-        );
-    }
-    println!();
-}
-
-fn print_precipitation_process_diagnostics(
-    summary: &sim::climate::surface::PrecipDiagnosticsSummary,
-) {
-    println!("-- Main Diagnostics: Precipitation Process (land aggregate) --");
-    println!(
-        "continental_reduction={:.1}%  cap_reduction={:.1}%  depletion_reduction={:.1}%",
-        summary.continental_reduction_ratio * 100.0,
-        summary.cap_reduction_ratio * 100.0,
-        summary.depletion_reduction_ratio * 100.0
-    );
-    println!(
-        "cap_hit_ratio={:.1}%  mean_monsoon_boost_mm={:.1}  mean_hotspot_boost_mm={:.1}",
-        summary.cap_hit_ratio * 100.0,
-        summary.mean_monsoon_boost_mm,
-        summary.mean_hotspot_boost_mm
-    );
-    println!(
-        "stage_source_mm={:.1}  stage_transport_mm={:.1}  stage_orographic_mm={:.1}  stage_correction_factor={:.3}",
-        summary.mean_stage_source_mm,
-        summary.mean_stage_transport_mm,
-        summary.mean_stage_orographic_mm,
-        summary.mean_stage_correction_factor,
-    );
-    println!(
-        "budget_storage_change_mm={:.2}  budget_residual_mm={:.2}  budget_residual_ratio={:.3}%",
-        summary.mean_budget_storage_change_mm,
-        summary.mean_budget_residual_mm,
-        summary.budget_residual_ratio * 100.0,
-    );
-    println!();
-}
-
 fn score_output_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir.parent().unwrap_or(manifest_dir.as_path());
-    repo_root.join("benches/results/climate_main_scores.jsonl")
+    repo_root.join("benches/results/glaciology_main_scores.jsonl")
 }
 
 fn json_escape(input: &str) -> String {
@@ -1148,12 +933,19 @@ fn file_fingerprint_component(path: &Path) -> String {
     }
 }
 
-fn build_cache_fingerprint(terrain_ref: Option<&Path>, climate_ref: Option<&Path>) -> String {
+fn build_cache_fingerprint(
+    terrain_ref: Option<&Path>,
+    climate_ref: Option<&Path>,
+    glaciology_ref: Option<&Path>,
+) -> String {
     let mut parts = Vec::<String>::new();
     if let Some(path) = terrain_ref {
         parts.push(file_fingerprint_component(path));
     }
     if let Some(path) = climate_ref {
+        parts.push(file_fingerprint_component(path));
+    }
+    if let Some(path) = glaciology_ref {
         parts.push(file_fingerprint_component(path));
     }
     if parts.is_empty() {
@@ -1166,15 +958,13 @@ fn build_cache_fingerprint(terrain_ref: Option<&Path>, climate_ref: Option<&Path
 #[allow(clippy::too_many_arguments)]
 fn append_score_record_jsonl(
     phase2_state: &Phase2State,
-    diagnostics_snapshot: Option<&BenchDiagnosticsSnapshot>,
     run_metadata: &BenchRunMetadata,
-    climate_step_ms: f32,
+    glaciology_step_ms: f32,
     seed: &str,
     mesh_level: u32,
     cell_count: usize,
-    temperature_summary: &Phase1MetricSummary,
-    precipitation_summary: &Phase1MetricSummary,
-    aridity_summary: &Phase1MetricSummary,
+    ice_thickness_summary: &Phase1MetricSummary,
+    melt_runoff_summary: &Phase1MetricSummary,
 ) -> Result<(), String> {
     let timestamp_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1197,76 +987,25 @@ fn append_score_record_jsonl(
                 "ready",
                 Some(reference_path.display().to_string()),
                 None,
-                format!(
-                    "{{\"temperature\":{},\"precipitation\":{},\"aridity\":{},\"evapotranspiration\":{},\"runoff\":{}}}",
-                    metric_value("temperature"),
-                    metric_value("precipitation"),
-                    metric_value("aridity"),
-                    metric_value("evapotranspiration"),
-                    metric_value("runoff"),
-                ),
+                format!("{{\"ice_thickness\":{}}}", metric_value("ice_thickness"),),
             )
         }
         Phase2State::Skipped => (
             "skipped",
             None,
             None,
-            "{\"temperature\":null,\"precipitation\":null,\"aridity\":null,\"evapotranspiration\":null,\"runoff\":null}".to_string(),
+            "{\"ice_thickness\":null}".to_string(),
         ),
         Phase2State::Error(error) => (
             "error",
             None,
             Some(error.clone()),
-            "{\"temperature\":null,\"precipitation\":null,\"aridity\":null,\"evapotranspiration\":null,\"runoff\":null}".to_string(),
+            "{\"ice_thickness\":null}".to_string(),
         ),
     };
 
-    let process_json = diagnostics_snapshot
-        .map(|snapshot| {
-            let summary = snapshot.precipitation_process;
-            format!(
-                "{{\"continental_reduction_ratio\":{},\"cap_reduction_ratio\":{},\"depletion_reduction_ratio\":{},\"cap_hit_ratio\":{},\"mean_monsoon_boost_mm\":{},\"mean_hotspot_boost_mm\":{},\"mean_stage_source_mm\":{},\"mean_stage_transport_mm\":{},\"mean_stage_orographic_mm\":{},\"mean_stage_correction_factor\":{},\"mean_budget_storage_change_mm\":{},\"mean_budget_residual_mm\":{},\"budget_residual_ratio\":{}}}",
-                format_json_number(summary.continental_reduction_ratio),
-                format_json_number(summary.cap_reduction_ratio),
-                format_json_number(summary.depletion_reduction_ratio),
-                format_json_number(summary.cap_hit_ratio),
-                format_json_number(summary.mean_monsoon_boost_mm),
-                format_json_number(summary.mean_hotspot_boost_mm),
-                format_json_number(summary.mean_stage_source_mm),
-                format_json_number(summary.mean_stage_transport_mm),
-                format_json_number(summary.mean_stage_orographic_mm),
-                format_json_number(summary.mean_stage_correction_factor),
-                format_json_number(summary.mean_budget_storage_change_mm),
-                format_json_number(summary.mean_budget_residual_mm),
-                format_json_number(summary.budget_residual_ratio),
-            )
-        })
-        .unwrap_or_else(|| "{\"continental_reduction_ratio\":null,\"cap_reduction_ratio\":null,\"depletion_reduction_ratio\":null,\"cold_coast_reduction_ratio\":null,\"cap_hit_ratio\":null,\"mean_monsoon_boost_mm\":null,\"mean_hotspot_boost_mm\":null,\"mean_stage_source_mm\":null,\"mean_stage_transport_mm\":null,\"mean_stage_orographic_mm\":null,\"mean_stage_correction_factor\":null,\"mean_budget_storage_change_mm\":null,\"mean_budget_residual_mm\":null,\"budget_residual_ratio\":null}".to_string());
-
-    let bands_json = diagnostics_snapshot
-        .map(|snapshot| {
-            let metric_value = |name: &str| -> String {
-                snapshot
-                    .precipitation_lat_bands
-                    .iter()
-                    .find(|metric| metric.name == name)
-                    .map(|metric| format_json_number(metric.rho))
-                    .unwrap_or_else(|| "null".to_string())
-            };
-            format!(
-                "{{\"tropics\":{},\"subtropics\":{},\"midlat\":{},\"highlat\":{}}}",
-                metric_value("tropics"),
-                metric_value("subtropics"),
-                metric_value("midlat"),
-                metric_value("highlat"),
-            )
-        })
-        .unwrap_or_else(|| {
-            "{\"tropics\":null,\"subtropics\":null,\"midlat\":null,\"highlat\":null}".to_string()
-        });
-
     let line = format!(
-        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"climate_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"cache_fingerprint\":\"{}\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"climate_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"temperature\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"precipitation\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"aridity\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"precipitation_process\":{},\"precipitation_lat_bands\":{}}}}}\n",
+        "{{\"schema_version\":1,\"timestamp_unix_ms\":{},\"bench\":\"glaciology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"cache_fingerprint\":\"{}\",\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"glaciology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"ice_thickness\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}},\"glacial_melt_runoff\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":{},\"coverage_ratio\":{}}}}}}}\n",
         timestamp_unix_ms,
         json_escape(&run_metadata.run_id),
         run_metadata
@@ -1286,9 +1025,9 @@ fn append_score_record_jsonl(
         json_escape(seed),
         mesh_level,
         cell_count,
-        format_json_number(climate_step_ms),
-        format_json_number(climate_step_ms),
-        format_json_number(climate_step_ms),
+        format_json_number(glaciology_step_ms),
+        format_json_number(glaciology_step_ms),
+        format_json_number(glaciology_step_ms),
         phase2_state_label,
         phase2_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))
@@ -1297,20 +1036,14 @@ fn append_score_record_jsonl(
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
         metrics_json,
-        temperature_summary.matched,
-        temperature_summary.total,
-        temperature_summary.excluded_known_hard,
-        format_json_number(temperature_summary.coverage_ratio),
-        precipitation_summary.matched,
-        precipitation_summary.total,
-        precipitation_summary.excluded_known_hard,
-        format_json_number(precipitation_summary.coverage_ratio),
-        aridity_summary.matched,
-        aridity_summary.total,
-        aridity_summary.excluded_known_hard,
-        format_json_number(aridity_summary.coverage_ratio),
-        process_json,
-        bands_json,
+        ice_thickness_summary.matched,
+        ice_thickness_summary.total,
+        ice_thickness_summary.excluded_known_hard,
+        format_json_number(ice_thickness_summary.coverage_ratio),
+        melt_runoff_summary.matched,
+        melt_runoff_summary.total,
+        melt_runoff_summary.excluded_known_hard,
+        format_json_number(melt_runoff_summary.coverage_ratio),
     );
 
     let output_path = score_output_path();

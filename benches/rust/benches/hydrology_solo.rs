@@ -343,7 +343,7 @@ fn main() {
         deposition_summary.mean, deposition_summary.p50, deposition_summary.p95
     );
 
-    let selection = build_region_selection(&sim_world.mesh.positions);
+    let selection = build_region_selection(&sim_world.mesh().positions);
     let flow_assertions = run_assertions(
         &selection,
         &sim_world.state.hydrology.river_flow,

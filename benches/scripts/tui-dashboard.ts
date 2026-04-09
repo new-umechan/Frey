@@ -13,7 +13,7 @@ const BENCHES = [
         id: "climate_solo",
         title: "CLIMATE_SOLO",
         jsonlPath: "benches/results/climate_main_scores.jsonl",
-        command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "climate_solo"],
+        command: ["cargo", "bench", "--manifest-path", "benches/rust/Cargo.toml", "--bench", "climate_solo"],
         summarize(record: Record<string, unknown>) {
             const phase2 = (record as { phase2?: { metrics?: Record<string, unknown> } })?.phase2?.metrics ?? {};
             const phase1 = (record as { phase1?: Record<string, { matched?: unknown }> })?.phase1 ?? {};
@@ -42,7 +42,7 @@ const BENCHES = [
         id: "hydrology_solo",
         title: "HYDROLOGY_SOLO",
         jsonlPath: "benches/results/hydrology_main_scores.jsonl",
-        command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "hydrology_solo"],
+        command: ["cargo", "bench", "--manifest-path", "benches/rust/Cargo.toml", "--bench", "hydrology_solo"],
         summarize(record: Record<string, unknown>) {
             const main = (record as { main_evaluation?: { metrics?: Record<string, unknown> } })?.main_evaluation?.metrics ?? {};
             const ranking = (record as { diagnostic_evaluation?: { river_flow_assertions?: Record<string, unknown> } })?.diagnostic_evaluation?.river_flow_assertions ?? {};
@@ -64,7 +64,7 @@ const BENCHES = [
         id: "ecology_solo",
         title: "ECOLOGY_SOLO",
         jsonlPath: "benches/results/ecology_main_scores.jsonl",
-        command: ["cargo", "bench", "--manifest-path", "rust/Cargo.toml", "--bench", "ecology_solo"],
+        command: ["cargo", "bench", "--manifest-path", "benches/rust/Cargo.toml", "--bench", "ecology_solo"],
         summarize(record: Record<string, unknown>) {
             const main = (record as { main_evaluation?: { metrics?: Record<string, unknown> } })?.main_evaluation?.metrics ?? {};
             const ranking = (record as { diagnostic_evaluation?: { biome_assertions?: Record<string, unknown> } })?.diagnostic_evaluation?.biome_assertions ?? {};

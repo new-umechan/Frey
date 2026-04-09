@@ -1,0 +1,27 @@
+[package]
+name = "frey_outer_benches"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+frey_wasm = { path = "../../rust", default-features = false }
+
+[[bench]]
+name = "climate_solo"
+harness = false
+
+[[bench]]
+name = "hydrology_solo"
+harness = false
+
+[[bench]]
+name = "ecology_solo"
+harness = false
+
+[[bench]]
+name = "glaciology_solo"
+harness = false
+
+[[bench]]
+name = "glaciology_sea_level_series"
+harness = false

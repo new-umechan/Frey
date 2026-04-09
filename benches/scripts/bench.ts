@@ -63,7 +63,7 @@ function runCargoBench(suite: string) {
     return new Promise((resolve, reject) => {
         const child = spawn(
             "cargo",
-            ["bench", "--manifest-path", "rust/Cargo.toml", "--bench", suite],
+            ["bench", "--manifest-path", "benches/rust/Cargo.toml", "--bench", suite],
             {
                 stdio: "inherit",
             },
