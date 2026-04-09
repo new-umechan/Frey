@@ -22,22 +22,11 @@ function createControllerDeps(options: {
     } = options;
 
     return {
-        elements,
         isPerfEnabled,
         setStatus,
-        world: runtimeStore.world,
-        worldState: runtimeStore.worldState,
-        getState: runtimeStore.getState,
-        setState: runtimeStore.setState,
-        getCurrentEraMetrics: runtimeStore.getCurrentEraMetrics,
-        cameraController: sceneRuntime.cameraController,
-        terrainRenderer: sceneRuntime.terrainRenderer,
-        wireframe: sceneRuntime.wireframe,
-        plateHover: sceneRuntime.plateHover,
-        globePinchFocusController: sceneRuntime.globePinchFocusController,
-        loadingOverlayController: sceneRuntime.loadingOverlayController,
-        syncClimateUi: sceneRuntime.syncClimateUi,
-        renderFrame: sceneRuntime.renderFrame,
+        store: runtimeStore,
+        scene: sceneRuntime,
+        elements,
         renderInitializationFrames,
     };
 }

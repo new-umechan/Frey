@@ -6,38 +6,29 @@ import {
     type StatFields,
     type EraScaleWeightFields,
     type PerfStatFields,
+    type PlaybackControlsElements,
+    type PerfControlsElements,
 } from "../../../components/dom";
-import { type AppState, type WorldState } from "../../state/app-state";
-import { type EraMetrics } from "../../state/era-presets";
-import { type RuntimeState } from "../../runtime/state";
 import {
     describeExecModuleGraph,
     getDefaultExecDisplayPhase,
 } from "../../runtime/state";
 import { createEngineWorkerClient } from "../../engine/engine-worker-client";
 import { type EngineClient } from "../../engine/engine-client";
+import { type RuntimeStore } from "../runtime-store";
+import { type SceneRuntime } from "../scene-runtime";
+import { type PlaybackController } from "../../playback/playback-controller";
 
 export interface ControllerDeps {
-    elements: AppElements;
     isPerfEnabled: boolean;
     setStatus: (msg: string) => void;
-    world: WorldState;
-    worldState: RuntimeState;
-    getState: () => AppState;
-    setState: (patch: Partial<AppState>) => void;
-    getCurrentEraMetrics: () => EraMetrics;
-    cameraController: any;
-    terrainRenderer: any;
-    wireframe: any;
-    plateHover: any;
-    globePinchFocusController: any;
-    loadingOverlayController: any;
-    syncClimateUi: () => void;
-    renderFrame: () => void;
-    renderInitializationFrames: any;
+    store: RuntimeStore;
+    scene: SceneRuntime;
+    elements: AppElements;
+    renderInitializationFrames: (renderFrame: () => void) => Promise<void>;
 }
 
-export interface RuntimeContext extends ControllerDeps {
+export interface RuntimeDomRefs {
     seedForm: HTMLFormElement;
     seedInput: HTMLInputElement;
     debugToggleInput: HTMLInputElement;
@@ -47,130 +38,106 @@ export interface RuntimeContext extends ControllerDeps {
     viewModeInputs: HTMLInputElement[];
     statFields: StatFields;
     statusEraLabel: HTMLElement;
-    playbackControls: any;
+    playbackControls: PlaybackControlsElements;
     eventLogList: HTMLUListElement;
-    perfControls: any;
+    perfControls: PerfControlsElements | null;
     perfStatFields: PerfStatFields | null;
     viewportPanel: HTMLElement;
+}
+
+export interface RuntimeContext {
+    isPerfEnabled: boolean;
+    setStatus: (msg: string) => void;
+    store: RuntimeStore;
+    scene: SceneRuntime;
+    dom: RuntimeDomRefs;
+    renderInitializationFrames: (renderFrame: () => void) => Promise<void>;
     engineClient: EngineClient;
 }
 
 function createRuntimeContext(options: ControllerDeps): RuntimeContext {
     const {
-        elements,
         isPerfEnabled,
         setStatus,
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
+        store,
+        scene,
+        elements,
         renderInitializationFrames,
     } = options;
 
-    const {
-        seedForm,
-        seedInput,
-        debugToggleInput,
-        eraScaleSelect,
-        eraScaleTickLabel,
-        eraScaleWeightFields,
-        viewModeInputs,
-        statFields,
-        statusEraLabel,
-        playbackControls,
-        eventLogList,
-        perfControls,
-        perfStatFields,
-        viewportPanel,
-    } = elements;
+    const dom: RuntimeDomRefs = {
+        seedForm: elements.seedForm,
+        seedInput: elements.seedInput,
+        debugToggleInput: elements.debugToggleInput,
+        eraScaleSelect: elements.eraScaleSelect,
+        eraScaleTickLabel: elements.eraScaleTickLabel,
+        eraScaleWeightFields: elements.eraScaleWeightFields,
+        viewModeInputs: elements.viewModeInputs,
+        statFields: elements.statFields,
+        statusEraLabel: elements.statusEraLabel,
+        playbackControls: elements.playbackControls,
+        eventLogList: elements.eventLogList,
+        perfControls: elements.perfControls,
+        perfStatFields: elements.perfStatFields,
+        viewportPanel: elements.viewportPanel,
+    };
 
     return {
-        elements,
         isPerfEnabled,
         setStatus,
-        world,
-        worldState,
-        getState,
-        setState,
-        getCurrentEraMetrics,
-        cameraController,
-        terrainRenderer,
-        wireframe,
-        plateHover,
-        globePinchFocusController,
-        loadingOverlayController,
-        syncClimateUi,
-        renderFrame,
+        store,
+        scene,
+        dom,
         renderInitializationFrames,
-        seedForm,
-        seedInput,
-        debugToggleInput,
-        eraScaleSelect,
-        eraScaleTickLabel,
-        eraScaleWeightFields,
-        viewModeInputs,
-        statFields,
-        statusEraLabel,
-        playbackControls,
-        eventLogList,
-        perfControls,
-        perfStatFields,
-        viewportPanel,
-        engineClient: null as any, // Initialized later
+        engineClient: null as unknown as EngineClient,
     };
 }
 
-async function runInitialSync(context: RuntimeContext, runtimeControllers: any) {
+interface RuntimeControllerHooks {
+    updateTerrain: (seed: string) => Promise<void>;
+    setEraScale: (era: string) => void;
+    playbackController: PlaybackController;
+}
+
+async function runInitialSync(context: RuntimeContext, runtimeControllers: RuntimeControllerHooks) {
     await runInitialWorldAndUiSync({
         updateTerrain: runtimeControllers.updateTerrain,
-        defaultTerrainSeed: context.getState().currentSeed,
-        eraScaleSelect: context.eraScaleSelect,
-        eraScaleTickLabel: context.eraScaleTickLabel,
-        eraScaleWeightFields: context.eraScaleWeightFields,
+        defaultTerrainSeed: context.store.getState().currentSeed,
+        eraScaleSelect: context.dom.eraScaleSelect,
+        eraScaleTickLabel: context.dom.eraScaleTickLabel,
+        eraScaleWeightFields: context.dom.eraScaleWeightFields,
         currentEraScale: DEFAULT_ERA_SCALE,
-        currentEraMetrics: context.getCurrentEraMetrics(),
+        currentEraMetrics: context.store.getCurrentEraMetrics(),
         setEraScale: runtimeControllers.setEraScale,
-        syncClimateUi: context.syncClimateUi,
+        syncClimateUi: context.scene.syncClimateUi,
         playbackController: runtimeControllers.playbackController,
-        viewportPanel: context.viewportPanel,
-        onResize: () => {
-            context.cameraController.onResize();
-            context.loadingOverlayController.render();
-        },
-        plateHover: context.plateHover,
+        viewportPanel: context.dom.viewportPanel,
+        onResize: context.scene.onResize,
+        plateHover: context.scene.plateHover,
     });
 }
 
 function shouldAdvanceWorld(context: RuntimeContext) {
-    const state = context.getState();
-    return context.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
+    const state = context.store.getState();
+    return context.store.worldState.playback.isPlaying && Boolean(state.currentTerrainData) && Boolean(state.activeWorldId);
 }
 
 export async function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
     context.engineClient = createEngineWorkerClient();
-    context.worldState.execModules = [];
-    context.worldState.execModuleGraph = null;
-    context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
-    context.worldState.execModules = await context.engineClient.get_exec_modules();
-    context.worldState.execModuleGraph = await context.engineClient.get_exec_module_graph();
-    context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
+    context.store.worldState.execModules = [];
+    context.store.worldState.execModuleGraph = null;
+    context.store.worldState.slicePhase = getDefaultExecDisplayPhase(context.store.worldState);
+    context.store.worldState.execModules = await context.engineClient.get_exec_modules();
+    context.store.worldState.execModuleGraph = await context.engineClient.get_exec_module_graph();
+    context.store.worldState.slicePhase = getDefaultExecDisplayPhase(context.store.worldState);
 
     const runtimeControllers = createRuntimeControllers(context);
     runtimeControllers.playbackController.appendPlaybackEvent(
         "exec-modules-loaded",
         "実行DAG",
-        describeExecModuleGraph(context.worldState),
-        context.world.tick,
+        describeExecModuleGraph(context.store.worldState),
+        context.store.world.tick,
     );
 
     return {
