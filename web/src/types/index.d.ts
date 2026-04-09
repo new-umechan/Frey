@@ -22,6 +22,6 @@ export { Wasm };
 // Extend Global types if necessary (e.g. for window object)
 declare global {
     interface Window {
-        __FREY_APP__?: any;
+        __FREY_APP__?: unknown;
     }
 }
