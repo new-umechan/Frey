@@ -1,5 +1,15 @@
 import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../interface/wasm";
-import type { EngineClient } from "./engine-client";
+import type {
+    EngineClient,
+    InitWorldResult,
+    MeshGenerationResult,
+    ExecWorldSliceResult,
+    ProfiledExecResult,
+    WorldDeltaResult,
+    MetricsResult,
+    FieldResult,
+    HistoryTicksResult,
+} from "./engine-client";
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
 type PendingRequest = {
@@ -59,40 +69,41 @@ export class EngineWorkerClient implements EngineClient {
         });
     }
 
-    init_world(seed: string, meshLevel: number, config: unknown): Promise<any> {
-        return this.request("init_world", { seed, meshLevel, config });
+    async init_world(seed: string, meshLevel: number, config: unknown): Promise<InitWorldResult> {
+        return await this.request("init_world", { seed, meshLevel, config }) as InitWorldResult;
     }
 
-    generate_mesh(level: number): Promise<any> {
-        return this.request("generate_mesh", { level });
+    async generate_mesh(level: number): Promise<MeshGenerationResult> {
+        return await this.request("generate_mesh", { level }) as MeshGenerationResult;
     }
 
     async exec_world(worldId: string, tickCount: number): Promise<void> {
         await this.request("exec_world", { worldId, tickCount });
     }
 
-    exec_world_slice(worldId: string, workBudget: number): Promise<any> {
-        return this.request("exec_world_slice", { worldId, workBudget });
+    async exec_world_slice(worldId: string, workBudget: number): Promise<ExecWorldSliceResult> {
+        return await this.request("exec_world_slice", { worldId, workBudget }) as ExecWorldSliceResult;
     }
 
-    exec_world_profiled(worldId: string, tickCount: number): Promise<any> {
-        return this.request("exec_world_profiled", { worldId, tickCount });
+    async exec_world_profiled(worldId: string, tickCount: number): Promise<ProfiledExecResult> {
+        return await this.request("exec_world_profiled", { worldId, tickCount }) as ProfiledExecResult;
     }
 
-    get_world_delta(worldId: string, options?: unknown): Promise<any> {
-        return this.request("get_world_delta", { worldId, options });
+    async get_world_delta(worldId: string, options?: unknown): Promise<WorldDeltaResult> {
+        return await this.request("get_world_delta", { worldId, options });
     }
 
-    get_metrics(worldId: string): Promise<any> {
-        return this.request("get_metrics", { worldId });
+    async get_metrics(worldId: string): Promise<MetricsResult | null> {
+        const result = await this.request("get_metrics", { worldId });
+        return (result ?? null) as MetricsResult | null;
     }
 
-    get_field(worldId: string, fieldKind: string, window: number): Promise<any> {
-        return this.request("get_field", { worldId, fieldKind, window });
+    async get_field(worldId: string, fieldKind: string, window: number): Promise<FieldResult> {
+        return await this.request("get_field", { worldId, fieldKind, window });
     }
 
-    list_history_ticks(worldId: string): Promise<any> {
-        return this.request("list_history_ticks", { worldId });
+    async list_history_ticks(worldId: string): Promise<HistoryTicksResult> {
+        return await this.request("list_history_ticks", { worldId }) as HistoryTicksResult;
     }
 
     async restore_world_to_tick(worldId: string, tick: number): Promise<void> {

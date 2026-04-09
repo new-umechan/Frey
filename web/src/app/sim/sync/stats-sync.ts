@@ -1,17 +1,6 @@
 import { type StatFields } from "../../../components/dom";
 import { type WorldState } from "../../state/app-state";
-import { type EngineClient } from "../../engine/engine-client";
-
-interface WorldMetricsResponse {
-    tick?: number;
-    era_scale?: string;
-    budget_geology?: number;
-    budget_climate?: number;
-    budget_ecology?: number;
-    budget_civilization?: number;
-    plate_count?: number;
-    land_ratio?: number;
-}
+import { type EngineClient, type MetricsResult } from "../../engine/engine-client";
 
 function formatPercent(ratio: number): string {
     if (!Number.isFinite(ratio)) {
@@ -33,7 +22,7 @@ export async function refreshWorldStatsFromController(options: {
         return false;
     }
 
-    const metrics = await engineClient.get_metrics(worldId) as WorldMetricsResponse | null;
+    const metrics = await engineClient.get_metrics(worldId) as MetricsResult | null;
     if (!metrics) {
         return false;
     }
