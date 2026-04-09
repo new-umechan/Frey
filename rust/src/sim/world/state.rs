@@ -17,7 +17,7 @@ pub struct World {
     pub state: WorldState,
     #[serde(default)]
     pub projections: WorldProjectionState,
-    pub entities: EntityState,
+    pub entities: EntityStore,
     pub clock: ClockState,
     pub control: WorldControlState,
     #[serde(alias = "runtime", default)]
@@ -585,6 +585,14 @@ pub struct CivilizationStateMut<'a> {
 pub type EntityStore = EntityState;
 pub type RelationsStore = WorldRelations;
 
+pub struct WorldCoreView<'a> {
+    pub cells: CellStore<'a>,
+    pub entities: &'a EntityStore,
+    pub relations: &'a RelationsStore,
+    pub clock: &'a ClockState,
+    pub control: &'a WorldControlState,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CivilizationIndicators {
     pub settled_cells: usize,
@@ -593,6 +601,16 @@ pub struct CivilizationIndicators {
 }
 
 impl World {
+    pub fn core_view(&self) -> WorldCoreView<'_> {
+        WorldCoreView {
+            cells: self.cell_store(),
+            entities: &self.entities,
+            relations: &self.relations,
+            clock: &self.clock,
+            control: &self.control,
+        }
+    }
+
     pub fn entity_store(&self) -> &EntityStore {
         &self.entities
     }
