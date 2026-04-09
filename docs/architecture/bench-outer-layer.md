@@ -20,5 +20,8 @@ Simulation core and performance/validation tooling are separated by responsibili
 ## Composite Gate
 
 - `pnpm run outer:gate`
-  - runs contract + regression + benchmark in sequence
-  - intended for lightweight CI quality gate at outer boundary
+  - runs contract + regression in sequence
+  - intended for stable CI quality gate at outer boundary
+- `pnpm run outer:gate:full`
+  - runs `outer:gate` + `outer:benchmark`
+  - intended for manual/perf-focused full checks

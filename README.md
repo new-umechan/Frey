@@ -37,3 +37,12 @@
 - MODIS MOD44B（`tree_cover` / `ground_cover` / `biome` 合成参照、`benches/raw/ecology/`）
 - MODIS MCD12Q1（`natural_mask` / `biome` 合成参照、`benches/raw/ecology/`）
 - SoilGrids（`soil_fertility` proxy、`benches/raw/ecology/soilgrids/`）
+
+## Quality Gate
+
+- Outer boundary gate: `pnpm run outer:gate`
+  - API contract: `pnpm run outer:contract`
+  - seed regression: `pnpm run outer:regression`
+  - benchmark gate: `pnpm run outer:benchmark`
+- Full gate (including benchmark): `pnpm run outer:gate:full`
+- CI workflow: `.github/workflows/outer-gate.yaml`
