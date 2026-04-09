@@ -6,11 +6,24 @@ import { buildRenderPositions } from "../../gfx/views/terrain-visuals";
 import { createLoadingOverlayController } from "./loading-overlay";
 import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup";
 import { createClimateUiController } from "../controllers/climate-ui-controller";
-import { createPlateHover } from "../input/plate-hover";
-import { createTerrainRenderer } from "../visualizers/terrain-renderer";
+import { createPlateHover, type PlateHoverController } from "../input/plate-hover";
+import { createTerrainRenderer, type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
+import { type GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+
+export interface CameraController {
+    onResize: () => void;
+    getCamera: () => any;
+    getActiveControls: () => { update: () => void };
+}
+
+export interface LoadingOverlayController {
+    clear: () => void;
+    render: () => void;
+    setWorldInitializing: (value: boolean) => void;
+}
 
 export interface SceneRuntimeOptions {
     elements: AppElements;
@@ -20,12 +33,12 @@ export interface SceneRuntimeOptions {
 }
 
 export interface SceneRuntime {
-    cameraController: any;
-    terrainRenderer: any;
-    wireframe: any;
-    plateHover: any;
-    globePinchFocusController: any;
-    loadingOverlayController: any;
+    cameraController: CameraController;
+    terrainRenderer: TerrainRenderer;
+    wireframe: { visible: boolean };
+    plateHover: PlateHoverController;
+    globePinchFocusController: GlobePinchFocusController;
+    loadingOverlayController: LoadingOverlayController;
     syncClimateUi: () => void;
     renderFrame: () => void;
     onResize: () => void;

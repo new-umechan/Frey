@@ -62,6 +62,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
         defaultEraScale: DEFAULT_ERA_SCALE,
         getState: context.store.getState,
         setState: context.store.setState,
+        getWorldTick: () => context.store.world.tick,
         setStatus: context.setStatus,
         appendPlaybackEvent: (type: string, label: string, detail?: string) => {
             playbackControllerRef.current?.appendPlaybackEvent(type, label, detail);

@@ -1,6 +1,23 @@
 import { createPerfController } from "../perf/controller";
+import { type PerfControlsElements, type PerfStatFields } from "../../components/dom";
 
-export function createPerfRuntime(options: any = {}) {
+export interface PerfRuntimeOptions {
+    isPerfEnabled: boolean;
+    perfControls: PerfControlsElements | null;
+    perfStatFields: PerfStatFields | null;
+    workerUrl: URL;
+    terrainParams: Record<string, unknown>;
+    level: number;
+    createPerfProfile: () => { tickCount: number };
+    createPerfConsoleTable: (result: unknown) => unknown;
+    formatPerfSummaryLine: (result: unknown) => string;
+    getRuntimeMeta: () => Record<string, unknown>;
+    canRunBenchmark: () => boolean;
+    setPlaybackRunning: (nextPlaying: boolean) => boolean;
+    syncPlaybackUi: () => void;
+}
+
+export function createPerfRuntime(options: PerfRuntimeOptions) {
     const {
         isPerfEnabled,
         perfControls,
@@ -20,9 +37,9 @@ export function createPerfRuntime(options: any = {}) {
     const perfUiEnabled = isPerfEnabled && Boolean(perfControls);
     const perfBenchmarkController = createPerfController({
         enabled: perfUiEnabled,
-        controls: perfControls,
+        controls: perfControls ?? undefined,
         perfStatFields,
-        workerUrl,
+        workerUrl: String(workerUrl),
         terrainParams,
         level,
         createPerfProfile,

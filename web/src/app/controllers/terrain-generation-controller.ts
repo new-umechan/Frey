@@ -1,5 +1,5 @@
 import { type EngineClient } from "../engine/engine-client";
-import { type WorldState } from "../state/app-state";
+import { type AppState, type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 
@@ -12,23 +12,23 @@ export interface TerrainGenerationControllerOptions {
     seedInput: HTMLInputElement;
     engineClient: EngineClient;
     level: number;
-    terrainParams: any;
+    terrainParams: Record<string, number>;
     world: WorldState;
     worldState: RuntimeState;
-    createInitialBudgets: () => any;
+    createInitialBudgets: () => Record<string, number>;
     createEraMetrics: (era: string) => EraMetrics;
     resetWorldProgress: (
         world: WorldState,
         worldState: RuntimeState,
-        createInitialBudgets: () => any,
+        createInitialBudgets: () => Record<string, number>,
         createEraMetrics: (era: string) => EraMetrics,
     ) => EraMetrics;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
     setStatus: (msg: string) => void;
-    syncWorldFromActiveController: () => Promise<any>;
+    syncWorldFromActiveController: () => Promise<unknown>;
     getCurrentEraScale: () => string;
     getCurrentSeed: () => string;
-    setCurrentState: (patch: any) => void;
+    setCurrentState: (patch: Partial<AppState>) => void;
     setPlaybackRunning: (isPlaying: boolean) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
     onInitWorldStart?: () => Promise<void>;

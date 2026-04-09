@@ -1,4 +1,26 @@
-export function createViewModeController(options: any = {}) {
+import { type PlateHoverController } from "../input/plate-hover";
+import { type TerrainRenderer } from "../visualizers/terrain-renderer";
+
+export interface ViewModeControllerOptions {
+    viewModeInputs: HTMLInputElement[];
+    normalizeCellMetric: (metric: string) => string;
+    terrainRenderer: TerrainRenderer;
+    plateHover: PlateHoverController;
+    syncClimateUi: () => void;
+    syncVisibleFieldsForCurrentView: () => void;
+    getCurrentViewMode: () => string;
+    getCurrentCellMetric: () => string;
+    getDebugEnabled: () => boolean;
+    setCurrentViewMode: (nextMode: string) => void;
+    setCurrentCellMetric: (nextMetric: string) => void;
+}
+
+export interface ViewModeController {
+    setViewMode: (nextMode: string) => void;
+    setCellMetric: (nextMetric: string) => void;
+}
+
+export function createViewModeController(options: ViewModeControllerOptions): ViewModeController {
     const {
         viewModeInputs,
         normalizeCellMetric,

@@ -2,6 +2,13 @@ import { type AppState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig, type EraScaleWeightFields } from "../state/era-presets";
 import { type PlateHoverController } from "../input/plate-hover";
+import { type TerrainRenderer } from "../visualizers/terrain-renderer";
+import { type CoreBuffers } from "../sim/sync/types";
+
+interface CameraController {
+    setSurfaceMode: (nextMode: string) => void;
+    getSurfaceMode: () => string;
+}
 
 export interface WorldUiController {
     setSurfaceMode: (nextMode: string) => void;
@@ -10,9 +17,9 @@ export interface WorldUiController {
 }
 
 export interface WorldUiControllerOptions {
-    cameraController: any;
-    terrainRenderer: any;
-    wireframe: any;
+    cameraController: CameraController;
+    terrainRenderer: TerrainRenderer;
+    wireframe: { visible: boolean };
     plateHover: PlateHoverController;
     debugToggleInput: HTMLInputElement;
     statusEraLabel: HTMLElement;
@@ -32,6 +39,7 @@ export interface WorldUiControllerOptions {
     defaultEraScale: string;
     getState: () => AppState;
     setState: (patch: Partial<AppState>) => void;
+    getWorldTick: () => number;
     setStatus: (msg: string) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
 }
@@ -54,6 +62,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         defaultEraScale,
         getState,
         setState,
+        getWorldTick,
         setStatus,
         appendPlaybackEvent,
     } = options;
@@ -65,11 +74,13 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
             return;
         }
         setState({ currentSurfaceMode: normalizedMode });
-        terrainRenderer.updateGeometryPositions(state.currentTerrainData, normalizedMode, {
-            force: true,
-            heightChanged: true,
-            tick: state.worldTick,
-        });
+        if (state.currentTerrainData) {
+            terrainRenderer.updateGeometryPositions(state.currentTerrainData as CoreBuffers, normalizedMode, {
+                force: true,
+                heightChanged: true,
+                tick: getWorldTick(),
+            });
+        }
         cameraController.setSurfaceMode(normalizedMode);
         plateHover.hidePopup();
     };
