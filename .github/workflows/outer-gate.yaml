@@ -2,6 +2,16 @@ name: Outer Gate
 
 on:
     workflow_dispatch:
+        inputs:
+            mode:
+                description: "outer gate mode"
+                required: true
+                type: choice
+                default: gate
+                options:
+                    - gate
+                    - full
+                    - validation
 
 jobs:
     outer-gate:
@@ -31,4 +41,15 @@ jobs:
               run: pnpm install --frozen-lockfile
 
             - name: Run outer gate
-              run: pnpm run outer:gate
+              run: |
+                  case "${{ github.event.inputs.mode }}" in
+                    full)
+                      pnpm run outer:gate:full
+                      ;;
+                    validation)
+                      pnpm run outer:validation
+                      ;;
+                    *)
+                      pnpm run outer:gate
+                      ;;
+                  esac

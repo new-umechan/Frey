@@ -45,4 +45,7 @@
   - seed regression: `pnpm run outer:regression`
   - benchmark gate: `pnpm run outer:benchmark`
 - Full gate (including benchmark): `pnpm run outer:gate:full`
-- CI workflow: `.github/workflows/outer-gate.yaml`
+- Manual CI workflow: `.github/workflows/outer-gate.yaml`
+  - mode=`gate` (default): contract + seed regression
+  - mode=`full`: gate + benchmark
+  - mode=`validation`: reference-data validation
