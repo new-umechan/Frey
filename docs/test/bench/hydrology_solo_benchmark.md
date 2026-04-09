@@ -221,7 +221,7 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 ## キャッシュのバイナリ形式
 
-`benches/scripts/resample.py` / `rust/benches/hydrology_solo.rs` 実装。
+`benches/scripts/resample.py` / `benches/rust/benches/hydrology_solo.rs` 実装。
 
 ### hydro_input.bin
 
