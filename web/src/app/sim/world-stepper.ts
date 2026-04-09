@@ -28,7 +28,7 @@ export interface WorldStepperOptions {
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
     getCurrentState: () => AppState;
-    pushStepBreakdownSamples: (recorder: TickPerfRecorder, profiled: unknown) => void;
+    pushStepBreakdownSamples: (recorder: TickPerfRecorder | null, profiled: Record<string, unknown>) => void;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
 }
 

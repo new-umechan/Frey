@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../../shared/constants";
 import { getCellMetricMeta } from "../visualizers/cell-metric";
+import { type CoreBuffers } from "../sim/sync/types";
 
 export interface PlateHoverController {
     hidePopup: () => void;
@@ -9,7 +10,7 @@ export interface PlateHoverController {
 }
 
 interface PlateHoverState {
-    currentTerrainData: Record<string, Float32Array | Int32Array | Uint32Array> | null;
+    currentTerrainData: CoreBuffers | null;
     currentViewMode: string;
     currentCellMetric: string;
     debugEnabled: boolean;
@@ -275,13 +276,20 @@ export function createPlateHover({
         const samePlateA = Number(plateA) === targetPlate;
         const samePlateB = Number(plateB) === targetPlate;
         const samePlateC = Number(plateC) === targetPlate;
+        const safeWeightA = Number(weightA);
+        const safeWeightB = Number(weightB);
+        const safeWeightC = Number(weightC);
+        const finiteWeightA = Number.isFinite(safeWeightA);
+        const finiteWeightB = Number.isFinite(safeWeightB);
+        const finiteWeightC = Number.isFinite(safeWeightC);
 
-        if (samePlateA && samePlateB && samePlateC) {
+        const allPlateWeightsFinite = finiteWeightA && finiteWeightB && finiteWeightC;
+        if (samePlateA && samePlateB && samePlateC && allPlateWeightsFinite) {
             return {
                 weight:
-                    hoverBarycoord.x * weightA +
-                    hoverBarycoord.y * weightB +
-                    hoverBarycoord.z * weightC,
+                    hoverBarycoord.x * safeWeightA +
+                    hoverBarycoord.y * safeWeightB +
+                    hoverBarycoord.z * safeWeightC,
                 source: "interp-all",
                 debugLines: [
                     ...baseDebugLines,
@@ -293,16 +301,16 @@ export function createPlateHover({
 
         let sum = 0;
         let wsum = 0;
-        if (samePlateA && Number.isFinite(weightA)) {
-            sum += hoverBarycoord.x * weightA;
+        if (samePlateA && finiteWeightA) {
+            sum += hoverBarycoord.x * safeWeightA;
             wsum += hoverBarycoord.x;
         }
-        if (samePlateB && Number.isFinite(weightB)) {
-            sum += hoverBarycoord.y * weightB;
+        if (samePlateB && finiteWeightB) {
+            sum += hoverBarycoord.y * safeWeightB;
             wsum += hoverBarycoord.y;
         }
-        if (samePlateC && Number.isFinite(weightC)) {
-            sum += hoverBarycoord.z * weightC;
+        if (samePlateC && finiteWeightC) {
+            sum += hoverBarycoord.z * safeWeightC;
             wsum += hoverBarycoord.z;
         }
         if (wsum > 1e-6) {
@@ -419,7 +427,7 @@ export function createPlateHover({
         );
     }
 
-    function readMetricHoverValue(currentTerrainData: Record<string, Float32Array | Int32Array | Uint32Array>, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
+    function readMetricHoverValue(currentTerrainData: CoreBuffers, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
         const meta = getCellMetricMeta(currentCellMetric);
         const vertexIndex = Number(vertexIndexValue);
         const values = currentTerrainData[meta.dataKey] as Float32Array | Int32Array | Uint32Array | undefined;

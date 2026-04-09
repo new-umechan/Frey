@@ -18,6 +18,8 @@ export interface CameraController {
     onResize: () => void;
     getCamera: () => any;
     getActiveControls: () => { update: () => void };
+    setSurfaceMode: (nextMode: string) => void;
+    getSurfaceMode: () => string;
 }
 
 export interface LoadingOverlayController {
@@ -122,6 +124,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         plateHoverPopup,
         getState: () => ({
             ...getState(),
+            currentTerrainData: getCurrentTerrainData(),
             camera: cameraController.getCamera(),
         }),
         onClimateHover: updateClimateHoverReadout,

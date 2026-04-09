@@ -61,6 +61,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
         worldState: context.store.worldState,
         defaultEraScale: DEFAULT_ERA_SCALE,
         getState: context.store.getState,
+        getCurrentTerrainData: context.store.getCurrentTerrainData,
         setState: context.store.setState,
         getWorldTick: () => context.store.world.tick,
         setStatus: context.setStatus,

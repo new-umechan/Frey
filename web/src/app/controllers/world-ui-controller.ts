@@ -38,6 +38,7 @@ export interface WorldUiControllerOptions {
     worldState: RuntimeState;
     defaultEraScale: string;
     getState: () => AppState;
+    getCurrentTerrainData: () => CoreBuffers | null;
     setState: (patch: Partial<AppState>) => void;
     getWorldTick: () => number;
     setStatus: (msg: string) => void;
@@ -61,6 +62,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         worldState,
         defaultEraScale,
         getState,
+        getCurrentTerrainData,
         setState,
         getWorldTick,
         setStatus,
@@ -69,13 +71,14 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
 
     const setSurfaceMode = (nextMode: string) => {
         const state = getState();
+        const currentTerrainData = getCurrentTerrainData();
         const normalizedMode = nextMode === "map" ? "map" : "globe";
-        if (state.currentSurfaceMode === normalizedMode && state.currentTerrainData) {
+        if (state.currentSurfaceMode === normalizedMode && currentTerrainData) {
             return;
         }
         setState({ currentSurfaceMode: normalizedMode });
-        if (state.currentTerrainData) {
-            terrainRenderer.updateGeometryPositions(state.currentTerrainData as CoreBuffers, normalizedMode, {
+        if (currentTerrainData) {
+            terrainRenderer.updateGeometryPositions(currentTerrainData, normalizedMode, {
                 force: true,
                 heightChanged: true,
                 tick: getWorldTick(),
