@@ -1,5 +1,5 @@
 import { type WorldState, type AppState } from "../state/app-state";
-import { type RuntimeState } from "../runtime/state";
+import { getDefaultExecDisplayPhase, type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
 import { type WorldSimController } from "../../interface/wasm";
@@ -166,7 +166,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         const state = getCurrentState();
         if (!state.activeWorldId || !state.currentTerrainData) {
             worldState.sliceBusy = false;
-            worldState.slicePhase = "feedback";
+            worldState.slicePhase = getDefaultExecDisplayPhase(worldState);
             return {
                 processedTicks: 0,
                 busy: false,
@@ -179,7 +179,9 @@ export function createWorldStepper(options: WorldStepperOptions) {
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
         );
         worldState.sliceBusy = response?.busy === true;
-        worldState.slicePhase = typeof response?.phase === "string" ? response.phase : "feedback";
+        worldState.slicePhase = typeof response?.phase === "string"
+            ? response.phase
+            : getDefaultExecDisplayPhase(worldState);
         const processedTicks = Math.max(0, Math.floor(response?.processed_ticks ?? 0));
         if (processedTicks > 0) {
             syncCompletedWorldStep({

@@ -2,8 +2,8 @@ use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim;
+use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::world::{EraKind, World};
 use crate::GeologyParams;
 

@@ -20,14 +20,15 @@ pub(crate) use crate::common::geo;
 pub use state::erosion;
 
 pub use exec::{
-    exec_world, exec_world_profiled, exec_world_profiled_detailed,
+    display_group_key, exec_world, exec_world_profiled, exec_world_profiled_detailed,
     exec_world_profiled_detailed_with_feedback,
     exec_world_profiled_detailed_with_feedback_and_hydrology,
     exec_world_profiled_detailed_with_feedback_and_states, exec_world_slice,
     exec_world_slice_with_hydrology, exec_world_slice_with_states, exec_world_with_feedback,
-    exec_world_with_feedback_and_hydrology, exec_world_with_feedback_and_states,
-    ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase, ExecWorldSliceResult,
-    GeologyExecState, HydrologyExecState,
+    exec_world_with_feedback_and_hydrology, exec_world_with_feedback_and_states, first_phase,
+    module_doc_records, module_graph_record, phase_display_group, ExecWorldBreakdown,
+    ExecWorldBreakdownDetailed, ExecWorldPhase, ExecWorldSliceResult, GeologyExecState,
+    HydrologyExecState,
 };
 
 use crate::common::mesh::{flatten_positions, generate_icosphere};

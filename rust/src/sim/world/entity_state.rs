@@ -34,7 +34,7 @@ pub struct RegionRecord {
 }
 
 #[derive(Debug, Clone)]
-pub struct EntityStore {
+pub struct EntityState {
     pub polities: SlotMap<PolityKey, PolityRecord>,
     pub settlements: SlotMap<SettlementKey, SettlementRecord>,
     pub regions: SlotMap<RegionKey, RegionRecord>,
@@ -44,7 +44,7 @@ pub struct EntityStore {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EntityStoreError {
+pub enum EntityStateError {
     DuplicatePolityId(PolityId),
     DuplicateSettlementId(SettlementId),
     DuplicateRegionId(RegionId),
@@ -87,7 +87,7 @@ struct EntityStoreSerde {
     regions: Vec<RegionRecord>,
 }
 
-impl Default for EntityStore {
+impl Default for EntityState {
     fn default() -> Self {
         Self {
             polities: SlotMap::with_key(),
@@ -100,16 +100,16 @@ impl Default for EntityStore {
     }
 }
 
-impl PartialEq for EntityStore {
+impl PartialEq for EntityState {
     fn eq(&self, other: &Self) -> bool {
         self.to_serde() == other.to_serde()
     }
 }
 
-impl EntityStore {
-    pub fn create_polity(&mut self, record: PolityRecord) -> Result<PolityKey, EntityStoreError> {
+impl EntityState {
+    pub fn create_polity(&mut self, record: PolityRecord) -> Result<PolityKey, EntityStateError> {
         if self.polity_by_id.contains_key(&record.id) {
-            return Err(EntityStoreError::DuplicatePolityId(record.id));
+            return Err(EntityStateError::DuplicatePolityId(record.id));
         }
         let polity_id = record.id;
         let key = self.polities.insert(record);
@@ -139,9 +139,9 @@ impl EntityStore {
     pub fn create_settlement(
         &mut self,
         record: SettlementRecord,
-    ) -> Result<SettlementKey, EntityStoreError> {
+    ) -> Result<SettlementKey, EntityStateError> {
         if self.settlement_by_id.contains_key(&record.id) {
-            return Err(EntityStoreError::DuplicateSettlementId(record.id));
+            return Err(EntityStateError::DuplicateSettlementId(record.id));
         }
         let settlement_id = record.id;
         let key = self.settlements.insert(record);
@@ -168,9 +168,9 @@ impl EntityStore {
         self.settlements.values()
     }
 
-    pub fn create_region(&mut self, record: RegionRecord) -> Result<RegionKey, EntityStoreError> {
+    pub fn create_region(&mut self, record: RegionRecord) -> Result<RegionKey, EntityStateError> {
         if self.region_by_id.contains_key(&record.id) {
-            return Err(EntityStoreError::DuplicateRegionId(record.id));
+            return Err(EntityStateError::DuplicateRegionId(record.id));
         }
         let region_id = record.id;
         let key = self.regions.insert(record);
@@ -197,21 +197,21 @@ impl EntityStore {
         self.regions.values()
     }
 
-    pub fn validate(&self) -> Result<(), EntityStoreError> {
+    pub fn validate(&self) -> Result<(), EntityStateError> {
         if self.polities.len() != self.polity_by_id.len() {
-            return Err(EntityStoreError::PolityCountMismatch {
+            return Err(EntityStateError::PolityCountMismatch {
                 records: self.polities.len(),
                 index: self.polity_by_id.len(),
             });
         }
         if self.settlements.len() != self.settlement_by_id.len() {
-            return Err(EntityStoreError::SettlementCountMismatch {
+            return Err(EntityStateError::SettlementCountMismatch {
                 records: self.settlements.len(),
                 index: self.settlement_by_id.len(),
             });
         }
         if self.regions.len() != self.region_by_id.len() {
-            return Err(EntityStoreError::RegionCountMismatch {
+            return Err(EntityStateError::RegionCountMismatch {
                 records: self.regions.len(),
                 index: self.region_by_id.len(),
             });
@@ -219,10 +219,10 @@ impl EntityStore {
 
         for (id, key) in &self.polity_by_id {
             let Some(record) = self.polities.get(*key) else {
-                return Err(EntityStoreError::DanglingPolityIndex(*id));
+                return Err(EntityStateError::DanglingPolityIndex(*id));
             };
             if record.id != *id {
-                return Err(EntityStoreError::MismatchedPolityIndex {
+                return Err(EntityStateError::MismatchedPolityIndex {
                     expected: *id,
                     actual: record.id,
                 });
@@ -230,16 +230,16 @@ impl EntityStore {
         }
         for record in self.polities.values() {
             if !self.polity_by_id.contains_key(&record.id) {
-                return Err(EntityStoreError::MissingPolityIndex(record.id));
+                return Err(EntityStateError::MissingPolityIndex(record.id));
             }
         }
 
         for (id, key) in &self.settlement_by_id {
             let Some(record) = self.settlements.get(*key) else {
-                return Err(EntityStoreError::DanglingSettlementIndex(*id));
+                return Err(EntityStateError::DanglingSettlementIndex(*id));
             };
             if record.id != *id {
-                return Err(EntityStoreError::MismatchedSettlementIndex {
+                return Err(EntityStateError::MismatchedSettlementIndex {
                     expected: *id,
                     actual: record.id,
                 });
@@ -247,16 +247,16 @@ impl EntityStore {
         }
         for record in self.settlements.values() {
             if !self.settlement_by_id.contains_key(&record.id) {
-                return Err(EntityStoreError::MissingSettlementIndex(record.id));
+                return Err(EntityStateError::MissingSettlementIndex(record.id));
             }
         }
 
         for (id, key) in &self.region_by_id {
             let Some(record) = self.regions.get(*key) else {
-                return Err(EntityStoreError::DanglingRegionIndex(*id));
+                return Err(EntityStateError::DanglingRegionIndex(*id));
             };
             if record.id != *id {
-                return Err(EntityStoreError::MismatchedRegionIndex {
+                return Err(EntityStateError::MismatchedRegionIndex {
                     expected: *id,
                     actual: record.id,
                 });
@@ -264,7 +264,7 @@ impl EntityStore {
         }
         for record in self.regions.values() {
             if !self.region_by_id.contains_key(&record.id) {
-                return Err(EntityStoreError::MissingRegionIndex(record.id));
+                return Err(EntityStateError::MissingRegionIndex(record.id));
             }
         }
 
@@ -288,7 +288,7 @@ impl EntityStore {
         }
     }
 
-    fn from_serde(value: EntityStoreSerde) -> Result<Self, EntityStoreError> {
+    fn from_serde(value: EntityStoreSerde) -> Result<Self, EntityStateError> {
         let mut store = Self::default();
         for record in value.polities {
             store.create_polity(record)?;
@@ -304,7 +304,7 @@ impl EntityStore {
     }
 }
 
-impl Serialize for EntityStore {
+impl Serialize for EntityState {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -313,7 +313,7 @@ impl Serialize for EntityStore {
     }
 }
 
-impl<'de> Deserialize<'de> for EntityStore {
+impl<'de> Deserialize<'de> for EntityState {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -323,7 +323,7 @@ impl<'de> Deserialize<'de> for EntityStore {
     }
 }
 
-impl std::fmt::Display for EntityStoreError {
+impl std::fmt::Display for EntityStateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DuplicatePolityId(id) => write!(f, "duplicate polity id {}", id.as_u32()),
@@ -375,7 +375,7 @@ impl std::fmt::Display for EntityStoreError {
     }
 }
 
-impl std::error::Error for EntityStoreError {}
+impl std::error::Error for EntityStateError {}
 
 impl From<PolityComponent> for PolityRecord {
     fn from(value: PolityComponent) -> Self {
@@ -470,16 +470,16 @@ mod tests {
 
     #[test]
     fn create_polity_rejects_duplicate_id() {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         store.create_polity(polity_record(1, 10)).unwrap();
 
         let error = store.create_polity(polity_record(1, 11)).unwrap_err();
-        assert_eq!(error, EntityStoreError::DuplicatePolityId(PolityId(1)));
+        assert_eq!(error, EntityStateError::DuplicatePolityId(PolityId(1)));
     }
 
     #[test]
     fn remove_updates_secondary_indexes() {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         store.create_polity(polity_record(1, 10)).unwrap();
         store.create_settlement(settlement_record(2, 20)).unwrap();
         store.create_region(region_record(3, &[1, 2, 3])).unwrap();
@@ -499,14 +499,14 @@ mod tests {
 
     #[test]
     fn serde_round_trip_preserves_store() {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         store.create_polity(polity_record(2, 4)).unwrap();
         store.create_polity(polity_record(1, 3)).unwrap();
         store.create_settlement(settlement_record(5, 8)).unwrap();
         store.create_region(region_record(7, &[0, 2, 4])).unwrap();
 
         let json = serde_json::to_string(&store).unwrap();
-        let restored: EntityStore = serde_json::from_str(&json).unwrap();
+        let restored: EntityState = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored, store);
         assert!(restored.validate().is_ok());
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn clone_preserves_store() {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         store.create_polity(polity_record(1, 2)).unwrap();
         store.create_settlement(settlement_record(2, 3)).unwrap();
         store.create_region(region_record(3, &[4, 5])).unwrap();
@@ -526,14 +526,14 @@ mod tests {
 
     #[test]
     fn validate_detects_missing_index() {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         store.create_polity(polity_record(1, 10)).unwrap();
         store.polity_by_id.clear();
 
         let error = store.validate().unwrap_err();
         assert_eq!(
             error,
-            EntityStoreError::PolityCountMismatch {
+            EntityStateError::PolityCountMismatch {
                 records: 1,
                 index: 0,
             }

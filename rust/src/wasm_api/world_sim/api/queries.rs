@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
 
 use super::super::helpers::{sample_f32, sample_i32, sample_u32_from_plate_id, sampled_len};
-use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::state::ManagedWorld;
+use super::super::state::HISTORY_SNAPSHOT_INTERVAL;
 use super::super::types::{
     BudgetSummary, FieldResponse, HistoryTicksResponse, MetricsResponse, PlateStat,
     PlateStatsResponse, WorldDeltaQuery, WorldDeltaResponse,

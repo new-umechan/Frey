@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::exec::modules::MODULE_DECLARATIONS;
 use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
     CellFieldId, CellId, ComponentPatch, EntityBundle, EntityRef, FeedbackEntry, FeedbackPayload,
@@ -86,7 +87,7 @@ fn exec_world_slice_matches_full_tick_execution() {
 
     exec_world(&mut full_world);
 
-    let mut phase = ExecWorldPhase::Prepare;
+    let mut phase = first_phase();
     let mut completed = 0;
     while completed == 0 {
         let result = exec_world_slice(&mut sliced_world, &mut sliced_feedback, phase, 1);
@@ -94,7 +95,7 @@ fn exec_world_slice_matches_full_tick_execution() {
         completed = result.ticks_completed;
     }
 
-    assert_eq!(phase, ExecWorldPhase::Prepare);
+    assert_eq!(phase, first_phase());
     assert_eq!(sliced_world.clock.tick, full_world.clock.tick);
     assert_eq!(sliced_world.clock.epoch, full_world.clock.epoch);
     assert_eq!(
@@ -113,6 +114,284 @@ fn exec_world_slice_matches_full_tick_execution() {
         sliced_world.state.hydrology.river_next,
         full_world.state.hydrology.river_next
     );
+}
+
+#[test]
+fn module_declarations_cover_each_exec_phase_once() {
+    let phases = declared_phase_order();
+    let declared = MODULE_DECLARATIONS
+        .iter()
+        .map(|declaration| declaration.phase)
+        .collect::<Vec<_>>();
+
+    assert_eq!(phases.len(), declared.len());
+    assert_eq!(phases.first().copied(), Some(first_phase()));
+    assert_eq!(
+        phases.last().copied(),
+        MODULE_DECLARATIONS
+            .iter()
+            .find(|declaration| declaration.completes_tick)
+            .map(|declaration| declaration.phase)
+    );
+    for phase in declared {
+        assert_eq!(
+            phases
+                .iter()
+                .filter(|candidate| **candidate == phase)
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn module_dependencies_follow_declared_phase_order() {
+    let dependencies = declared_dependencies();
+    assert!(dependencies.contains(&ModuleDependency {
+        from: ExecWorldPhase::Prepare,
+        to: ExecWorldPhase::ExecFeedback,
+    }));
+    assert!(dependencies.contains(&ModuleDependency {
+        from: ExecWorldPhase::ExecFeedback,
+        to: ExecWorldPhase::Domesticates,
+    }));
+    assert!(dependencies.contains(&ModuleDependency {
+        from: ExecWorldPhase::Climate,
+        to: ExecWorldPhase::Ecology,
+    }));
+    assert!(dependencies.contains(&ModuleDependency {
+        from: ExecWorldPhase::Hydrology,
+        to: ExecWorldPhase::Ecology,
+    }));
+    assert!(!dependencies
+        .iter()
+        .any(|edge| edge.to == ExecWorldPhase::Prepare));
+}
+
+#[test]
+fn module_order_remains_stable_under_generated_dependencies() {
+    let phases = declared_phase_order();
+    let declaration_index = MODULE_DECLARATIONS
+        .iter()
+        .enumerate()
+        .map(|(index, declaration)| (declaration.phase, index))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    for window in phases.windows(2) {
+        let lhs = declaration_index[&window[0]];
+        let rhs = declaration_index[&window[1]];
+        assert!(
+            lhs < rhs,
+            "declaration order regressed: {:?} then {:?}",
+            window[0],
+            window[1]
+        );
+    }
+}
+
+#[test]
+fn exec_feedback_stage_does_not_consume_other_module_entries() {
+    let mut world = build_test_world();
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
+    world.clock.tick = 1;
+    feedback.push(FeedbackEntry {
+        source: ModuleId::Population,
+        target_module: ModuleId::Hydrology,
+        target_ref: TargetRef::Cell(CellId(0)),
+        enqueued_tick: 0,
+        payload: FeedbackPayload::SetValue {
+            field: CellFieldId::CropAdoption(0),
+            cell: CellId(0),
+            value: FieldValue::F32(0.5),
+        },
+    });
+
+    super::pipeline::run_feedback_stage(&mut world, &mut feedback);
+
+    assert_eq!(feedback.entries.len(), 1);
+    assert_eq!(feedback.entries[0].target_module, ModuleId::Hydrology);
+}
+
+#[test]
+fn module_manifest_includes_generated_dependencies() {
+    let manifests = module_manifests();
+    let ecology = manifests
+        .iter()
+        .find(|manifest| manifest.phase == ExecWorldPhase::Ecology)
+        .expect("ecology manifest is missing");
+    let domesticates = manifests
+        .iter()
+        .find(|manifest| manifest.phase == ExecWorldPhase::Domesticates)
+        .expect("domesticates manifest is missing");
+
+    assert!(ecology.depends_on.contains(&ExecWorldPhase::Climate));
+    assert!(ecology.depends_on.contains(&ExecWorldPhase::Hydrology));
+    assert!(domesticates
+        .depends_on
+        .contains(&ExecWorldPhase::ExecFeedback));
+    assert!(domesticates.depends_on.contains(&ExecWorldPhase::Ecology));
+    assert_eq!(ecology.phase_key, "ecology");
+    assert_eq!(ecology.module_key, "ecology");
+    assert_eq!(ecology.description, "update biome and ecosystem state");
+    assert_eq!(ecology.feedback_mode, FeedbackMode::ModuleInbox);
+    assert_eq!(ecology.profile_category, ProfileCategory::Ecology);
+    assert_eq!(ecology.display_group, DisplayGroup::Ecology);
+    assert_eq!(ecology.execution_kind, ExecutionKind::Plain);
+    assert!(!ecology.completes_tick);
+    assert_eq!(domesticates.feedback_mode, FeedbackMode::ModuleInbox);
+    assert_eq!(domesticates.profile_category, ProfileCategory::Society);
+    assert_eq!(domesticates.display_group, DisplayGroup::Society);
+}
+
+#[test]
+fn module_manifest_lines_expose_doc_facing_metadata() {
+    let lines = module_manifest_lines();
+    let ecology = lines
+        .iter()
+        .find(|line| line.starts_with("ecology "))
+        .expect("ecology manifest line is missing");
+    let exec_feedback = lines
+        .iter()
+        .find(|line| line.starts_with("exec_feedback "))
+        .expect("exec_feedback manifest line is missing");
+
+    assert!(ecology
+        .contains("reads=clock,terrain_projection,climate_cells,hydrology_cells,ecology_cells"));
+    assert!(ecology.contains("inbox=module_inbox"));
+    assert!(ecology.contains("profile=ecology"));
+    assert!(ecology.contains("display=ecology"));
+    assert!(ecology.contains("exec=plain"));
+    assert!(ecology.contains("tick_boundary=no"));
+    assert!(ecology.contains("depends_on="));
+    assert!(ecology.contains("climate"));
+    assert!(ecology.contains("hydrology"));
+    assert!(ecology.contains("desc=\"update biome and ecosystem state\""));
+    assert!(exec_feedback.contains("[exec]"));
+    assert!(exec_feedback.contains("inbox=exec_inbox"));
+    assert!(exec_feedback.contains("profile=feedback"));
+    assert!(exec_feedback.contains("display=feedback"));
+    assert!(exec_feedback.contains("exec=plain"));
+    assert!(exec_feedback
+        .contains("desc=\"apply global exec-targeted feedback queued before this tick\""));
+}
+
+#[test]
+fn module_doc_records_expose_structured_doc_metadata() {
+    let records = module_doc_records();
+    let hydrology = records
+        .iter()
+        .find(|record| record.phase == "hydrology")
+        .expect("hydrology doc record is missing");
+    let finalize = records
+        .iter()
+        .find(|record| record.phase == "finalize")
+        .expect("finalize doc record is missing");
+
+    assert_eq!(hydrology.module, "hydrology");
+    assert_eq!(hydrology.profile, "hydrology");
+    assert_eq!(hydrology.display, "hydrology");
+    assert_eq!(hydrology.execution, "hydrology_coupled");
+    assert!(hydrology.reads.contains(&"terrain_projection"));
+    assert!(hydrology.feedback_targets.contains(&"ecology"));
+    assert!(hydrology.depends_on.contains(&"glaciology"));
+    assert_eq!(finalize.display, "post_step");
+    assert!(finalize.tick_boundary);
+}
+
+#[test]
+fn module_doc_records_are_ready_for_wasm_export() {
+    let records = module_doc_records();
+    let serialized = serde_json::to_value(&records).expect("module doc records should serialize");
+    let array = serialized
+        .as_array()
+        .expect("serialized module records should be an array");
+    let first = array
+        .first()
+        .expect("serialized module records should not be empty");
+
+    assert_eq!(
+        first.get("phase").and_then(|value| value.as_str()),
+        Some("prepare")
+    );
+    assert_eq!(
+        first.get("display").and_then(|value| value.as_str()),
+        Some("feedback")
+    );
+}
+
+#[test]
+fn module_graph_record_is_ready_for_wasm_export() {
+    let graph = module_graph_record();
+    let serialized = serde_json::to_value(&graph).expect("module graph should serialize");
+    let modules = serialized
+        .get("modules")
+        .and_then(|value| value.as_array())
+        .expect("module graph should include modules");
+    let edges = serialized
+        .get("edges")
+        .and_then(|value| value.as_array())
+        .expect("module graph should include edges");
+
+    assert!(!modules.is_empty());
+    assert!(!edges.is_empty());
+    let first_edge = edges
+        .first()
+        .expect("module graph should include at least one edge");
+    assert!(first_edge.get("from_phase").is_some());
+    assert!(first_edge.get("to_phase").is_some());
+}
+
+#[test]
+fn feedback_mode_helpers_follow_declarations() {
+    assert!(!phase_accepts_module_feedback(ExecWorldPhase::Prepare));
+    assert!(!phase_accepts_module_feedback(ExecWorldPhase::ExecFeedback));
+    assert!(phase_accepts_exec_feedback(ExecWorldPhase::ExecFeedback));
+    assert_eq!(
+        phase_profile_category(ExecWorldPhase::ExecFeedback),
+        ProfileCategory::Feedback
+    );
+    assert_eq!(
+        phase_profile_category(ExecWorldPhase::Domesticates),
+        ProfileCategory::Society
+    );
+    assert_eq!(
+        phase_execution_kind(ExecWorldPhase::Hydrology),
+        ExecutionKind::HydrologyCoupled
+    );
+    assert_eq!(
+        phase_display_group(ExecWorldPhase::Population),
+        DisplayGroup::Society
+    );
+    assert_eq!(
+        phase_display_group(ExecWorldPhase::Finalize),
+        DisplayGroup::PostStep
+    );
+    assert_eq!(
+        phase_execution_kind(ExecWorldPhase::Climate),
+        ExecutionKind::Plain
+    );
+    assert!(phase_completes_tick(ExecWorldPhase::Finalize));
+    assert!(!phase_completes_tick(ExecWorldPhase::Transition));
+    assert!(phase_accepts_module_feedback(ExecWorldPhase::Hydrology));
+    assert!(phase_accepts_module_feedback(ExecWorldPhase::Conflict));
+    assert!(!phase_accepts_exec_feedback(ExecWorldPhase::Finalize));
+}
+
+#[test]
+fn exec_world_profiled_uses_declared_profile_categories() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::Environment;
+
+    let breakdown = exec_world_profiled(&mut world);
+
+    assert!(breakdown.exec_feedback_ms.is_finite());
+    assert!(breakdown.exec_geology_terrain_ms.is_finite());
+    assert!(breakdown.exec_climate_ms.is_finite());
+    assert!(breakdown.exec_glaciology_ms.is_finite());
+    assert!(breakdown.exec_hydrology_ms.is_finite());
+    assert!(breakdown.exec_ecology_ms.is_finite());
+    assert!(breakdown.exec_society_ms.is_finite());
+    assert!(breakdown.exec_transition_ms.is_finite());
 }
 
 #[test]
@@ -274,7 +553,7 @@ fn polity_update_overwrites_stale_ids_with_none_for_low_population_cells() {
 }
 
 #[test]
-fn feedback_entity_payloads_use_entity_store() {
+fn feedback_entity_payloads_use_entity_state() {
     let mut world = build_test_world();
     let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::History;
@@ -361,7 +640,21 @@ fn feedback_entity_payloads_use_entity_store() {
         },
     });
 
-    crate::sim::exec::feedback::apply_feedback_queue(&mut world, &mut feedback);
+    crate::sim::exec::feedback::apply_feedback_queue_for_module(
+        &mut world,
+        &mut feedback,
+        ModuleId::Polity,
+    );
+    crate::sim::exec::feedback::apply_feedback_queue_for_module(
+        &mut world,
+        &mut feedback,
+        ModuleId::Settlement,
+    );
+    crate::sim::exec::feedback::apply_feedback_queue_for_module(
+        &mut world,
+        &mut feedback,
+        ModuleId::Conflict,
+    );
 
     let polity = world.entities.get_polity(PolityId(9)).unwrap();
     assert_eq!(polity.capital_cell, CellId(3));
@@ -385,7 +678,11 @@ fn feedback_entity_payloads_use_entity_store() {
             entity: EntityRef::Polity(PolityId(9)),
         },
     });
-    crate::sim::exec::feedback::apply_feedback_queue(&mut world, &mut feedback);
+    crate::sim::exec::feedback::apply_feedback_queue_for_module(
+        &mut world,
+        &mut feedback,
+        ModuleId::Polity,
+    );
 
     assert!(world.entities.get_polity(PolityId(9)).is_none());
 }

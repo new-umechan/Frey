@@ -7,28 +7,32 @@
 設計上の原則は次の通りである。
 
 - 全セルが持つ現在値は `WorldState` 内の各State構造体にSoAで置く
-- 他Systemが読むComponentと内部状態Componentは命名で分離する（`_internal` サフィックス）
-- 疎なEntity（国家・集落・地域など）は`EntitiesState`で管理する
-- 国家間関係・プレート間関係は `World` 直下に `HashMap` で保持する
-- 国家間関係は `Simulation` 直下に `HashMap` で保持する
-- tick 進行や履歴管理のための進行管理状態は `ClockState`・`FeedbackQueue`・`ArchiveState` に分割して置く
+- 他Moduleが読む公開列と内部状態列は命名で分離する（`_internal` サフィックス）
+- 疎なEntity（国家・集落・地域など）は `EntityState` で直接管理する
+- 国家間関係・プレート間関係は `World` 直下に保持する
+- tick 計算に不要な派生情報は `WorldProjectionState` に分離する
+- 実行時だけ必要な scratch 状態は `exec_scratch` として保持し、履歴や transport には持ち込まない
+- 実行順・依存・feedback inbox・profiling group は module declaration を正本にする
 
 ## 目標構造
 
 ```rust
 struct World {
     mesh:             WorldMesh,
-    state:            WorldState,      // 全セルの状態（Geology, Climate, Hydrology, etc.）
-    entities:         EntitiesState,   // 疎な Entity（EntityStore をラップ）
+    state:            WorldState,            // 次 tick の計算に必要な SoA 正本
+    projections:      WorldProjectionState,  // terrain などの派生 view
+    entities:         EntityState,           // 疎な Entity の正本
     clock:            ClockState,
-    feedback:         FeedbackQueue,
-    runtime:          RuntimeState,    // 実行時状態（ターゲット値、活動量 EMA など）
+    control:          WorldControlState,     // simulation control / tunables
+    exec_scratch:     ExecScratchState,      // exec 中だけ使う scratch
     polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     polity_groups:    Vec<PolityGroup>,
     plate_relations:  HashMap<(PlateId, PlateId), PlateRelation>,
-    archive:          ArchiveState,
 }
 ```
+
+履歴・fork・intervention 用の snapshot と replay 状態は `World` の正本には含めず、
+管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
 ## ID型定義
 
@@ -45,7 +49,8 @@ struct PlateId(u32);
 
 ## WorldState
 
-WorldStateは複数のState構造体を含む。各StateはSoA構造を持つ。
+`WorldState` は「次 tick の計算に必要な正本」だけを持つ。
+各 State は SoA 構造を持ち、セル index がそのまま `CellId` になる。
 
 ### GeologyState
 
@@ -53,19 +58,8 @@ WorldStateは複数のState構造体を含む。各StateはSoA構造を持つ。
 セルは常に全数存在し、全Componentを保持する。
 インデックスがそのままCellIdになる。
 
-グリッドは正二十面体分割由来のため、6角形セルが大多数だが5角形セルが12個存在する。
-このため隣接数は5または6の可変長になり、`neighbors` は `SmallVec<[CellId; 6]>` で保持する。
-隣接セル情報は初期化時に一度計算し、その後は固定とする。
-
 ```rust
 struct GeologyState {
-    // --- Terrain（共有状態層）---
-    latitude:             Vec<f32>,
-    distance_from_ocean:  Vec<f32>,
-    coast_side:           Vec<CoastSide>,
-    is_coastal:           Vec<bool>,
-    neighbors:            Vec<SmallVec<[CellId; 6]>>,  // 5角形は5要素、6角形は6要素
-
     // --- Geology ---
     height:               Vec<f32>,
     plate_id:             Vec<PlateId>,
@@ -156,6 +150,10 @@ struct GeologyState {
 }
 ```
 
+`latitude` / `distance_from_ocean` / `coast_side` / `is_coastal` のような terrain 系の派生列は
+`WorldState` には置かず、`WorldProjectionState` に分ける。
+隣接トポロジは `WorldMesh` が正本であり、cell state 側に重複保持しない。
+
 ### 内部状態Componentの型定義
 
 ```rust
@@ -198,30 +196,18 @@ struct BoundaryDynamicsState {
 `age`・`thickness`・`density` は連続属性として移流する。
 `stress`・`temperature`・`rigidity` はその場で毎tick再計算する。
 
-## EntitiesState
+## EntityState
 
-`EntityStore` をラップする。
-Polity・Settlement・Regionなど、数が少なく動的に生滅する疎なEntityを管理する。
-現在は互換のため `PolityComponent` / `SettlementComponent` / `RegionComponent` の配列も持つが、
-正本は `EntityStore` とする。
+Polity・Settlement・Region など、数が少なく動的に生滅する疎な Entity を直接管理する。
 
-```rust
-struct EntitiesState {
-    polity_components: Vec<PolityComponent>,
-    settlement_components: Vec<SettlementComponent>,
-    region_components: Vec<RegionComponent>,
-    store: EntityStore,
-}
-```
-
-`EntityStore` は `slotmap` ベースの専用ストアとし、各ドメインIDと内部キーを分離する。
+`EntityState` は `slotmap` ベースの専用ストアとし、各ドメインIDと内部キーを分離する。
 
 ```rust
 new_key_type! { struct PolityKey; }
 new_key_type! { struct SettlementKey; }
 new_key_type! { struct RegionKey; }
 
-struct EntityStore {
+struct EntityState {
     polities: SlotMap<PolityKey, PolityRecord>,
     settlements: SlotMap<SettlementKey, SettlementRecord>,
     regions: SlotMap<RegionKey, RegionRecord>,
@@ -264,7 +250,7 @@ struct RegionComponent {
 ## polity_relations
 
 国家間の二者間関係グラフ。
-`EntityStore` とは別に、`Simulation` 直下に `HashMap` で保持する。
+`EntityState` とは別に、`World` 直下に `HashMap` で保持する。
 関係は有向であり、`(from, to)` と `(to, from)` は独立したエントリを持つ。
 
 ```rust
@@ -326,13 +312,52 @@ struct ClockState {
 
 ---
 
+## WorldProjectionState
+
+projection は正本から再構成可能な派生 state をまとめる。
+現在は terrain view がここに入る。
+
+```rust
+struct WorldProjectionState {
+    terrain: TerrainState,
+}
+
+struct TerrainState {
+    latitude:            Vec<f32>,
+    distance_from_ocean: Vec<f32>,
+    coast_side:          Vec<CoastSide>,
+    is_coastal:          Vec<bool>,
+}
+```
+
+terrain は `Glaciology` / `Hydrology` の更新や海面変化に応じて refresh されるが、
+正本はあくまで `height` や hydrology/geology の基礎列であり、projection は必要に応じて再生成する。
+
+## WorldControlState
+
+tick 計算に必要だが、セル単位の SoA ではない control / parameter 群を持つ。
+
+```rust
+struct WorldControlState {
+    geology_params:                GeologyParams,
+    target_sea_ratio:              f32,
+    sea_level_offset:              f32,
+    erosion_thickness_coupling:    f32,
+    deposition_thickness_coupling: f32,
+}
+```
+
+`target_sea_ratio` や `sea_level_offset` は projection/derived state ではなく、
+次 tick の計算に効く control 値として `WorldControlState` に置く。
+
 ## FeedbackQueue
 
 同一tick内で循環依存を作らないための遅延反映キュー。
-tick開始時に `ExecSystem` が一括で `GeologyState` と `EntitiesState` に適用する。
+`World` の正本には含めず、実行管理層が保持する。
+各 module 実行直前に、その module inbox に向いた entry だけを適用する。
 
 `ModuleId` は実行単位の `System` ID ではない。
-予算配分、責務境界、フィードバック帰属を表す `Module` 識別子として扱う。
+責務境界、feedback 帰属、実行 DAG のノードを表す `Module` 識別子として扱う。
 
 ```rust
 struct FeedbackQueue {
@@ -387,34 +412,24 @@ enum FeedbackPayload {
     DeltaF32     { field: CellFieldId, cell: CellId, delta: f32 },
     // セルのフィールドを直接上書きする
     SetValue     { field: CellFieldId, cell: CellId, value: FieldValue },
-    // hecs::World 側のエンティティ操作
+    // EntityState 側のエンティティ操作
     SpawnEntity  { bundle: EntityBundle },
-    DestroyEntity{ id: EntityId },
-    MutateEntity { id: EntityId, patch: ComponentPatch },
-    // 型互換のため保持するが、固定 tick 遷移モードでは ExecSystem で無効化する
+    DestroyEntity{ entity: EntityRef },
+    MutateEntity { entity: EntityRef, patch: ComponentPatch },
+    // 型互換のため保持するが、固定 tick 遷移モードでは exec pipeline で無効化する
     TriggerEpochTransition { to: Epoch },
 }
 ```
 
 `FeedbackEntry.source` と `FeedbackEntry.target_module` は、どの `Module` 境界から出た影響か、
 どの `Module` 境界へ渡す影響かを示す。
-同一 `Module` 内でどの `System` を実行したかは `ExecSystem` の実行計画で管理し、
+同一 `Module` 内でどの `System` を実行したかは exec pipeline の実行計画で管理し、
 `FeedbackQueue` の型には直接持たせない。
 
 複数エントリが同一フィールド・同一セルに `DeltaF32` を積んだ場合、単純加算で解決する。
 適用タイミングと更新順序は `docs/architecture/phase_control.md` を参照。
 
 ---
-
-## ArchiveState
-
-履歴と過去スナップショットの記録。世界の現在状態ではなく観測・再生用途。
-
-```rust
-struct ArchiveState {
-    history: History,
-}
-```
 
 ## WorldMesh
 
@@ -428,30 +443,59 @@ struct WorldMesh {
 }
 ```
 
-## RuntimeState
+`WorldMesh` が隣接トポロジの正本であり、terrain/cell state 側に neighbor 配列を重複保持しない。
 
-実行時状態。シミュレーションの進行に伴うターゲット値や活動量の指数移動平均を保持する。
-全球海面基準は `Glaciology` が氷量から計算し、`Terrain` と `Climate` が参照する。
+## ExecScratchState
+
+exec 中だけ必要な scratch を保持する。serialize/fork/replay の正本には含めない。
+現在は geology 実行補助の scratch slot を持つ。
 
 ```rust
-struct RuntimeState {
-    target_sea_ratio:        f32,              // 目標海比率
-    sea_level_offset:        f32,              // 全球海面基準。Glaciology が計算し、Terrain/Climate が参照
-    transition: TransitionState,
-    geology_dynamics:        Option<GeologyDynamicsState>,
-    hydrology_dynamics:      Option<ErosionAutomatonState>,
-}
-
-struct TransitionState {
-    era_enter_tick:          u64,              // 時代遷移時の tick
-    stable_ticks_in_era:     u64,              // 現在の時代での安定 tick 数
-    last_land_ratio:         f32,              // 前回の陸比率
-    ema_geology_activity:    f32,              // 地質活動量の EMA
-    ema_climate_activity:    f32,              // 気候活動量の EMA
-    ema_ecology_activity:    f32,              // 生態系活動量の EMA
-    ema_civilization_activity: f32,            // 文明活動量の EMA
+struct ExecScratchState {
+    geology_dynamics: Option<GeologyDynamicsState>,
 }
 ```
+
+`TransitionState` は `ClockState` 側に属し、hydrology runtime state は `World` ではなく
+exec 管理層から明示引数で渡す。
+
+## Module Declarations
+
+exec pipeline の正本は hand-written な if/match 列ではなく module declaration とする。
+各 module は reads / writes / feedback / profiling / display group / execution kind を宣言する。
+
+```rust
+struct ModuleDeclaration {
+    phase:          ExecWorldPhase,
+    module_id:      ModuleId,
+    reads:          &'static [WorldResource],
+    writes:         &'static [WorldResource],
+    feedback:       &'static [ModuleId],
+    feedback_mode:  FeedbackMode,
+    profile_category: ProfileCategory,
+    display_group:  DisplayGroup,
+    execution_kind: ExecutionKind,
+    completes_tick: bool,
+    step:           fn(&mut World, &mut ModuleExecContext<'_>),
+}
+```
+
+依存辺は declaration から自動生成する。
+基本ルールは次の通り。
+
+- `writes -> reads/writes` の資源競合から順序を張る
+- `feedback -> target module` から inbox 依存を張る
+- topo sort 後も declaration 定義順は安定化する
+
+この declaration から、次の情報を docs / graph / web UI にそのまま出力できる。
+
+- module 一覧
+- 依存 edge 一覧
+- inbox 種別
+- profiling group
+- display group
+- tick boundary
+- execution kind
 
 ## Tier 2 追加時の拡張予定
 

@@ -3,14 +3,14 @@
 ## 目的
 
 この文書は、各モジュールが何を読み、何を書き、何を書かないかを定義する。
-ここで扱う共有面は `CellStore` と `EntityStore`、進行管理入力は `Clock` と `FeedbackQueue` である。
+ここで扱う共有面は `CellStore` と `EntityState`、進行管理入力は `Clock` と `FeedbackQueue` である。
 擬似コードをpythonで記述しているが、これはrustで書くと長くなってしまい、要件定義書として不適だったためだ。
 
 この文書が定義するのは `Module` 境界であり、`System` 境界ではない。
 `Module` は同一、または非常に近い内容を読み書きする `System` の束ね単位で、ECS実装都合とは独立した設計上の区分である。
 
 各モジュールは他モジュールへ直接依存しない。
-モジュール間の共有面は `CellStore` および `EntityStore` である。
+モジュール間の共有面は `CellStore` および `EntityState` である。
 
 ## `Module` と共有状態層の違い
 
@@ -24,10 +24,10 @@
 - 海からの距離（`terrain.distance_from_ocean`）
 - 海岸向き（`terrain.coast_side`）
 - 沿岸フラグ（`terrain.is_coastal`）
-- 近傍情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
 
 `Terrain` 自体は独立して世界を更新しない。
 `Geology` が標高を更新し、全球海面基準が与えられた後に、`Terrain` がその結果から再導出される。
+近傍トポロジの正本は `WorldMesh` であり、`Terrain` に重複保持しない。
 
 したがって、`Terrain` は `Common` ではない。
 `Common` は数学・乱数・メッシュなどの汎用処理であり、`Terrain` は明確なドメイン意味を持つ共有状態層である。
@@ -73,41 +73,20 @@ Tier1までのモジュールについて、詳細を決定している。
 
 ---
 
-## tick内依存（UPDATE_DAG）
+## tick内依存（Declaration DAG）
 
-```python
-UPDATE_DAG = {
-    Geology:      [],
-    Climate:      [Geology],
-    Glaciology:   [Geology, Climate],
-    Hydrology:    [Geology, Climate, Glaciology],
-    Ecology:      [Geology, Climate, Hydrology],
-    Domesticates: [Geology, Climate, Hydrology, Ecology],
-    Subsistence:  [Geology, Hydrology, Ecology, Domesticates],
-    Population:   [Subsistence, Ecology],
-    Settlement:   [Population, Subsistence, Hydrology, Geology],
-    Polity:       [Settlement, Population],
-    Conflict:     [Polity, Population],
-}
-```
+実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。
+固定の hand-written DAG は正本にしない。
 
-`Terrain` は `UPDATE_DAG` に含めない。
+`Terrain` は実行 module ではないため、実行 DAG ノードに含めない。
 理由は、`Terrain` が独立更新モジュールではなく、`Geology` と海面基準の結果から再構成される共有状態層だからである。
 
-## フィードバック（FEEDBACK_EDGES）
+## フィードバック（Declaration feedback edges）
 
 逆方向の影響は次tickへ遅延させる。
 
-```python
-FEEDBACK_EDGES = {
-    # 文明→環境・文明内逆向き
-    Conflict:    [Geology, Hydrology, Ecology, Population, Settlement, Polity],
-    Population:  [Ecology],
-    Subsistence: [Ecology, Hydrology],
-    Polity:      [Settlement, Domesticates],
-    Settlement:  [Domesticates],  # 隣接地域への作物・家畜拡散を含む
-}
-```
+`FeedbackEntry.target_module` と declaration の `feedback` により、
+どの module inbox に次 tick で配送するかを定義する。
 
 ---
 
@@ -158,7 +137,7 @@ FEEDBACK_EDGES = {
 
 - 標高（`geology.height`）
 - 地表派生状態（`terrain.latitude`、`terrain.distance_from_ocean`、`terrain.coast_side`、`terrain.is_coastal`）
-- 全球海面基準（`runtime.sea_level_offset`）
+- 全球海面基準（`control.sea_level_offset`）
 - 植生密度（`ecology.tree_cover`、`ecology.ground_cover` から算出）
 - `Clock`
 
@@ -191,7 +170,7 @@ FEEDBACK_EDGES = {
 - 標高（`geology.height`）
 - 気温（`climate.temperature`）
 - 降水（`climate.precipitation`）
-- 隣接情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
+- メッシュ近傍情報（`WorldMesh`）
 - `Clock`
 
 ### 書くもの
@@ -203,7 +182,7 @@ FEEDBACK_EDGES = {
 - 地盤応答目標量（`glaciology.isostatic_adjustment`）
 - 融解流出量（`glaciology.glacial_melt_runoff`）
 - 氷河侵食率（`glaciology.glacial_erosion_rate`）
-- 全球海面基準（`runtime.sea_level_offset`）
+- 全球海面基準（`control.sea_level_offset`）
 
 ### 書かないもの
 
@@ -225,7 +204,7 @@ FEEDBACK_EDGES = {
 ### 読むもの
 
 - 標高（`geology.height`）
-- 全球海面基準（`runtime.sea_level_offset`）
+- 全球海面基準（`control.sea_level_offset`）
 - メッシュ近傍
 
 ### 書くもの
@@ -234,7 +213,6 @@ FEEDBACK_EDGES = {
 - 海からの距離（`terrain.distance_from_ocean`）
 - 海岸向き（`terrain.coast_side`）
 - 沿岸フラグ（`terrain.is_coastal`）
-- 近傍情報（`terrain.neighbors_offsets`、`terrain.neighbors`）
 
 ### 書かないもの
 
@@ -257,10 +235,10 @@ Systemは2つに分かれる。
 
 | System | 実行条件 |
 | --- | --- |
-| `HydrologyMFDSystem` | 地殻形成期・環境形成期は毎tick実行。先史期以降はExecSystemが地形変化フラグを検知したtickのみ実行 |
+| `HydrologyMFDSystem` | 地殻形成期・環境形成期は毎tick実行。先史期以降は実行文脈の地形活動量（geology exec state）に応じて実行 |
 | `HydrologyFlowSystem` | 先史期以降、毎tick実行 |
 
-地形変化フラグの判定はExecSystemが担う。GeologyはCellStoreに標高を書くだけであり、フラグ管理はしない。
+地形活動判定は実行パイプラインが担う。Geology は CellStore に標高を書くだけであり、判定フラグ自体は持たない。
 
 ### 読むもの
 
@@ -491,7 +469,7 @@ MFD（Multiple Flow Direction）を採用する。
 
 `legitimacy` と `centralization` の組み合わせで国家の拡大・崩壊・分裂のダイナミクスを表現する。
 多民族構成（言語圏と国家境界の不一致）はTier2の `Language` モジュールが担う。
-`cells_cache` の更新は `ExecSystem` が `changed_polity_cells` バッファ経由で差分管理する。
+`cells_cache` の更新は実行パイプライン側で差分管理する。
 
 ---
 

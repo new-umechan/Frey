@@ -1,6 +1,6 @@
 import { DEFAULT_ERA_SCALE, type WorldSubsystemKey } from "../../shared/constants";
 import { type WorldState } from "../state/app-state";
-import { type RuntimeState } from "../runtime/state";
+import { getDefaultExecDisplayPhase, type RuntimeState } from "../runtime/state";
 import { type EraMetrics } from "../state/era-presets";
 
 export function resetWorldProgress(
@@ -17,7 +17,7 @@ export function resetWorldProgress(
     worldState.accumulatorMs = 0;
     worldState.lastFrameTimeMs = null;
     worldState.sliceBusy = false;
-    worldState.slicePhase = "feedback";
+    worldState.slicePhase = getDefaultExecDisplayPhase(worldState);
     worldState.pendingRiverSteps = 0;
     worldState.terrainErosionDirty = false;
     worldState.terrainCoreDirty = false;

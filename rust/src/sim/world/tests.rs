@@ -1,5 +1,5 @@
 use super::{
-    CellId, EntitiesState, EraKind, FeedbackQueue, GeologyState, PolityComponent, PolityId,
+    CellId, EntityState, EraKind, FeedbackQueue, GeologyState, PolityComponent, PolityId,
     RegionComponent, RegionId, SettlementComponent, SettlementId, World, WorldMesh,
 };
 use crate::common::mesh::{build_neighbors, generate_icosphere};
@@ -235,8 +235,8 @@ fn world_initializes_exec_state() {
 }
 
 #[test]
-fn entities_state_round_trips_through_entity_store() {
-    let entities = EntitiesState::from_components(
+fn entity_state_round_trips_through_serde() {
+    let entities = EntityState::from_components(
         vec![
             PolityComponent {
                 polity_id: PolityId(1),
@@ -265,39 +265,10 @@ fn entities_state_round_trips_through_entity_store() {
         }],
     );
 
-    let store = entities.to_entity_store().unwrap();
-    let restored = EntitiesState::from_entity_store(&store);
-
+    let json = serde_json::to_string(&entities).expect("serialize entity store");
+    let restored: EntityState = serde_json::from_str(&json).expect("deserialize entity store");
     assert_eq!(restored, entities);
-}
-
-#[test]
-fn entities_state_to_entity_store_rejects_duplicate_ids() {
-    let entities = EntitiesState::from_components(
-        vec![
-            PolityComponent {
-                polity_id: PolityId(1),
-                capital_cell: CellId(1),
-                legitimacy: 0.5,
-                centralization: 0.5,
-                military_tech: 0.5,
-                cells_cache: vec![CellId(1)],
-            },
-            PolityComponent {
-                polity_id: PolityId(1),
-                capital_cell: CellId(2),
-                legitimacy: 0.6,
-                centralization: 0.6,
-                military_tech: 0.6,
-                cells_cache: vec![CellId(2)],
-            },
-        ],
-        Vec::new(),
-        Vec::new(),
-    );
-
-    let error = entities.to_entity_store().unwrap_err();
-    assert_eq!(error.to_string(), "duplicate polity id 1");
+    assert!(restored.validate().is_ok());
 }
 
 #[test]

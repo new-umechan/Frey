@@ -1,6 +1,6 @@
 use super::*;
-use crate::sim::hydrology::downstream_from_csr;
 use crate::sim::erosion::ErosionAutomatonState;
+use crate::sim::hydrology::downstream_from_csr;
 
 pub(super) fn run_river_fallback(
     world: &mut World,

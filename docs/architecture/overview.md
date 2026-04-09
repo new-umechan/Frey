@@ -17,7 +17,7 @@
 ```text
 Simulation
 ├── CellStore         （全セルのComponent群、SoA配列）
-├── EntityStore       （Polity・Settlement・Region等の疎なEntity）
+├── EntityState       （Polity・Settlement・Region等の疎なEntity）
 ├── polity_relations  （国家間の二者間関係）
 ├── polity_groups     （経済圏・軍事同盟・文化宗教圏などのグループ）
 ├── clock             （tick・epoch・予算）
@@ -58,7 +58,7 @@ ExecSystem（切り替えと実行制御）
 
 ---
 
-## SoA + EntityStore の採用
+## SoA + EntityState の採用
 
 ### 採用理由
 
@@ -74,7 +74,7 @@ ExecSystem（切り替えと実行制御）
 
 - `CellStore`（自前SoA）
   - 全セルの現在値Componentを保持する
-- `EntityStore`（疎なEntity）
+- `EntityState`（疎なEntity）
   - `slotmap` ベースで Polity・Settlement・Region などを保持する
 - `polity_relations`（国家間関係）
   - 国家間の重み付き関係を保持する
@@ -86,7 +86,7 @@ ExecSystem（切り替えと実行制御）
 ## Systemの原則
 
 `System` は「更新を行う実行単位」として実装する。
-`CellStore`・`EntityStore`・`Clock`・`FeedbackQueue`（必要に応じて`Archive`）を入力に、次状態を書き戻す。
+`CellStore`・`EntityState`・`Clock`・`FeedbackQueue`（必要に応じて`Archive`）を入力に、次状態を書き戻す。
 
 `System` 内部は複数 `Model` で構成してよい。
 ただし、対象 `Model` の構成自体が変わる場合（例: 川の侵食表現を時間段階で切り替える場合）は、
@@ -103,7 +103,7 @@ ExecSystem（切り替えと実行制御）
 
 - 時代・tick・予算・遷移
   - `docs/architecture/phase_control.md`
-- CellStore・EntityStore・Clock・FeedbackQueue・Archiveの構造と型定義
+- CellStore・EntityState・Clock・FeedbackQueue・Archiveの構造と型定義
   - `docs/architecture/data_model.md`
 - 各Systemが何を読み、何を書くか
   - `docs/architecture/module_boundaries.md`

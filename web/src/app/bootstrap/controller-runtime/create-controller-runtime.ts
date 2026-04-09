@@ -1,4 +1,8 @@
-import { WorldSimController } from "../../../interface/wasm";
+import {
+    getExecModuleGraph,
+    getExecModules,
+    WorldSimController,
+} from "../../../interface/wasm";
 import { createRuntimeControllers } from "./controller-factories";
 import { DEFAULT_ERA_SCALE } from "../../../shared/constants";
 import { runInitialWorldAndUiSync } from "../post-init-sync";
@@ -11,6 +15,10 @@ import {
 import { type AppState, type WorldState } from "../../state/app-state";
 import { type EraMetrics } from "../../state/era-presets";
 import { type RuntimeState } from "../../runtime/state";
+import {
+    describeExecModuleGraph,
+    getDefaultExecDisplayPhase,
+} from "../../runtime/state";
 
 export interface ControllerDeps {
     elements: AppElements;
@@ -153,8 +161,17 @@ function shouldAdvanceWorld(context: RuntimeContext) {
 export function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
     context.worldSimController = new WorldSimController();
+    context.worldState.execModules = getExecModules(context.worldSimController);
+    context.worldState.execModuleGraph = getExecModuleGraph(context.worldSimController);
+    context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
 
     const runtimeControllers = createRuntimeControllers(context);
+    runtimeControllers.playbackController.appendPlaybackEvent(
+        "exec-modules-loaded",
+        "実行DAG",
+        describeExecModuleGraph(context.worldState),
+        context.world.tick,
+    );
 
     return {
         ...runtimeControllers,

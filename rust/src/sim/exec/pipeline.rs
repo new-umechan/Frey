@@ -1,24 +1,33 @@
-use super::feedback::apply_feedback_queue;
+use super::feedback::{apply_feedback_queue, apply_feedback_queue_for_module};
 use super::geology::{
     apply_glaciology_forcing_to_geology, apply_hydrology_erosion_to_geology,
     run_geology_step_with_state, run_hydrology_step_unprofiled,
     should_run_hydrology_mfd_for_geology,
 };
+use super::modules::{
+    declaration_for_phase, declared_phase_order, next_phase_after, phase_accepts_module_feedback,
+    phase_completes_tick, validate_module_declarations, ModuleExecContext,
+};
 use super::transition::update_era_transition;
 
 use crate::sim::world::{FeedbackQueue, World};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ExecWorldPhase {
     #[default]
     Prepare,
-    Feedback,
+    ExecFeedback,
     Geology,
     Climate,
     Glaciology,
     Hydrology,
     Ecology,
-    Society,
+    Domesticates,
+    Subsistence,
+    Population,
+    Settlement,
+    Polity,
+    Conflict,
     Transition,
     Finalize,
 }
@@ -75,12 +84,27 @@ pub(super) fn run_ecology_stage(world: &mut World) {
     crate::sim::ecology::run_ecology_step(world, world.clock.budgets.ecology);
 }
 
-pub(super) fn run_society_stage(world: &mut World) {
+pub(super) fn run_domesticates_stage(world: &mut World) {
     crate::sim::domesticates::update_domesticates(world, world.clock.budgets.ecology);
+}
+
+pub(super) fn run_subsistence_stage(world: &mut World) {
     crate::sim::subsistence::update_subsistence(world, world.clock.budgets.civilization);
+}
+
+pub(super) fn run_population_stage(world: &mut World) {
     crate::sim::population::update_population(world, world.clock.budgets.civilization);
+}
+
+pub(super) fn run_settlement_stage(world: &mut World) {
     crate::sim::settlement::update_settlement(world, world.clock.budgets.civilization);
+}
+
+pub(super) fn run_polity_stage(world: &mut World) {
     crate::sim::polity::update_polity(world, world.clock.budgets.civilization);
+}
+
+pub(super) fn run_conflict_stage(world: &mut World) {
     crate::sim::conflict::update_conflict(world, world.clock.budgets.civilization);
 }
 
@@ -135,6 +159,7 @@ pub fn exec_world_slice_with_states(
     starting_phase: ExecWorldPhase,
     work_budget: u32,
 ) -> ExecWorldSliceResult {
+    validate_module_declarations();
     if work_budget == 0 {
         return ExecWorldSliceResult {
             next_phase: starting_phase,
@@ -146,50 +171,22 @@ pub fn exec_world_slice_with_states(
     let mut next_phase = starting_phase;
     let mut work_units_consumed: u32 = 0;
     let mut ticks_completed: u32 = 0;
+    let mut ctx = ModuleExecContext {
+        feedback,
+        geology_state,
+        hydrology_state,
+    };
 
     while work_units_consumed < work_budget {
-        match next_phase {
-            ExecWorldPhase::Prepare => {
-                prepare_step(world);
-                next_phase = ExecWorldPhase::Feedback;
-            }
-            ExecWorldPhase::Feedback => {
-                run_feedback_stage(world, feedback);
-                next_phase = ExecWorldPhase::Geology;
-            }
-            ExecWorldPhase::Geology => {
-                run_geology_stage_with_geology(world, geology_state);
-                next_phase = ExecWorldPhase::Climate;
-            }
-            ExecWorldPhase::Climate => {
-                run_climate_stage(world);
-                next_phase = ExecWorldPhase::Glaciology;
-            }
-            ExecWorldPhase::Glaciology => {
-                run_glaciology_stage_with_hydrology(world, hydrology_state);
-                next_phase = ExecWorldPhase::Hydrology;
-            }
-            ExecWorldPhase::Hydrology => {
-                run_hydrology_stage_with_hydrology(world, geology_state, hydrology_state);
-                next_phase = ExecWorldPhase::Ecology;
-            }
-            ExecWorldPhase::Ecology => {
-                run_ecology_stage(world);
-                next_phase = ExecWorldPhase::Society;
-            }
-            ExecWorldPhase::Society => {
-                run_society_stage(world);
-                next_phase = ExecWorldPhase::Transition;
-            }
-            ExecWorldPhase::Transition => {
-                run_transition_stage(world);
-                next_phase = ExecWorldPhase::Finalize;
-            }
-            ExecWorldPhase::Finalize => {
-                finalize_tick(world);
-                next_phase = ExecWorldPhase::Prepare;
-                ticks_completed = ticks_completed.saturating_add(1);
-            }
+        let phase = next_phase;
+        let declaration = declaration_for_phase(phase);
+        if phase_accepts_module_feedback(phase) {
+            apply_feedback_queue_for_module(world, ctx.feedback, declaration.module_id);
+        }
+        (declaration.step)(world, &mut ctx);
+        next_phase = next_phase_after(phase);
+        if phase_completes_tick(phase) {
+            ticks_completed = ticks_completed.saturating_add(1);
         }
         work_units_consumed = work_units_consumed.saturating_add(1);
         if ticks_completed > 0 {
@@ -230,14 +227,17 @@ pub fn exec_world_with_feedback_and_states(
     geology_state: &mut crate::sim::exec::GeologyExecState,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
 ) {
-    prepare_step(world);
-    run_feedback_stage(world, feedback);
-    run_geology_stage_with_geology(world, geology_state);
-    run_climate_stage(world);
-    run_glaciology_stage_with_hydrology(world, hydrology_state);
-    run_hydrology_stage_with_hydrology(world, geology_state, hydrology_state);
-    run_ecology_stage(world);
-    run_society_stage(world);
-    run_transition_stage(world);
-    finalize_tick(world);
+    validate_module_declarations();
+    let mut ctx = ModuleExecContext {
+        feedback,
+        geology_state,
+        hydrology_state,
+    };
+    for phase in declared_phase_order() {
+        let declaration = declaration_for_phase(phase);
+        if phase_accepts_module_feedback(phase) {
+            apply_feedback_queue_for_module(world, ctx.feedback, declaration.module_id);
+        }
+        (declaration.step)(world, &mut ctx);
+    }
 }

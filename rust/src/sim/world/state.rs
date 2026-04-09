@@ -1,12 +1,10 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-use super::entity_store::{
-    EntityStore, EntityStoreError, PolityRecord, RegionRecord, SettlementRecord,
-};
+use super::entity_state::{EntityState, EntityStateError};
 use super::exec::{
     ClockState, ComponentPatch, EntityBundle, EntityRef, ExecScratchState, TargetRef,
 };
@@ -19,7 +17,7 @@ pub struct World {
     pub state: WorldState,
     #[serde(default)]
     pub projections: WorldProjectionState,
-    pub entities: EntitiesState,
+    pub entities: EntityState,
     pub clock: ClockState,
     pub control: WorldControlState,
     #[serde(alias = "runtime", default)]
@@ -129,87 +127,13 @@ pub struct RegionComponent {
     pub cells: Vec<CellId>,
 }
 
-pub struct EntitiesState {
-    pub store: EntityStore,
-}
-
-#[derive(Serialize, Deserialize)]
-struct EntitiesSerde {
-    polity_components: Vec<PolityComponent>,
-    settlement_components: Vec<SettlementComponent>,
-    region_components: Vec<RegionComponent>,
-}
-
-impl std::fmt::Debug for EntitiesState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let polity_components = self.polity_components();
-        let settlement_components = self.settlement_components();
-        let region_components = self.region_components();
-        f.debug_struct("EntitiesState")
-            .field("polity_components", &polity_components)
-            .field("settlement_components", &settlement_components)
-            .field("region_components", &region_components)
-            .finish()
-    }
-}
-
-impl Clone for EntitiesState {
-    fn clone(&self) -> Self {
-        Self {
-            store: self.store.clone(),
-        }
-    }
-}
-
-impl PartialEq for EntitiesState {
-    fn eq(&self, other: &Self) -> bool {
-        self.store == other.store
-    }
-}
-
-impl Default for EntitiesState {
-    fn default() -> Self {
-        Self {
-            store: EntityStore::default(),
-        }
-    }
-}
-
-impl Serialize for EntitiesState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        EntitiesSerde {
-            polity_components: self.polity_components(),
-            settlement_components: self.settlement_components(),
-            region_components: self.region_components(),
-        }
-        .serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for EntitiesState {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed = EntitiesSerde::deserialize(deserializer)?;
-        Ok(Self::from_components(
-            parsed.polity_components,
-            parsed.settlement_components,
-            parsed.region_components,
-        ))
-    }
-}
-
-impl EntitiesState {
+impl EntityState {
     pub fn from_components(
         polity_components: Vec<PolityComponent>,
         settlement_components: Vec<SettlementComponent>,
         region_components: Vec<RegionComponent>,
     ) -> Self {
-        let mut store = EntityStore::default();
+        let mut store = EntityState::default();
         for component in polity_components {
             let _ = store.create_polity(component.into());
         }
@@ -219,12 +143,11 @@ impl EntitiesState {
         for component in region_components {
             let _ = store.create_region(component.into());
         }
-        Self { store }
+        store
     }
 
     pub fn polity_components(&self) -> Vec<PolityComponent> {
         let mut components = self
-            .store
             .iter_polities()
             .cloned()
             .map(PolityComponent::from)
@@ -235,7 +158,6 @@ impl EntitiesState {
 
     pub fn settlement_components(&self) -> Vec<SettlementComponent> {
         let mut components = self
-            .store
             .iter_settlements()
             .cloned()
             .map(SettlementComponent::from)
@@ -246,7 +168,6 @@ impl EntitiesState {
 
     pub fn region_components(&self) -> Vec<RegionComponent> {
         let mut components = self
-            .store
             .iter_regions()
             .cloned()
             .map(RegionComponent::from)
@@ -258,66 +179,31 @@ impl EntitiesState {
     pub fn replace_polities(&mut self, components: Vec<PolityComponent>) {
         let settlements = self.settlement_components();
         let regions = self.region_components();
-        *self = Self::from_components(components, settlements, regions);
+        *self = EntityState::from_components(components, settlements, regions);
     }
 
     pub fn replace_settlements(&mut self, components: Vec<SettlementComponent>) {
         let polities = self.polity_components();
         let regions = self.region_components();
-        *self = Self::from_components(polities, components, regions);
+        *self = EntityState::from_components(polities, components, regions);
     }
 
     pub fn replace_regions(&mut self, components: Vec<RegionComponent>) {
         let polities = self.polity_components();
         let settlements = self.settlement_components();
-        *self = Self::from_components(polities, settlements, components);
+        *self = EntityState::from_components(polities, settlements, components);
     }
 
-    pub fn to_entity_store(&self) -> Result<EntityStore, EntityStoreError> {
-        self.store.validate()?;
-        Ok(self.store.clone())
-    }
-
-    pub fn from_entity_store(store: &EntityStore) -> Self {
-        Self {
-            store: store.clone(),
-        }
-    }
-
-    pub fn iter_polities(&self) -> impl Iterator<Item = &PolityRecord> {
-        self.store.iter_polities()
-    }
-
-    pub fn iter_settlements(&self) -> impl Iterator<Item = &SettlementRecord> {
-        self.store.iter_settlements()
-    }
-
-    pub fn iter_regions(&self) -> impl Iterator<Item = &RegionRecord> {
-        self.store.iter_regions()
-    }
-
-    pub fn get_polity(&self, id: PolityId) -> Option<&PolityRecord> {
-        self.store.get_polity(id)
-    }
-
-    pub fn get_settlement(&self, id: SettlementId) -> Option<&SettlementRecord> {
-        self.store.get_settlement(id)
-    }
-
-    pub fn get_region(&self, id: RegionId) -> Option<&RegionRecord> {
-        self.store.get_region(id)
-    }
-
-    pub fn apply_entity_bundle(&mut self, bundle: EntityBundle) -> Result<(), EntityStoreError> {
+    pub fn apply_entity_bundle(&mut self, bundle: EntityBundle) -> Result<(), EntityStateError> {
         match bundle {
             EntityBundle::Polity(component) => {
-                self.store.create_polity(component.into())?;
+                self.create_polity(component.into())?;
             }
             EntityBundle::Settlement(component) => {
-                self.store.create_settlement(component.into())?;
+                self.create_settlement(component.into())?;
             }
             EntityBundle::Region(component) => {
-                self.store.create_region(component.into())?;
+                self.create_region(component.into())?;
             }
         }
         Ok(())
@@ -326,13 +212,13 @@ impl EntitiesState {
     pub fn destroy_entity(&mut self, entity: &EntityRef) {
         match entity {
             EntityRef::Polity(id) => {
-                self.store.remove_polity(*id);
+                self.remove_polity(*id);
             }
             EntityRef::Settlement(id) => {
-                self.store.remove_settlement(*id);
+                self.remove_settlement(*id);
             }
             EntityRef::Region(id) => {
-                self.store.remove_region(*id);
+                self.remove_region(*id);
             }
         }
     }
@@ -355,7 +241,7 @@ impl EntitiesState {
                     cells_cache,
                 },
             ) => {
-                if let Some(record) = self.store.get_polity_mut(*id) {
+                if let Some(record) = self.get_polity_mut(*id) {
                     if let Some(value) = capital_cell {
                         record.capital_cell = value;
                     }
@@ -378,14 +264,14 @@ impl EntitiesState {
                 EntityRef::Settlement(id),
                 ComponentPatch::Settlement { cell },
             ) => {
-                if let Some(record) = self.store.get_settlement_mut(*id) {
+                if let Some(record) = self.get_settlement_mut(*id) {
                     if let Some(value) = cell {
                         record.cell = value;
                     }
                 }
             }
             (TargetRef::Region(_), EntityRef::Region(id), ComponentPatch::Region { cells }) => {
-                if let Some(record) = self.store.get_region_mut(*id) {
+                if let Some(record) = self.get_region_mut(*id) {
                     if let Some(value) = cells {
                         record.cells = value;
                     }
@@ -393,20 +279,6 @@ impl EntitiesState {
             }
             _ => {}
         }
-    }
-}
-
-impl TryFrom<&EntitiesState> for EntityStore {
-    type Error = EntityStoreError;
-
-    fn try_from(value: &EntitiesState) -> Result<Self, Self::Error> {
-        value.to_entity_store()
-    }
-}
-
-impl From<&EntityStore> for EntitiesState {
-    fn from(value: &EntityStore) -> Self {
-        Self::from_entity_store(value)
     }
 }
 

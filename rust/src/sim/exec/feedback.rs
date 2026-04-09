@@ -1,21 +1,43 @@
 use crate::sim::world::{
-    CellFieldId, ComponentPatch, EntityBundle, FeedbackPayload, FeedbackQueue, FieldValue,
-    TargetRef, World,
+    CellFieldId, ComponentPatch, EntityBundle, FeedbackEntry, FeedbackPayload, FeedbackQueue,
+    FieldValue, ModuleId, TargetRef, World,
 };
 
 pub(super) fn apply_feedback_queue(world: &mut World, feedback: &mut FeedbackQueue) {
-    apply_payload_entries(world, feedback);
+    apply_feedback_queue_for_module(world, feedback, ModuleId::Exec);
 }
 
-fn apply_payload_entries(world: &mut World, feedback: &mut FeedbackQueue) {
-    let cell_count = world.cell_count();
+pub(super) fn apply_feedback_queue_for_module(
+    world: &mut World,
+    feedback: &mut FeedbackQueue,
+    module_id: ModuleId,
+) {
+    let entries = drain_feedback_for_module(feedback, module_id, world.clock.tick);
+    apply_feedback_entries(world, entries);
+}
+
+fn drain_feedback_for_module(
+    feedback: &mut FeedbackQueue,
+    module_id: ModuleId,
+    current_tick: u64,
+) -> Vec<FeedbackEntry> {
     let entries = std::mem::take(&mut feedback.entries);
+    let mut ready = Vec::new();
     let mut remaining = Vec::new();
     for entry in entries {
-        if entry.enqueued_tick >= world.clock.tick {
+        if entry.enqueued_tick >= current_tick || entry.target_module != module_id {
             remaining.push(entry);
-            continue;
+        } else {
+            ready.push(entry);
         }
+    }
+    feedback.entries = remaining;
+    ready
+}
+
+fn apply_feedback_entries(world: &mut World, entries: Vec<FeedbackEntry>) {
+    let cell_count = world.cell_count();
+    for entry in entries {
         match entry.payload {
             FeedbackPayload::DeltaF32 { field, cell, delta } => {
                 apply_feedback_f32_delta(
@@ -54,7 +76,6 @@ fn apply_payload_entries(world: &mut World, feedback: &mut FeedbackQueue) {
             _ => {}
         }
     }
-    feedback.entries = remaining;
 }
 
 fn apply_feedback_f32_delta(

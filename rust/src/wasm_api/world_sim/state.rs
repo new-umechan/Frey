@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
-use crate::sim::ExecWorldPhase;
+use crate::sim::{first_phase, ExecWorldPhase};
 
 use super::types::{DeltaRange, FieldDeltaResponse};
 
@@ -94,7 +94,7 @@ pub(super) struct ManagedWorldExecState {
 impl Default for ManagedWorldExecState {
     fn default() -> Self {
         Self {
-            next_phase: ExecWorldPhase::Prepare,
+            next_phase: first_phase(),
             remaining_steps: 0,
             pending_post_step: false,
         }
@@ -741,7 +741,8 @@ impl ManagedWorld {
         {
             return;
         }
-        self.history.insert(self.world.clock.tick, self.snapshot_world());
+        self.history
+            .insert(self.world.clock.tick, self.snapshot_world());
         while self.history.len() > DEFAULT_HISTORY_LIMIT {
             if let Some(oldest) = self.history.keys().next().copied() {
                 self.history.remove(&oldest);

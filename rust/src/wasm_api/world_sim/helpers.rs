@@ -83,11 +83,7 @@ pub(super) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
     state.river_flux.clone_from_slice(cells.river_flow);
     state.prev_river_next.clone_from_slice(cells.river_next);
     state.river_next.clone_from_slice(cells.river_next);
-    for (rain, runoff) in state
-        .rain
-        .iter_mut()
-        .zip(cells.runoff.iter().copied())
-    {
+    for (rain, runoff) in state.rain.iter_mut().zip(cells.runoff.iter().copied()) {
         *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
     }
     state.tick = world.clock.tick;

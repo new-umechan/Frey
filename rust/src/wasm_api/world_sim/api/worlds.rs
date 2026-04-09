@@ -5,8 +5,9 @@ use wasm_bindgen::prelude::*;
 use crate::sim;
 use crate::sim::geology_types::GeologyInternal;
 use crate::sim::{
-    exec_world_profiled_detailed_with_feedback_and_states, exec_world_slice_with_states,
-    exec_world_with_feedback_and_states, world, ExecWorldBreakdown,
+    display_group_key, exec_world_profiled_detailed_with_feedback_and_states,
+    exec_world_slice_with_states, exec_world_with_feedback_and_states, first_phase,
+    module_doc_records, module_graph_record, phase_display_group, world, ExecWorldBreakdown,
     ExecWorldBreakdownDetailed, ExecWorldPhase,
 };
 
@@ -56,21 +57,24 @@ fn reset_pending_slice(managed: &mut ManagedWorld) {
 }
 
 fn exec_phase_label(phase: ExecWorldPhase) -> &'static str {
-    match phase {
-        ExecWorldPhase::Prepare | ExecWorldPhase::Feedback => "feedback",
-        ExecWorldPhase::Geology => "geology",
-        ExecWorldPhase::Climate => "climate",
-        ExecWorldPhase::Glaciology => "glaciology",
-        ExecWorldPhase::Hydrology => "hydrology",
-        ExecWorldPhase::Ecology => "ecology",
-        ExecWorldPhase::Society => "society",
-        ExecWorldPhase::Transition => "transition",
-        ExecWorldPhase::Finalize => "post_step",
-    }
+    display_group_key(phase_display_group(phase))
 }
 
 #[wasm_bindgen]
 impl WorldSimController {
+    #[wasm_bindgen(js_name = exec_modules)]
+    pub fn exec_modules_js(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&module_doc_records())
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize exec modules: {err}")))
+    }
+
+    #[wasm_bindgen(js_name = exec_module_graph)]
+    pub fn exec_module_graph_js(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&module_graph_record()).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize exec module graph: {err}"))
+        })
+    }
+
     #[wasm_bindgen(js_name = init_world)]
     pub fn init_world_js(
         &mut self,
@@ -331,8 +335,8 @@ impl WorldSimController {
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
-            let step_breakdown = managed
-                .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
+            let step_breakdown =
+                managed.with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
             sim_breakdown.accumulate(&step_breakdown);
 
             let phase_start = profile_now_ms();
@@ -404,7 +408,7 @@ impl WorldSimController {
         let budget = work_budget.max(1);
         if !managed.exec_is_busy() {
             managed.exec_state.remaining_steps = scaled_step_count(managed.simulation_rate, 1);
-            managed.exec_state.next_phase = ExecWorldPhase::Prepare;
+            managed.exec_state.next_phase = first_phase();
         }
 
         let mut remaining_budget = budget;
@@ -421,16 +425,17 @@ impl WorldSimController {
             }
 
             let next_phase = managed.exec_state.next_phase;
-            let slice = managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
-                exec_world_slice_with_states(
-                    world,
-                    feedback,
-                    geology_state,
-                    hydrology_state,
-                    next_phase,
-                    remaining_budget,
-                )
-            });
+            let slice =
+                managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
+                    exec_world_slice_with_states(
+                        world,
+                        feedback,
+                        geology_state,
+                        hydrology_state,
+                        next_phase,
+                        remaining_budget,
+                    )
+                });
             managed.exec_state.next_phase = slice.next_phase;
             remaining_budget = remaining_budget.saturating_sub(slice.work_units_consumed);
             if slice.ticks_completed > 0 {

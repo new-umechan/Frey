@@ -1,8 +1,7 @@
 use crate::sim::exec::HYDROLOGY_MFD_ACTIVITY_THRESHOLD;
 use crate::sim::glaciology::types::GlaciologyParams;
 use crate::sim::hydrology::{
-    run_hydrology_flow_step, run_hydrology_step, sync_erosion_height,
-    HydrologyStepDetailBreakdown,
+    run_hydrology_flow_step, run_hydrology_step, sync_erosion_height, HydrologyStepDetailBreakdown,
 };
 use crate::sim::world::{EraKind, World};
 

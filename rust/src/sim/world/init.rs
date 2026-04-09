@@ -7,13 +7,14 @@ use crate::sim::geo::{
 };
 use smallvec::SmallVec;
 
+use super::entity_state::EntityState;
 use super::era::EraKind;
 use super::exec::{ClockState, ExecScratchState, TransitionState};
 use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
-    EcologyInternal, EcologyState, EntitiesState, GeologyState, GlaciologyState, HydrologyState,
-    PolityState, PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState,
-    World, WorldControlState, WorldMesh, WorldProjectionState, WorldState, N_CROPS, N_LIVESTOCK,
+    EcologyInternal, EcologyState, GeologyState, GlaciologyState, HydrologyState, PolityState,
+    PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState, World,
+    WorldControlState, WorldMesh, WorldProjectionState, WorldState, N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
@@ -100,7 +101,7 @@ impl World {
                 },
             },
             projections: WorldProjectionState { terrain },
-            entities: EntitiesState::default(),
+            entities: EntityState::default(),
             clock: ClockState {
                 tick: 0,
                 epoch: era,
@@ -122,8 +123,7 @@ impl World {
                 target_sea_ratio,
                 sea_level_offset: 0.0,
                 erosion_thickness_coupling: default_geology_params.erosion_thickness_coupling,
-                deposition_thickness_coupling: default_geology_params
-                    .deposition_thickness_coupling,
+                deposition_thickness_coupling: default_geology_params.deposition_thickness_coupling,
             },
             exec_scratch: ExecScratchState {
                 geology_dynamics: None,
@@ -265,9 +265,7 @@ fn classify_coast_side(
     if index >= cell_count {
         return CoastSide::None;
     }
-    let pos = mesh
-        .position(index)
-        .unwrap_or([0.0, 0.0, 1.0]);
+    let pos = mesh.position(index).unwrap_or([0.0, 0.0, 1.0]);
     let is_land = is_land_height(height[index], sea_level_offset);
     let seek_land = !is_land;
     let mut dir_sum = [0.0_f32; 3];

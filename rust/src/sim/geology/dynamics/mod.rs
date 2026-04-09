@@ -213,7 +213,12 @@ pub(crate) fn run_geology_dynamics_step_with_state(
 
     let _ = dynamics;
     if should_run_debug_validation() {
-        debug_validate_geology_state_with_state(world, geology_state.as_ref(), &params, "post-step");
+        debug_validate_geology_state_with_state(
+            world,
+            geology_state.as_ref(),
+            &params,
+            "post-step",
+        );
     }
 }
 
