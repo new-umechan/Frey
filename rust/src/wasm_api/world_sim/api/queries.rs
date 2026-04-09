@@ -443,12 +443,14 @@ impl WorldSimController {
                 ecology: w.clock.budgets.ecology,
                 civilization: w.clock.budgets.civilization,
             },
-            deltas: managed.transport_cache.take_world_field_deltas(|field_kind| {
-                include_fields
-                    .as_ref()
-                    .map(|fields| fields.contains(field_kind))
-                    .unwrap_or(true)
-            }),
+            deltas: managed
+                .transport_cache
+                .take_world_field_deltas(|field_kind| {
+                    include_fields
+                        .as_ref()
+                        .map(|fields| fields.contains(field_kind))
+                        .unwrap_or(true)
+                }),
         };
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize world delta: {err}")))

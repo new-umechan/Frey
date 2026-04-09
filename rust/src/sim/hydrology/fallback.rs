@@ -16,9 +16,9 @@ pub(super) fn run_river_fallback(
     let params = &world.control.geology_params;
 
     let mut rebuilt = build_river_network(
-            &world.mesh().positions,
-            &world.mesh().nbr_offsets,
-            &world.mesh().nbrs,
+        &world.mesh().positions,
+        &world.mesh().nbr_offsets,
+        &world.mesh().nbrs,
         &world.state.geology.height,
         runoff,
         params,

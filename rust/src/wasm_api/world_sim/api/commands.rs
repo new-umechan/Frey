@@ -110,7 +110,9 @@ fn replay_world_to_tick(
         managed.with_exec_states(exec_world_with_feedback_and_states);
         post_step_sync_light(managed);
         let current_tick = managed.world.clock.tick;
-        while replay_index < replay_entries.len() && replay_entries[replay_index].tick == current_tick {
+        while replay_index < replay_entries.len()
+            && replay_entries[replay_index].tick == current_tick
+        {
             let entry = &replay_entries[replay_index];
             let _ = apply_intervention_batch(managed, &entry.ops);
             replay_index += 1;
@@ -204,8 +206,11 @@ impl WorldSimController {
         let mut replay_archive = source_archive_owned.clone();
         replay_world_to_tick(&mut forked, &mut replay_archive, tick_u64)?;
         let snapshot_tick = forked.world.clock.tick;
-        let fork_archive =
-            build_fork_archive(&source_archive_owned, snapshot_tick, forked.snapshot_world());
+        let fork_archive = build_fork_archive(
+            &source_archive_owned,
+            snapshot_tick,
+            forked.snapshot_world(),
+        );
         let new_world_id = self.next_world_id();
         forked.feedback = world::FeedbackQueue::new(forked.transport_cache.height.shadow.len());
         forked.simulation_rate = source_rate;

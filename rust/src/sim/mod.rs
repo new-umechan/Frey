@@ -82,9 +82,9 @@ pub fn build_hydrology_state_for_bench(
 
     let cell_count = world.state.geology.height.len();
     erosion::ErosionAutomatonState {
-                positions: world.mesh().positions.clone(),
-                nbr_offsets: world.mesh().nbr_offsets.clone(),
-                nbrs: world.mesh().nbrs.clone(),
+        positions: world.mesh().positions.clone(),
+        nbr_offsets: world.mesh().nbr_offsets.clone(),
+        nbrs: world.mesh().nbrs.clone(),
         height: world.state.geology.height.clone(),
         water: vec![0.0; cell_count],
         sediment: vec![0.0; cell_count],

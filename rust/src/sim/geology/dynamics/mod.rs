@@ -339,7 +339,7 @@ fn debug_validate_geology_state_with_state(
 ) {
     let cell_count = world.state.geology.height.len();
     debug_assert_eq!(
-            world.mesh().nbr_offsets.len(),
+        world.mesh().nbr_offsets.len(),
         cell_count.saturating_add(1),
         "{stage}: mesh neighbor offsets length mismatch"
     );

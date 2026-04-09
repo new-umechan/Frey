@@ -10,9 +10,7 @@ use crate::sim::{
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{
-    ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
-};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache};
 use super::super::types::ExecWorldSliceResponse;
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;

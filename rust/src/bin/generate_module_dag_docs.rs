@@ -27,7 +27,9 @@ fn main() -> Result<(), String> {
     lines.push("## Modules".to_string());
     lines.push(String::new());
     lines.push("| phase | module | inbox | profile | display | execution | tick_boundary | reads | writes | feedback | depends_on | description |".to_string());
-    lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |".to_string());
+    lines.push(
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |".to_string(),
+    );
 
     for module in modules {
         lines.push(format!(
