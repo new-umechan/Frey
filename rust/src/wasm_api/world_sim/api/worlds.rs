@@ -10,7 +10,9 @@ use crate::sim::{
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldSyncState};
+use super::super::state::{
+    ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
+};
 use super::super::types::ExecWorldSliceResponse;
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
@@ -148,7 +150,8 @@ impl WorldSimController {
         let erosion_state = build_erosion_state(&sim_world, geology_params.clone());
         let _ = crate::sim::hydrology::apply_hydrology_state_view(&mut sim_world, &erosion_state);
         let geology_dynamics = sim_world.exec_scratch.geology_dynamics.take();
-        let sync_state = WorldSyncState::from_world(&sim_world, geology_dynamics.as_ref());
+        let transport_cache =
+            WorldTransportCache::from_world(&sim_world, geology_dynamics.as_ref());
         let hydrology_dynamics = Some(erosion_state);
 
         let feedback = world::FeedbackQueue::new(sim_world.cell_count());
@@ -159,7 +162,7 @@ impl WorldSimController {
             feedback,
             simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
             geology_params,
-            sync_state,
+            transport_cache,
             exec_state: ManagedWorldExecState::default(),
         };
         let mut archive = WorldArchive::new();

@@ -39,7 +39,7 @@ pub(super) struct U32FieldTracker {
 }
 
 #[derive(Clone)]
-pub(super) struct WorldSyncState {
+pub(super) struct WorldTransportCache {
     pub height: F32FieldTracker,
     pub lake_depth: F32FieldTracker,
     pub volcanism: F32FieldTracker,
@@ -72,7 +72,7 @@ pub(super) struct ManagedWorld {
     pub feedback: world::FeedbackQueue,
     pub simulation_rate: f32,
     pub geology_params: GeologyParams,
-    pub sync_state: WorldSyncState,
+    pub transport_cache: WorldTransportCache,
     pub exec_state: ManagedWorldExecState,
 }
 
@@ -433,7 +433,7 @@ fn collect_plate_ids(world: &world::World) -> Vec<u32> {
         .collect()
 }
 
-impl WorldSyncState {
+impl WorldTransportCache {
     pub fn from_world(
         world: &world::World,
         geology_dynamics: Option<&world::GeologyDynamicsState>,
@@ -732,7 +732,7 @@ impl ManagedWorld {
     }
 
     pub fn observe_after_world_change(&mut self) {
-        self.sync_state
+        self.transport_cache
             .observe_world(&self.world, self.geology_dynamics.as_ref());
     }
 
@@ -774,7 +774,7 @@ impl WorldArchive {
 
 #[cfg(test)]
 mod tests {
-    use super::{F32FieldTracker, I32FieldTracker, U32FieldTracker, WorldSyncState};
+    use super::{F32FieldTracker, I32FieldTracker, U32FieldTracker, WorldTransportCache};
 
     #[test]
     fn f32_tracker_collects_delta_ranges_once() {
@@ -814,7 +814,7 @@ mod tests {
 
     #[test]
     fn world_sync_state_discards_pending_for_excluded_fields() {
-        let mut state = WorldSyncState {
+        let mut state = WorldTransportCache {
             height: F32FieldTracker::new(&[1.0, 1.0]),
             lake_depth: F32FieldTracker::new(&[0.0, 0.0]),
             volcanism: F32FieldTracker::new(&[0.0, 0.0]),
@@ -853,7 +853,7 @@ mod tests {
 
     #[test]
     fn world_sync_state_tracks_ice_pressure_deltas() {
-        let mut state = WorldSyncState {
+        let mut state = WorldTransportCache {
             height: F32FieldTracker::new(&[1.0, 1.0]),
             lake_depth: F32FieldTracker::new(&[0.0, 0.0]),
             volcanism: F32FieldTracker::new(&[0.0, 0.0]),

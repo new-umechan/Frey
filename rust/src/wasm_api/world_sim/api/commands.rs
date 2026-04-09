@@ -4,7 +4,7 @@ use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
 use super::super::helpers::{apply_f32, apply_i32, apply_plate_id, sync_erosion_state};
-use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldSyncState};
+use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache};
 use super::super::types::{
     ForkWorldResult, InterventionField, InterventionOp, InterventionResult, RestoreWorldResult,
 };
@@ -124,16 +124,16 @@ impl WorldSimController {
         let archive_snapshot = snapshot.clone();
         let snapshot_tick = snapshot.world.clock.tick;
         let new_world_id = self.next_world_id();
-        let sync_state =
-            WorldSyncState::from_world(&snapshot.world, snapshot.geology_dynamics.as_ref());
+        let transport_cache =
+            WorldTransportCache::from_world(&snapshot.world, snapshot.geology_dynamics.as_ref());
         let forked = ManagedWorld {
             world: snapshot.world,
             hydrology_dynamics: snapshot.hydrology_dynamics,
             geology_dynamics: snapshot.geology_dynamics,
-            feedback: world::FeedbackQueue::new(sync_state.height.shadow.len()),
+            feedback: world::FeedbackQueue::new(transport_cache.height.shadow.len()),
             simulation_rate: source_rate,
             geology_params: source_params,
-            sync_state,
+            transport_cache,
             exec_state: ManagedWorldExecState::default(),
         };
         self.worlds.insert(new_world_id.clone(), forked);
@@ -180,8 +180,8 @@ impl WorldSimController {
         if managed.hydrology_dynamics.is_none() {
             sync_erosion_state(managed);
         }
-        managed.sync_state =
-            WorldSyncState::from_world(&managed.world, managed.geology_dynamics.as_ref());
+        managed.transport_cache =
+            WorldTransportCache::from_world(&managed.world, managed.geology_dynamics.as_ref());
         managed.reset_exec_state();
         archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
 

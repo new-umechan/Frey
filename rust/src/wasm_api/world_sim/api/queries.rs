@@ -443,7 +443,7 @@ impl WorldSimController {
                 ecology: w.clock.budgets.ecology,
                 civilization: w.clock.budgets.civilization,
             },
-            deltas: managed.sync_state.take_world_field_deltas(|field_kind| {
+            deltas: managed.transport_cache.take_world_field_deltas(|field_kind| {
                 include_fields
                     .as_ref()
                     .map(|fields| fields.contains(field_kind))
