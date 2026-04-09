@@ -10,10 +10,12 @@ import {
     createEmptyLayers,
     createInitialBudgets,
     createInitialRuntimeState,
+    type WorldLayers,
     type RuntimeState,
 } from "../runtime/state";
 import { type EraMetrics } from "./era-presets";
 import { createInitialEngineViewState, type EngineViewState } from "./engine-view-state";
+import { type CoreBuffers } from "../sim/sync/types";
 
 export interface Mesh {
     positions: Float32Array;
@@ -34,8 +36,8 @@ export interface WorldState {
     era: string;
     mesh: Mesh;
     engineView: EngineViewState;
-    core: any;
-    layers: Record<string, any>;
+    core: CoreBuffers | null;
+    layers: WorldLayers;
     budgets: Record<string, number>;
     runtime: RuntimeState;
 }
@@ -70,7 +72,7 @@ export function createWorldState(options: {
 export interface AppState {
     activeWorldId: string | null;
     currentSeed: string;
-    currentTerrainData: any;
+    currentTerrainData: CoreBuffers | null;
     currentSurfaceMode: string;
     currentViewMode: string;
     currentCellMetric: string;
@@ -88,7 +90,7 @@ export function createMutableStateStore(options: {
     const { worldTick } = options;
     let activeWorldId: string | null = null;
     let currentSeed = DEFAULT_TERRAIN_SEED;
-    let currentTerrainData: any = null;
+    let currentTerrainData: CoreBuffers | null = null;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentCellMetric = DEFAULT_CELL_METRIC;
@@ -96,7 +98,7 @@ export function createMutableStateStore(options: {
     let currentEraMetrics = options.currentEraMetrics;
     let debugEnabled = Boolean(options.debugEnabled);
 
-    const stateSetters: Record<string, (value: any) => void> = {
+    const stateSetters: Record<string, (value: unknown) => void> = {
         activeWorldId: (value) => {
             activeWorldId = value;
         },
@@ -104,7 +106,7 @@ export function createMutableStateStore(options: {
             currentSeed = value;
         },
         currentTerrainData: (value) => {
-            currentTerrainData = value;
+            currentTerrainData = value as CoreBuffers | null;
         },
         currentSurfaceMode: (value) => {
             currentSurfaceMode = value;
