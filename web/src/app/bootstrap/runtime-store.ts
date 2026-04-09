@@ -40,7 +40,7 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         debugEnabled,
     });
 
-    mutableStateStore.setState({ currentTerrainData: null });
+    mutableStateStore.setCurrentTerrainData(null);
 
     function setState(patch: Partial<AppState> = {}) {
         mutableStateStore.setState(patch);
@@ -55,9 +55,9 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         getState: mutableStateStore.getState,
         setState,
         getCurrentEraMetrics: () => currentEraMetrics,
-        getCurrentTerrainData: () => mutableStateStore.getState().currentTerrainData,
+        getCurrentTerrainData: mutableStateStore.getCurrentTerrainData,
         setCurrentTerrainData: (nextData: CoreBuffers | null) => {
-            setState({ currentTerrainData: nextData });
+            mutableStateStore.setCurrentTerrainData(nextData);
         },
     };
 }

@@ -65,7 +65,6 @@ export function createWorldState(options: {
 export interface AppState {
     activeWorldId: string | null;
     currentSeed: string;
-    currentTerrainData: CoreBuffers | null;
     currentSurfaceMode: string;
     currentViewMode: string;
     currentCellMetric: string;
@@ -95,9 +94,6 @@ export function createMutableStateStore(options: {
         currentSeed: (value) => {
             currentSeed = value;
         },
-        currentTerrainData: (value) => {
-            currentTerrainData = value as CoreBuffers | null;
-        },
         currentSurfaceMode: (value) => {
             currentSurfaceMode = value;
         },
@@ -122,7 +118,6 @@ export function createMutableStateStore(options: {
         return {
             activeWorldId,
             currentSeed,
-            currentTerrainData,
             currentSurfaceMode,
             currentViewMode,
             currentCellMetric,
@@ -141,5 +136,9 @@ export function createMutableStateStore(options: {
     return {
         getState,
         setState,
+        getCurrentTerrainData: () => currentTerrainData,
+        setCurrentTerrainData: (nextTerrainData: CoreBuffers | null) => {
+            currentTerrainData = nextTerrainData;
+        },
     };
 }
