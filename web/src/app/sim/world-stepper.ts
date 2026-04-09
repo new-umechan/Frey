@@ -28,6 +28,7 @@ export interface WorldStepperOptions {
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
     getCurrentState: () => AppState;
+    getCurrentEraMetrics: () => EraMetrics;
     getActiveWorldId: () => string | null;
     getCurrentTerrainData: () => CoreBuffers | null;
     pushStepBreakdownSamples: (recorder: TickPerfRecorder | null, profiled: Record<string, unknown>) => void;
@@ -51,6 +52,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         syncAfterWorldStep,
         setStatus,
         getCurrentState,
+        getCurrentEraMetrics,
         getActiveWorldId,
         getCurrentTerrainData,
         pushStepBreakdownSamples,
@@ -123,8 +125,9 @@ export function createWorldStepper(options: WorldStepperOptions) {
 
         if (!benchmarkMode && world.tick > 0 && shouldRefreshStats) {
             const preset = getEraScalePreset(liveState.currentEraScale);
+            const currentEraMetrics = getCurrentEraMetrics();
             setStatus(
-                `Running (${liveState.currentSeed}) | ${preset.label} / 1Tick=${liveState.currentEraMetrics.tickLabel} | tick=${world.tick}`,
+                `Running (${liveState.currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel} | tick=${world.tick}`,
             );
         }
         if (!benchmarkMode) {

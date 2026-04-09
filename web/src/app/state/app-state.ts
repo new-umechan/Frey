@@ -68,12 +68,10 @@ export interface AppState {
     currentViewMode: string;
     currentCellMetric: string;
     currentEraScale: string;
-    currentEraMetrics: EraMetrics;
     debugEnabled: boolean;
 }
 
 export function createMutableStateStore(options: {
-    currentEraMetrics: EraMetrics;
     debugEnabled?: boolean;
 }) {
     let activeWorldId: string | null = null;
@@ -83,7 +81,6 @@ export function createMutableStateStore(options: {
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentCellMetric = DEFAULT_CELL_METRIC;
     let currentEraScale = DEFAULT_ERA_SCALE;
-    let currentEraMetrics = options.currentEraMetrics;
     let debugEnabled = Boolean(options.debugEnabled);
 
     const stateSetters: Record<string, (value: unknown) => void> = {
@@ -102,9 +99,6 @@ export function createMutableStateStore(options: {
         currentEraScale: (value) => {
             currentEraScale = value;
         },
-        currentEraMetrics: (value) => {
-            currentEraMetrics = value;
-        },
         debugEnabled: (value) => {
             debugEnabled = Boolean(value);
         },
@@ -117,7 +111,6 @@ export function createMutableStateStore(options: {
             currentViewMode,
             currentCellMetric,
             currentEraScale,
-            currentEraMetrics,
             debugEnabled,
         };
     };

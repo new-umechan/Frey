@@ -7,6 +7,7 @@ import { renderInitializationFrames } from "./initialization-frames";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
 import { type PlaybackController } from "../playback/playback-controller";
+import { type EraMetrics } from "../state/era-presets";
 
 function createControllerDeps(options: {
     elements: AppElements;
@@ -49,6 +50,7 @@ interface BindRuntimeUiOptions {
         updateTerrain: (seed: string) => Promise<void>;
     };
     getState: () => AppState;
+    getCurrentEraMetrics: () => EraMetrics;
     setStatus: (msg: string) => void;
 }
 
@@ -58,6 +60,7 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         sceneRuntime,
         controllerRuntime,
         getState,
+        getCurrentEraMetrics,
         setStatus,
     } = options;
 
@@ -94,7 +97,7 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         getCurrentSurfaceMode: () => getState().currentSurfaceMode,
         getCurrentCellMetric: () => getState().currentCellMetric,
         getCurrentEraScale: () => getState().currentEraScale,
-        getCurrentEraMetrics: () => getState().currentEraMetrics,
+        getCurrentEraMetrics,
         updateTerrain: controllerRuntime.updateTerrain,
         setStatus,
     });
@@ -145,6 +148,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         sceneRuntime,
         controllerRuntime,
         getState: runtimeStore.getState,
+        getCurrentEraMetrics: runtimeStore.getCurrentEraMetrics,
         setStatus,
     });
 

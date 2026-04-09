@@ -64,6 +64,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
         getCurrentTerrainData: context.store.getCurrentTerrainData,
         getActiveWorldId: context.store.getActiveWorldId,
         setState: context.store.setState,
+        setCurrentEraMetrics: context.store.setCurrentEraMetrics,
         getWorldTick: () => context.store.world.tick,
         setStatus: context.setStatus,
         appendPlaybackEvent: (type: string, label: string, detail?: string) => {
@@ -134,6 +135,7 @@ function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRe
         },
         setStatus: context.setStatus,
         getCurrentState: context.store.getState,
+        getCurrentEraMetrics: context.store.getCurrentEraMetrics,
         getActiveWorldId: context.store.getActiveWorldId,
         getCurrentTerrainData: context.store.getCurrentTerrainData,
         pushStepBreakdownSamples,
@@ -184,6 +186,7 @@ function createTerrainGenerationRuntime(
         getCurrentSeed: () => context.store.getState().currentSeed,
         setActiveWorldId: context.store.setActiveWorldId,
         setCurrentState: context.store.setState,
+        setCurrentEraMetrics: context.store.setCurrentEraMetrics,
         setPlaybackRunning: (isPlaying: boolean) => {
             playbackControllerRef.current?.setPlaybackRunning(isPlaying);
         },

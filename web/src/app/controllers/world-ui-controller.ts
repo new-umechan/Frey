@@ -41,6 +41,7 @@ export interface WorldUiControllerOptions {
     getCurrentTerrainData: () => CoreBuffers | null;
     getActiveWorldId: () => string | null;
     setState: (patch: Partial<AppState>) => void;
+    setCurrentEraMetrics: (metrics: EraMetrics) => void;
     getWorldTick: () => number;
     setStatus: (msg: string) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
@@ -66,6 +67,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         getCurrentTerrainData,
         getActiveWorldId,
         setState,
+        setCurrentEraMetrics,
         getWorldTick,
         setStatus,
         appendPlaybackEvent,
@@ -111,8 +113,8 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         const currentEraMetrics = metrics ?? createEraMetrics(currentEraScale);
         setState({
             currentEraScale,
-            currentEraMetrics,
         });
+        setCurrentEraMetrics(currentEraMetrics);
         worldState.runtimeTickMs = currentEraMetrics.runtimeTickMs;
         renderEraScaleControls(
             eraScaleSelect,

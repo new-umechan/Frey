@@ -17,6 +17,7 @@ export interface RuntimeStore {
     getState: () => AppState;
     setState: (patch: Partial<AppState>) => void;
     getCurrentEraMetrics: () => EraMetrics;
+    setCurrentEraMetrics: (nextMetrics: EraMetrics) => void;
     getCurrentTerrainData: () => CoreBuffers | null;
     setCurrentTerrainData: (nextData: CoreBuffers | null) => void;
     getActiveWorldId: () => string | null;
@@ -38,7 +39,6 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         currentEraMetrics,
     });
     const mutableStateStore = createMutableStateStore({
-        currentEraMetrics,
         debugEnabled,
     });
 
@@ -46,9 +46,6 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
 
     function setState(patch: Partial<AppState> = {}) {
         mutableStateStore.setState(patch);
-        if (patch.currentEraMetrics) {
-            currentEraMetrics = patch.currentEraMetrics;
-        }
     }
 
     return {
@@ -57,6 +54,9 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         getState: mutableStateStore.getState,
         setState,
         getCurrentEraMetrics: () => currentEraMetrics,
+        setCurrentEraMetrics: (nextMetrics: EraMetrics) => {
+            currentEraMetrics = nextMetrics;
+        },
         getCurrentTerrainData: mutableStateStore.getCurrentTerrainData,
         setCurrentTerrainData: (nextData: CoreBuffers | null) => {
             mutableStateStore.setCurrentTerrainData(nextData);
