@@ -39,7 +39,7 @@ export function createPlaybackController({
     eventLogList,
     playbackState,
     worldState,
-    worldSimController,
+    engineClient,
     getActiveWorldId,
     getCurrentTerrainData,
     getWorldTick,
@@ -51,7 +51,7 @@ export function createPlaybackController({
     eventLogList: HTMLUListElement;
     playbackState: PlaybackState;
     worldState: RuntimeState;
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     getActiveWorldId: () => string | null;
     getCurrentTerrainData: () => CoreBuffers | null;
     getWorldTick: () => number;
@@ -204,7 +204,7 @@ export function createPlaybackController({
             return;
         }
 
-        const response = await worldSimController.list_history_ticks(activeWorldId);
+        const response = await engineClient.list_history_ticks(activeWorldId);
         const ticks: unknown[] = Array.isArray(response?.ticks) ? response.ticks : [];
         const normalized = normalizeTicks(ticks);
         playbackState.availableTicks = normalized;
@@ -238,7 +238,7 @@ export function createPlaybackController({
         }
 
         try {
-            await worldSimController.restore_world_to_tick(activeWorldId, normalizedTick);
+            await engineClient.restore_world_to_tick(activeWorldId, normalizedTick);
             setPlaybackRunning(false);
             await syncWorldFromActiveController();
             playbackState.selectedTick = normalizedTick;

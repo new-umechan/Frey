@@ -8,7 +8,7 @@ import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from
 import { type FieldKind } from "../sim/sync/constants";
 
 export interface WorldStepperOptions {
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     world: WorldState;
     worldState: RuntimeState;
     terrainRenderer: TerrainRenderer;
@@ -29,7 +29,7 @@ export interface WorldStepperOptions {
 
 export function createWorldStepper(options: WorldStepperOptions) {
     const {
-        worldSimController,
+        engineClient,
         world,
         worldState,
         terrainRenderer,
@@ -71,7 +71,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             return;
         }
         const changes = await syncVisibleCoreFieldsFromController({
-            worldSimController,
+            engineClient,
             worldId: state.activeWorldId,
             core: state.currentTerrainData as CoreBuffers,
             fieldKinds: getCurrentDeltaFieldKinds(),
@@ -90,7 +90,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         const nextTick = previousTick + batchCount;
         const shouldRefreshStats = benchmarkMode ? false : shouldRefreshStatsForAdvance(previousTick, nextTick);
         const { changes, statsRefreshed } = await syncWorldDeltaFromController({
-            worldSimController,
+            engineClient,
             worldId: liveState.activeWorldId,
             world,
             core: liveState.currentTerrainData as CoreBuffers,
@@ -140,14 +140,14 @@ export function createWorldStepper(options: WorldStepperOptions) {
             if (perfRecorder) {
                 const start = performance.now();
                 if (sampleStepBreakdown) {
-                    const profiled = await worldSimController.exec_world_profiled(liveState.activeWorldId!, batchCount);
+                    const profiled = await engineClient.exec_world_profiled(liveState.activeWorldId!, batchCount);
                     pushStepBreakdownSamples(perfRecorder, profiled);
                 } else {
-                    await worldSimController.exec_world(liveState.activeWorldId!, batchCount);
+                    await engineClient.exec_world(liveState.activeWorldId!, batchCount);
                 }
                 perfRecorder.pushSample("exec_world", performance.now() - start);
             } else {
-                await worldSimController.exec_world(liveState.activeWorldId!, batchCount);
+                await engineClient.exec_world(liveState.activeWorldId!, batchCount);
             }
 
             return await syncCompletedWorldStep({
@@ -177,7 +177,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             };
         }
 
-        const response = await worldSimController.exec_world_slice(
+        const response = await engineClient.exec_world_slice(
             state.activeWorldId,
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
         );

@@ -8,19 +8,19 @@ function formatPercent(ratio: number): string {
 }
 
 export async function refreshWorldStatsFromController(options: {
-    worldSimController: any;
+    engineClient: any;
     worldId: string | null;
     world: any;
     currentSeed: string;
     statFields: StatFields;
     level: number;
 }) {
-    const { worldSimController, worldId, world, currentSeed, statFields, level } = options;
+    const { engineClient, worldId, world, currentSeed, statFields, level } = options;
     if (!worldId) {
         return false;
     }
 
-    const metrics = await worldSimController.get_metrics(worldId);
+    const metrics = await engineClient.get_metrics(worldId);
     if (!metrics) {
         return false;
     }

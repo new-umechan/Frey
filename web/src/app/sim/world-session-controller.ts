@@ -6,7 +6,7 @@ import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { type SyncOptions, type CoreBuffers } from "../sim/sync/types";
 
 export interface WorldSessionControllerOptions {
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     world: WorldState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
@@ -27,7 +27,7 @@ export interface WorldSessionControllerOptions {
 
 export function createWorldSessionController(options: WorldSessionControllerOptions) {
     const {
-        worldSimController,
+        engineClient,
         world,
         terrainRenderer,
         createEraMetrics,
@@ -52,7 +52,7 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
             return null;
         }
         const result = await syncWorldFromController({
-            worldSimController,
+            engineClient,
             worldId,
             world,
             currentSeed: getCurrentSeed(),
@@ -77,7 +77,7 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
             return null;
         }
         return refreshWorldStatsFromController({
-            worldSimController,
+            engineClient,
             worldId,
             world,
             currentSeed: getCurrentSeed(),

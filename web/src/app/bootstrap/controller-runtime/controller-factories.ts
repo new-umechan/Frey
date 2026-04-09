@@ -78,7 +78,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: { 
 
 function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void) {
     return createWorldSessionController({
-        worldSimController: context.worldSimController,
+        engineClient: context.engineClient,
         world: context.world,
         terrainRenderer: context.terrainRenderer,
         createEraMetrics,
@@ -106,7 +106,7 @@ function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRe
 
 function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRef: { current: any }, setEraScale: (era: string) => void, refreshWorldStats: () => Promise<boolean>) {
     return createWorldStepper({
-        worldSimController: context.worldSimController,
+        engineClient: context.engineClient,
         world: context.world,
         worldState: context.worldState,
         terrainRenderer: context.terrainRenderer,
@@ -152,7 +152,7 @@ function createTerrainGenerationRuntime(context: RuntimeContext, playbackControl
     return createTerrainGenerationController({
         seedForm: context.seedForm,
         seedInput: context.seedInput,
-        worldSimController: context.worldSimController,
+        engineClient: context.engineClient,
         level: LEVEL,
         terrainParams: TERRAIN_PARAMS,
         world: context.world,
@@ -190,7 +190,7 @@ function createPlaybackRuntime(context: RuntimeContext, syncWorldFromActiveContr
         eventLogList: context.eventLogList,
         playbackState: context.worldState.playback,
         worldState: context.worldState,
-        worldSimController: context.worldSimController,
+        engineClient: context.engineClient,
         getActiveWorldId: () => context.getState().activeWorldId,
         getCurrentTerrainData: () => context.getState().currentTerrainData,
         getWorldTick: () => context.world.tick,

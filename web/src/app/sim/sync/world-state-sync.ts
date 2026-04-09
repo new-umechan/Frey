@@ -5,7 +5,7 @@ import { type SyncOptions, type SyncDeltaOptions, type SyncVisibleOptions } from
 
 export async function syncWorldFromController(options: SyncOptions) {
     const {
-        worldSimController,
+        engineClient,
         worldId,
         world,
         currentSurfaceMode,
@@ -17,10 +17,10 @@ export async function syncWorldFromController(options: SyncOptions) {
         level,
     } = options;
 
-    const core = await buildCoreBuffers(worldSimController, worldId);
+    const core = await buildCoreBuffers(engineClient, worldId);
     setCurrentTerrainData(core);
 
-    const metrics = await worldSimController.get_metrics(worldId);
+    const metrics = await engineClient.get_metrics(worldId);
     if (!metrics) {
         return null;
     }
@@ -30,7 +30,7 @@ export async function syncWorldFromController(options: SyncOptions) {
     setEraScale(era);
 
     await refreshWorldStatsFromController({
-        worldSimController,
+        engineClient,
         worldId,
         world,
         currentSeed: options.currentSeed,
@@ -47,7 +47,7 @@ export async function syncWorldFromController(options: SyncOptions) {
 
 export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     const {
-        worldSimController,
+        engineClient,
         worldId,
         world,
         core,
@@ -64,10 +64,10 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     let worldDelta = null;
     if (perfRecorder) {
         const start = performance.now();
-        worldDelta = await worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
+        worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
         perfRecorder.pushSample("get_world_delta", performance.now() - start);
     } else {
-        worldDelta = await worldSimController.get_world_delta(worldId, { include_fields: deltaFieldKinds });
+        worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
     }
 
     const changes = applyWorldDeltaToCore(core, worldDelta);
@@ -77,7 +77,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     let statsRefreshed = false;
     if (refreshStats) {
         statsRefreshed = await refreshWorldStats();
-        const metrics = await worldSimController.get_metrics(worldId);
+        const metrics = await engineClient.get_metrics(worldId);
         if (metrics) {
             const era = String(metrics.era_scale ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);
@@ -95,8 +95,8 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
 }
 
 export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions) {
-    const { worldSimController, worldId, core, fieldKinds } = options;
-    const worldDelta = await worldSimController.get_world_delta(worldId, {
+    const { engineClient, worldId, core, fieldKinds } = options;
+    const worldDelta = await engineClient.get_world_delta(worldId, {
         include_fields: fieldKinds,
     });
     return applyWorldDeltaToCore(core, worldDelta);

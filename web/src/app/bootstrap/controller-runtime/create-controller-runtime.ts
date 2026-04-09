@@ -52,7 +52,7 @@ export interface RuntimeContext extends ControllerDeps {
     perfControls: any;
     perfStatFields: PerfStatFields | null;
     viewportPanel: HTMLElement;
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
 }
 
 function createRuntimeContext(options: ControllerDeps): RuntimeContext {
@@ -125,7 +125,7 @@ function createRuntimeContext(options: ControllerDeps): RuntimeContext {
         perfControls,
         perfStatFields,
         viewportPanel,
-        worldSimController: null as any, // Initialized later
+        engineClient: null as any, // Initialized later
     };
 }
 
@@ -157,12 +157,12 @@ function shouldAdvanceWorld(context: RuntimeContext) {
 
 export async function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
-    context.worldSimController = createEngineWorkerClient();
+    context.engineClient = createEngineWorkerClient();
     context.worldState.execModules = [];
     context.worldState.execModuleGraph = null;
     context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
-    context.worldState.execModules = await context.worldSimController.get_exec_modules();
-    context.worldState.execModuleGraph = await context.worldSimController.get_exec_module_graph();
+    context.worldState.execModules = await context.engineClient.get_exec_modules();
+    context.worldState.execModuleGraph = await context.engineClient.get_exec_module_graph();
     context.worldState.slicePhase = getDefaultExecDisplayPhase(context.worldState);
 
     const runtimeControllers = createRuntimeControllers(context);

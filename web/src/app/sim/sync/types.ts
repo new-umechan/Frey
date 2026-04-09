@@ -41,7 +41,7 @@ export interface CoreBuffers {
 }
 
 export interface SyncOptions {
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     worldId: string;
     world: WorldState;
     currentSeed: string;
@@ -56,7 +56,7 @@ export interface SyncOptions {
 }
 
 export interface SyncDeltaOptions {
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     worldId: string;
     world: WorldState;
     core: CoreBuffers;
@@ -72,7 +72,7 @@ export interface SyncDeltaOptions {
 }
 
 export interface SyncVisibleOptions {
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     worldId: string;
     core: CoreBuffers;
     fieldKinds: FieldKind[];

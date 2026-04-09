@@ -10,7 +10,7 @@ export interface TerrainGenerationController {
 export interface TerrainGenerationControllerOptions {
     seedForm: HTMLFormElement;
     seedInput: HTMLInputElement;
-    worldSimController: EngineClient;
+    engineClient: EngineClient;
     level: number;
     terrainParams: any;
     world: WorldState;
@@ -39,7 +39,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
     const {
         seedForm,
         seedInput,
-        worldSimController,
+        engineClient,
         level,
         terrainParams,
         world,
@@ -70,7 +70,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
 
         try {
             await onInitWorldStart();
-            const initResult = await worldSimController.init_world(nextSeed, level, {
+            const initResult = await engineClient.init_world(nextSeed, level, {
                 geology_params: terrainParams,
             });
             if (token !== generationToken) {
