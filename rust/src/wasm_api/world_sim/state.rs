@@ -12,6 +12,61 @@ pub(super) const DEFAULT_HISTORY_LIMIT: usize = 512;
 pub(super) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
 pub(super) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
 
+fn bitmap_word_len(values_len: usize) -> usize {
+    values_len.div_ceil(32)
+}
+
+fn bitmap_mark(bitmap: &mut [u32], index: usize) {
+    let word_index = index / 32;
+    let bit_offset = index % 32;
+    if let Some(word) = bitmap.get_mut(word_index) {
+        *word |= 1u32 << bit_offset;
+    }
+}
+
+fn bitmap_clear(bitmap: &mut [u32]) {
+    bitmap.fill(0);
+}
+
+fn bitmap_any(bitmap: &[u32]) -> bool {
+    bitmap.iter().any(|word| *word != 0)
+}
+
+fn bitmap_count(bitmap: &[u32]) -> usize {
+    bitmap.iter().map(|word| word.count_ones() as usize).sum()
+}
+
+fn bitmap_indices(bitmap: &[u32], max_len: usize) -> Vec<usize> {
+    let mut out = Vec::with_capacity(bitmap_count(bitmap));
+    for (word_index, mut word) in bitmap.iter().copied().enumerate() {
+        while word != 0 {
+            let bit = word.trailing_zeros() as usize;
+            let index = word_index * 32 + bit;
+            if index >= max_len {
+                break;
+            }
+            out.push(index);
+            word &= word - 1;
+        }
+    }
+    out
+}
+
+fn range_cell_count(ranges: &[RangeDelta], max_len: usize) -> usize {
+    ranges
+        .iter()
+        .map(|range| {
+            let start = (range.start as usize).min(max_len);
+            let end = (range.end as usize).min(max_len);
+            end.saturating_sub(start)
+        })
+        .sum()
+}
+
+fn should_emit_bitmap(bitmap_words: usize, range_count: usize) -> bool {
+    range_count > 0 && bitmap_words < range_count.saturating_mul(2)
+}
+
 #[derive(Clone)]
 pub(super) struct RangeDelta {
     pub start: u32,
@@ -22,6 +77,7 @@ pub(super) struct RangeDelta {
 pub(super) struct F32FieldTracker {
     pub shadow: Vec<f32>,
     pub dirty_ranges: Vec<RangeDelta>,
+    pub dirty_bitmap: Vec<u32>,
     pub force_full: bool,
 }
 
@@ -29,6 +85,7 @@ pub(super) struct F32FieldTracker {
 pub(super) struct I32FieldTracker {
     pub shadow: Vec<i32>,
     pub dirty_ranges: Vec<RangeDelta>,
+    pub dirty_bitmap: Vec<u32>,
     pub force_full: bool,
 }
 
@@ -36,6 +93,7 @@ pub(super) struct I32FieldTracker {
 pub(super) struct U32FieldTracker {
     pub shadow: Vec<u32>,
     pub dirty_ranges: Vec<RangeDelta>,
+    pub dirty_bitmap: Vec<u32>,
     pub force_full: bool,
 }
 
@@ -119,6 +177,7 @@ impl F32FieldTracker {
         Self {
             shadow: values.to_vec(),
             dirty_ranges: Vec::new(),
+            dirty_bitmap: vec![0; bitmap_word_len(values.len())],
             force_full: false,
         }
     }
@@ -128,6 +187,7 @@ impl F32FieldTracker {
             self.shadow = values.to_vec();
             self.force_full = true;
             self.dirty_ranges.clear();
+            self.dirty_bitmap = vec![0; bitmap_word_len(values.len())];
             return;
         }
 
@@ -141,6 +201,7 @@ impl F32FieldTracker {
                 continue;
             }
             self.shadow[index] = value;
+            bitmap_mark(&mut self.dirty_bitmap, index);
             changed += 1;
             if range_start.is_none() {
                 range_start = Some(index);
@@ -152,6 +213,7 @@ impl F32FieldTracker {
         if changed > 0 && (changed as f32) >= (values.len() as f32) * DELTA_FULL_THRESHOLD_RATIO {
             self.force_full = true;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
         }
     }
 
@@ -159,6 +221,7 @@ impl F32FieldTracker {
         if self.force_full {
             self.force_full = false;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
             return Some(FieldDeltaResponse {
                 field_kind: field_kind.to_string(),
                 mode: "full".to_string(),
@@ -166,13 +229,40 @@ impl F32FieldTracker {
                     start: 0,
                     end: self.shadow.len() as u32,
                 }],
+                dirty_bitmap: None,
                 f32_data: Some(self.shadow.clone()),
                 u32_data: None,
                 i32_data: None,
             });
         }
-        if self.dirty_ranges.is_empty() {
+        if self.dirty_ranges.is_empty() || !bitmap_any(&self.dirty_bitmap) {
             return None;
+        }
+
+        let changed_cells = bitmap_count(&self.dirty_bitmap);
+        let range_cells = range_cell_count(&self.dirty_ranges, self.shadow.len());
+        let use_bitmap = changed_cells > 0
+            && changed_cells < self.shadow.len()
+            && should_emit_bitmap(self.dirty_bitmap.len(), self.dirty_ranges.len())
+            && range_cells >= changed_cells;
+        if use_bitmap {
+            let indices = bitmap_indices(&self.dirty_bitmap, self.shadow.len());
+            let values = indices
+                .iter()
+                .map(|index| self.shadow[*index])
+                .collect::<Vec<_>>();
+            let bitmap = self.dirty_bitmap.clone();
+            self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
+            return Some(FieldDeltaResponse {
+                field_kind: field_kind.to_string(),
+                mode: "bitmap".to_string(),
+                ranges: Vec::new(),
+                dirty_bitmap: Some(bitmap),
+                f32_data: Some(values),
+                u32_data: None,
+                i32_data: None,
+            });
         }
 
         let ranges = self
@@ -187,10 +277,12 @@ impl F32FieldTracker {
         for range in self.dirty_ranges.drain(..) {
             values.extend_from_slice(&self.shadow[range.start as usize..range.end as usize]);
         }
+        bitmap_clear(&mut self.dirty_bitmap);
         Some(FieldDeltaResponse {
             field_kind: field_kind.to_string(),
             mode: "delta".to_string(),
             ranges,
+            dirty_bitmap: None,
             f32_data: Some(values),
             u32_data: None,
             i32_data: None,
@@ -200,6 +292,7 @@ impl F32FieldTracker {
     pub fn discard_pending(&mut self) {
         self.force_full = false;
         self.dirty_ranges.clear();
+        bitmap_clear(&mut self.dirty_bitmap);
     }
 
     fn merge_dirty_range(&mut self, start: usize, end: usize) {
@@ -225,6 +318,7 @@ impl I32FieldTracker {
         Self {
             shadow: values.to_vec(),
             dirty_ranges: Vec::new(),
+            dirty_bitmap: vec![0; bitmap_word_len(values.len())],
             force_full: false,
         }
     }
@@ -234,6 +328,7 @@ impl I32FieldTracker {
             self.shadow = values.to_vec();
             self.force_full = true;
             self.dirty_ranges.clear();
+            self.dirty_bitmap = vec![0; bitmap_word_len(values.len())];
             return;
         }
 
@@ -247,6 +342,7 @@ impl I32FieldTracker {
                 continue;
             }
             self.shadow[index] = value;
+            bitmap_mark(&mut self.dirty_bitmap, index);
             changed += 1;
             if range_start.is_none() {
                 range_start = Some(index);
@@ -258,6 +354,7 @@ impl I32FieldTracker {
         if changed > 0 && (changed as f32) >= (values.len() as f32) * DELTA_FULL_THRESHOLD_RATIO {
             self.force_full = true;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
         }
     }
 
@@ -265,6 +362,7 @@ impl I32FieldTracker {
         if self.force_full {
             self.force_full = false;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
             return Some(FieldDeltaResponse {
                 field_kind: field_kind.to_string(),
                 mode: "full".to_string(),
@@ -272,13 +370,40 @@ impl I32FieldTracker {
                     start: 0,
                     end: self.shadow.len() as u32,
                 }],
+                dirty_bitmap: None,
                 f32_data: None,
                 u32_data: None,
                 i32_data: Some(self.shadow.clone()),
             });
         }
-        if self.dirty_ranges.is_empty() {
+        if self.dirty_ranges.is_empty() || !bitmap_any(&self.dirty_bitmap) {
             return None;
+        }
+
+        let changed_cells = bitmap_count(&self.dirty_bitmap);
+        let range_cells = range_cell_count(&self.dirty_ranges, self.shadow.len());
+        let use_bitmap = changed_cells > 0
+            && changed_cells < self.shadow.len()
+            && should_emit_bitmap(self.dirty_bitmap.len(), self.dirty_ranges.len())
+            && range_cells >= changed_cells;
+        if use_bitmap {
+            let indices = bitmap_indices(&self.dirty_bitmap, self.shadow.len());
+            let values = indices
+                .iter()
+                .map(|index| self.shadow[*index])
+                .collect::<Vec<_>>();
+            let bitmap = self.dirty_bitmap.clone();
+            self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
+            return Some(FieldDeltaResponse {
+                field_kind: field_kind.to_string(),
+                mode: "bitmap".to_string(),
+                ranges: Vec::new(),
+                dirty_bitmap: Some(bitmap),
+                f32_data: None,
+                u32_data: None,
+                i32_data: Some(values),
+            });
         }
 
         let ranges = self
@@ -293,10 +418,12 @@ impl I32FieldTracker {
         for range in self.dirty_ranges.drain(..) {
             values.extend_from_slice(&self.shadow[range.start as usize..range.end as usize]);
         }
+        bitmap_clear(&mut self.dirty_bitmap);
         Some(FieldDeltaResponse {
             field_kind: field_kind.to_string(),
             mode: "delta".to_string(),
             ranges,
+            dirty_bitmap: None,
             f32_data: None,
             u32_data: None,
             i32_data: Some(values),
@@ -306,6 +433,7 @@ impl I32FieldTracker {
     pub fn discard_pending(&mut self) {
         self.force_full = false;
         self.dirty_ranges.clear();
+        bitmap_clear(&mut self.dirty_bitmap);
     }
 
     fn merge_dirty_range(&mut self, start: usize, end: usize) {
@@ -331,6 +459,7 @@ impl U32FieldTracker {
         Self {
             shadow: values.to_vec(),
             dirty_ranges: Vec::new(),
+            dirty_bitmap: vec![0; bitmap_word_len(values.len())],
             force_full: false,
         }
     }
@@ -340,6 +469,7 @@ impl U32FieldTracker {
             self.shadow = values.to_vec();
             self.force_full = true;
             self.dirty_ranges.clear();
+            self.dirty_bitmap = vec![0; bitmap_word_len(values.len())];
             return;
         }
 
@@ -353,6 +483,7 @@ impl U32FieldTracker {
                 continue;
             }
             self.shadow[index] = value;
+            bitmap_mark(&mut self.dirty_bitmap, index);
             changed += 1;
             if range_start.is_none() {
                 range_start = Some(index);
@@ -364,6 +495,7 @@ impl U32FieldTracker {
         if changed > 0 && (changed as f32) >= (values.len() as f32) * DELTA_FULL_THRESHOLD_RATIO {
             self.force_full = true;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
         }
     }
 
@@ -371,6 +503,7 @@ impl U32FieldTracker {
         if self.force_full {
             self.force_full = false;
             self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
             return Some(FieldDeltaResponse {
                 field_kind: field_kind.to_string(),
                 mode: "full".to_string(),
@@ -378,13 +511,40 @@ impl U32FieldTracker {
                     start: 0,
                     end: self.shadow.len() as u32,
                 }],
+                dirty_bitmap: None,
                 f32_data: None,
                 u32_data: Some(self.shadow.clone()),
                 i32_data: None,
             });
         }
-        if self.dirty_ranges.is_empty() {
+        if self.dirty_ranges.is_empty() || !bitmap_any(&self.dirty_bitmap) {
             return None;
+        }
+
+        let changed_cells = bitmap_count(&self.dirty_bitmap);
+        let range_cells = range_cell_count(&self.dirty_ranges, self.shadow.len());
+        let use_bitmap = changed_cells > 0
+            && changed_cells < self.shadow.len()
+            && should_emit_bitmap(self.dirty_bitmap.len(), self.dirty_ranges.len())
+            && range_cells >= changed_cells;
+        if use_bitmap {
+            let indices = bitmap_indices(&self.dirty_bitmap, self.shadow.len());
+            let values = indices
+                .iter()
+                .map(|index| self.shadow[*index])
+                .collect::<Vec<_>>();
+            let bitmap = self.dirty_bitmap.clone();
+            self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
+            return Some(FieldDeltaResponse {
+                field_kind: field_kind.to_string(),
+                mode: "bitmap".to_string(),
+                ranges: Vec::new(),
+                dirty_bitmap: Some(bitmap),
+                f32_data: None,
+                u32_data: Some(values),
+                i32_data: None,
+            });
         }
 
         let ranges = self
@@ -399,10 +559,12 @@ impl U32FieldTracker {
         for range in self.dirty_ranges.drain(..) {
             values.extend_from_slice(&self.shadow[range.start as usize..range.end as usize]);
         }
+        bitmap_clear(&mut self.dirty_bitmap);
         Some(FieldDeltaResponse {
             field_kind: field_kind.to_string(),
             mode: "delta".to_string(),
             ranges,
+            dirty_bitmap: None,
             f32_data: None,
             u32_data: Some(values),
             i32_data: None,
@@ -412,6 +574,7 @@ impl U32FieldTracker {
     pub fn discard_pending(&mut self) {
         self.force_full = false;
         self.dirty_ranges.clear();
+        bitmap_clear(&mut self.dirty_bitmap);
     }
 
     fn merge_dirty_range(&mut self, start: usize, end: usize) {
@@ -838,6 +1001,22 @@ mod tests {
         assert_eq!(delta.ranges.len(), 2);
         assert_eq!(delta.u32_data.expect("u32 data"), vec![8, 9]);
         assert!(tracker.take_delta("plate_id").is_none());
+    }
+
+    #[test]
+    fn f32_tracker_can_emit_bitmap_delta_for_sparse_updates() {
+        let mut tracker = F32FieldTracker::new(&vec![0.0; 128]);
+        let mut next = vec![0.0; 128];
+        for index in [0usize, 33, 66, 99, 127] {
+            next[index] = 1.0;
+        }
+        tracker.observe(&next);
+
+        let delta = tracker.take_delta("height").expect("bitmap delta");
+        assert_eq!(delta.mode, "bitmap");
+        let bitmap = delta.dirty_bitmap.expect("bitmap");
+        assert_eq!(bitmap.len(), 4);
+        assert_eq!(delta.f32_data.expect("f32 data"), vec![1.0, 1.0, 1.0, 1.0, 1.0]);
     }
 
     #[test]

@@ -23,9 +23,10 @@ interface DeltaRange {
 }
 
 interface FieldDelta {
-    mode?: "full" | "range";
+    mode?: "full" | "range" | "delta" | "bitmap";
     field_kind?: string;
     ranges?: DeltaRange[];
+    dirty_bitmap?: ArrayLike<number>;
     f32_data?: Float32Array;
     i32_data?: Int32Array;
     u32_data?: Uint32Array;
@@ -113,6 +114,7 @@ export function buildCoreBuffers(controller: WorldSimController, worldId: string
 
 function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
+    const dirtyBitmap = fieldDelta?.dirty_bitmap ?? [];
     const values: ArrayLike<number> = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
     const canFastCopy =
         (target instanceof Float32Array || target instanceof Int32Array || target instanceof Uint32Array) &&
@@ -128,6 +130,25 @@ function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean 
             target[i] = Number(values[i] ?? 0);
         }
         return copyLength > 0;
+    }
+
+    if (fieldDelta?.mode === "bitmap") {
+        let offset = 0;
+        for (let wordIndex = 0; wordIndex < dirtyBitmap.length; wordIndex += 1) {
+            let word = Number(dirtyBitmap[wordIndex] ?? 0) >>> 0;
+            while (word !== 0) {
+                const lowestBit = word & -word;
+                const bit = Math.log2(lowestBit) | 0;
+                const cellIndex = wordIndex * 32 + bit;
+                if (cellIndex >= target.length) {
+                    break;
+                }
+                target[cellIndex] = Number(values[offset] ?? 0);
+                offset += 1;
+                word &= word - 1;
+            }
+        }
+        return offset > 0;
     }
 
     let offset = 0;
@@ -155,6 +176,24 @@ function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean 
 function countDeltaCells(delta: FieldDelta, targetLength: number): number {
     if (delta?.mode === "full") {
         return targetLength;
+    }
+    if (delta?.mode === "bitmap") {
+        let count = 0;
+        const dirtyBitmap = delta?.dirty_bitmap ?? [];
+        for (let wordIndex = 0; wordIndex < dirtyBitmap.length; wordIndex += 1) {
+            let word = Number(dirtyBitmap[wordIndex] ?? 0) >>> 0;
+            while (word !== 0) {
+                const lowestBit = word & -word;
+                const bit = Math.log2(lowestBit) | 0;
+                const cellIndex = wordIndex * 32 + bit;
+                if (cellIndex >= targetLength) {
+                    break;
+                }
+                count += 1;
+                word &= word - 1;
+            }
+        }
+        return count;
     }
     let count = 0;
     for (const range of delta?.ranges ?? []) {
