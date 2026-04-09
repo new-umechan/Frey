@@ -13,6 +13,7 @@ import {
     type RuntimeState,
 } from "../runtime/state";
 import { type EraMetrics } from "./era-presets";
+import { createInitialEngineViewState, type EngineViewState } from "./engine-view-state";
 
 export interface Mesh {
     positions: Float32Array;
@@ -32,6 +33,7 @@ export interface WorldState {
     tick: number;
     era: string;
     mesh: Mesh;
+    engineView: EngineViewState;
     core: any;
     layers: Record<string, any>;
     budgets: Record<string, number>;
@@ -53,6 +55,7 @@ export function createWorldState(options: {
             nbrOffsets: null,
             nbrs: null,
         },
+        engineView: createInitialEngineViewState(),
         core: createEmptyCore(),
         layers: createEmptyLayers(),
         budgets: createInitialBudgets(),
