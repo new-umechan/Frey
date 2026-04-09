@@ -3,17 +3,24 @@ import { type EraMetrics } from "../state/era-presets";
 import { type StatFields } from "../../components/dom";
 import { type EngineClient } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
-import { type SyncOptions, type CoreBuffers } from "../sim/sync/types";
+import { type SyncOptions, type CoreBuffers, type SyncWorldResult } from "../sim/sync/types";
 
 export interface WorldSessionControllerOptions {
     engineClient: EngineClient;
     world: WorldState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldFromController: (options: SyncOptions) => Promise<any>;
-    refreshWorldStatsFromController: (options: any) => Promise<any>;
+    syncWorldFromController: (options: SyncOptions) => Promise<SyncWorldResult | null>;
+    refreshWorldStatsFromController: (options: {
+        engineClient: WorldSessionControllerOptions["engineClient"];
+        worldId: string | null;
+        world: WorldState;
+        currentSeed: string;
+        statFields: StatFields;
+        level: number;
+    }) => Promise<boolean>;
     setCurrentTerrainData: (data: CoreBuffers) => void;
     syncClimateUi: () => void;
     hidePlateHover: () => void;
@@ -46,7 +53,7 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
         level,
     } = options;
 
-    const syncWorldFromActiveController = async () => {
+    const syncWorldFromActiveController = async (): Promise<SyncWorldResult | null> => {
         const worldId = getActiveWorldId();
         if (!worldId) {
             return null;
@@ -71,10 +78,10 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
         return result;
     };
 
-    const refreshActiveWorldStats = async () => {
+    const refreshActiveWorldStats = async (): Promise<boolean> => {
         const worldId = getActiveWorldId();
         if (!worldId) {
-            return null;
+            return false;
         }
         return refreshWorldStatsFromController({
             engineClient,

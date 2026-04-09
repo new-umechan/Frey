@@ -1,9 +1,16 @@
 import { buildCoreBuffers } from "./core-builders";
 import { applyWorldDeltaToCore } from "./delta-sync";
 import { refreshWorldStatsFromController } from "./stats-sync";
-import { type SyncOptions, type SyncDeltaOptions, type SyncVisibleOptions } from "./types";
+import {
+    type SyncOptions,
+    type SyncDeltaOptions,
+    type SyncVisibleOptions,
+    type SyncWorldResult,
+    type SyncDeltaResult,
+} from "./types";
+import { type WorldChangeset } from "./constants";
 
-export async function syncWorldFromController(options: SyncOptions) {
+export async function syncWorldFromController(options: SyncOptions): Promise<SyncWorldResult | null> {
     const {
         engineClient,
         worldId,
@@ -45,7 +52,7 @@ export async function syncWorldFromController(options: SyncOptions) {
     };
 }
 
-export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
+export async function syncWorldDeltaFromController(options: SyncDeltaOptions): Promise<SyncDeltaResult> {
     const {
         engineClient,
         worldId,
@@ -61,7 +68,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
         perfRecorder,
     } = options;
 
-    let worldDelta = null;
+    let worldDelta: unknown = null;
     if (perfRecorder) {
         const start = performance.now();
         worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
@@ -94,7 +101,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     };
 }
 
-export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions) {
+export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions): Promise<WorldChangeset> {
     const { engineClient, worldId, core, fieldKinds } = options;
     const worldDelta = await engineClient.get_world_delta(worldId, {
         include_fields: fieldKinds,

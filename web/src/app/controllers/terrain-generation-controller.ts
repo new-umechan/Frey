@@ -2,6 +2,7 @@ import { type EngineClient } from "../engine/engine-client";
 import { type AppState, type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
+import { type SyncWorldResult } from "../sim/sync/types";
 
 export interface TerrainGenerationController {
     updateTerrain: (seed: string) => Promise<void>;
@@ -25,7 +26,7 @@ export interface TerrainGenerationControllerOptions {
     ) => EraMetrics;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
     setStatus: (msg: string) => void;
-    syncWorldFromActiveController: () => Promise<unknown>;
+    syncWorldFromActiveController: () => Promise<SyncWorldResult | null>;
     getCurrentEraScale: () => string;
     getCurrentSeed: () => string;
     setCurrentState: (patch: Partial<AppState>) => void;

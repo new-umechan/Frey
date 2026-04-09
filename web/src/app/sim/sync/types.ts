@@ -5,6 +5,7 @@ import { type WorldState } from "../../state/app-state";
 import { type EraMetrics } from "../../state/era-presets";
 import { type StatFields } from "../../../components/dom";
 import { type TickPerfRecorder } from "../../perf/recorder";
+import { type WorldChangeset } from "./constants";
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 
@@ -48,7 +49,7 @@ export interface SyncOptions {
     currentSurfaceMode: string;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
     setEraScale: (era: string) => void;
     setCurrentTerrainData: (data: CoreBuffers) => void;
     statFields: StatFields;
@@ -63,10 +64,10 @@ export interface SyncDeltaOptions {
     currentSurfaceMode: string;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
     setEraScale: (era: string) => void;
     refreshStats: boolean;
-    refreshWorldStats: () => boolean;
+    refreshWorldStats: () => Promise<boolean>;
     deltaFieldKinds: FieldKind[];
     perfRecorder?: TickPerfRecorder | null;
 }
@@ -76,4 +77,14 @@ export interface SyncVisibleOptions {
     worldId: string;
     core: CoreBuffers;
     fieldKinds: FieldKind[];
+}
+
+export interface SyncWorldResult {
+    eraMetrics: EraMetrics;
+}
+
+export interface SyncDeltaResult {
+    changes: WorldChangeset;
+    eraMetrics: EraMetrics | null;
+    statsRefreshed: boolean;
 }

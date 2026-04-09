@@ -4,8 +4,13 @@ import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
 import { type EngineClient } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
-import { type SyncDeltaOptions, type SyncVisibleOptions, type CoreBuffers } from "../sim/sync/types";
-import { type FieldKind } from "../sim/sync/constants";
+import {
+    type SyncDeltaOptions,
+    type SyncVisibleOptions,
+    type CoreBuffers,
+    type SyncDeltaResult,
+} from "../sim/sync/types";
+import { type FieldKind, type WorldChangeset } from "../sim/sync/constants";
 
 export interface WorldStepperOptions {
     engineClient: EngineClient;
@@ -13,17 +18,17 @@ export interface WorldStepperOptions {
     worldState: RuntimeState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: any) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
     setEraScale: (era: string) => void;
-    syncWorldDeltaFromController: (options: SyncDeltaOptions) => Promise<{ changes: any; statsRefreshed: boolean }>;
-    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<any>;
+    syncWorldDeltaFromController: (options: SyncDeltaOptions) => Promise<SyncDeltaResult>;
+    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<WorldChangeset>;
     getDeltaFieldKindsForView: (options: { viewMode: string; cellMetric: string }) => FieldKind[];
     refreshWorldStats: () => Promise<boolean>;
     syncClimateUi: () => void;
     syncAfterWorldStep: (options: { previousTick: number; nextTick: number; ticksAdvanced: number; batched: boolean }) => void;
     setStatus: (msg: string) => void;
     getCurrentState: () => AppState;
-    pushStepBreakdownSamples: (recorder: TickPerfRecorder, profiled: any) => void;
+    pushStepBreakdownSamples: (recorder: TickPerfRecorder, profiled: unknown) => void;
     getEraScalePreset: (era: string) => EraScaleConfig & { key: string };
 }
 

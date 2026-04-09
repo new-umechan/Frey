@@ -36,7 +36,7 @@ import { pushStepBreakdownSamples } from "../../perf/perf-step-breakdown";
 import { resetWorldProgress } from "../../sim/world-loop";
 import { createPerfRuntime } from "../perf-runtime";
 import { type RuntimeContext } from "./create-controller-runtime";
-import { type CoreBuffers } from "../../sim/sync/types";
+import { type CoreBuffers, type SyncWorldResult } from "../../sim/sync/types";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 
@@ -157,7 +157,11 @@ function createViewModeRuntime(context: RuntimeContext, syncVisibleFieldsForCurr
     });
 }
 
-function createTerrainGenerationRuntime(context: RuntimeContext, playbackControllerRef: PlaybackRef, syncWorldFromActiveController: () => Promise<any>) {
+function createTerrainGenerationRuntime(
+    context: RuntimeContext,
+    playbackControllerRef: PlaybackRef,
+    syncWorldFromActiveController: () => Promise<SyncWorldResult | null>,
+) {
     return createTerrainGenerationController({
         seedForm: context.dom.seedForm,
         seedInput: context.dom.seedInput,
@@ -195,8 +199,8 @@ function createTerrainGenerationRuntime(context: RuntimeContext, playbackControl
 
 function createPlaybackRuntime(
     context: RuntimeContext,
-    syncWorldFromActiveController: () => Promise<any>,
-    stepWorldTick: (perfRecorder?: TickPerfRecorder | null) => Promise<any>,
+    syncWorldFromActiveController: () => Promise<SyncWorldResult | null>,
+    stepWorldTick: (perfRecorder?: TickPerfRecorder | null) => Promise<boolean>,
 ) {
     return createPlaybackController({
         playbackControls: context.dom.playbackControls,
