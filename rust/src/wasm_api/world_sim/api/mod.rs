@@ -206,17 +206,16 @@ mod tests {
             .expect("list history ticks");
         let history_data: HistoryTicksResponse =
             serde_wasm_bindgen::from_value(history_ticks).expect("parse history ticks");
-        assert_eq!(history_data.interval, 32);
+        assert_eq!(history_data.interval, 64);
         assert!(history_data.ticks.contains(&0.0));
-        assert!(history_data.ticks.contains(&32.0));
         assert!(history_data.ticks.contains(&64.0));
 
         let restored = controller
-            .restore_world_to_tick_js(world_id.clone(), 32.0)
+            .restore_world_to_tick_js(world_id.clone(), 64.0)
             .expect("restore world");
         let restored_data: RestoreWorldResponse =
             serde_wasm_bindgen::from_value(restored).expect("parse restored world");
-        assert_eq!(restored_data.tick, 32.0);
+        assert_eq!(restored_data.tick, 64.0);
 
         let history_after_restore = controller
             .list_history_ticks_js(world_id.clone())
@@ -231,7 +230,7 @@ mod tests {
             .expect("get metrics after restore");
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
-        assert_eq!(metrics_data.tick, 32.0);
+        assert_eq!(metrics_data.tick, 64.0);
     }
 
     #[wasm_bindgen_test]

@@ -29,6 +29,10 @@ impl WorldSimController {
         let managed = worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        archive.append_intervention(managed.world.clock.tick, &ops);
 
         let mut applied = 0u32;
         let mut rejected = 0u32;
@@ -81,9 +85,7 @@ impl WorldSimController {
         sync_erosion_state(managed);
         managed.reset_exec_state();
         managed.observe_after_world_change();
-        if let Some(archive) = archives.get_mut(&world_id) {
-            archive.save_snapshot_if_needed(managed);
-        }
+        archive.save_snapshot_if_needed(managed);
 
         let result = InterventionResult {
             world_id,
