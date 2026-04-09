@@ -77,6 +77,8 @@ Tier1までのモジュールについて、詳細を決定している。
 
 実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。
 固定の hand-written DAG は正本にしない。
+生成結果は `docs/architecture/module_boundaries.generated.md` を参照する。
+更新は `npm run module:docs` で行う。
 
 `Terrain` は実行 module ではないため、実行 DAG ノードに含めない。
 理由は、`Terrain` が独立更新モジュールではなく、`Geology` と海面基準の結果から再構成される共有状態層だからである。
