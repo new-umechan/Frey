@@ -72,15 +72,12 @@ export interface AppState {
     currentEraScale: string;
     currentEraMetrics: EraMetrics;
     debugEnabled: boolean;
-    worldTick: number;
 }
 
 export function createMutableStateStore(options: {
-    worldTick: () => number;
     currentEraMetrics: EraMetrics;
     debugEnabled?: boolean;
 }) {
-    const { worldTick } = options;
     let activeWorldId: string | null = null;
     let currentSeed = DEFAULT_TERRAIN_SEED;
     let currentTerrainData: CoreBuffers | null = null;
@@ -132,11 +129,10 @@ export function createMutableStateStore(options: {
             currentEraScale,
             currentEraMetrics,
             debugEnabled,
-            worldTick: worldTick(),
         };
     };
 
-    const setState = (patch: Partial<Omit<AppState, "worldTick">> = {}) => {
+    const setState = (patch: Partial<AppState> = {}) => {
         for (const [key, value] of Object.entries(patch)) {
             stateSetters[key]?.(value);
         }

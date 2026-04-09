@@ -26,6 +26,14 @@ export async function refreshWorldStatsFromController(options: {
     }
 
     world.tick = Math.floor(metrics.tick ?? 0);
+    world.engineView.tick = world.tick;
+    world.engineView.era = String(metrics.era_scale ?? world.era);
+    world.engineView.budgets = {
+        geology: Math.max(0, Math.floor(metrics?.budget_geology ?? world.engineView.budgets.geology ?? 0)),
+        climate: Math.max(0, Math.floor(metrics?.budget_climate ?? world.engineView.budgets.climate ?? 0)),
+        ecology: Math.max(0, Math.floor(metrics?.budget_ecology ?? world.engineView.budgets.ecology ?? 0)),
+        civilization: Math.max(0, Math.floor(metrics?.budget_civilization ?? world.engineView.budgets.civilization ?? 0)),
+    };
     statFields.level.textContent = `L${level}`;
     statFields.seed.textContent = currentSeed;
     statFields.plates.textContent = `${metrics.plate_count ?? 0}P`;

@@ -71,6 +71,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions) {
     }
 
     const changes = applyWorldDeltaToCore(core, worldDelta);
+    world.engineView.deltaRevision += 1;
 
     let eraMetrics = null;
     let statsRefreshed = false;

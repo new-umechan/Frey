@@ -14,7 +14,7 @@ export interface RuntimeStore {
     world: WorldState;
     worldState: RuntimeState;
     getState: () => AppState;
-    setState: (patch: Partial<Omit<AppState, "worldTick">>) => void;
+    setState: (patch: Partial<AppState>) => void;
     getCurrentEraMetrics: () => EraMetrics;
 }
 
@@ -35,12 +35,11 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
     const mutableStateStore = createMutableStateStore({
         currentEraMetrics,
         debugEnabled,
-        worldTick: () => world.tick,
     });
 
     mutableStateStore.setState({ currentTerrainData: null });
 
-    function setState(patch: Partial<Omit<AppState, "worldTick">> = {}) {
+    function setState(patch: Partial<AppState> = {}) {
         mutableStateStore.setState(patch);
         if (patch.currentEraMetrics) {
             currentEraMetrics = patch.currentEraMetrics;
