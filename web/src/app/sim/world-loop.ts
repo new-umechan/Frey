@@ -1,18 +1,16 @@
 import { DEFAULT_ERA_SCALE, type WorldSubsystemKey } from "../../shared/constants";
 import { type WorldState } from "../state/app-state";
-import { getDefaultExecDisplayPhase, type RuntimeState, type WorldLayers } from "../runtime/state";
+import { getDefaultExecDisplayPhase, type RuntimeState } from "../runtime/state";
 import { type EraMetrics } from "../state/era-presets";
 
 export function resetWorldProgress(
     world: WorldState,
     worldState: RuntimeState,
-    createEmptyLayers: () => WorldLayers,
     createInitialBudgets: () => Record<WorldSubsystemKey, number>,
     createEraMetrics: (era: string) => EraMetrics
 ): EraMetrics {
     world.tick = 0;
     world.era = DEFAULT_ERA_SCALE;
-    world.layers = createEmptyLayers();
     world.budgets = createInitialBudgets();
     worldState.accumulatorMs = 0;
     worldState.lastFrameTimeMs = null;

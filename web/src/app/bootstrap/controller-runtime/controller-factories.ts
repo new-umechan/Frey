@@ -7,7 +7,6 @@ import {
     renderEraScaleControls,
 } from "../../state/era-presets";
 import {
-    createEmptyLayers,
     createInitialBudgets,
 } from "../../runtime/state";
 import { getDeltaFieldKindsForView } from "../../sim/sync/view-mode";
@@ -158,7 +157,6 @@ function createTerrainGenerationRuntime(context: RuntimeContext, playbackControl
         terrainParams: TERRAIN_PARAMS,
         world: context.world,
         worldState: context.worldState,
-        createEmptyLayers,
         createInitialBudgets,
         createEraMetrics,
         resetWorldProgress,

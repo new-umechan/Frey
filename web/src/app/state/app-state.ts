@@ -6,11 +6,8 @@ import {
     DEFAULT_VIEW_MODE,
 } from "../../shared/constants";
 import {
-    createEmptyCore,
-    createEmptyLayers,
     createInitialBudgets,
     createInitialRuntimeState,
-    type WorldLayers,
     type RuntimeState,
 } from "../runtime/state";
 import { type EraMetrics } from "./era-presets";
@@ -36,8 +33,6 @@ export interface WorldState {
     era: string;
     mesh: Mesh;
     engineView: EngineViewState;
-    core: CoreBuffers | null;
-    layers: WorldLayers;
     budgets: Record<string, number>;
     runtime: RuntimeState;
 }
@@ -58,8 +53,6 @@ export function createWorldState(options: {
             nbrs: null,
         },
         engineView: createInitialEngineViewState(),
-        core: createEmptyCore(),
-        layers: createEmptyLayers(),
         budgets: createInitialBudgets(),
         runtime: createInitialRuntimeState(currentEraMetrics.runtimeTickMs),
     };

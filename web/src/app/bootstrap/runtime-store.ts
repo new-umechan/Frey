@@ -38,7 +38,7 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         worldTick: () => world.tick,
     });
 
-    mutableStateStore.setState({ currentTerrainData: world.core });
+    mutableStateStore.setState({ currentTerrainData: null });
 
     function setState(patch: Partial<Omit<AppState, "worldTick">> = {}) {
         mutableStateStore.setState(patch);

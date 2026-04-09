@@ -15,13 +15,11 @@ export interface TerrainGenerationControllerOptions {
     terrainParams: any;
     world: WorldState;
     worldState: RuntimeState;
-    createEmptyLayers: () => any;
     createInitialBudgets: () => any;
     createEraMetrics: (era: string) => EraMetrics;
     resetWorldProgress: (
         world: WorldState,
         worldState: RuntimeState,
-        createEmptyLayers: () => any,
         createInitialBudgets: () => any,
         createEraMetrics: (era: string) => EraMetrics,
     ) => EraMetrics;
@@ -46,7 +44,6 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
         terrainParams,
         world,
         worldState,
-        createEmptyLayers,
         createInitialBudgets,
         createEraMetrics,
         resetWorldProgress,
@@ -83,7 +80,6 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             const currentEraMetrics = resetWorldProgress(
                 world,
                 worldState,
-                createEmptyLayers,
                 createInitialBudgets,
                 createEraMetrics,
             );
