@@ -58,7 +58,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     world: &mut World,
     geology_state: &mut crate::sim::exec::GeologyExecState,
 ) {
-    if world.mesh.nbr_offsets.len() != world.state.geology.height.len() + 1 {
+    if world.mesh().nbr_offsets.len() != world.state.geology.height.len() + 1 {
         return;
     }
     if world.state.geology.plate_id.len() != world.state.geology.height.len() {
@@ -105,9 +105,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     }
     let heights = world.state.geology.height.clone();
     let plate_id = world.state.geology.plate_id.clone();
-    let positions = world.mesh.positions.clone();
-    let nbr_offsets = world.mesh.nbr_offsets.clone();
-    let nbrs = world.mesh.nbrs.clone();
+    let positions = world.mesh().positions.clone();
+    let nbr_offsets = world.mesh().nbr_offsets.clone();
+    let nbrs = world.mesh().nbrs.clone();
 
     let plume_force = update_mantle_heat_and_plumes(
         &mut dynamics.mantle_heat,
@@ -339,7 +339,7 @@ fn debug_validate_geology_state_with_state(
 ) {
     let cell_count = world.state.geology.height.len();
     debug_assert_eq!(
-        world.mesh.nbr_offsets.len(),
+            world.mesh().nbr_offsets.len(),
         cell_count.saturating_add(1),
         "{stage}: mesh neighbor offsets length mismatch"
     );

@@ -15,6 +15,8 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     let n = world.state.geology.height.len();
     world.state.conflict.conflict_intensity.fill(0.0);
     world.state.conflict.occupier_id.fill(None);
+    let nbr_offsets = world.mesh().nbr_offsets.clone();
+    let nbrs = world.mesh().nbrs.clone();
 
     let mut polity_cells: HashMap<PolityId, Vec<CellId>> = HashMap::new();
     let mut frontline_cells = Vec::new();
@@ -42,14 +44,9 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
                 .or_default()
                 .push(CellId(i as u32));
         }
-        let start = world.mesh.nbr_offsets.get(i).copied().unwrap_or(0) as usize;
-        let end = world
-            .mesh
-            .nbr_offsets
-            .get(i + 1)
-            .copied()
-            .unwrap_or(start as u32) as usize;
-        for &nbr in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
+        let start = nbr_offsets.get(i).copied().unwrap_or(0) as usize;
+        let end = nbr_offsets.get(i + 1).copied().unwrap_or(start as u32) as usize;
+        for &nbr in nbrs.get(start..end).unwrap_or(&[]) {
             let j = nbr as usize;
             if j >= n {
                 continue;
@@ -72,11 +69,11 @@ pub(crate) fn update_conflict(world: &mut World, budget: u32) {
     }
 
     for (a, b) in hostile_pairs {
-                if let Some(rel) = world.relations.polity_relations.get_mut(&(a, b)) {
+        if let Some(rel) = world.relations.polity_relations.get_mut(&(a, b)) {
             rel.at_war = true;
             rel.alliance = rel.alliance.min(-0.6);
         }
-                if let Some(rel) = world.relations.polity_relations.get_mut(&(b, a)) {
+        if let Some(rel) = world.relations.polity_relations.get_mut(&(b, a)) {
             rel.at_war = true;
             rel.alliance = rel.alliance.min(-0.6);
         }

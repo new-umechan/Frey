@@ -8,7 +8,7 @@ pub(super) fn run_river_fallback(
     state: Option<&mut ErosionAutomatonState>,
 ) {
     let cell_count = world.state.geology.height.len();
-    if cell_count == 0 || world.mesh.nbr_offsets.len() != cell_count + 1 {
+    if cell_count == 0 || world.mesh().nbr_offsets.len() != cell_count + 1 {
         return;
     }
 
@@ -16,9 +16,9 @@ pub(super) fn run_river_fallback(
     let params = &world.control.geology_params;
 
     let mut rebuilt = build_river_network(
-        &world.mesh.positions,
-        &world.mesh.nbr_offsets,
-        &world.mesh.nbrs,
+            &world.mesh().positions,
+            &world.mesh().nbr_offsets,
+            &world.mesh().nbrs,
         &world.state.geology.height,
         runoff,
         params,

@@ -13,7 +13,8 @@ use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
-    pub mesh: WorldMesh,
+    #[serde(flatten)]
+    pub metadata: WorldMetadata,
     pub state: WorldState,
     #[serde(default)]
     pub projections: WorldProjectionState,
@@ -24,6 +25,11 @@ pub struct World {
     pub exec_scratch: ExecScratchState,
     #[serde(default, flatten)]
     pub relations: WorldRelations,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldMetadata {
+    pub mesh: WorldMesh,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -601,6 +607,14 @@ pub struct CivilizationIndicators {
 }
 
 impl World {
+    pub fn mesh(&self) -> &WorldMesh {
+        &self.metadata.mesh
+    }
+
+    pub fn mesh_mut(&mut self) -> &mut WorldMesh {
+        &mut self.metadata.mesh
+    }
+
     pub fn core_view(&self) -> WorldCoreView<'_> {
         WorldCoreView {
             cells: self.cell_store(),
@@ -629,8 +643,8 @@ impl World {
 
     pub fn cell_store(&self) -> CellStore<'_> {
         CellStore {
-            neighbors_offsets: &self.mesh.nbr_offsets,
-            neighbors: &self.mesh.nbrs,
+            neighbors_offsets: &self.mesh().nbr_offsets,
+            neighbors: &self.mesh().nbrs,
             height: &self.state.geology.height,
             lake_depth: &self.state.geology.lake_depth,
             plate_id: &self.state.geology.plate_id,
@@ -707,7 +721,7 @@ impl World {
     }
 
     pub fn position(&self, index: usize) -> Option<[f32; 3]> {
-        self.mesh.positions.get(index).copied()
+        self.mesh().positions.get(index).copied()
     }
 
     pub fn latitude(&self, index: usize) -> f32 {
@@ -755,14 +769,14 @@ impl World {
     }
 
     pub fn cell_neighbors(&self, index: usize) -> &[u32] {
-        let start = self.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+        let start = self.mesh().nbr_offsets.get(index).copied().unwrap_or(0) as usize;
         let end = self
-            .mesh
+            .mesh()
             .nbr_offsets
             .get(index + 1)
             .copied()
             .unwrap_or(start as u32) as usize;
-        self.mesh.nbrs.get(start..end).unwrap_or(&[])
+        self.mesh().nbrs.get(start..end).unwrap_or(&[])
     }
 
     pub fn heights(&self) -> &[f32] {

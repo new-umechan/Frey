@@ -661,7 +661,7 @@ fn local_dynamic_forcing(
         return (0.0, 0.0);
     }
     let pos = world
-        .mesh
+        .mesh()
         .positions
         .get(index)
         .copied()
@@ -991,7 +991,7 @@ fn circulation_vertical_motion_proxy(
 
 fn local_wind_vector(world: &World, index: usize, wind_u: f32, wind_v: f32) -> [f32; 3] {
     let pos = world
-        .mesh
+        .mesh()
         .positions
         .get(index)
         .copied()
@@ -1199,31 +1199,31 @@ fn vegetation_density_proxy(world: &World, index: usize) -> f32 {
 fn build_neighbor_lookup(world: &World) -> NeighborLookup {
     let cell_count = world.state.geology.height.len();
     let mut offsets = Vec::with_capacity(cell_count + 1);
-    let mut entries = Vec::with_capacity(world.mesh.nbrs.len());
+    let mut entries = Vec::with_capacity(world.mesh().nbrs.len());
     offsets.push(0);
 
     for index in 0..cell_count {
         let pos = world
-            .mesh
+            .mesh()
             .positions
             .get(index)
             .copied()
             .unwrap_or([0.0, 0.0, 1.0]);
-        let start = world.mesh.nbr_offsets.get(index).copied().unwrap_or(0) as usize;
+        let start = world.mesh().nbr_offsets.get(index).copied().unwrap_or(0) as usize;
         let end = world
-            .mesh
+            .mesh()
             .nbr_offsets
             .get(index + 1)
             .copied()
             .unwrap_or(start as u32) as usize;
 
-        for &n_u32 in world.mesh.nbrs.get(start..end).unwrap_or(&[]) {
+        for &n_u32 in world.mesh().nbrs.get(start..end).unwrap_or(&[]) {
             let n = n_u32 as usize;
             if n >= cell_count {
                 continue;
             }
             let neighbor_pos = world
-                .mesh
+                .mesh()
                 .positions
                 .get(n)
                 .copied()

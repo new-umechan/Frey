@@ -14,8 +14,8 @@ use super::state::{
     Biome, ClimateState, CoastSide, ConflictState, DomesticatesInternal, DomesticatesState,
     EcologyInternal, EcologyState, GeologyState, GlaciologyState, HydrologyState, PolityState,
     PopulationState, SettlementState, SubsistenceMix, SubsistenceState, TerrainState, World,
-    WorldControlState, WorldMesh, WorldProjectionState, WorldRelations, WorldState, N_CROPS,
-    N_LIVESTOCK,
+    WorldControlState, WorldMesh, WorldMetadata, WorldProjectionState, WorldRelations, WorldState,
+    N_CROPS, N_LIVESTOCK,
 };
 
 impl World {
@@ -31,7 +31,7 @@ impl World {
         let era = EraKind::Crust;
         let default_geology_params = crate::GeologyParams::default();
         Self {
-            mesh,
+            metadata: WorldMetadata { mesh },
             state: WorldState {
                 geology,
                 climate: ClimateState {
@@ -139,7 +139,7 @@ impl World {
 
     pub fn refresh_terrain_state(&mut self) {
         self.projections.terrain = build_terrain_state(
-            &self.mesh,
+            self.mesh(),
             &self.state.geology.height,
             self.control.sea_level_offset,
         );

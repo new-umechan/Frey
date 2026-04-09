@@ -13,7 +13,7 @@ pub(super) fn build_erosion_state(
 ) -> ErosionAutomatonState {
     let cells = world.cell_store();
     let cell_count = cells.len();
-    let mesh = &world.mesh;
+    let mesh = world.mesh();
     ErosionAutomatonState {
         positions: mesh.positions.clone(),
         nbr_offsets: mesh.nbr_offsets.clone(),

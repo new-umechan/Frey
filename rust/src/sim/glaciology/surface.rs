@@ -17,8 +17,8 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     let heights = world.state.geology.height.clone();
     let temperatures = world.state.climate.temperature.clone();
     let precipitation = world.state.climate.precipitation.clone();
-    let nbr_offsets = world.mesh.nbr_offsets.clone();
-    let nbrs = world.mesh.nbrs.clone();
+    let nbr_offsets = world.mesh().nbr_offsets.clone();
+    let nbrs = world.mesh().nbrs.clone();
 
     let state = &mut world.state.glaciology;
     let mut total_ice = 0.0f32;
