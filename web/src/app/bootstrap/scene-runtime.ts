@@ -12,6 +12,7 @@ import { DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
 import { type GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+import { type CoreBuffers } from "../sim/sync/types";
 
 export interface CameraController {
     onResize: () => void;
@@ -30,6 +31,7 @@ export interface SceneRuntimeOptions {
     indices: Uint32Array;
     basePositions: Float32Array;
     getState: () => AppState;
+    getCurrentTerrainData: () => CoreBuffers | null;
 }
 
 export interface SceneRuntime {
@@ -50,6 +52,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         indices,
         basePositions,
         getState,
+        getCurrentTerrainData,
     } = options;
     const {
         canvas,
@@ -107,7 +110,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         climateLegend,
         getCurrentViewMode: () => getState().currentViewMode,
         getCurrentCellMetric: () => getState().currentCellMetric,
-        getCurrentTerrainData: () => getState().currentTerrainData,
+        getCurrentTerrainData,
     });
     const { syncClimateUi, updateClimateHoverReadout } = climateUiController;
 

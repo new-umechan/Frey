@@ -116,6 +116,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         indices,
         basePositions,
         getState: runtimeStore.getState,
+        getCurrentTerrainData: runtimeStore.getCurrentTerrainData,
     });
 
     const controllerRuntime = await createControllerRuntime(createControllerDeps({

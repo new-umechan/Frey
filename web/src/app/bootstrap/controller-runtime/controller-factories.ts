@@ -96,7 +96,7 @@ function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRe
         syncWorldFromController,
         refreshWorldStatsFromController,
         setCurrentTerrainData: (core: CoreBuffers) => {
-            context.store.setState({ currentTerrainData: core });
+            context.store.setCurrentTerrainData(core);
         },
         syncClimateUi: context.scene.syncClimateUi,
         hidePlateHover: () => {
@@ -209,7 +209,7 @@ function createPlaybackRuntime(
         worldState: context.store.worldState,
         engineClient: context.engineClient,
         getActiveWorldId: () => context.store.getState().activeWorldId,
-        getCurrentTerrainData: () => context.store.getState().currentTerrainData,
+        getCurrentTerrainData: context.store.getCurrentTerrainData,
         getWorldTick: () => context.store.world.tick,
         syncWorldFromActiveController,
         stepWorldTick,
@@ -234,7 +234,7 @@ function createPerfControllers(context: RuntimeContext, playbackControllerRef: P
         }),
         canRunBenchmark: () => {
             const state = context.store.getState();
-            return Boolean(state.activeWorldId && state.currentTerrainData);
+            return Boolean(state.activeWorldId && context.store.getCurrentTerrainData());
         },
         setPlaybackRunning: (nextPlaying: boolean) => {
             const wasPlaying = context.store.worldState.playback.isPlaying;
