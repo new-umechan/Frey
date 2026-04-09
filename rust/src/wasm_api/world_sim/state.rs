@@ -796,7 +796,12 @@ impl WorldArchive {
 
 #[cfg(test)]
 mod tests {
-    use super::{F32FieldTracker, I32FieldTracker, U32FieldTracker, WorldTransportCache};
+    use super::{
+        F32FieldTracker, I32FieldTracker, ManagedWorld, ManagedWorldExecState, U32FieldTracker,
+        WorldTransportCache,
+    };
+    use crate::sim::geology_types::{GeologyInternal, PlateId};
+    use crate::sim::world;
 
     #[test]
     fn f32_tracker_collects_delta_ranges_once() {
@@ -906,5 +911,41 @@ mod tests {
         assert_eq!(deltas.len(), 1);
         assert_eq!(deltas[0].field_kind, "ice_pressure");
         assert_eq!(deltas[0].mode, "full");
+    }
+
+    #[test]
+    fn snapshot_world_strips_projection_state() {
+        let geology = world::GeologyState {
+            height: vec![0.2],
+            lake_depth: vec![0.0],
+            plate_id: vec![PlateId(0)],
+            erosion_rate: vec![0.0],
+            deposition_rate: vec![0.0],
+            volcanism: vec![0.0],
+            vertex_buoyancy: vec![0.0],
+            geology_internal: vec![GeologyInternal::default()],
+            boundary_condition: vec![0.0],
+        };
+        let mesh = world::WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]],
+            nbr_offsets: vec![0, 0],
+            nbrs: vec![],
+        };
+        let sim_world = world::World::new(mesh, geology);
+        assert!(!sim_world.projections.is_empty());
+
+        let managed = ManagedWorld {
+            world: sim_world.clone(),
+            hydrology_dynamics: None,
+            geology_dynamics: None,
+            feedback: world::FeedbackQueue::new(sim_world.cell_count()),
+            simulation_rate: 1.0,
+            geology_params: crate::GeologyParams::default(),
+            transport_cache: WorldTransportCache::from_world(&sim_world, None),
+            exec_state: ManagedWorldExecState::default(),
+        };
+
+        let snapshot = managed.snapshot_world();
+        assert!(snapshot.world.projections.is_empty());
     }
 }
