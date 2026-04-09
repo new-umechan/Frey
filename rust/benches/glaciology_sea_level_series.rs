@@ -274,7 +274,7 @@ fn main() {
         sim::run_glaciology_step_for_bench(&mut sim_world, glaciology_budget);
         let step_ms = (started_at.elapsed().as_secs_f64() * 1000.0) as f32;
         step_ms_series.push(step_ms);
-        sea_level_series.push(sim_world.runtime.sea_level_offset);
+        sea_level_series.push(sim_world.control.sea_level_offset);
     }
 
     let step_median_ms = median(&step_ms_series).unwrap_or(f32::NAN);

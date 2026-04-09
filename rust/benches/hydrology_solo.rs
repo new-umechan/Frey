@@ -274,14 +274,7 @@ fn main() {
     sim_world.state.climate.runoff = hydro_input.runoff;
     sim_world.state.hydrology.river_flow = terrain.river_flux;
     sim_world.state.hydrology.river_next = terrain.river_next;
-    let erosion_state = sim::build_hydrology_state_for_bench(&sim_world, geology_params);
-    if let Err(error) = sim_world.attach_hydrology_dynamics(erosion_state) {
-        println!("=== Hydrology Solo Bench ===");
-        println!();
-        println!("-- Hydrology State: ERROR --");
-        println!("{}", error);
-        return;
-    }
+    let _erosion_state = sim::build_hydrology_state_for_bench(&sim_world, geology_params);
     let geology_budget = sim_world.clock.budgets.geology;
     let hydro_started_at = Instant::now();
     sim::run_hydrology_step_for_bench(&mut sim_world, geology_budget, true);
