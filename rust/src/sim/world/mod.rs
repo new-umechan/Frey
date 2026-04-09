@@ -25,8 +25,9 @@ pub use state::{
     CivilizationIndicators, CivilizationState, CivilizationStateMut, ClimateState, CoastSide,
     ConflictState, CropBitmap, DomesticatesInternal, DomesticatesState, EcologyInternal,
     EcologyState, GeologyDynamicsState, GeologyState, GeologyStepMetrics, GlaciologyState,
-    HydrologyState, LivestockBitmap, PlateKinematicsState, PolityComponent, PolityGroupId,
-    PolityId, PolityState, PopulationState, RegionComponent, RegionId, SettlementComponent,
+    HydrologyState, LivestockBitmap, PlateKinematicsState, PolityComponent, PolityGroupId, PolityId,
+    PolityState, PopulationState, RegionComponent, RegionId, SettlementComponent,
     SettlementId, SettlementState, SubsistenceMix, SubsistenceState, TerrainState,
-    VertexCrustState, World, WorldControlState, WorldMesh, WorldState, N_CROPS, N_LIVESTOCK,
+    VertexCrustState, World, WorldControlState, WorldCore, WorldMesh, WorldState, N_CROPS,
+    N_LIVESTOCK,
 };

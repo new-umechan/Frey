@@ -604,6 +604,15 @@ pub struct CivilizationStateMut<'a> {
 pub type EntityStore = EntityState;
 pub type RelationsStore = WorldRelations;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorldCore {
+    pub cells: WorldState,
+    pub entities: EntityStore,
+    pub relations: RelationsStore,
+    pub clock: ClockState,
+    pub control: WorldControlState,
+}
+
 pub struct WorldCoreView<'a> {
     pub cells: CellStore<'a>,
     pub entities: &'a EntityStore,
@@ -644,6 +653,25 @@ impl World {
             clock: &self.clock,
             control: &self.control,
         }
+    }
+
+    pub fn core_owned(&self) -> WorldCore {
+        WorldCore {
+            cells: self.state.clone(),
+            entities: self.entities.clone(),
+            relations: self.relations.clone(),
+            clock: self.clock.clone(),
+            control: self.control.clone(),
+        }
+    }
+
+    pub fn apply_core(&mut self, core: WorldCore) {
+        self.state = core.cells;
+        self.entities = core.entities;
+        self.relations = core.relations;
+        self.clock = core.clock;
+        self.control = core.control;
+        self.refresh_terrain_state();
     }
 
     pub fn entity_store(&self) -> &EntityStore {
