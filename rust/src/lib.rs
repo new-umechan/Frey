@@ -6,6 +6,7 @@ mod glaciology_params_defaults;
 pub mod sim;
 #[path = "generated/terrain_params_defaults.rs"]
 mod terrain_params_defaults;
+#[cfg(feature = "wasm_transport")]
 mod wasm_api;
 pub use sim::world;
 
@@ -14,7 +15,9 @@ pub use crate::sim::geology_types::{
     CrustType, GeologyInternal, GeologyOutput, GeologyParams, MeshOutput, PlateId, PlateRelation,
     StressTensor, SubductionPolarity,
 };
+#[cfg(feature = "wasm_transport")]
 pub use crate::wasm_api::world_sim::WorldSimController;
+#[cfg(feature = "wasm_transport")]
 use wasm_bindgen::prelude::*;
 
 pub fn generate_mesh_core(level: u32) -> Result<MeshOutput, String> {
@@ -25,6 +28,7 @@ pub fn generate_geology_core(seed: &str, geology_params: GeologyParams) -> Geolo
     sim::build_geology(seed, geology_params)
 }
 
+#[cfg(feature = "wasm_transport")]
 #[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
     let output = generate_mesh_core(level).map_err(|err| JsValue::from_str(&err))?;
@@ -32,6 +36,7 @@ pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
         .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
 }
 
+#[cfg(feature = "wasm_transport")]
 #[wasm_bindgen]
 pub fn generate_geology(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {
     let geology_params = if params_js.is_undefined() || params_js.is_null() {
@@ -46,6 +51,7 @@ pub fn generate_geology(seed: String, params_js: JsValue) -> Result<JsValue, JsV
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }
 
+#[cfg(feature = "wasm_transport")]
 #[wasm_bindgen]
 pub fn build_render_positions(input_js: JsValue) -> Result<JsValue, JsValue> {
     let positions = wasm_api::visuals::build_render_positions_from_js(input_js)

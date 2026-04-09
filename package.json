@@ -76,9 +76,9 @@
         "bench:resample:glaciology-ref": "python3 benches/scripts/resample.py --module glaciology-ref --centroids benches/data/cell_centroids.csv --output benches/data/glaciology_ref.bin",
         "bench:raw:prune:recoverable:dry-run": "bash benches/scripts/prune-recoverable-raw.sh",
         "bench:raw:prune:recoverable": "bash benches/scripts/prune-recoverable-raw.sh --apply",
-        "wasm:build": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --release",
-        "wasm:build:dev": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev",
-        "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev"
+        "wasm:build": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --release -- --features wasm_transport",
+        "wasm:build:dev": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev -- --features wasm_transport",
+        "wasm:build:dev:no-sync": "wasm-pack build rust --target web --out-dir ../generated/wasm/web --dev -- --features wasm_transport"
     },
     "dependencies": {
         "blessed": "^0.1.81",
