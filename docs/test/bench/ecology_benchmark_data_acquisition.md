@@ -276,4 +276,4 @@ benches/raw/ecology/soilgrids/
 
 1. `benches/scripts/resample.py` に `ecology-ref` モジュールを追加する
 2. MOD44B / MCD12Q1 / SoilGrids の raw から canonical ファイルを作る補助スクリプトを足す
-3. `rust/benches/ecology_solo.rs` を追加する
+3. `benches/rust/benches/ecology_solo.rs` を追加する

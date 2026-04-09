@@ -22,11 +22,7 @@ pnpm run bench -- --suite glaciology_solo
 
 # または cargo bench を直接実行
 # repo root から実行
-cargo bench --manifest-path rust/Cargo.toml --bench glaciology_solo
-
-# もしくは rust/ 配下で実行
-cd rust
-cargo bench --bench glaciology_solo
+cargo bench --manifest-path benches/rust/Cargo.toml --bench glaciology_solo
 ```
 
 ## 入力の準備
@@ -301,7 +297,7 @@ python benches/scripts/resample.py --module glaciology-ref \
 
 ## スコア保存フロー
 
-`cargo bench --manifest-path rust/Cargo.toml --bench glaciology_solo` 実行時に、
+`cargo bench --manifest-path benches/rust/Cargo.toml --bench glaciology_solo` 実行時に、
 補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
 - 保存先: `benches/results/glaciology_main_scores.jsonl`
