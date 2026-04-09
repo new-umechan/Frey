@@ -14,7 +14,7 @@ JSから利用する現行WASM公開APIを定義する。
 
 ## 2. WorldSimController API
 
-`WorldSimController`は世界インスタンスの初期化、逐次更新、観測、介入、分岐、履歴tick復元を提供する。
+`WorldSimController`は世界インスタンスの初期化、逐次更新、観測、履歴tick復元を提供する。
 
 ### 2.1 初期化と実行
 
@@ -57,10 +57,11 @@ JSから利用する現行WASM公開APIを定義する。
 `get_world_delta` の内部同期（`WorldSyncState`）:
 - `WorldSimController` は各 `world_id` ごとに `World` 本体とは別に `WorldSyncState` を保持し、差分返却専用のシャドウ状態として利用する。
 - 追跡対象フィールドは `height` / `river_flux` / `river_next` / `mantle_heat` / `temperature` / `precipitation`。
-- 差分は、`exec_world*` 実行後および `apply_intervention` 後の観測で更新される。`fork_world` / `restore_world_to_tick` では対象Worldの現在値から再初期化される。
+- 差分は `exec_world*` 実行後の観測で更新される。`restore_world_to_tick` では対象Worldの現在値から再初期化される。
 - `get_world_delta` は pending 差分を返す one-shot API で、同じ差分は次回以降に再返却されない。
 - `include_fields` 指定時、対象外フィールドの pending 差分は保持せず破棄される。
 - 変更セル率が閾値以上（現行実装では40%以上）の場合、当該フィールドは範囲差分ではなく `mode: "full"` で返す。
+- 疎な更新では `mode: "bitmap"` を返す。`dirty_bitmap` の立っているセル順に値配列が並ぶ。
 
 `MetricsResponse`:
 - `world_id: string`
@@ -88,16 +89,9 @@ JSから利用する現行WASM公開APIを定義する。
 - `continent_count: number`
 - `largest_continent_cells: number`
 
-### 2.3 介入と分岐
+### 2.3 履歴復元
 
-- `apply_intervention(world_id: string, op_batch: InterventionOp[]) -> { applied, rejected }`
-- `fork_world(world_id: string, tick: number) -> { source_world_id, world_id, tick }`
 - `restore_world_to_tick(world_id: string, tick: number) -> { world_id, tick }`
-
-`InterventionOp`:
-- `cell_id: number`
-- `field: "height" | "river_flux" | "river_next" | "plate_id"`
-- `value: number`
 
 ## 3. エラー方針
 
@@ -105,7 +99,7 @@ JSから利用する現行WASM公開APIを定義する。
 - `mesh_level > 8`はエラー。
 - `exec_world(world_id, 0)`はno-opで成功する。
 - `set_simulation_rate` の `rate` が非有限値（NaN/Inf）の場合はエラー。
-- `fork_world` / `restore_world_to_tick` の `tick` が不正（負値・非整数・未保存tick）の場合はエラー。
+- `restore_world_to_tick` の `tick` が不正（負値・非整数・未保存tick）の場合はエラー。
 
 ## 4. 互換性方針
 

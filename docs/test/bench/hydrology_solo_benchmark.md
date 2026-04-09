@@ -15,11 +15,7 @@ Hydrologyモジュール単体の評価が目的であり、Climateの誤差を�
 
 ```
 # repo root から実行
-cargo bench --manifest-path rust/Cargo.toml --bench hydrology_solo
-
-# もしくは rust/ 配下で実行
-cd rust
-cargo bench --bench hydrology_solo
+cargo bench --manifest-path benches/rust/Cargo.toml --bench hydrology_solo
 ```
 
 ## 入力の準備

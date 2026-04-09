@@ -19,11 +19,7 @@ pnpm run bench -- --suite climate_solo
 
 # または cargo bench を直接実行
 # repo root から実行
-cargo bench --manifest-path rust/Cargo.toml --bench climate_solo
-
-# もしくは rust/ 配下で実行
-cd rust
-cargo bench --bench climate_solo
+cargo bench --manifest-path benches/rust/Cargo.toml --bench climate_solo
 ```
 
 ### 入力の準備
@@ -152,7 +148,7 @@ struct ClimateRef {
 
 欠損値（海セル等）は `f32::NAN` で格納し、Spearman計算時にペアごとに除外する。
 
-キャッシュの物理バイナリ形式（`benches/scripts/resample.py` / `rust/benches/climate_solo.rs` 実装）：
+キャッシュの物理バイナリ形式（`benches/scripts/resample.py` / `benches/rust/benches/climate_solo.rs` 実装）：
 
 1. magic: `CLIMREF1`（8 bytes）
 2. version: `u32` little-endian（現行 `1`）

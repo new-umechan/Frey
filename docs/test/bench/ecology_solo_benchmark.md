@@ -16,11 +16,7 @@ Ecologyモジュール単体の評価が目的であり、ClimateとHydrologyの
 
 ```sh
 # repo root から実行
-cargo bench --manifest-path rust/Cargo.toml --bench ecology_solo
-
-# もしくは rust/ 配下で実行
-cd rust
-cargo bench --bench ecology_solo
+cargo bench --manifest-path benches/rust/Cargo.toml --bench ecology_solo
 ```
 
 ## 入力の準備
@@ -374,7 +370,7 @@ struct EcologyRef {
 
 ## `ecology_ref.bin` の物理バイナリ形式
 
-`benches/scripts/resample.py` / `rust/benches/ecology_solo.rs` 実装。
+`benches/scripts/resample.py` / `benches/rust/benches/ecology_solo.rs` 実装。
 
 1. magic: `ECOREF01`（8 bytes）
 2. version: `u32` little-endian（現行 `1`）

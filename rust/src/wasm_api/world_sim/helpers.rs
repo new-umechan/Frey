@@ -196,27 +196,3 @@ pub(super) fn sample_i32(values: &[i32], stride: u32) -> Vec<i32> {
         .copied()
         .collect()
 }
-
-pub(super) fn apply_f32(values: &mut [f32], index: usize, value: f32) -> bool {
-    if index >= values.len() || !value.is_finite() {
-        return false;
-    }
-    values[index] = value;
-    true
-}
-
-pub(super) fn apply_i32(values: &mut [i32], index: usize, value: i32) -> bool {
-    if index >= values.len() {
-        return false;
-    }
-    values[index] = value;
-    true
-}
-
-pub(super) fn apply_plate_id(values: &mut [PlateId], index: usize, value: PlateId) -> bool {
-    if index >= values.len() {
-        return false;
-    }
-    values[index] = value;
-    true
-}

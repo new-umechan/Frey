@@ -234,23 +234,6 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn fork_world_rejects_fractional_tick() {
-        let mut controller = WorldSimController::new();
-        let init = controller
-            .init_world_js("seed-fork".to_string(), 1, JsValue::NULL)
-            .expect("init world");
-        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
-        let world_id = init_data.world_id;
-
-        controller
-            .exec_world_js(world_id.clone(), 64)
-            .expect("step world");
-
-        let result = controller.fork_world_js(world_id, 32.5);
-        assert!(result.is_err(), "fractional tick must be rejected");
-    }
-
-    #[wasm_bindgen_test]
     fn long_exec_keeps_world_observable() {
         let mut controller = WorldSimController::new();
         let init = controller

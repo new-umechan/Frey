@@ -5,7 +5,6 @@ use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 use crate::sim::{first_phase, ExecWorldPhase};
 
-use super::types::InterventionOp;
 use super::types::{DeltaRange, FieldDeltaResponse};
 
 pub(super) const DEFAULT_HISTORY_LIMIT: usize = 512;
@@ -145,14 +144,6 @@ pub(super) struct WorldHistorySnapshot {
 #[derive(Clone)]
 pub(super) struct WorldArchive {
     pub history: BTreeMap<u64, WorldHistorySnapshot>,
-    pub intervention_log: Vec<InterventionLogEntry>,
-}
-
-#[allow(dead_code)]
-#[derive(Clone)]
-pub(super) struct InterventionLogEntry {
-    pub tick: u64,
-    pub ops: Vec<InterventionOp>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -917,7 +908,6 @@ impl WorldArchive {
     pub fn new() -> Self {
         Self {
             history: BTreeMap::new(),
-            intervention_log: Vec::new(),
         }
     }
 
@@ -944,15 +934,6 @@ impl WorldArchive {
         }
     }
 
-    pub fn append_intervention(&mut self, tick: u64, ops: &[InterventionOp]) {
-        if ops.is_empty() {
-            return;
-        }
-        self.intervention_log.push(InterventionLogEntry {
-            tick,
-            ops: ops.to_vec(),
-        });
-    }
 }
 
 #[cfg(test)]

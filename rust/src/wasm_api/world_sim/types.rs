@@ -18,22 +18,6 @@ pub(super) struct WorldDeltaQuery {
     pub include_fields: Option<Vec<String>>,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum InterventionField {
-    Height,
-    RiverFlux,
-    RiverNext,
-    PlateId,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub(super) struct InterventionOp {
-    pub cell_id: u32,
-    pub field: InterventionField,
-    pub value: f64,
-}
-
 #[derive(Serialize)]
 pub(super) struct InitWorldOutput {
     pub world_id: String,
@@ -104,20 +88,6 @@ pub(super) struct PlateStatsResponse {
     pub tick: f64,
     pub plate_count: u32,
     pub stats: Vec<PlateStat>,
-}
-
-#[derive(Serialize)]
-pub(super) struct InterventionResult {
-    pub world_id: String,
-    pub applied: u32,
-    pub rejected: u32,
-}
-
-#[derive(Serialize)]
-pub(super) struct ForkWorldResult {
-    pub source_world_id: String,
-    pub world_id: String,
-    pub tick: f64,
 }
 
 #[derive(Serialize)]
