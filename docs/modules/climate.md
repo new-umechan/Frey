@@ -214,8 +214,8 @@ aridity = PET / max(precip, eps)
 
 ## パラメータ管理
 
-気候パラメータは `config/climate.yaml` を正本とし、同期スクリプト
-`tools/sync/sync-climate-params.ts` で
+気候パラメータは `config/climate.yaml` を正本とし、
+`pnpm run config:sync` で
 `rust/src/generated/climate_params_defaults.rs` を再生成する。
 
 ## 地理固定場

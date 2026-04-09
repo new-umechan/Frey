@@ -97,8 +97,8 @@ glacial_erosion_rate = ice_thickness * local_relief * erosion_gain
 
 ## パラメータ管理
 
-氷河パラメータは `config/glaciology.yaml` を正本とし、同期スクリプト
-`tools/sync/sync-glaciology-params.ts` で
+氷河パラメータは `config/glaciology.yaml` を正本とし、
+`pnpm run config:sync` で
 `rust/src/generated/glaciology_params_defaults.rs` を再生成する。
 
 主パラメータ:
