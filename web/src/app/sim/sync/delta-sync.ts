@@ -25,7 +25,7 @@ interface FieldDelta {
 
 function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
-    const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
+    const values: ArrayLike<number> = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
     const canFastCopy =
         (target instanceof Float32Array || target instanceof Int32Array || target instanceof Uint32Array) &&
         (values instanceof Float32Array || values instanceof Int32Array || values instanceof Uint32Array);
@@ -40,7 +40,7 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
             return copyLength > 0;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as number[])[i] = (values as any)[i];
+            target[i] = Number(values[i] ?? 0);
         }
         return copyLength > 0;
     }
@@ -53,7 +53,7 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
             continue;
         }
         const rangeLength = end - start;
-        const copyLength = Math.max(0, Math.min(rangeLength, (values as any).length - offset));
+        const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
         if (canFastCopy && copyLength > 0) {
             (target as TypedArray).set(
                 (values as TypedArray).subarray(offset, offset + copyLength),
@@ -63,7 +63,7 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
             continue;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as number[])[start + i] = (values as any)[offset + i];
+            target[start + i] = Number(values[offset + i] ?? 0);
         }
         offset += rangeLength;
     }

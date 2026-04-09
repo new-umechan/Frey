@@ -11,6 +11,7 @@ import {
 } from "./helpers";
 import { applyWorldDeltaToCore, estimateRiverMaskUpdate, type WorldChangeset, type CoreBuffers } from "./world-core";
 import { type WorldSimController } from "../../interface/wasm";
+import { type PerfProfile } from "./recorder";
 
 export interface PerfRunnerDeps {
     WorldSimController: new () => WorldSimController;
@@ -21,6 +22,34 @@ export interface PerfRunnerDeps {
     }) => void;
     generate_mesh: (level: number) => { positions: number[] | Float32Array };
     nowMs?: () => number;
+}
+
+interface PerfRunnerOptions {
+    runId?: string;
+    profile?: PerfProfile;
+    level?: number;
+    terrainParams?: Record<string, unknown>;
+    sampleInterval?: number;
+    profileEveryTick?: boolean;
+    skipGeometry?: boolean;
+    geometryUpdateMinChangedRatio?: number;
+    meta?: {
+        user_agent?: string;
+        timezone?: string;
+    };
+    onProgress?: (payload: {
+        runId: string;
+        done: number;
+        total: number;
+        percent: number;
+        status: string;
+    }) => void;
+    onWarning?: (message: string) => void;
+}
+
+interface ProfiledExecApi {
+    exec_world_profiled_detail?: (worldId: string, tickCount: number) => Record<string, unknown>;
+    exec_world_profiled: (worldId: string, tickCount: number) => Record<string, unknown>;
 }
 
 export function createPerfRunner(deps: PerfRunnerDeps) {
@@ -41,7 +70,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
         throw new Error("generate_mesh is required");
     }
 
-    async function runBenchmark(options: any = {}) {
+    async function runBenchmark(options: PerfRunnerOptions = {}) {
         const {
             runId = "bench",
             profile = {},
@@ -67,7 +96,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
             }
         };
 
-        const postProgress = (payload: any = {}) => {
+        const postProgress = (payload: Partial<{ done: number; total: number; percent: number; status: string }> = {}) => {
             if (typeof onProgress !== "function") {
                 return;
             }
@@ -122,9 +151,11 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
             if (shouldSampleBreakdown) {
                 diagnostics.profile_attempt_count += 1;
                 try {
-                    const profiled = (controller as any).exec_world_profiled_detail
-                        ? (controller as any).exec_world_profiled_detail(worldId, 1)
-                        : (controller as any).exec_world_profiled(worldId, 1);
+                    const profiledApi = controller as unknown as ProfiledExecApi;
+                    const profileFn = typeof profiledApi.exec_world_profiled_detail === "function"
+                        ? profiledApi.exec_world_profiled_detail
+                        : profiledApi.exec_world_profiled;
+                    const profiled = profileFn(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
                     recordProfiledStepSuccess(diagnostics, profiled);

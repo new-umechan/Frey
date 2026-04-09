@@ -5,6 +5,8 @@ import { createSceneRuntime, type SceneRuntime } from "./scene-runtime";
 import { createControllerRuntime, type ControllerDeps } from "./controller-runtime/create-controller-runtime";
 import { renderInitializationFrames } from "./initialization-frames";
 import { type AppElements } from "../../components/dom";
+import { type AppState } from "../state/app-state";
+import { type PlaybackController } from "../playback/playback-controller";
 
 function createControllerDeps(options: {
     elements: AppElements;
@@ -34,8 +36,19 @@ function createControllerDeps(options: {
 interface BindRuntimeUiOptions {
     elements: AppElements;
     sceneRuntime: SceneRuntime;
-    controllerRuntime: any;
-    getState: () => any;
+    controllerRuntime: {
+        perfUiEnabled: boolean;
+        setDebugModeEnabled: (enabled: boolean) => void;
+        setEraScale: (era: string) => void;
+        setViewMode: (mode: string) => void;
+        setCellMetric: (metric: string) => void;
+        setSurfaceModeWithPinchReset: (mode: string) => void;
+        playbackController: PlaybackController;
+        runPerf: () => Promise<void>;
+        copyPerfResult: () => Promise<void>;
+        updateTerrain: (seed: string) => Promise<void>;
+    };
+    getState: () => AppState;
     setStatus: (msg: string) => void;
 }
 

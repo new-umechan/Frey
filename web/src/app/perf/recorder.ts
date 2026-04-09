@@ -54,6 +54,21 @@ export interface TickPerfRecorder {
     buildSummary: () => Record<string, MetricStats>;
 }
 
+export interface PerfProfile {
+    label?: string;
+    tickCount?: number;
+    seed?: string;
+    surfaceMode?: string;
+    viewMode?: string;
+    cellMetric?: string;
+    [key: string]: unknown;
+}
+
+export interface PerfResult {
+    metrics?: Record<string, MetricStats>;
+    [key: string]: unknown;
+}
+
 export function createTickPerfRecorder(): TickPerfRecorder {
     const sampleBuckets = new Map<string, number[]>();
 
@@ -84,7 +99,7 @@ export function createTickPerfRecorder(): TickPerfRecorder {
     };
 }
 
-export function createPerfProfile(overrides = {}) {
+export function createPerfProfile(overrides: Partial<PerfProfile> = {}): PerfProfile {
     return {
         label: PERF_LABEL,
         tickCount: 32,
@@ -95,11 +110,20 @@ export function createPerfProfile(overrides = {}) {
     };
 }
 
-export function createPerfConsoleTable(result: any) {
+export function createPerfConsoleTable(result: PerfResult): Array<{
+    metric: string;
+    count: number;
+    mean_ms: number;
+    p50_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+    min_ms: number;
+    max_ms: number;
+}> {
     if (!result?.metrics) {
         return [];
     }
-    return Object.entries(result.metrics).map(([name, stats]: [string, any]) => ({
+    return Object.entries(result.metrics).map(([name, stats]) => ({
         metric: name,
         count: stats.count,
         mean_ms: stats.mean,
@@ -111,7 +135,7 @@ export function createPerfConsoleTable(result: any) {
     }));
 }
 
-export function formatPerfSummaryLine(result: any) {
+export function formatPerfSummaryLine(result: PerfResult): string {
     if (!result?.metrics?.tick_total) {
         return "No performance data.";
     }

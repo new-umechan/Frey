@@ -1,6 +1,8 @@
 import { getCellMetricMeta } from "../visualizers/cell-metric";
+import { type ClimateLegendElements } from "../../components/dom";
+import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
 
-function computeLegendStats(values: number[] | null) {
+function computeLegendStats(values: ArrayLike<number> | null) {
     if (!values || values.length === 0) {
         return null;
     }
@@ -26,7 +28,14 @@ function computeLegendStats(values: number[] | null) {
     };
 }
 
-export function createClimateUiController(options: any = {}) {
+interface ClimateUiControllerOptions {
+    climateLegend: ClimateLegendElements | null;
+    getCurrentViewMode: () => string;
+    getCurrentCellMetric: () => string;
+    getCurrentTerrainData: () => CoreBuffers | null;
+}
+
+export function createClimateUiController(options: ClimateUiControllerOptions) {
     const {
         climateLegend,
         getCurrentViewMode,
@@ -59,7 +68,8 @@ export function createClimateUiController(options: any = {}) {
         }
 
         const meta = getCellMetricMeta(currentCellMetric);
-        const stats = computeLegendStats(currentTerrainData?.[meta.dataKey]);
+        const metricValues = currentTerrainData?.[meta.dataKey] as TypedArray | undefined;
+        const stats = computeLegendStats(metricValues ?? null);
         climateLegend.panel.dataset.metric = currentCellMetric;
         climateLegend.title.textContent = `${meta.label} (${meta.unit})`;
         climateLegend.min.textContent = stats ? meta.formatter(stats.min) : "-";

@@ -1,11 +1,18 @@
 import * as THREE from "three";
 import { type TickPerfRecorder } from "../perf/recorder";
-import { type CoreBuffers } from "../sim/sync/types";
+import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
 import { type WorldChangeset } from "../sim/sync/constants";
+
+interface TerrainMaterialController {
+    setRiverMaskTexture: (texture: THREE.Texture) => void;
+    setViewMode: (mode: string) => void;
+    setDebugEnabled: (enabled: boolean) => void;
+    setCellMetric: (metric: string) => void;
+}
 
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;
-    terrainMaterial: any; // TODO: improve this type if possible, likely a custom ShaderMaterial
+    terrainMaterial: TerrainMaterialController;
     basePositions: Float32Array;
     buildRenderPositions: (base: Float32Array, height: Float32Array, mode: string) => Float32Array;
     buildRiverMaskTexture: (base: Float32Array, next: Int32Array, flux: Float32Array) => THREE.Texture;
@@ -51,12 +58,12 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     let lastSurfaceMode: string | null = null;
     let lastNormalRefreshTick = -1;
 
-    const CORE_ATTRIBUTE_MAP: Record<string, string[]> = {
+    const CORE_ATTRIBUTE_MAP: Partial<Record<keyof WorldChangeset, string[]>> = {
         height: ["terrainHeight", "terrainLakeDepth"],
         metric: ["terrainMetric"],
     };
 
-    function resolveMetricArray(currentTerrainData: CoreBuffers, metricKey: string): Float32Array | Int32Array | Uint32Array {
+    function resolveMetricArray(currentTerrainData: CoreBuffers, metricKey: string): TypedArray {
         switch (metricKey) {
         case "mantle_heat":
             return currentTerrainData.mantleHeat as Float32Array;
@@ -95,12 +102,12 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         if (!metricBuffer || metricBuffer.length !== source.length) {
             metricBuffer = new Float32Array(source.length);
         }
-        metricBuffer.set(source as any); // Use any for set to handle TypedArray types
+        metricBuffer.set(source as ArrayLike<number>);
         const metricAttr = ensureAttribute("terrainMetric", metricBuffer, 1);
         metricAttr.needsUpdate = true;
     }
 
-    function ensureAttribute(name: string, array: any, itemSize: number): THREE.BufferAttribute {
+    function ensureAttribute(name: string, array: ArrayLike<number>, itemSize: number): THREE.BufferAttribute {
         const current = geometry.getAttribute(name);
         if (current?.array === array) {
             return current as THREE.BufferAttribute;
@@ -136,8 +143,8 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     }
 
     function markTerrainChanges(changes: WorldChangeset) {
-        for (const [changeKey, attributeNames] of Object.entries(CORE_ATTRIBUTE_MAP)) {
-            if (!(changes as any)[changeKey]) {
+        for (const [changeKey, attributeNames] of Object.entries(CORE_ATTRIBUTE_MAP) as [keyof WorldChangeset, string[]][]) {
+            if (!changes[changeKey]) {
                 continue;
             }
             for (const attributeName of attributeNames) {

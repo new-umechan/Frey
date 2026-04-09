@@ -1,5 +1,6 @@
 import { buildCoreBuffers, type CoreBuffers } from "./world-core";
 import { type WorldSimController } from "../../interface/wasm";
+import { type PerfProfile } from "./recorder";
 
 export interface ControllerState {
     controller: WorldSimController;
@@ -9,9 +10,9 @@ export interface ControllerState {
 
 export function createControllerState(
     WorldSimControllerConstructor: new () => WorldSimController,
-    profile: any,
+    profile: PerfProfile,
     level: number,
-    terrainParams: any
+    terrainParams: Record<string, unknown>
 ): ControllerState {
     const controller = new WorldSimControllerConstructor();
     const initResult = controller.init_world(profile.seed ?? "alpha", level, {
@@ -30,9 +31,9 @@ export function createControllerState(
 
 export function rebuildControllerState(
     WorldSimControllerConstructor: new () => WorldSimController,
-    profile: any,
+    profile: PerfProfile,
     level: number,
-    terrainParams: any,
+    terrainParams: Record<string, unknown>,
     completedTicks: number,
     deltaFieldKinds: string[]
 ): ControllerState {

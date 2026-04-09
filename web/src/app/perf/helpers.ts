@@ -4,6 +4,15 @@ import {
     RIVER_BREAKDOWN_METRIC_NAMES,
     STEP_BREAKDOWN_METRIC_NAMES,
 } from "./constants";
+import { type PerfProfile } from "./recorder";
+
+interface PerfSampleRecorder {
+    pushSample: (name: string, valueMs: number) => void;
+}
+
+type ProfiledResult = Record<string, unknown> & {
+    steps?: number;
+};
 
 export function defaultNowMs(): number {
     if (globalThis.performance && typeof globalThis.performance.now === "function") {
@@ -26,14 +35,14 @@ export function roundRatio(value: number): number {
     return Math.round(value * 1000000) / 1000000;
 }
 
-export function formatError(error: any): string {
+export function formatError(error: unknown): string {
     if (error instanceof Error) {
         return `${error.name}: ${error.message}`;
     }
     return String(error);
 }
 
-export function getDeltaFieldKindsForProfile(profile: any): string[] {
+export function getDeltaFieldKindsForProfile(profile: PerfProfile): string[] {
     if (profile?.viewMode === "metric") {
         const metricField = FIELD_KIND_BY_CELL_METRIC[profile?.cellMetric] ?? "height";
         return ["height", "river_flux", "river_next", metricField];
@@ -41,7 +50,7 @@ export function getDeltaFieldKindsForProfile(profile: any): string[] {
     return DELTA_FIELD_KIND_BY_VIEW[profile?.viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }
 
-export function pushStepBreakdownSamples(recorder: any, profiledResult: any): void {
+export function pushStepBreakdownSamples(recorder: PerfSampleRecorder, profiledResult: ProfiledResult): void {
     if (!profiledResult) {
         return;
     }
@@ -60,24 +69,24 @@ export function pushStepBreakdownSamples(recorder: any, profiledResult: any): vo
     };
     for (const metricName of STEP_BREAKDOWN_METRIC_NAMES) {
         const rawFieldName = rawMetricByName[metricName] ?? `${metricName}_ms`;
-        const rawValue = (profiledResult as any)[rawFieldName];
+        const rawValue = profiledResult[rawFieldName];
         if (!Number.isFinite(rawValue)) {
             continue;
         }
-        recorder.pushSample(metricName, rawValue / steps);
+        recorder.pushSample(metricName, Number(rawValue) / steps);
     }
 }
 
-export function pushRiverBreakdownSamples(recorder: any, profiledResult: any): void {
+export function pushRiverBreakdownSamples(recorder: PerfSampleRecorder, profiledResult: ProfiledResult): void {
     if (!profiledResult) {
         return;
     }
     const steps = Math.max(1, Math.floor(profiledResult.steps ?? 1));
     for (const metricName of RIVER_BREAKDOWN_METRIC_NAMES) {
-        const rawValue = (profiledResult as any)[`${metricName}_ms`];
+        const rawValue = profiledResult[`${metricName}_ms`];
         if (!Number.isFinite(rawValue)) {
             continue;
         }
-        recorder.pushSample(metricName, rawValue / steps);
+        recorder.pushSample(metricName, Number(rawValue) / steps);
     }
 }

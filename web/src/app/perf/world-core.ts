@@ -31,6 +31,12 @@ interface FieldDelta {
     u32_data?: Uint32Array;
 }
 
+interface FieldResponse {
+    f32_data?: Float32Array;
+    i32_data?: Int32Array;
+    u32_data?: Uint32Array;
+}
+
 function createFallbackFieldData(fieldKind: string, fallbackCellCount: number): TypedArray {
     const count = Math.max(0, Math.floor(fallbackCellCount || 0));
     if (FLOAT32_FIELDS.has(fieldKind)) {
@@ -43,9 +49,9 @@ function createFallbackFieldData(fieldKind: string, fallbackCellCount: number): 
 }
 
 function getFieldData(controller: WorldSimController, worldId: string, fieldKind: string, fallbackCellCount = 0): TypedArray {
-    let response: any = null;
+    let response: FieldResponse | null = null;
     try {
-        response = controller.get_field(worldId, fieldKind, 1);
+        response = controller.get_field(worldId, fieldKind, 1) as FieldResponse;
     } catch (error) {
         if (OPTIONAL_FIELD_KINDS.has(fieldKind)) {
             return createFallbackFieldData(fieldKind, fallbackCellCount);
@@ -107,7 +113,7 @@ export function buildCoreBuffers(controller: WorldSimController, worldId: string
 
 function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];
-    const values = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
+    const values: ArrayLike<number> = fieldDelta?.f32_data ?? fieldDelta?.i32_data ?? fieldDelta?.u32_data ?? [];
     const canFastCopy =
         (target instanceof Float32Array || target instanceof Int32Array || target instanceof Uint32Array) &&
         (values instanceof Float32Array || values instanceof Int32Array || values instanceof Uint32Array);
@@ -119,7 +125,7 @@ function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean 
             return copyLength > 0;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as any)[i] = (values as any)[i];
+            target[i] = Number(values[i] ?? 0);
         }
         return copyLength > 0;
     }
@@ -132,14 +138,14 @@ function applyNumericDelta(target: TypedArray, fieldDelta: FieldDelta): boolean 
             continue;
         }
         const rangeLength = end - start;
-        const copyLength = Math.max(0, Math.min(rangeLength, (values as any).length - offset));
+        const copyLength = Math.max(0, Math.min(rangeLength, values.length - offset));
         if (canFastCopy && copyLength > 0) {
             (target as TypedArray).set((values as TypedArray).subarray(offset, offset + copyLength), start);
             offset += rangeLength;
             continue;
         }
         for (let i = 0; i < copyLength; i += 1) {
-            (target as any)[start + i] = (values as any)[offset + i];
+            target[start + i] = Number(values[offset + i] ?? 0);
         }
         offset += rangeLength;
     }
@@ -244,11 +250,12 @@ export function applyWorldDeltaToCore(core: CoreBuffers, worldDelta: { deltas?: 
 export function estimateRiverMaskUpdate(riverNext: TypedArray, riverFlux: TypedArray): number {
     let activeSegments = 0;
     for (let i = 0; i < riverNext.length; i += 1) {
-        const next = (riverNext as any)[i];
+        const next = Number(riverNext[i] ?? -1);
         if (next < 0 || next >= riverNext.length) {
             continue;
         }
-        if (Number.isFinite((riverFlux as any)[i]) && (riverFlux as any)[i] > 0) {
+        const flux = Number(riverFlux[i] ?? 0);
+        if (Number.isFinite(flux) && flux > 0) {
             activeSegments += 1;
         }
     }

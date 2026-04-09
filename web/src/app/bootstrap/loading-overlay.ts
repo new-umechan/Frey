@@ -1,6 +1,14 @@
 import * as THREE from "three";
 
-export function createLoadingOverlayController(options: any = {}) {
+interface LoadingOverlayOptions {
+    loadingOverlayCanvas: HTMLCanvasElement;
+    viewportPanel: HTMLElement;
+    sphere: THREE.Mesh;
+    getCamera: () => THREE.Camera;
+    circleColor?: string;
+}
+
+export function createLoadingOverlayController(options: LoadingOverlayOptions) {
     const {
         loadingOverlayCanvas,
         viewportPanel,

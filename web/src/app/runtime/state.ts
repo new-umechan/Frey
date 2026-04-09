@@ -78,9 +78,9 @@ export function createEmptyCore(): CoreBuffers | null {
 }
 
 export interface WorldLayers {
-    [LAYER_KIND.CLIMATE]: any; // TODO: define climate layer type
-    [LAYER_KIND.ECOLOGY]: any; // TODO: define ecology layer type
-    [LAYER_KIND.CIVILIZATION]: any; // TODO: define civilization layer type
+    [LAYER_KIND.CLIMATE]: unknown; // TODO: define climate layer type
+    [LAYER_KIND.ECOLOGY]: unknown; // TODO: define ecology layer type
+    [LAYER_KIND.CIVILIZATION]: unknown; // TODO: define civilization layer type
 }
 
 export function createEmptyLayers(): WorldLayers {
@@ -111,11 +111,11 @@ export interface RuntimeState {
     sliceRequestInFlight: boolean;
     slicePhase: string;
     maxRiverStepsPerFrame: number;
-    erosionAutomatonState: any | null; // TODO: define automaton state type
+    erosionAutomatonState: unknown | null; // TODO: define automaton state type
     pendingRiverSteps: number;
     terrainErosionDirty: boolean;
     terrainCoreDirty: boolean;
-    terrainDynamics: any | null; // TODO: define dynamics type
+    terrainDynamics: unknown | null; // TODO: define dynamics type
     execModules: ExecModuleDocRecordState[];
     execModuleGraph: ExecModuleGraphState | null;
     latestActivity: Record<WorldSubsystemKey, number>;

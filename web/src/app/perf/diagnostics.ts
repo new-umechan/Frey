@@ -19,6 +19,8 @@ export interface Diagnostics {
     sink_rebuild_fallback_full_count_total: number;
 }
 
+type ProfiledResult = Record<string, unknown>;
+
 export function createDiagnostics(): Diagnostics {
     return {
         profile_attempt_count: 0,
@@ -40,7 +42,7 @@ export function createDiagnostics(): Diagnostics {
     };
 }
 
-function accumulateProfiledDiagnostics(diagnostics: Diagnostics, profiled: any) {
+function accumulateProfiledDiagnostics(diagnostics: Diagnostics, profiled: ProfiledResult) {
     diagnostics.step_geology_river_time_ms_total += Number(profiled?.exec_hydrology_ms) || 0;
     diagnostics.river_network_rebuild_count_total += Math.max(
         0,
@@ -68,7 +70,7 @@ function accumulateProfiledDiagnostics(diagnostics: Diagnostics, profiled: any) 
     );
 }
 
-export function recordProfiledStepSuccess(diagnostics: Diagnostics, profiled: any) {
+export function recordProfiledStepSuccess(diagnostics: Diagnostics, profiled: ProfiledResult) {
     accumulateProfiledDiagnostics(diagnostics, profiled);
     diagnostics.profile_success_count += 1;
 }

@@ -43,17 +43,27 @@ export function createEraMetrics(key = DEFAULT_ERA_SCALE): EraMetrics {
     };
 }
 
-export function buildEraMetricsFromRuntime(era: string, metrics: any): EraMetrics {
+export function buildEraMetricsFromRuntime(era: string, metrics: unknown): EraMetrics {
+    const runtimeMetrics = metrics as {
+        real_years_per_tick?: number;
+        runtime_tick_ms?: number;
+        budgets?: {
+            geology?: number;
+            climate?: number;
+            ecology?: number;
+            civilization?: number;
+        };
+    } | null;
     const fallback = createEraMetrics(era);
     return {
         key: Object.hasOwn(ERA_SCALE_PRESETS, era) ? era : DEFAULT_ERA_SCALE,
-        tickLabel: formatRealYearsPerTick(Number(metrics?.real_years_per_tick) || 0),
-        runtimeTickMs: Number(metrics?.runtime_tick_ms) || fallback.runtimeTickMs,
+        tickLabel: formatRealYearsPerTick(Number(runtimeMetrics?.real_years_per_tick) || 0),
+        runtimeTickMs: Number(runtimeMetrics?.runtime_tick_ms) || fallback.runtimeTickMs,
         budgets: {
-            geology: Number(metrics?.budgets?.geology) || 0,
-            climate: Number(metrics?.budgets?.climate) || 0,
-            ecology: Number(metrics?.budgets?.ecology) || 0,
-            civilization: Number(metrics?.budgets?.civilization) || 0,
+            geology: Number(runtimeMetrics?.budgets?.geology) || 0,
+            climate: Number(runtimeMetrics?.budgets?.climate) || 0,
+            ecology: Number(runtimeMetrics?.budgets?.ecology) || 0,
+            civilization: Number(runtimeMetrics?.budgets?.civilization) || 0,
         },
     };
 }

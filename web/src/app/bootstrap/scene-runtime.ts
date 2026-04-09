@@ -13,10 +13,11 @@ import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
 import { type GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
 import { type CoreBuffers } from "../sim/sync/types";
+import { type Camera } from "three";
 
 export interface CameraController {
     onResize: () => void;
-    getCamera: () => any;
+    getCamera: () => Camera;
     getActiveControls: () => { update: () => void };
     setSurfaceMode: (nextMode: string) => void;
     getSurfaceMode: () => string;

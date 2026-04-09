@@ -2,6 +2,12 @@ import { type EngineClient } from "../../engine/engine-client";
 import { FLOAT32_FIELDS, OPTIONAL_FIELD_KINDS, type FieldKind } from "./constants";
 import { type CoreBuffers, type TypedArray } from "./types";
 
+interface FieldResponse {
+    f32_data?: Float32Array;
+    i32_data?: Int32Array;
+    u32_data?: Uint32Array;
+}
+
 function createFieldData(fieldKind: FieldKind, cellCount: number): TypedArray {
     const count = Math.max(0, Math.floor(cellCount || 0));
     if (FLOAT32_FIELDS.has(fieldKind)) {
@@ -19,9 +25,9 @@ async function getFieldData(
     fieldKind: FieldKind,
     fallbackCellCount = 0
 ): Promise<TypedArray> {
-    let response: any = null;
+    let response: FieldResponse | null = null;
     try {
-        response = await controller.get_field(worldId, fieldKind, 1);
+        response = await controller.get_field(worldId, fieldKind, 1) as FieldResponse;
     } catch (error) {
         if (OPTIONAL_FIELD_KINDS.has(fieldKind)) {
             return createFieldData(fieldKind, fallbackCellCount);
