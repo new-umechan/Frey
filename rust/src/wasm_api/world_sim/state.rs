@@ -731,6 +731,7 @@ impl ManagedWorld {
     pub fn snapshot_world(&self) -> WorldHistorySnapshot {
         let mut snapshot_world = self.world.clone();
         snapshot_world.clear_projections();
+        snapshot_world.clear_runtime_scratch();
         WorldHistorySnapshot {
             world: snapshot_world,
             hydrology_dynamics: self.hydrology_dynamics.clone(),
@@ -947,5 +948,6 @@ mod tests {
 
         let snapshot = managed.snapshot_world();
         assert!(snapshot.world.projections.is_empty());
+        assert!(snapshot.world.exec_scratch.is_empty());
     }
 }

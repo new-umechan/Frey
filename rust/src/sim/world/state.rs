@@ -21,7 +21,11 @@ pub struct World {
     pub entities: EntityStore,
     pub clock: ClockState,
     pub control: WorldControlState,
-    #[serde(alias = "runtime", default)]
+    #[serde(
+        alias = "runtime",
+        default,
+        skip_serializing_if = "ExecScratchState::is_empty"
+    )]
     pub exec_scratch: ExecScratchState,
     #[serde(default, flatten)]
     pub relations: WorldRelations,
@@ -626,6 +630,10 @@ impl World {
 
     pub fn clear_projections(&mut self) {
         self.projections = WorldProjectionState::default();
+    }
+
+    pub fn clear_runtime_scratch(&mut self) {
+        self.exec_scratch = ExecScratchState::default();
     }
 
     pub fn core_view(&self) -> WorldCoreView<'_> {

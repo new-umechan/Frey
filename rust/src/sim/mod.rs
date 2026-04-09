@@ -46,7 +46,7 @@ pub(crate) struct ErosionAutomatonBreakdown {
     pub sink_rebuild_fallback_full_count: u32,
 }
 
-pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
+pub fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     if level > 8 {
         return Err("level must be between 0 and 8".to_string());
     }
@@ -59,7 +59,7 @@ pub(crate) fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     })
 }
 
-pub(crate) fn build_geology(seed: &str, geology_params: GeologyParams) -> GeologyOutput {
+pub fn build_geology(seed: &str, geology_params: GeologyParams) -> GeologyOutput {
     geology::generate(seed, geology_params)
 }
 

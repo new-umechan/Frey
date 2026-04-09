@@ -22,6 +22,12 @@ pub struct ExecScratchState {
     pub geology_dynamics: Option<GeologyDynamicsState>,
 }
 
+impl ExecScratchState {
+    pub fn is_empty(&self) -> bool {
+        self.geology_dynamics.is_none()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SubsystemBudgets {
     pub geology: u32,

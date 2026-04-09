@@ -17,9 +17,17 @@ pub use crate::sim::geology_types::{
 pub use crate::wasm_api::world_sim::WorldSimController;
 use wasm_bindgen::prelude::*;
 
+pub fn generate_mesh_core(level: u32) -> Result<MeshOutput, String> {
+    sim::build_mesh(level)
+}
+
+pub fn generate_geology_core(seed: &str, geology_params: GeologyParams) -> GeologyOutput {
+    sim::build_geology(seed, geology_params)
+}
+
 #[wasm_bindgen]
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
-    let output = sim::build_mesh(level).map_err(|err| JsValue::from_str(&err))?;
+    let output = generate_mesh_core(level).map_err(|err| JsValue::from_str(&err))?;
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
 }
@@ -33,7 +41,7 @@ pub fn generate_geology(seed: String, params_js: JsValue) -> Result<JsValue, JsV
             .map_err(|err| JsValue::from_str(&format!("invalid terrain params: {err}")))?
     };
 
-    let output = sim::build_geology(&seed, geology_params);
+    let output = generate_geology_core(&seed, geology_params);
     serde_wasm_bindgen::to_value(&output)
         .map_err(|err| JsValue::from_str(&format!("failed to serialize terrain output: {err}")))
 }
