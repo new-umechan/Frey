@@ -16,7 +16,7 @@ pub struct World {
     #[serde(flatten)]
     pub metadata: WorldMetadata,
     pub state: WorldState,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "WorldProjectionState::is_empty")]
     pub projections: WorldProjectionState,
     pub entities: EntityStore,
     pub clock: ClockState,
@@ -339,6 +339,15 @@ pub struct WorldProjectionState {
     pub terrain: TerrainState,
 }
 
+impl WorldProjectionState {
+    pub fn is_empty(&self) -> bool {
+        self.terrain.latitude.is_empty()
+            && self.terrain.distance_from_ocean.is_empty()
+            && self.terrain.coast_side.is_empty()
+            && self.terrain.is_coastal.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TerrainState {
     #[serde(alias = "latitude_deg")]
@@ -613,6 +622,10 @@ impl World {
 
     pub fn mesh_mut(&mut self) -> &mut WorldMesh {
         &mut self.metadata.mesh
+    }
+
+    pub fn clear_projections(&mut self) {
+        self.projections = WorldProjectionState::default();
     }
 
     pub fn core_view(&self) -> WorldCoreView<'_> {

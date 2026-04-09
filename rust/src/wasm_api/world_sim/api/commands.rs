@@ -23,6 +23,7 @@ fn apply_intervention_batch(managed: &mut ManagedWorld, ops: &[InterventionOp]) 
     let mut applied = 0u32;
     let mut rejected = 0u32;
     let mut river_next_updated = false;
+    let mut terrain_projection_updated = false;
 
     for op in ops {
         let idx = op.cell_id as usize;
@@ -55,6 +56,9 @@ fn apply_intervention_batch(managed: &mut ManagedWorld, ops: &[InterventionOp]) 
             }
         };
         if ok {
+            if matches!(op.field, InterventionField::Height) {
+                terrain_projection_updated = true;
+            }
             if matches!(op.field, InterventionField::RiverNext) {
                 river_next_updated = true;
             }
@@ -66,6 +70,9 @@ fn apply_intervention_batch(managed: &mut ManagedWorld, ops: &[InterventionOp]) 
 
     if river_next_updated {
         rebuild_mfd_from_primary(&mut managed.world.state.hydrology);
+    }
+    if terrain_projection_updated {
+        managed.world.refresh_terrain_state();
     }
 
     (applied, rejected)
@@ -84,6 +91,7 @@ fn replay_world_to_tick(
         .ok_or_else(|| history_tick_not_available_error(target_tick))?;
 
     managed.world = checkpoint.world;
+    managed.world.refresh_terrain_state();
     managed.hydrology_dynamics = checkpoint.hydrology_dynamics;
     managed.geology_dynamics = checkpoint.geology_dynamics;
     if managed.hydrology_dynamics.is_none() {

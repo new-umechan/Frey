@@ -729,8 +729,10 @@ impl ManagedWorld {
     }
 
     pub fn snapshot_world(&self) -> WorldHistorySnapshot {
+        let mut snapshot_world = self.world.clone();
+        snapshot_world.clear_projections();
         WorldHistorySnapshot {
-            world: self.world.clone(),
+            world: snapshot_world,
             hydrology_dynamics: self.hydrology_dynamics.clone(),
             geology_dynamics: self.geology_dynamics.clone(),
         }
