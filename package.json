@@ -24,6 +24,7 @@
         "lint:prepush": "pnpm lint:web && pnpm lint:rust",
         "hooks:install": "tsx tools/dev/install-git-hooks.ts",
         "bench": "tsx benches/scripts/bench.ts",
+        "bench:outer": "tsx benches/scripts/bench-outer.ts",
         "bench:run:climate-series": "tsx benches/scripts/bench-climate-series.ts",
         "bench:compare:climate": "tsx benches/scripts/compare-climate-scores.ts",
         "bench:check:climate-runtime": "tsx benches/scripts/check-climate-runtime.ts",
