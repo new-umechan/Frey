@@ -13,11 +13,6 @@
     "isolatedModules": true,
     "noEmit": true,
 
-    /* JS Support */
-    "allowJs": true,
-    "checkJs": true, // JSファイル内のエラーを検知
-    "maxNodeModuleJsDepth": 1,
-
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
