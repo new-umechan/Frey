@@ -315,8 +315,12 @@ MFD（Multiple Flow Direction）を採用する。
 - 標高
 - 気温
 - 降水
+- 乾燥指数
+- 流量
 - 植生 ← `Ecology` が書く
-- FeedbackQueue（`Settlement` 隣接地域からの拡散）
+- 土壌肥沃度 ← `Ecology` が書く
+- 前tickまでの作物・家畜普及度
+- FeedbackQueue（`Settlement` が積む拡散圧。`target_module = Domesticates`）
 
 ### 書くもの
 
@@ -334,8 +338,10 @@ MFD（Multiple Flow Direction）を採用する。
 
 ### 補足
 
-伝播（隣接 `Settlement` からの拡散）はFeedbackQueue経由で次tickに適用する。
-環境条件から栽培・利用可能かどうかを判定し、分布を更新する。
+環境条件から各作物・家畜の成立可能性を判定し、
+起源地シードと近傍セルからの内生拡散、
+および `Settlement -> Domesticates` feedback をもとに普及度を更新する。
+`available` は内部判定用で、`Subsistence` は `adoption` のみを読む。
 
 ---
 
