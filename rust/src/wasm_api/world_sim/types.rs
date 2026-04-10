@@ -104,6 +104,13 @@ pub(super) struct RestoreWorldResult {
 }
 
 #[derive(Serialize)]
+pub(super) struct ForkWorldOutput {
+    pub source_world_id: String,
+    pub world_id: String,
+    pub tick: f64,
+}
+
+#[derive(Serialize)]
 pub(super) struct DeltaRange {
     pub start: u32,
     pub end: u32,

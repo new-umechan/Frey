@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
@@ -132,6 +134,7 @@ pub(super) struct ManagedWorld {
     pub geology_params: GeologyParams,
     pub transport_cache: WorldTransportCache,
     pub exec_state: ManagedWorldExecState,
+    pub applied_intervention_seq: u64,
 }
 
 #[derive(Clone)]
@@ -139,11 +142,27 @@ pub(super) struct WorldHistorySnapshot {
     pub core: world::WorldCore,
     pub hydrology_dynamics: Option<ErosionAutomatonState>,
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
+    pub applied_intervention_seq: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(super) enum InterventionCommand {
+    SetSimulationRate { value: f32 },
+    SetTargetSeaRatio { value: f32 },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(super) struct InterventionEvent {
+    pub tick: u64,
+    pub sequence: u64,
+    pub command: InterventionCommand,
 }
 
 #[derive(Clone)]
 pub(super) struct WorldArchive {
     pub history: BTreeMap<u64, WorldHistorySnapshot>,
+    pub interventions: Vec<InterventionEvent>,
+    pub next_intervention_seq: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -887,6 +906,7 @@ impl ManagedWorld {
             core: self.world.core_owned(),
             hydrology_dynamics: self.hydrology_dynamics.clone(),
             geology_dynamics: self.geology_dynamics.clone(),
+            applied_intervention_seq: self.applied_intervention_seq,
         }
     }
 
@@ -908,6 +928,8 @@ impl WorldArchive {
     pub fn new() -> Self {
         Self {
             history: BTreeMap::new(),
+            interventions: Vec::new(),
+            next_intervention_seq: 0,
         }
     }
 
@@ -932,6 +954,42 @@ impl WorldArchive {
                 break;
             }
         }
+    }
+
+    pub fn enqueue_intervention(
+        &mut self,
+        managed: &mut ManagedWorld,
+        command: InterventionCommand,
+    ) -> InterventionEvent {
+        let event = InterventionEvent {
+            tick: managed.world.clock.tick,
+            sequence: self.next_intervention_seq,
+            command,
+        };
+        self.next_intervention_seq = self.next_intervention_seq.saturating_add(1);
+        self.apply_event(managed, &event);
+        self.interventions.push(event.clone());
+        event
+    }
+
+    pub fn apply_pending_interventions_for_tick(&self, managed: &mut ManagedWorld, tick: u64) {
+        for event in self.interventions.iter().filter(|entry| {
+            entry.tick == tick && entry.sequence >= managed.applied_intervention_seq
+        }) {
+            self.apply_event(managed, event);
+        }
+    }
+
+    fn apply_event(&self, managed: &mut ManagedWorld, event: &InterventionEvent) {
+        match event.command {
+            InterventionCommand::SetSimulationRate { value } => {
+                managed.simulation_rate = value.clamp(0.1, 32.0);
+            }
+            InterventionCommand::SetTargetSeaRatio { value } => {
+                managed.world.control.target_sea_ratio = value.clamp(0.02, 0.98);
+            }
+        }
+        managed.applied_intervention_seq = event.sequence.saturating_add(1);
     }
 
 }
@@ -1101,6 +1159,7 @@ mod tests {
             geology_params: crate::GeologyParams::default(),
             transport_cache: WorldTransportCache::from_world(&sim_world, None),
             exec_state: ManagedWorldExecState::default(),
+            applied_intervention_seq: 0,
         };
 
         let snapshot = managed.snapshot_world();

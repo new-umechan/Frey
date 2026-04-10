@@ -10,14 +10,18 @@ use crate::sim::{
 };
 
 use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache};
+use super::super::state::{
+    InterventionCommand, ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
+};
 use super::super::types::ExecWorldSliceResponse;
+use super::super::types::ForkWorldOutput;
 use super::super::types::InitWorldConfig;
 use super::super::types::InitWorldOutput;
 use super::super::types::StepWorldProfiledDetailResponse;
 use super::super::types::StepWorldProfiledResponse;
 use super::super::WorldSimController;
-use super::common::world_not_found_error;
+use super::commands::replay_world_to_tick;
+use super::common::{validate_integer_tick, validate_non_negative_tick, world_not_found_error};
 
 #[cfg(target_arch = "wasm32")]
 fn profile_now_ms() -> f64 {
@@ -162,6 +166,7 @@ impl WorldSimController {
             geology_params,
             transport_cache,
             exec_state: ManagedWorldExecState::default(),
+            applied_intervention_seq: 0,
         };
         let mut archive = WorldArchive::new();
         archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
@@ -197,6 +202,7 @@ impl WorldSimController {
         let steps = scaled_step_count(managed.simulation_rate, tick_count);
 
         for _ in 0..steps {
+            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
             managed.with_exec_states(exec_world_with_feedback_and_states);
             run_post_step(managed, archive);
         }
@@ -246,6 +252,7 @@ impl WorldSimController {
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
+            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
             let step_breakdown = managed
                 .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states)
                 .breakdown;
@@ -342,6 +349,7 @@ impl WorldSimController {
         let mut step_history_snapshot_ms = 0.0;
 
         for _ in 0..steps {
+            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
             let step_breakdown =
                 managed.with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
             sim_breakdown.accumulate(&step_breakdown);
@@ -435,6 +443,7 @@ impl WorldSimController {
             }
 
             let next_phase = managed.exec_state.next_phase;
+            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
             let slice =
                 managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
                     exec_world_slice_with_states(
@@ -478,11 +487,76 @@ impl WorldSimController {
         if !rate.is_finite() {
             return Err(JsValue::from_str("rate must be finite"));
         }
-        let managed = self
-            .worlds
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
             .get_mut(&world_id)
             .ok_or_else(|| world_not_found_error(&world_id))?;
-        managed.simulation_rate = rate.clamp(0.1, 32.0);
+        let archive = archives
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let _ = archive.enqueue_intervention(
+            managed,
+            InterventionCommand::SetSimulationRate { value: rate },
+        );
         Ok(())
+    }
+
+    #[wasm_bindgen(js_name = set_target_sea_ratio)]
+    pub fn set_target_sea_ratio_js(
+        &mut self,
+        world_id: String,
+        target_sea_ratio: f32,
+    ) -> Result<(), JsValue> {
+        if !target_sea_ratio.is_finite() {
+            return Err(JsValue::from_str("target_sea_ratio must be finite"));
+        }
+        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
+        let managed = worlds
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let archive = archives
+            .get_mut(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?;
+        let _ = archive.enqueue_intervention(
+            managed,
+            InterventionCommand::SetTargetSeaRatio {
+                value: target_sea_ratio,
+            },
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = fork_world)]
+    pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
+        let tick_u64 = validate_non_negative_tick(tick)?;
+        validate_integer_tick(tick, tick_u64)?;
+
+        let source_world = self
+            .worlds
+            .get(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?
+            .clone();
+        let source_archive = self
+            .archives
+            .get(&world_id)
+            .ok_or_else(|| world_not_found_error(&world_id))?
+            .clone();
+
+        let mut forked_world = source_world;
+        let mut forked_archive = source_archive;
+        replay_world_to_tick(&mut forked_world, &mut forked_archive, tick_u64)?;
+
+        let forked_world_id = self.next_world_id();
+        self.worlds.insert(forked_world_id.clone(), forked_world);
+        self.archives
+            .insert(forked_world_id.clone(), forked_archive);
+
+        let response = ForkWorldOutput {
+            source_world_id: world_id,
+            world_id: forked_world_id,
+            tick: tick_u64 as f64,
+        };
+        serde_wasm_bindgen::to_value(&response)
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize fork_world: {err}")))
     }
 }

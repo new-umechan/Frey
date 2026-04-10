@@ -10,7 +10,7 @@ use super::common::{
     history_tick_not_available_error, validate_integer_tick, validate_non_negative_tick, world_not_found_error,
 };
 
-fn replay_world_to_tick(
+pub(super) fn replay_world_to_tick(
     managed: &mut ManagedWorld,
     archive: &mut WorldArchive,
     target_tick: u64,
@@ -26,15 +26,18 @@ fn replay_world_to_tick(
     managed.world.refresh_terrain_state();
     managed.hydrology_dynamics = checkpoint.hydrology_dynamics;
     managed.geology_dynamics = checkpoint.geology_dynamics;
+    managed.applied_intervention_seq = checkpoint.applied_intervention_seq;
     if managed.hydrology_dynamics.is_none() {
         sync_erosion_state(managed);
     }
 
     while managed.world.clock.tick < target_tick {
+        archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
         managed.with_exec_states(exec_world_with_feedback_and_states);
         post_step_sync_light(managed);
         archive.save_snapshot_if_needed(managed);
     }
+    archive.apply_pending_interventions_for_tick(managed, target_tick);
 
     managed.transport_cache =
         WorldTransportCache::from_world(&managed.world, managed.geology_dynamics.as_ref());
