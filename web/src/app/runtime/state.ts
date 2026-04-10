@@ -56,6 +56,7 @@ export interface PlaybackEvent {
 export interface PlaybackState {
     isPlaying: boolean;
     historyInterval: number;
+    maxKnownTick: number;
     selectedTick: number | null;
     availableTicks: number[];
     eventLog: PlaybackEvent[];
@@ -66,6 +67,7 @@ function createInitialPlaybackState(): PlaybackState {
     return {
         isPlaying: true,
         historyInterval: 32,
+        maxKnownTick: 0,
         selectedTick: null,
         availableTicks: [],
         eventLog: [],

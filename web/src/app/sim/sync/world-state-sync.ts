@@ -10,6 +10,22 @@ import {
 } from "./types";
 import { type WorldChangeset } from "./constants";
 
+function sanitizeTick(rawTick: unknown): number {
+    const tick = Math.floor(Number(rawTick));
+    if (!Number.isFinite(tick) || tick < 0) {
+        return 0;
+    }
+    return tick;
+}
+
+function sanitizeBudget(rawBudget: unknown): number {
+    const budget = Math.floor(Number(rawBudget));
+    if (!Number.isFinite(budget) || budget < 0) {
+        return 0;
+    }
+    return budget;
+}
+
 export async function syncWorldFromController(options: SyncOptions): Promise<SyncWorldResult | null> {
     const {
         engineClient,
@@ -77,7 +93,29 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
     }
 
-    const changes = applyWorldDeltaToCore(core, worldDelta);
+    const deltaView = (worldDelta ?? {}) as {
+        tick?: unknown;
+        era?: unknown;
+        budgets?: {
+            geology?: unknown;
+            climate?: unknown;
+            ecology?: unknown;
+            civilization?: unknown;
+        };
+        deltas?: unknown[];
+    };
+    world.tick = sanitizeTick(deltaView.tick);
+    world.engineView.tick = world.tick;
+    if (typeof deltaView.era === "string" && deltaView.era.length > 0) {
+        world.engineView.era = deltaView.era;
+    }
+    world.engineView.budgets = {
+        geology: sanitizeBudget(deltaView.budgets?.geology),
+        climate: sanitizeBudget(deltaView.budgets?.climate),
+        ecology: sanitizeBudget(deltaView.budgets?.ecology),
+        civilization: sanitizeBudget(deltaView.budgets?.civilization),
+    };
+    const changes = applyWorldDeltaToCore(core, deltaView);
     world.engineView.deltaRevision += 1;
 
     let eraMetrics = null;

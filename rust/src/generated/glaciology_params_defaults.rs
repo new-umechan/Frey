@@ -19,3 +19,4 @@ pub(crate) fn build_default_glaciology_params() -> GlaciologyParams {
         isostatic_adjustment_rate: 0.08f32,
     }
 }
+

@@ -34,6 +34,7 @@ export function resetWorldProgress(
     }
     if (worldState.playback) {
         worldState.playback.historyInterval = 32;
+        worldState.playback.maxKnownTick = 0;
         worldState.playback.selectedTick = null;
         worldState.playback.availableTicks = [];
         worldState.playback.eventLog = [];

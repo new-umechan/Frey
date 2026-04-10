@@ -31,7 +31,7 @@ struct World {
 }
 ```
 
-履歴・fork・intervention 用の snapshot と replay 状態は `World` の正本には含めず、
+履歴用の snapshot と replay 状態は `World` の正本には含めず、
 管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
 ## ID型定義
@@ -122,7 +122,7 @@ struct GeologyState {
     ecology_internal:     Vec<EcologyInternal>,
 
     // --- Domesticates（公開）---
-    // crop_available / livestock_available は Domesticates 内部専用。Subsistence は読まない。
+    // crop_available / livestock_available は環境適性判定結果。adoption更新は Domesticates が書くが、デバッグ・可視化で確認可能な公開値として扱う。Subsistence は読まない。
     crop_available:       Vec<CropBitmap>,
     crop_adoption:        Vec<[f32; N_CROPS]>,       // 0.0〜1.0の普及度。Subsistenceが読む
     livestock_available:  Vec<LivestockBitmap>,
