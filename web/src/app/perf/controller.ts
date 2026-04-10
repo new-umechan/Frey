@@ -1,6 +1,7 @@
 import {
     STEP_BREAKDOWN_SAMPLE_INTERVAL,
 } from "./perf-step-breakdown";
+import { type PerfProfile } from "./recorder";
 
 interface PerfStatFields {
     tickP50: HTMLElement;
@@ -55,9 +56,9 @@ interface PerfControllerOptions {
     workerUrl: string;
     terrainParams: Record<string, unknown>;
     level: number;
-    createPerfProfile: () => { tickCount: number };
-    createPerfConsoleTable: (result: unknown) => unknown;
-    formatPerfSummaryLine: (result: unknown) => string;
+    createPerfProfile: (overrides?: Partial<PerfProfile>) => PerfProfile;
+    createPerfConsoleTable: (result: any) => unknown;
+    formatPerfSummaryLine: (result: any) => string;
     getRuntimeMeta: () => Record<string, unknown>;
     canRunBenchmark: () => boolean;
     setPlaybackRunning: (playing: boolean) => boolean;
@@ -140,10 +141,11 @@ export function createPerfController(options: Partial<PerfControllerOptions> = {
         worker = null;
     };
 
-    const runOnWorker = async (profile: { tickCount: number }) => {
+    const runOnWorker = async (profile: PerfProfile) => {
         const currentWorker = getWorker();
         const runId = runSeq + 1;
         runSeq = runId;
+        const tickCount = Math.max(1, Math.floor(Number(profile.tickCount ?? 1)));
 
         return await new Promise((resolve, reject) => {
             const handleMessage = (event: MessageEvent<WorkerMessage>) => {
@@ -153,7 +155,7 @@ export function createPerfController(options: Partial<PerfControllerOptions> = {
                 }
                 if (message.type === "progress") {
                     const done = Math.max(0, Math.floor(message.done ?? 0));
-                    const total = Math.max(1, Math.floor(message.total ?? profile.tickCount));
+                    const total = Math.max(1, Math.floor(message.total ?? tickCount));
                     const percent = Math.max(0, Math.min(100, Math.floor(message.percent ?? 0)));
                     const status = typeof message.status === "string"
                         ? message.status
@@ -226,14 +228,15 @@ export function createPerfController(options: Partial<PerfControllerOptions> = {
             setStatus("Failed to create performance profile.");
             return;
         }
+        const tickCount = Math.max(1, Math.floor(Number(profile.tickCount ?? 1)));
         isRunning = true;
         setControlsDisabled(true);
         setStatus("Preparing performance profile...");
         const wasPlaying = setPlaybackRunning?.(false) ?? false;
 
         try {
-            setStatus(`Running 0/${profile.tickCount} ticks... (0%)`);
-            setProgress(0, profile.tickCount);
+            setStatus(`Running 0/${tickCount} ticks... (0%)`);
+            setProgress(0, tickCount);
             let result;
             try {
                 result = await runOnWorker(profile);
@@ -261,8 +264,8 @@ export function createPerfController(options: Partial<PerfControllerOptions> = {
             renderPerfStats(result as PerfResult | null);
             const summaryLine = formatPerfSummaryLine?.(result) ?? "Done";
             setStatus(`Done: ${summaryLine}`);
-            setProgress(profile.tickCount, profile.tickCount);
-            console.group(`[perf] ${profile.tickCount} tick performance run`);
+            setProgress(tickCount, tickCount);
+            console.group(`[perf] ${tickCount} tick performance run`);
             console.log("result", result);
             console.table(createPerfConsoleTable?.(result) ?? result);
             console.groupEnd();

@@ -1,7 +1,12 @@
 import initWasm, { WorldSimController, generate_mesh } from "../../interface/wasm";
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
-const workerScope = self as unknown as DedicatedWorkerGlobalScope;
+type WorkerScope = {
+    postMessage: (message: EngineWorkerResponse) => void;
+    onmessage: ((event: MessageEvent<EngineWorkerRequest>) => void) | null;
+};
+
+const workerScope = self as unknown as WorkerScope;
 
 let initialized = false;
 let controller: WorldSimController | null = null;

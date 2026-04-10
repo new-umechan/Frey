@@ -102,49 +102,38 @@ export function createPlaybackController({
     function renderHistorySeekSlider() {
         const slider = playbackControls.historySeekSlider;
         const ticks = getAvailableTicks();
+        const currentTick = Math.max(0, sanitizeTick(getWorldTick()) ?? 0);
         if (ticks.length === 0) {
             slider.min = "0";
-            slider.max = "0";
-            slider.value = "0";
-            playbackControls.seekMinLabel.textContent = "-";
-            playbackControls.seekMaxLabel.textContent = "-";
+            slider.max = String(currentTick);
+            slider.value = String(currentTick);
+            playbackControls.seekMinLabel.textContent = "t0";
+            playbackControls.seekMaxLabel.textContent = `t${currentTick}`;
             updateSeekSliderFill();
             return;
         }
 
-        const fallbackTick = ticks[ticks.length - 1];
-        const selectedTick = playbackState.selectedTick !== null && ticks.includes(playbackState.selectedTick)
-            ? playbackState.selectedTick
-            : fallbackTick;
+        const fallbackTick = Math.max(ticks[ticks.length - 1], currentTick);
+        const selectedTick = playbackState.selectedTick !== null
+            ? Math.min(fallbackTick, Math.max(0, playbackState.selectedTick))
+            : currentTick;
         playbackState.selectedTick = selectedTick;
 
-        const selectedIndex = Math.max(0, ticks.indexOf(selectedTick));
         slider.min = "0";
-        slider.max = String(ticks.length - 1);
-        slider.value = String(selectedIndex);
+        slider.max = String(fallbackTick);
+        slider.value = String(selectedTick);
         playbackControls.seekMinLabel.textContent = `t${ticks[0]}`;
-        playbackControls.seekMaxLabel.textContent = `t${ticks[ticks.length - 1]}`;
+        playbackControls.seekMaxLabel.textContent = `t${fallbackTick}`;
         updateSeekSliderFill();
     }
 
     function syncSeekSliderWithWorldTick() {
-        const ticks = getAvailableTicks();
-        if (ticks.length === 0) {
-            return;
-        }
-
         const slider = playbackControls.historySeekSlider;
         const currentTick = getWorldTick();
-        let nextIndex = 0;
-        for (let i = ticks.length - 1; i >= 0; i -= 1) {
-            if (ticks[i] <= currentTick) {
-                nextIndex = i;
-                break;
-            }
-        }
-
-        playbackState.selectedTick = ticks[nextIndex];
-        slider.value = String(nextIndex);
+        const max = Math.max(0, sanitizeTick(slider.max) ?? 0);
+        const clampedTick = Math.min(max, Math.max(0, sanitizeTick(currentTick) ?? 0));
+        playbackState.selectedTick = clampedTick;
+        slider.value = String(clampedTick);
     }
 
     function renderEventLog() {
@@ -173,11 +162,11 @@ export function createPlaybackController({
         const sliceBusy = worldState.sliceBusy === true;
 
         playbackControls.playToggleButton.disabled = !hasWorld;
-        playbackControls.historySeekSlider.disabled = !hasWorld || !hasTicks || sliceBusy;
+        playbackControls.historySeekSlider.disabled = !hasWorld || sliceBusy;
         playbackControls.seekForwardButton.disabled = sliceBusy || !hasWorld || getNextHistoryTick(getWorldTick()) === null;
         playbackControls.seekBackwardButton.disabled = sliceBusy || !hasWorld || getPreviousHistoryTick(getWorldTick()) === null;
 
-        if (hasWorld && hasTicks) {
+        if (hasWorld) {
             syncSeekSliderWithWorldTick();
         }
         updateSeekSliderFill();
@@ -323,17 +312,10 @@ export function createPlaybackController({
 
     function handleHistorySeek(indexText: string) {
         withHistoryRestore(async () => {
-            const historyIndex = sanitizeTick(indexText);
-            if (historyIndex === null) {
+            const targetTick = sanitizeTick(indexText);
+            if (targetTick === null) {
                 return;
             }
-
-            const ticks = getAvailableTicks();
-            if (historyIndex >= ticks.length) {
-                return;
-            }
-
-            const targetTick = ticks[historyIndex];
             if (targetTick === getWorldTick()) {
                 return;
             }

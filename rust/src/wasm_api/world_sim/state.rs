@@ -973,9 +973,10 @@ impl WorldArchive {
     }
 
     pub fn apply_pending_interventions_for_tick(&self, managed: &mut ManagedWorld, tick: u64) {
-        for event in self.interventions.iter().filter(|entry| {
-            entry.tick == tick && entry.sequence >= managed.applied_intervention_seq
-        }) {
+        for event in self.interventions.iter().filter(|entry| entry.tick == tick) {
+            if event.sequence < managed.applied_intervention_seq {
+                continue;
+            }
             self.apply_event(managed, event);
         }
     }

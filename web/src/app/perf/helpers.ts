@@ -44,10 +44,12 @@ export function formatError(error: unknown): string {
 
 export function getDeltaFieldKindsForProfile(profile: PerfProfile): string[] {
     if (profile?.viewMode === "metric") {
-        const metricField = FIELD_KIND_BY_CELL_METRIC[profile?.cellMetric] ?? "height";
+        const metricKey = typeof profile?.cellMetric === "string" ? profile.cellMetric : "height";
+        const metricField = FIELD_KIND_BY_CELL_METRIC[metricKey] ?? "height";
         return ["height", "river_flux", "river_next", metricField];
     }
-    return DELTA_FIELD_KIND_BY_VIEW[profile?.viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
+    const viewMode = typeof profile?.viewMode === "string" ? profile.viewMode : "normal";
+    return DELTA_FIELD_KIND_BY_VIEW[viewMode] ?? DELTA_FIELD_KIND_BY_VIEW.normal;
 }
 
 export function pushStepBreakdownSamples(recorder: PerfSampleRecorder, profiledResult: ProfiledResult): void {

@@ -91,7 +91,7 @@ export class EngineWorkerClient implements EngineClient {
     }
 
     async get_world_delta(worldId: string, options?: unknown): Promise<WorldDeltaResult> {
-        return await this.request("get_world_delta", { worldId, options });
+        return await this.request("get_world_delta", { worldId, options }) as WorldDeltaResult;
     }
 
     async get_metrics(worldId: string): Promise<MetricsResult | null> {
@@ -100,7 +100,7 @@ export class EngineWorkerClient implements EngineClient {
     }
 
     async get_field(worldId: string, fieldKind: string, window: number): Promise<FieldResult> {
-        return await this.request("get_field", { worldId, fieldKind, window });
+        return await this.request("get_field", { worldId, fieldKind, window }) as FieldResult;
     }
 
     async list_history_ticks(worldId: string): Promise<HistoryTicksResult> {

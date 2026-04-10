@@ -12,6 +12,7 @@ import { advanceWorldLoop } from "./sim/world-loop";
 import { createMeshBuffers } from "./state/app-state";
 import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap";
 import { createEngineWorkerClient } from "./engine/engine-worker-client";
+import initWasm from "../interface/wasm";
 
 interface SidebarControllerOptions {
     appShell: HTMLElement;
@@ -52,6 +53,7 @@ export async function createApp() {
         setSidebarOpen(true);
     }
     seedInput.value = DEFAULT_TERRAIN_SEED;
+    await initWasm();
     setStatus("Preparing mesh...");
     const bootstrapEngine = createEngineWorkerClient();
     const mesh = await bootstrapEngine.generate_mesh(LEVEL);

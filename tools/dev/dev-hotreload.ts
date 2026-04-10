@@ -81,7 +81,7 @@ async function syncConfig() {
 }
 
 function startVite() {
-    viteProcess = spawn("pnpm", ["exec", "vite", "--config", "web/vite.config.js"], {
+    viteProcess = spawn("pnpm", ["exec", "vite", "--config", "web/vite.config.ts"], {
         cwd: rootDir,
         stdio: "inherit",
         shell: process.platform === "win32",

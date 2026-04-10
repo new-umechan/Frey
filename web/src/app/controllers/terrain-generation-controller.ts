@@ -78,6 +78,14 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             const initResult = await engineClient.init_world(nextSeed, level, {
                 geology_params: terrainParams,
             });
+            const worldId = (() => {
+                const value = (initResult as { world_id?: unknown; worldId?: unknown }).world_id
+                    ?? (initResult as { world_id?: unknown; worldId?: unknown }).worldId;
+                return typeof value === "string" && value.length > 0 ? value : null;
+            })();
+            if (!worldId) {
+                throw new Error("init_world response does not include a valid world id");
+            }
             if (token !== generationToken) {
                 return;
             }
@@ -88,7 +96,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
                 createInitialBudgets,
                 createEraMetrics,
             );
-            setActiveWorldId(initResult.world_id);
+            setActiveWorldId(worldId);
             setCurrentState({
                 currentSeed: nextSeed,
             });

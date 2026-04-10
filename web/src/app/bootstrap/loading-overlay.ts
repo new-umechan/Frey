@@ -16,10 +16,11 @@ export function createLoadingOverlayController(options: LoadingOverlayOptions) {
         getCamera,
         circleColor = "#E5EAEE",
     } = options;
-    const loadingOverlayContext = loadingOverlayCanvas.getContext("2d");
-    if (!loadingOverlayContext) {
+    const loadingOverlayContextRaw = loadingOverlayCanvas.getContext("2d");
+    if (!loadingOverlayContextRaw) {
         throw new Error("loading overlay canvas context is unavailable");
     }
+    const loadingOverlayContext: CanvasRenderingContext2D = loadingOverlayContextRaw;
 
     const loadingPlanetCenterWorld = new THREE.Vector3();
     const loadingPlanetEdgeWorld = new THREE.Vector3();
