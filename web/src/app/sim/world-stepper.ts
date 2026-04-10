@@ -2,7 +2,7 @@ import { type WorldState, type AppState } from "../state/app-state";
 import { getDefaultExecDisplayPhase, type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type TickPerfRecorder } from "../perf/recorder";
-import { type EngineClient } from "../engine/engine-client";
+import { type EngineClient, type MetricsResult } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import {
     type SyncDeltaOptions,
@@ -18,7 +18,7 @@ export interface WorldStepperOptions {
     worldState: RuntimeState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     syncWorldDeltaFromController: (options: SyncDeltaOptions) => Promise<SyncDeltaResult>;
     syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<WorldChangeset>;

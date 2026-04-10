@@ -1,7 +1,7 @@
 import { type WorldState } from "../state/app-state";
 import { type EraMetrics } from "../state/era-presets";
 import { type StatFields } from "../../components/dom";
-import { type EngineClient } from "../engine/engine-client";
+import { type EngineClient, type MetricsResult } from "../engine/engine-client";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { type SyncOptions, type CoreBuffers, type SyncWorldResult } from "../sim/sync/types";
 
@@ -10,7 +10,7 @@ export interface WorldSessionControllerOptions {
     world: WorldState;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     syncWorldFromController: (options: SyncOptions) => Promise<SyncWorldResult | null>;
     refreshWorldStatsFromController: (options: {

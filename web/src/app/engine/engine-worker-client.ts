@@ -2,6 +2,7 @@ import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../interface
 import type {
     EngineClient,
     InitWorldResult,
+    ForkWorldResult,
     MeshGenerationResult,
     ExecWorldSliceResult,
     ProfiledExecResult,
@@ -108,6 +109,18 @@ export class EngineWorkerClient implements EngineClient {
 
     async restore_world_to_tick(worldId: string, tick: number): Promise<void> {
         await this.request("restore_world_to_tick", { worldId, tick });
+    }
+
+    async set_simulation_rate(worldId: string, rate: number): Promise<void> {
+        await this.request("set_simulation_rate", { worldId, rate });
+    }
+
+    async set_target_sea_ratio(worldId: string, targetSeaRatio: number): Promise<void> {
+        await this.request("set_target_sea_ratio", { worldId, targetSeaRatio });
+    }
+
+    async fork_world(worldId: string, tick: number): Promise<ForkWorldResult> {
+        return await this.request("fork_world", { worldId, tick }) as ForkWorldResult;
     }
 
     async get_exec_modules(): Promise<ExecModuleDocRecord[]> {

@@ -46,6 +46,21 @@ export type EngineWorkerRequest =
     }
     | {
         id: number;
+        kind: "set_simulation_rate";
+        payload: { worldId: string; rate: number };
+    }
+    | {
+        id: number;
+        kind: "set_target_sea_ratio";
+        payload: { worldId: string; targetSeaRatio: number };
+    }
+    | {
+        id: number;
+        kind: "fork_world";
+        payload: { worldId: string; tick: number };
+    }
+    | {
+        id: number;
         kind: "exec_world_profiled";
         payload: { worldId: string; tickCount: number };
     }

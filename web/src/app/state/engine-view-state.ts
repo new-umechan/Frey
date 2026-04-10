@@ -1,9 +1,11 @@
-export interface EngineViewState {
+export interface RenderState {
     tick: number;
     era: string;
     budgets: Record<string, number>;
     deltaRevision: number;
 }
+
+export type EngineViewState = RenderState;
 
 export function createInitialEngineViewState(): EngineViewState {
     return {

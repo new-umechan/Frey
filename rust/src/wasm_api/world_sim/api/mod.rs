@@ -27,6 +27,7 @@ mod tests {
     #[derive(Deserialize)]
     struct MetricsResponse {
         tick: f64,
+        simulation_rate: Option<f32>,
         budgets: BudgetSummary,
     }
 
@@ -67,6 +68,12 @@ mod tests {
 
     #[derive(Deserialize)]
     struct RestoreWorldResponse {
+        tick: f64,
+    }
+
+    #[derive(Deserialize)]
+    struct ForkWorldResponse {
+        world_id: String,
         tick: f64,
     }
 
@@ -261,5 +268,41 @@ mod tests {
             serde_wasm_bindgen::from_value(history_ticks).expect("parse history ticks");
         assert!(history_data.ticks.contains(&64.0));
         assert!(history_data.ticks.iter().all(|tick| tick.is_finite()));
+    }
+
+    #[wasm_bindgen_test]
+    fn interventions_and_fork_replay_from_checkpoint() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-intervention".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+        let world_id = init_data.world_id;
+
+        controller
+            .set_simulation_rate_js(world_id.clone(), 4.0)
+            .expect("set simulation rate intervention");
+        controller
+            .exec_world_js(world_id.clone(), 80)
+            .expect("step world to create checkpoints");
+        controller
+            .restore_world_to_tick_js(world_id.clone(), 0.0)
+            .expect("restore to tick 0");
+
+        let metrics = controller
+            .get_metrics_js(world_id.clone())
+            .expect("metrics after restore");
+        let metrics_data: MetricsResponse =
+            serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
+        assert_eq!(metrics_data.tick, 0.0);
+        assert_eq!(metrics_data.simulation_rate.unwrap_or(0.0), 4.0);
+
+        let forked = controller
+            .fork_world_js(world_id, 0.0)
+            .expect("fork world at tick 0");
+        let forked_data: ForkWorldResponse =
+            serde_wasm_bindgen::from_value(forked).expect("parse fork world");
+        assert_eq!(forked_data.tick, 0.0);
+        assert!(!forked_data.world_id.is_empty());
     }
 }

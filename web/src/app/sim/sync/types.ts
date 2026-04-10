@@ -1,4 +1,4 @@
-import { type EngineClient } from "../../engine/engine-client";
+import { type EngineClient, type MetricsResult, type ViewDeltaResult } from "../../engine/engine-client";
 import { type FieldKind } from "./constants";
 import { type TerrainRenderer } from "../../visualizers/terrain-renderer";
 import { type WorldState } from "../../state/app-state";
@@ -49,7 +49,7 @@ export interface SyncOptions {
     currentSurfaceMode: string;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     setCurrentTerrainData: (data: CoreBuffers) => void;
     statFields: StatFields;
@@ -64,7 +64,7 @@ export interface SyncDeltaOptions {
     currentSurfaceMode: string;
     terrainRenderer: TerrainRenderer;
     createEraMetrics: (era: string) => EraMetrics;
-    buildEraMetricsFromRuntime: (era: string, metrics: unknown) => EraMetrics;
+    buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     refreshStats: boolean;
     refreshWorldStats: () => Promise<boolean>;
@@ -88,3 +88,5 @@ export interface SyncDeltaResult {
     eraMetrics: EraMetrics | null;
     statsRefreshed: boolean;
 }
+
+export type ViewDelta = ViewDeltaResult;

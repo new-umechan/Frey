@@ -15,12 +15,13 @@ interface DeltaRange {
 }
 
 interface FieldDelta {
-    mode?: "full" | "range";
+    mode?: "full" | "delta" | "bitmap";
     field_kind?: FieldKind;
     ranges?: DeltaRange[];
-    f32_data?: Float32Array;
-    i32_data?: Int32Array;
-    u32_data?: Uint32Array;
+    dirty_bitmap?: Uint32Array | number[];
+    f32_data?: NumericArray;
+    i32_data?: NumericArray;
+    u32_data?: NumericArray;
 }
 
 function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolean {
@@ -43,6 +44,28 @@ function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolea
             target[i] = Number(values[i] ?? 0);
         }
         return copyLength > 0;
+    }
+
+    if (fieldDelta?.mode === "bitmap") {
+        const bitmap = fieldDelta?.dirty_bitmap;
+        if (!bitmap || bitmap.length === 0) {
+            return false;
+        }
+        let valueOffset = 0;
+        for (let wordIndex = 0; wordIndex < bitmap.length; wordIndex += 1) {
+            let word = Number(bitmap[wordIndex] ?? 0) >>> 0;
+            while (word !== 0) {
+                const bit = Math.clz32(word & -word) ^ 31;
+                const cellIndex = wordIndex * 32 + bit;
+                if (cellIndex >= target.length || valueOffset >= values.length) {
+                    return valueOffset > 0;
+                }
+                target[cellIndex] = Number(values[valueOffset] ?? 0);
+                valueOffset += 1;
+                word &= word - 1;
+            }
+        }
+        return valueOffset > 0;
     }
 
     let offset = 0;

@@ -83,6 +83,30 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                 post({ id: request.id, ok: true, kind: request.kind, payload: null });
                 return;
             }
+            case "set_simulation_rate": {
+                (runtime as WorldSimController & {
+                    set_simulation_rate(worldId: string, rate: number): void;
+                }).set_simulation_rate(request.payload.worldId, request.payload.rate);
+                post({ id: request.id, ok: true, kind: request.kind, payload: null });
+                return;
+            }
+            case "set_target_sea_ratio": {
+                (runtime as WorldSimController & {
+                    set_target_sea_ratio(worldId: string, targetSeaRatio: number): void;
+                }).set_target_sea_ratio(
+                    request.payload.worldId,
+                    request.payload.targetSeaRatio,
+                );
+                post({ id: request.id, ok: true, kind: request.kind, payload: null });
+                return;
+            }
+            case "fork_world": {
+                const result = (runtime as WorldSimController & {
+                    fork_world(worldId: string, tick: number): unknown;
+                }).fork_world(request.payload.worldId, request.payload.tick);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                return;
+            }
             case "exec_world_profiled": {
                 const result = runtime.exec_world_profiled(
                     request.payload.worldId,

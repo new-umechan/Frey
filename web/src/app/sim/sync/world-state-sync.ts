@@ -32,7 +32,7 @@ export async function syncWorldFromController(options: SyncOptions): Promise<Syn
         return null;
     }
 
-    const era = String(metrics.era_scale ?? world.era);
+    const era = String(metrics.era ?? world.era);
     const eraMetrics = buildEraMetricsFromRuntime(era, metrics);
     setEraScale(era);
 
@@ -86,7 +86,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         statsRefreshed = await refreshWorldStats();
         const metrics = await engineClient.get_metrics(worldId);
         if (metrics) {
-            const era = String(metrics.era_scale ?? world.era);
+            const era = String(metrics.era ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);
             setEraScale(era);
         }

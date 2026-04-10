@@ -1,5 +1,6 @@
 import { createPerfController } from "../perf/controller";
 import { type PerfControlsElements, type PerfStatFields } from "../../components/dom";
+import { type PerfProfile } from "../perf/recorder";
 
 export interface PerfRuntimeOptions {
     isPerfEnabled: boolean;
@@ -8,9 +9,9 @@ export interface PerfRuntimeOptions {
     workerUrl: URL;
     terrainParams: Record<string, unknown>;
     level: number;
-    createPerfProfile: () => { tickCount: number };
-    createPerfConsoleTable: (result: unknown) => unknown;
-    formatPerfSummaryLine: (result: unknown) => string;
+    createPerfProfile: (overrides?: Partial<PerfProfile>) => PerfProfile;
+    createPerfConsoleTable: (result: any) => unknown;
+    formatPerfSummaryLine: (result: any) => string;
     getRuntimeMeta: () => Record<string, unknown>;
     canRunBenchmark: () => boolean;
     setPlaybackRunning: (nextPlaying: boolean) => boolean;

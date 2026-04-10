@@ -5,6 +5,7 @@ import {
     type EraScaleConfig,
     type WorldSubsystemKey,
 } from "../../shared/constants";
+import { type MetricsResult } from "../engine/engine-client";
 
 export type { EraScaleConfig, WorldSubsystemKey };
 
@@ -43,27 +44,17 @@ export function createEraMetrics(key = DEFAULT_ERA_SCALE): EraMetrics {
     };
 }
 
-export function buildEraMetricsFromRuntime(era: string, metrics: unknown): EraMetrics {
-    const runtimeMetrics = metrics as {
-        real_years_per_tick?: number;
-        runtime_tick_ms?: number;
-        budgets?: {
-            geology?: number;
-            climate?: number;
-            ecology?: number;
-            civilization?: number;
-        };
-    } | null;
+export function buildEraMetricsFromRuntime(era: string, runtimeMetrics: MetricsResult): EraMetrics {
     const fallback = createEraMetrics(era);
     return {
         key: Object.hasOwn(ERA_SCALE_PRESETS, era) ? era : DEFAULT_ERA_SCALE,
-        tickLabel: formatRealYearsPerTick(Number(runtimeMetrics?.real_years_per_tick) || 0),
-        runtimeTickMs: Number(runtimeMetrics?.runtime_tick_ms) || fallback.runtimeTickMs,
+        tickLabel: formatRealYearsPerTick(Number(runtimeMetrics.real_years_per_tick) || 0),
+        runtimeTickMs: Number(runtimeMetrics.runtime_tick_ms) || fallback.runtimeTickMs,
         budgets: {
-            geology: Number(runtimeMetrics?.budgets?.geology) || 0,
-            climate: Number(runtimeMetrics?.budgets?.climate) || 0,
-            ecology: Number(runtimeMetrics?.budgets?.ecology) || 0,
-            civilization: Number(runtimeMetrics?.budgets?.civilization) || 0,
+            geology: Number(runtimeMetrics.budgets.geology) || 0,
+            climate: Number(runtimeMetrics.budgets.climate) || 0,
+            ecology: Number(runtimeMetrics.budgets.ecology) || 0,
+            civilization: Number(runtimeMetrics.budgets.civilization) || 0,
         },
     };
 }

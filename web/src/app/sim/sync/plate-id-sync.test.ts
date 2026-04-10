@@ -27,4 +27,23 @@ describe("plate_id sync", () => {
         expect(Array.from(core.plateId as Uint32Array)).toEqual([0, 8, 9, 3, 4]);
         expect(changes.metric).toBe(true);
     });
+
+    it("applies bitmap deltas into core plateId buffer", () => {
+        const core = {
+            plateId: new Uint32Array([0, 1, 2, 3, 4, 5]),
+        } as unknown as CoreBuffers;
+
+        const changes = applyWorldDeltaToCore(core, {
+            deltas: [{
+                field_kind: "plate_id",
+                mode: "bitmap",
+                ranges: [],
+                dirty_bitmap: [0b00101010],
+                u32_data: [8, 9, 10],
+            }],
+        });
+
+        expect(Array.from(core.plateId as Uint32Array)).toEqual([0, 8, 2, 9, 4, 10]);
+        expect(changes.metric).toBe(true);
+    });
 });
