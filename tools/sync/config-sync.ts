@@ -85,7 +85,6 @@ function syncTerrainParams(): number {
     }
     rustLines.push("    }");
     rustLines.push("}");
-    rustLines.push("");
 
     const tsChanged = Number(writeFileIfChanged(tsOutPath, `${tsLines.join("\n")}\n`));
     const rustChanged = Number(writeFileIfChanged(rustOutPath, `${rustLines.join("\n")}\n`));
@@ -115,7 +114,6 @@ function syncClimateParams(): number {
     }
     rustLines.push("    }");
     rustLines.push("}");
-    rustLines.push("");
 
     return Number(writeFileIfChanged(rustOutPath, `${rustLines.join("\n")}\n`));
 }
@@ -143,7 +141,6 @@ function syncGlaciologyParams(): number {
     }
     rustLines.push("    }");
     rustLines.push("}");
-    rustLines.push("");
 
     return Number(writeFileIfChanged(rustOutPath, `${rustLines.join("\n")}\n`));
 }

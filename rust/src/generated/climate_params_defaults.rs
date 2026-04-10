@@ -52,4 +52,3 @@ pub(crate) fn build_default_climate_params() -> ClimateParams {
         core_humidity_cc_rate_per_c: 0.067f32,
     }
 }
-
