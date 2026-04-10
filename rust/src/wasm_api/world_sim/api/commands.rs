@@ -7,7 +7,8 @@ use super::super::state::{ManagedWorld, WorldArchive, WorldTransportCache};
 use super::super::types::RestoreWorldResult;
 use super::super::WorldSimController;
 use super::common::{
-    history_tick_not_available_error, validate_integer_tick, validate_non_negative_tick, world_not_found_error,
+    history_tick_not_available_error, validate_integer_tick, validate_non_negative_tick,
+    world_not_found_error,
 };
 
 pub(super) fn replay_world_to_tick(

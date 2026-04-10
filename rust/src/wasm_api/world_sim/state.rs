@@ -992,7 +992,6 @@ impl WorldArchive {
         }
         managed.applied_intervention_seq = event.sequence.saturating_add(1);
     }
-
 }
 
 #[cfg(test)]
@@ -1053,7 +1052,10 @@ mod tests {
         assert_eq!(delta.mode, "bitmap");
         let bitmap = delta.dirty_bitmap.expect("bitmap");
         assert_eq!(bitmap.len(), 4);
-        assert_eq!(delta.f32_data.expect("f32 data"), vec![1.0, 1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(
+            delta.f32_data.expect("f32 data"),
+            vec![1.0, 1.0, 1.0, 1.0, 1.0]
+        );
     }
 
     #[test]
@@ -1166,6 +1168,9 @@ mod tests {
         let snapshot = managed.snapshot_world();
         assert_eq!(snapshot.core.cells.geology.height, vec![0.2]);
         assert_eq!(snapshot.core.clock.tick, sim_world.clock.tick);
-        assert_eq!(snapshot.core.entities.polity_count(), sim_world.entities.polity_count());
+        assert_eq!(
+            snapshot.core.entities.polity_count(),
+            sim_world.entities.polity_count()
+        );
     }
 }
