@@ -22,24 +22,24 @@ export async function refreshWorldStatsFromController(options: {
         return false;
     }
 
-    const metrics = await engineClient.get_metrics(worldId) as MetricsResult | null;
+    const metrics = await engineClient.get_metrics(worldId);
     if (!metrics) {
         return false;
     }
 
-    world.tick = Math.floor(metrics.tick ?? 0);
+    world.tick = Math.floor(metrics.tick);
     world.engineView.tick = world.tick;
-    world.engineView.era = String(metrics.era_scale ?? world.era);
+    world.engineView.era = String(metrics.era ?? world.era);
     world.engineView.budgets = {
-        geology: Math.max(0, Math.floor(metrics?.budget_geology ?? world.engineView.budgets.geology ?? 0)),
-        climate: Math.max(0, Math.floor(metrics?.budget_climate ?? world.engineView.budgets.climate ?? 0)),
-        ecology: Math.max(0, Math.floor(metrics?.budget_ecology ?? world.engineView.budgets.ecology ?? 0)),
-        civilization: Math.max(0, Math.floor(metrics?.budget_civilization ?? world.engineView.budgets.civilization ?? 0)),
+        geology: Math.max(0, Math.floor(metrics.budgets.geology)),
+        climate: Math.max(0, Math.floor(metrics.budgets.climate)),
+        ecology: Math.max(0, Math.floor(metrics.budgets.ecology)),
+        civilization: Math.max(0, Math.floor(metrics.budgets.civilization)),
     };
     statFields.level.textContent = `L${level}`;
     statFields.seed.textContent = currentSeed;
     statFields.plates.textContent = `${metrics.plate_count ?? 0}P`;
-    statFields.land.textContent = formatPercent(metrics.land_ratio ?? 0);
+    statFields.land.textContent = formatPercent(metrics.land_ratio);
 
     return true;
 }
