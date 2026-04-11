@@ -13,6 +13,7 @@ import { createPerfRunner } from "../../../web/src/app/perf/runner";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
 
 const DEFAULT_THRESHOLD = 0.10;
+const METRIC_NOISE_FLOOR_MS = 0.01;
 const execFileAsync = promisify(execFile);
 const HISTORY_FILE_PATH = resolve("tests/perf/history/perf-history.jsonl");
 
@@ -252,6 +253,12 @@ function evaluateRegression(
         }
         if (baselineValue <= 0) {
             warnings.push(`skip ${spec.label}: baseline <= 0`);
+            continue;
+        }
+        if (baselineValue < METRIC_NOISE_FLOOR_MS) {
+            warnings.push(
+                `skip ${spec.label}: baseline below noise floor (${METRIC_NOISE_FLOOR_MS}ms)`,
+            );
             continue;
         }
 

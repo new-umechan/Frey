@@ -62,20 +62,22 @@ pub(super) fn should_run_hydrology_mfd_for_geology(
 pub(super) fn run_hydrology_step_unprofiled(
     world: &mut World,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+    geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
     budget: u32,
     run_mfd: bool,
 ) {
-    let _ = run_hydrology_step_profiled(world, hydrology_state, budget, run_mfd);
+    let _ = run_hydrology_step_profiled(world, hydrology_state, geology_state, budget, run_mfd);
 }
 
 pub(super) fn run_hydrology_step_profiled(
     world: &mut World,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
+    geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
     budget: u32,
     run_mfd: bool,
 ) -> HydrologyStepDetailBreakdown {
     if run_mfd {
-        run_hydrology_step(world, hydrology_state, budget)
+        run_hydrology_step(world, hydrology_state, budget, geology_state)
     } else {
         run_hydrology_flow_step(world, hydrology_state, budget)
     }

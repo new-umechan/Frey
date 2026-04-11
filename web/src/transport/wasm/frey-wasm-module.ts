@@ -5,7 +5,7 @@ import initWasm, {
     generate_mesh,
     type InitInput,
     type InitOutput,
-} from "../../../generated/wasm/web/frey_wasm";
+} from "../../../../generated/wasm/web/frey_wasm";
 
 export type ExecModuleDocRecord = {
     phase: string;
@@ -34,7 +34,11 @@ export type ExecModuleGraphRecord = {
     edges: ExecModuleGraphEdgeRecord[];
 };
 
-export default initWasm as (input?: InitInput | Promise<InitInput>) => Promise<InitOutput>;
+export type WasmModuleInitializer = (
+    input?: InitInput | Promise<InitInput>,
+) => Promise<InitOutput>;
+
+export const initializeFreyWasm: WasmModuleInitializer = initWasm;
 
 export function getExecModules(controller: WorldSimController): ExecModuleDocRecord[] {
     return (controller as WorldSimController & {

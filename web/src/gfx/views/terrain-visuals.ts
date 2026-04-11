@@ -1,6 +1,6 @@
 import {
     build_render_positions as wasmBuildRenderPositions,
-} from "../../interface/wasm";
+} from "../../transport/wasm/frey-wasm-module";
 
 export function buildRenderPositions(basePositions: Float32Array, heightData: Float32Array, surfaceMode = "globe") {
     const positions = wasmBuildRenderPositions({

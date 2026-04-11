@@ -1,4 +1,4 @@
-import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../interface/wasm";
+import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../transport/wasm/frey-wasm-module";
 import type {
     EngineClient,
     InitWorldResult,

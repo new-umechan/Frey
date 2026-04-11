@@ -1,4 +1,8 @@
-import initWasm, { WorldSimController, generate_mesh } from "../../interface/wasm";
+import {
+    WorldSimController,
+    generate_mesh,
+    initializeFreyWasm,
+} from "../../transport/wasm/frey-wasm-module";
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
 type WorkerScope = {
@@ -13,7 +17,7 @@ let controller: WorldSimController | null = null;
 
 async function ensureController(): Promise<WorldSimController> {
     if (!initialized) {
-        await initWasm();
+        await initializeFreyWasm();
         controller = new WorldSimController();
         initialized = true;
     }

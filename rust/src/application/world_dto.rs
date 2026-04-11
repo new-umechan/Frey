@@ -1,9 +1,11 @@
+#![cfg(feature = "wasm_transport")]
+
 use serde::{Deserialize, Serialize};
 
 use crate::sim::geology_types::GeologyParams;
 
 #[derive(Deserialize)]
-pub(super) struct InitWorldConfig {
+pub(crate) struct InitWorldConfig {
     #[serde(default)]
     pub geology_params: Option<GeologyParams>,
     #[serde(default)]
@@ -13,13 +15,13 @@ pub(super) struct InitWorldConfig {
 }
 
 #[derive(Deserialize)]
-pub(super) struct WorldDeltaQuery {
+pub(crate) struct WorldDeltaQuery {
     #[serde(default)]
     pub include_fields: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
-pub(super) struct InitWorldOutput {
+pub(crate) struct InitWorldOutput {
     pub world_id: String,
     pub tick: f64,
     pub era: String,
@@ -27,7 +29,7 @@ pub(super) struct InitWorldOutput {
 }
 
 #[derive(Serialize)]
-pub(super) struct FieldResponse {
+pub(crate) struct FieldResponse {
     pub field_kind: String,
     pub stride: u32,
     pub cell_count: u32,
@@ -38,7 +40,7 @@ pub(super) struct FieldResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct BudgetSummary {
+pub(crate) struct BudgetSummary {
     pub geology: u32,
     pub climate: u32,
     pub ecology: u32,
@@ -46,7 +48,7 @@ pub(super) struct BudgetSummary {
 }
 
 #[derive(Serialize)]
-pub(super) struct MetricsResponse {
+pub(crate) struct MetricsResponse {
     pub world_id: String,
     pub tick: f64,
     pub era: String,
@@ -74,7 +76,7 @@ pub(super) struct MetricsResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct PlateStat {
+pub(crate) struct PlateStat {
     pub plate_id: u32,
     pub cell_count: u32,
     pub mean_height: f32,
@@ -83,7 +85,7 @@ pub(super) struct PlateStat {
 }
 
 #[derive(Serialize)]
-pub(super) struct PlateStatsResponse {
+pub(crate) struct PlateStatsResponse {
     pub world_id: String,
     pub tick: f64,
     pub plate_count: u32,
@@ -91,33 +93,33 @@ pub(super) struct PlateStatsResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct HistoryTicksResponse {
+pub(crate) struct HistoryTicksResponse {
     pub world_id: String,
     pub interval: u32,
     pub ticks: Vec<f64>,
 }
 
 #[derive(Serialize)]
-pub(super) struct RestoreWorldResult {
+pub(crate) struct RestoreWorldResult {
     pub world_id: String,
     pub tick: f64,
 }
 
 #[derive(Serialize)]
-pub(super) struct ForkWorldOutput {
+pub(crate) struct ForkWorldOutput {
     pub source_world_id: String,
     pub world_id: String,
     pub tick: f64,
 }
 
 #[derive(Serialize)]
-pub(super) struct DeltaRange {
+pub(crate) struct DeltaRange {
     pub start: u32,
     pub end: u32,
 }
 
 #[derive(Serialize)]
-pub(super) struct FieldDeltaResponse {
+pub(crate) struct FieldDeltaResponse {
     pub field_kind: String,
     pub mode: String,
     pub ranges: Vec<DeltaRange>,
@@ -128,7 +130,7 @@ pub(super) struct FieldDeltaResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct WorldDeltaResponse {
+pub(crate) struct WorldDeltaResponse {
     pub world_id: String,
     pub tick: f64,
     pub era: String,
@@ -139,7 +141,7 @@ pub(super) struct WorldDeltaResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct StepWorldProfiledResponse {
+pub(crate) struct StepWorldProfiledResponse {
     pub world_id: String,
     pub steps: u32,
     pub exec_feedback_ms: f64,
@@ -156,7 +158,7 @@ pub(super) struct StepWorldProfiledResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct StepWorldProfiledDetailResponse {
+pub(crate) struct StepWorldProfiledDetailResponse {
     pub world_id: String,
     pub steps: u32,
     pub exec_feedback_ms: f64,
@@ -187,7 +189,7 @@ pub(super) struct StepWorldProfiledDetailResponse {
 }
 
 #[derive(Serialize)]
-pub(super) struct ExecWorldSliceResponse {
+pub(crate) struct ExecWorldSliceResponse {
     pub world_id: String,
     pub processed_ticks: u32,
     pub busy: bool,

@@ -79,6 +79,7 @@ pub fn exec_world_profiled_detailed_with_feedback_and_states(
                 let river_profile = run_hydrology_step_profiled(
                     world,
                     ctx.hydrology_state,
+                    ctx.geology_state.as_ref(),
                     world.clock.budgets.geology,
                     run_mfd,
                 );

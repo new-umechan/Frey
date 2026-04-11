@@ -152,10 +152,9 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
                 diagnostics.profile_attempt_count += 1;
                 try {
                     const profiledApi = controller as unknown as ProfiledExecApi;
-                    const profileFn = typeof profiledApi.exec_world_profiled_detail === "function"
-                        ? profiledApi.exec_world_profiled_detail
-                        : profiledApi.exec_world_profiled;
-                    const profiled = profileFn(worldId, 1);
+                    const profiled = typeof profiledApi.exec_world_profiled_detail === "function"
+                        ? profiledApi.exec_world_profiled_detail(worldId, 1)
+                        : profiledApi.exec_world_profiled(worldId, 1);
                     pushStepBreakdownSamples(recorder, profiled);
                     pushRiverBreakdownSamples(recorder, profiled);
                     recordProfiledStepSuccess(diagnostics, profiled);

@@ -2,7 +2,7 @@ import initWasm, {
     WorldSimController,
     build_render_positions,
     generate_mesh,
-} from "../interface/wasm";
+} from "../transport/wasm/frey-wasm-module";
 import { createPerfRunner } from "../app/perf/runner";
 
 const runner = createPerfRunner({

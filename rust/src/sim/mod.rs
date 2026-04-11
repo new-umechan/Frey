@@ -137,7 +137,7 @@ pub fn run_glaciology_step_for_bench(world: &mut world::World, glaciology_budget
 pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u32, run_mfd: bool) {
     let mut hydrology_state: HydrologyExecState = None;
     if run_mfd {
-        hydrology::run_hydrology_step(world, &mut hydrology_state, geology_budget);
+        hydrology::run_hydrology_step(world, &mut hydrology_state, geology_budget, None);
     } else {
         hydrology::run_hydrology_flow_step(world, &mut hydrology_state, geology_budget);
     }

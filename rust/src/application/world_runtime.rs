@@ -2,16 +2,15 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::application::world_dto::{DeltaRange, FieldDeltaResponse};
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 use crate::sim::{first_phase, ExecWorldPhase};
 
-use super::types::{DeltaRange, FieldDeltaResponse};
-
-pub(super) const DEFAULT_HISTORY_LIMIT: usize = 512;
-pub(super) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
-pub(super) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
+pub(crate) const DEFAULT_HISTORY_LIMIT: usize = 512;
+pub(crate) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
+pub(crate) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
 
 fn bitmap_word_len(values_len: usize) -> usize {
     values_len.div_ceil(32)
@@ -69,13 +68,13 @@ fn should_emit_bitmap(bitmap_words: usize, range_count: usize) -> bool {
 }
 
 #[derive(Clone)]
-pub(super) struct RangeDelta {
+pub(crate) struct RangeDelta {
     pub start: u32,
     pub end: u32,
 }
 
 #[derive(Clone)]
-pub(super) struct F32FieldTracker {
+pub(crate) struct F32FieldTracker {
     pub shadow: Vec<f32>,
     pub dirty_ranges: Vec<RangeDelta>,
     pub dirty_bitmap: Vec<u32>,
@@ -83,7 +82,7 @@ pub(super) struct F32FieldTracker {
 }
 
 #[derive(Clone)]
-pub(super) struct I32FieldTracker {
+pub(crate) struct I32FieldTracker {
     pub shadow: Vec<i32>,
     pub dirty_ranges: Vec<RangeDelta>,
     pub dirty_bitmap: Vec<u32>,
@@ -91,7 +90,7 @@ pub(super) struct I32FieldTracker {
 }
 
 #[derive(Clone)]
-pub(super) struct U32FieldTracker {
+pub(crate) struct U32FieldTracker {
     pub shadow: Vec<u32>,
     pub dirty_ranges: Vec<RangeDelta>,
     pub dirty_bitmap: Vec<u32>,
@@ -99,7 +98,7 @@ pub(super) struct U32FieldTracker {
 }
 
 #[derive(Clone)]
-pub(super) struct WorldTransportCache {
+pub(crate) struct WorldTransportCache {
     pub height: F32FieldTracker,
     pub lake_depth: F32FieldTracker,
     pub volcanism: F32FieldTracker,
@@ -125,7 +124,7 @@ pub(super) struct WorldTransportCache {
 }
 
 #[derive(Clone)]
-pub(super) struct ManagedWorld {
+pub(crate) struct ManagedWorld {
     pub world: world::World,
     pub hydrology_dynamics: Option<ErosionAutomatonState>,
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
@@ -138,7 +137,7 @@ pub(super) struct ManagedWorld {
 }
 
 #[derive(Clone)]
-pub(super) struct WorldHistorySnapshot {
+pub(crate) struct WorldHistorySnapshot {
     pub core: world::WorldCore,
     pub hydrology_dynamics: Option<ErosionAutomatonState>,
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
@@ -146,27 +145,27 @@ pub(super) struct WorldHistorySnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub(super) enum InterventionCommand {
+pub(crate) enum InterventionCommand {
     SetSimulationRate { value: f32 },
     SetTargetSeaRatio { value: f32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub(super) struct InterventionEvent {
+pub(crate) struct InterventionEvent {
     pub tick: u64,
     pub sequence: u64,
     pub command: InterventionCommand,
 }
 
 #[derive(Clone)]
-pub(super) struct WorldArchive {
+pub(crate) struct WorldArchive {
     pub history: BTreeMap<u64, WorldHistorySnapshot>,
     pub interventions: Vec<InterventionEvent>,
     pub next_intervention_seq: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct ManagedWorldExecState {
+pub(crate) struct ManagedWorldExecState {
     pub next_phase: ExecWorldPhase,
     pub remaining_steps: u32,
     pub pending_post_step: bool,
@@ -1169,8 +1168,8 @@ mod tests {
         assert_eq!(snapshot.core.cells.geology.height, vec![0.2]);
         assert_eq!(snapshot.core.clock.tick, sim_world.clock.tick);
         assert_eq!(
-            snapshot.core.entities.polity_count(),
-            sim_world.entities.polity_count()
+            snapshot.core.entities.iter_polities().count(),
+            sim_world.entities.iter_polities().count()
         );
     }
 }

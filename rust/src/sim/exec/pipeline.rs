@@ -75,7 +75,13 @@ pub(super) fn run_hydrology_stage_with_hydrology(
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
 ) {
     let run_mfd = should_run_hydrology_mfd_for_geology(world, geology_state.as_ref());
-    run_hydrology_step_unprofiled(world, hydrology_state, world.clock.budgets.geology, run_mfd);
+    run_hydrology_step_unprofiled(
+        world,
+        hydrology_state,
+        geology_state.as_ref(),
+        world.clock.budgets.geology,
+        run_mfd,
+    );
     apply_hydrology_erosion_to_geology(world, geology_state, hydrology_state);
     world.refresh_terrain_state();
 }

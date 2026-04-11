@@ -4,7 +4,7 @@ function roundMetric(value: number): number {
     if (!Number.isFinite(value)) {
         return 0;
     }
-    return Math.round(value * 1000) / 1000;
+    return Math.round(value * 1_000_000) / 1_000_000;
 }
 
 function percentile(sortedValues: number[], ratio: number): number {

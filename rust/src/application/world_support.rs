@@ -1,13 +1,14 @@
+#![cfg(feature = "wasm_transport")]
+
+use crate::application::world_runtime::ManagedWorld;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::{GeologyParams, PlateId};
 use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::world;
 
-use super::state::ManagedWorld;
-
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
 
-pub(super) fn build_erosion_state(
+pub(crate) fn build_erosion_state(
     world: &world::World,
     params: GeologyParams,
 ) -> ErosionAutomatonState {
@@ -61,11 +62,11 @@ pub(super) fn build_erosion_state(
     }
 }
 
-pub(super) fn sync_erosion_state(managed: &mut ManagedWorld) {
+pub(crate) fn sync_erosion_state(managed: &mut ManagedWorld) {
     sync_erosion_state_full(managed);
 }
 
-pub(super) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
+pub(crate) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
     let params = managed.geology_params.clone();
     let world = &mut managed.world;
     let hydrology_dynamics = &mut managed.hydrology_dynamics;
@@ -94,7 +95,7 @@ pub(super) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
     ensure_sink_buffers(state, expected);
 }
 
-pub(super) fn post_step_sync_light(managed: &mut ManagedWorld) {
+pub(crate) fn post_step_sync_light(managed: &mut ManagedWorld) {
     let params = managed.geology_params.clone();
     let world = &mut managed.world;
     let hydrology_dynamics = &mut managed.hydrology_dynamics;
@@ -165,7 +166,7 @@ fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
     }
 }
 
-pub(super) fn sampled_len(total_len: usize, stride: u32) -> u32 {
+pub(crate) fn sampled_len(total_len: usize, stride: u32) -> u32 {
     if total_len == 0 {
         return 0;
     }
@@ -173,7 +174,7 @@ pub(super) fn sampled_len(total_len: usize, stride: u32) -> u32 {
     total_len.div_ceil(step) as u32
 }
 
-pub(super) fn sample_f32(values: &[f32], stride: u32) -> Vec<f32> {
+pub(crate) fn sample_f32(values: &[f32], stride: u32) -> Vec<f32> {
     values
         .iter()
         .step_by(stride.max(1) as usize)
@@ -181,7 +182,7 @@ pub(super) fn sample_f32(values: &[f32], stride: u32) -> Vec<f32> {
         .collect()
 }
 
-pub(super) fn sample_u32_from_plate_id(values: &[PlateId], stride: u32) -> Vec<u32> {
+pub(crate) fn sample_u32_from_plate_id(values: &[PlateId], stride: u32) -> Vec<u32> {
     values
         .iter()
         .step_by(stride.max(1) as usize)
@@ -189,7 +190,7 @@ pub(super) fn sample_u32_from_plate_id(values: &[PlateId], stride: u32) -> Vec<u
         .collect()
 }
 
-pub(super) fn sample_i32(values: &[i32], stride: u32) -> Vec<i32> {
+pub(crate) fn sample_i32(values: &[i32], stride: u32) -> Vec<i32> {
     values
         .iter()
         .step_by(stride.max(1) as usize)

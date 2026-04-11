@@ -23,9 +23,7 @@ use network::{
     smooth_and_normalize_flux, RiverNetworkConstraintBuffers, RiverNetworkConstraintInput,
 };
 use profiling::{profile_elapsed_ms, profile_now};
-use routing::{
-    apply_baseflow_storage, build_runoff_for_routing, river_rebuild_driver, should_rebuild_network,
-};
+use routing::{apply_baseflow_storage, build_runoff_for_routing, should_rebuild_network};
 pub(crate) use sync::sync_erosion_height;
 use sync::{erosion_state_matches_world, sync_erosion_rain};
 
@@ -55,6 +53,7 @@ pub(crate) fn run_hydrology_step(
     world: &mut World,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
     geology_budget: u32,
+    geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
 ) -> HydrologyStepDetailBreakdown {
     let mut detail = HydrologyStepDetailBreakdown::default();
     let budget = geology_river_budget(world.clock.epoch, geology_budget);
@@ -65,7 +64,7 @@ pub(crate) fn run_hydrology_step(
     let phase_start = profile_now();
     let runoff = build_runoff_for_routing(world);
     detail.river_prepare_ms += profile_elapsed_ms(phase_start);
-    let river_driver = river_rebuild_driver(world);
+    let river_driver = routing::river_rebuild_driver_with_geology(world, geology_state);
     if !run_river_step_with_erosion_state(
         world,
         hydrology_state.as_mut(),

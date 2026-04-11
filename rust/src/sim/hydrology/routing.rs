@@ -127,8 +127,12 @@ pub(super) fn river_rebuild_driver_for_geology(
         .unwrap_or(1.0)
 }
 
-pub(super) fn river_rebuild_driver(world: &World) -> f32 {
-    river_rebuild_driver_for_geology(world.matched_geology_dynamics())
+pub(super) fn river_rebuild_driver_with_geology(
+    world: &World,
+    geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
+) -> f32 {
+    let geology = geology_state.or_else(|| world.matched_geology_dynamics());
+    river_rebuild_driver_for_geology(geology)
 }
 
 pub(super) fn compute_rebuild_interval(params: &GeologyParams, driver: f32) -> u32 {

@@ -1,66 +1,11 @@
 use wasm_bindgen::prelude::*;
 
-use crate::sim;
-use crate::sim::geology_types::GeologyInternal;
-use crate::sim::{
-    display_group_key, exec_world_profiled_detailed_with_feedback_and_states,
-    exec_world_slice_with_states, exec_world_with_feedback_and_states, first_phase,
-    module_doc_records, module_graph_record, phase_display_group, world, ExecWorldBreakdown,
-    ExecWorldBreakdownDetailed, ExecWorldPhase,
-};
+use crate::application::world_dto::InitWorldConfig;
+use crate::application::world_use_cases;
+use crate::application::world_validation::{validate_integer_tick, validate_non_negative_tick};
+use crate::sim::{module_doc_records, module_graph_record};
 
-use super::super::helpers::{build_erosion_state, post_step_sync_light};
-use super::super::state::{
-    InterventionCommand, ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
-};
-use super::super::types::ExecWorldSliceResponse;
-use super::super::types::ForkWorldOutput;
-use super::super::types::InitWorldConfig;
-use super::super::types::InitWorldOutput;
-use super::super::types::StepWorldProfiledDetailResponse;
-use super::super::types::StepWorldProfiledResponse;
 use super::super::WorldSimController;
-use super::commands::replay_world_to_tick;
-use super::common::{validate_integer_tick, validate_non_negative_tick, world_not_found_error};
-
-#[cfg(target_arch = "wasm32")]
-fn profile_now_ms() -> f64 {
-    js_sys::Date::now()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn profile_now_ms() -> std::time::Instant {
-    std::time::Instant::now()
-}
-
-#[cfg(target_arch = "wasm32")]
-fn profile_elapsed_ms(start: f64) -> f64 {
-    js_sys::Date::now() - start
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
-    start.elapsed().as_secs_f64() * 1000.0
-}
-
-fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
-    post_step_sync_light(managed);
-    managed.observe_after_world_change();
-    archive.save_snapshot_if_needed(managed);
-}
-
-fn scaled_step_count(simulation_rate: f32, tick_count: u32) -> u32 {
-    let scaled_ticks = ((tick_count as f32) * simulation_rate).round() as u32;
-    scaled_ticks.max(1)
-}
-
-fn reset_pending_slice(managed: &mut ManagedWorld) {
-    managed.reset_exec_state();
-}
-
-fn exec_phase_label(phase: ExecWorldPhase) -> &'static str {
-    display_group_key(phase_display_group(phase))
-}
 
 #[wasm_bindgen]
 impl WorldSimController {
@@ -95,119 +40,16 @@ impl WorldSimController {
                 .map_err(|err| JsValue::from_str(&format!("invalid init config: {err}")))?
         };
 
-        if mesh_level > 8 {
-            return Err(JsValue::from_str("mesh_level must be between 0 and 8"));
-        }
-
-        let mut geology_params = config.geology_params.unwrap_or_default();
-        geology_params.level = mesh_level;
-
-        let (terrain, positions, nbr_offsets, nbrs) =
-            sim::build_geology_with_mesh(&seed, geology_params.clone());
-
-        if terrain.height.len() != positions.len() || terrain.plate_id.len() != positions.len() {
-            return Err(JsValue::from_str(
-                "terrain output does not match mesh vertex count",
-            ));
-        }
-
-        let plate_id = terrain.plate_id;
-
-        let river_flow = terrain.river_flux;
-        let river_next = terrain.river_next;
-        let volcanism = terrain.volcanism;
-        let vertex_buoyancy = terrain.vertex_buoyancy;
-        let lake_depth = terrain.lake_depth;
-        let geology = world::GeologyState {
-            height: terrain.height,
-            lake_depth,
-            plate_id,
-            erosion_rate: vec![0.0; positions.len()],
-            deposition_rate: vec![0.0; positions.len()],
-            volcanism,
-            vertex_buoyancy,
-            geology_internal: vec![GeologyInternal::default(); positions.len()],
-            boundary_condition: vec![0.0; positions.len()],
-        };
-
-        let mesh = world::WorldMesh {
-            positions,
-            nbr_offsets,
-            nbrs,
-        };
-
-        let mut sim_world = world::World::new(mesh, geology);
-        sim_world.state.hydrology.river_flow = river_flow;
-        sim_world.state.hydrology.river_next = river_next;
-        crate::sim::hydrology::rebuild_mfd_from_primary(&mut sim_world.state.hydrology);
-        if let Some(target) = config.target_sea_ratio {
-            sim_world.control.target_sea_ratio = target.clamp(0.02, 0.98);
-        }
-        sim_world.control.geology_params = geology_params.clone();
-        sim_world.control.erosion_thickness_coupling = geology_params.erosion_thickness_coupling;
-        sim_world.control.deposition_thickness_coupling =
-            geology_params.deposition_thickness_coupling;
-        sim_world.clock.epoch = world::EraKind::Crust;
-
-        let erosion_state = build_erosion_state(&sim_world, geology_params.clone());
-        let _ = crate::sim::hydrology::apply_hydrology_state_view(&mut sim_world, &erosion_state);
-        let geology_dynamics = sim_world.exec_scratch.geology_dynamics.take();
-        let transport_cache =
-            WorldTransportCache::from_world(&sim_world, geology_dynamics.as_ref());
-        let hydrology_dynamics = Some(erosion_state);
-
-        let feedback = world::FeedbackQueue::new(sim_world.cell_count());
-        let managed = ManagedWorld {
-            world: sim_world,
-            hydrology_dynamics,
-            geology_dynamics,
-            feedback,
-            simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
-            geology_params,
-            transport_cache,
-            exec_state: ManagedWorldExecState::default(),
-            applied_intervention_seq: 0,
-        };
-        let mut archive = WorldArchive::new();
-        archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
-
-        let world_id = self.next_world_id();
-        let output = InitWorldOutput {
-            world_id: world_id.clone(),
-            tick: managed.world.clock.tick as f64,
-            era: managed.world.clock.epoch.as_key().to_string(),
-            cell_count: managed.world.state.geology.height.len() as u32,
-        };
-        self.archives.insert(world_id.clone(), archive);
-        self.worlds.insert(world_id, managed);
-
+        let output = world_use_cases::init_world(&mut self.service, seed, mesh_level, config)
+            .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&output)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize init result: {err}")))
     }
 
     #[wasm_bindgen(js_name = exec_world)]
     pub fn exec_world_js(&mut self, world_id: String, tick_count: u32) -> Result<(), JsValue> {
-        if tick_count == 0 {
-            return Ok(());
-        }
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        reset_pending_slice(managed);
-
-        let steps = scaled_step_count(managed.simulation_rate, tick_count);
-
-        for _ in 0..steps {
-            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
-            managed.with_exec_states(exec_world_with_feedback_and_states);
-            run_post_step(managed, archive);
-        }
-
-        Ok(())
+        world_use_cases::exec_world(&mut self.service, &world_id, tick_count)
+            .map_err(|err| JsValue::from_str(&err))
     }
 
     #[wasm_bindgen(js_name = exec_world_profiled)]
@@ -216,76 +58,9 @@ impl WorldSimController {
         world_id: String,
         tick_count: u32,
     ) -> Result<JsValue, JsValue> {
-        if tick_count == 0 {
-            let response = StepWorldProfiledResponse {
-                world_id,
-                steps: 0,
-                exec_feedback_ms: 0.0,
-                exec_geology_terrain_ms: 0.0,
-                exec_climate_ms: 0.0,
-                exec_glaciology_ms: 0.0,
-                exec_hydrology_ms: 0.0,
-                exec_ecology_ms: 0.0,
-                exec_society_ms: 0.0,
-                exec_transition_ms: 0.0,
-                step_sync_erosion_ms: 0.0,
-                step_observe_world_change_ms: 0.0,
-                step_history_snapshot_ms: 0.0,
-            };
-            return serde_wasm_bindgen::to_value(&response).map_err(|err| {
-                JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}"))
-            });
-        }
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        reset_pending_slice(managed);
-
-        let steps = scaled_step_count(managed.simulation_rate, tick_count);
-        let mut sim_breakdown = ExecWorldBreakdown::default();
-        let mut step_sync_erosion_ms = 0.0;
-        let mut step_observe_world_change_ms = 0.0;
-        let mut step_history_snapshot_ms = 0.0;
-
-        for _ in 0..steps {
-            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
-            let step_breakdown = managed
-                .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states)
-                .breakdown;
-            sim_breakdown.accumulate(&step_breakdown);
-
-            let phase_start = profile_now_ms();
-            post_step_sync_light(managed);
-            step_sync_erosion_ms += profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            managed.observe_after_world_change();
-            step_observe_world_change_ms += profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            archive.save_snapshot_if_needed(managed);
-            step_history_snapshot_ms += profile_elapsed_ms(phase_start);
-        }
-
-        let response = StepWorldProfiledResponse {
-            world_id,
-            steps,
-            exec_feedback_ms: sim_breakdown.exec_feedback_ms,
-            exec_geology_terrain_ms: sim_breakdown.exec_geology_terrain_ms,
-            exec_climate_ms: sim_breakdown.exec_climate_ms,
-            exec_glaciology_ms: sim_breakdown.exec_glaciology_ms,
-            exec_hydrology_ms: sim_breakdown.exec_hydrology_ms,
-            exec_ecology_ms: sim_breakdown.exec_ecology_ms,
-            exec_society_ms: sim_breakdown.exec_society_ms,
-            exec_transition_ms: sim_breakdown.exec_transition_ms,
-            step_sync_erosion_ms,
-            step_observe_world_change_ms,
-            step_history_snapshot_ms,
-        };
+        let response =
+            world_use_cases::exec_world_profiled(&mut self.service, world_id, tick_count)
+                .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!("failed to serialize exec_world_profiled: {err}"))
         })
@@ -297,111 +72,9 @@ impl WorldSimController {
         world_id: String,
         tick_count: u32,
     ) -> Result<JsValue, JsValue> {
-        if tick_count == 0 {
-            let response = StepWorldProfiledDetailResponse {
-                world_id,
-                steps: 0,
-                exec_feedback_ms: 0.0,
-                exec_geology_terrain_ms: 0.0,
-                exec_climate_ms: 0.0,
-                exec_glaciology_ms: 0.0,
-                exec_hydrology_ms: 0.0,
-                exec_ecology_ms: 0.0,
-                exec_society_ms: 0.0,
-                exec_transition_ms: 0.0,
-                step_sync_erosion_ms: 0.0,
-                step_observe_world_change_ms: 0.0,
-                step_history_snapshot_ms: 0.0,
-                step_geology_river_prepare_ms: 0.0,
-                step_geology_river_automaton_ms: 0.0,
-                step_geology_river_automaton_sink_ms: 0.0,
-                step_geology_river_automaton_cell_ms: 0.0,
-                step_geology_river_automaton_queue_ms: 0.0,
-                step_geology_river_network_ms: 0.0,
-                step_geology_river_sync_ms: 0.0,
-                step_geology_river_fallback_ms: 0.0,
-                river_network_rebuild_count: 0,
-                river_fallback_count: 0,
-                sink_rebuild_full_count: 0,
-                sink_rebuild_partial_count: 0,
-                sink_rebuild_skipped_count: 0,
-                sink_rebuild_fallback_full_count: 0,
-            };
-            return serde_wasm_bindgen::to_value(&response).map_err(|err| {
-                JsValue::from_str(&format!(
-                    "failed to serialize exec_world_profiled_detail: {err}"
-                ))
-            });
-        }
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        reset_pending_slice(managed);
-
-        let steps = scaled_step_count(managed.simulation_rate, tick_count);
-        let mut sim_breakdown = ExecWorldBreakdownDetailed::default();
-        let mut step_sync_erosion_ms = 0.0;
-        let mut step_observe_world_change_ms = 0.0;
-        let mut step_history_snapshot_ms = 0.0;
-
-        for _ in 0..steps {
-            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
-            let step_breakdown =
-                managed.with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
-            sim_breakdown.accumulate(&step_breakdown);
-
-            let phase_start = profile_now_ms();
-            post_step_sync_light(managed);
-            step_sync_erosion_ms += profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            managed.observe_after_world_change();
-            step_observe_world_change_ms += profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            archive.save_snapshot_if_needed(managed);
-            step_history_snapshot_ms += profile_elapsed_ms(phase_start);
-        }
-
-        let response = StepWorldProfiledDetailResponse {
-            world_id,
-            steps,
-            exec_feedback_ms: sim_breakdown.breakdown.exec_feedback_ms,
-            exec_geology_terrain_ms: sim_breakdown.breakdown.exec_geology_terrain_ms,
-            exec_climate_ms: sim_breakdown.breakdown.exec_climate_ms,
-            exec_glaciology_ms: sim_breakdown.breakdown.exec_glaciology_ms,
-            exec_hydrology_ms: sim_breakdown.breakdown.exec_hydrology_ms,
-            exec_ecology_ms: sim_breakdown.breakdown.exec_ecology_ms,
-            exec_society_ms: sim_breakdown.breakdown.exec_society_ms,
-            exec_transition_ms: sim_breakdown.breakdown.exec_transition_ms,
-            step_sync_erosion_ms,
-            step_observe_world_change_ms,
-            step_history_snapshot_ms,
-            step_geology_river_prepare_ms: sim_breakdown.river.step_geology_river_prepare_ms,
-            step_geology_river_automaton_ms: sim_breakdown.river.step_geology_river_automaton_ms,
-            step_geology_river_automaton_sink_ms: sim_breakdown
-                .river
-                .step_geology_river_automaton_sink_ms,
-            step_geology_river_automaton_cell_ms: sim_breakdown
-                .river
-                .step_geology_river_automaton_cell_ms,
-            step_geology_river_automaton_queue_ms: sim_breakdown
-                .river
-                .step_geology_river_automaton_queue_ms,
-            step_geology_river_network_ms: sim_breakdown.river.step_geology_river_network_ms,
-            step_geology_river_sync_ms: sim_breakdown.river.step_geology_river_sync_ms,
-            step_geology_river_fallback_ms: sim_breakdown.river.step_geology_river_fallback_ms,
-            river_network_rebuild_count: sim_breakdown.river.river_network_rebuild_count,
-            river_fallback_count: sim_breakdown.river.river_fallback_count,
-            sink_rebuild_full_count: sim_breakdown.river.sink_rebuild_full_count,
-            sink_rebuild_partial_count: sim_breakdown.river.sink_rebuild_partial_count,
-            sink_rebuild_skipped_count: sim_breakdown.river.sink_rebuild_skipped_count,
-            sink_rebuild_fallback_full_count: sim_breakdown.river.sink_rebuild_fallback_full_count,
-        };
+        let response =
+            world_use_cases::exec_world_profiled_detail(&mut self.service, world_id, tick_count)
+                .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(
                 "failed to serialize exec_world_profiled_detail: {err}"
@@ -415,68 +88,8 @@ impl WorldSimController {
         world_id: String,
         work_budget: u32,
     ) -> Result<JsValue, JsValue> {
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-
-        let budget = work_budget.max(1);
-        if !managed.exec_is_busy() {
-            managed.exec_state.remaining_steps = scaled_step_count(managed.simulation_rate, 1);
-            managed.exec_state.next_phase = first_phase();
-        }
-
-        let mut remaining_budget = budget;
-        let mut processed_ticks = 0u32;
-        while remaining_budget > 0 && managed.exec_is_busy() {
-            if managed.exec_state.pending_post_step {
-                run_post_step(managed, archive);
-                managed.exec_state.pending_post_step = false;
-                managed.exec_state.remaining_steps =
-                    managed.exec_state.remaining_steps.saturating_sub(1);
-                processed_ticks = processed_ticks.saturating_add(1);
-                remaining_budget = remaining_budget.saturating_sub(1);
-                continue;
-            }
-
-            let next_phase = managed.exec_state.next_phase;
-            archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
-            let slice =
-                managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
-                    exec_world_slice_with_states(
-                        world,
-                        feedback,
-                        geology_state,
-                        hydrology_state,
-                        next_phase,
-                        remaining_budget,
-                    )
-                });
-            managed.exec_state.next_phase = slice.next_phase;
-            remaining_budget = remaining_budget.saturating_sub(slice.work_units_consumed);
-            if slice.ticks_completed > 0 {
-                managed.exec_state.pending_post_step = true;
-            }
-            if slice.work_units_consumed == 0 {
-                break;
-            }
-        }
-
-        let phase = if managed.exec_state.pending_post_step {
-            "post_step".to_string()
-        } else {
-            exec_phase_label(managed.exec_state.next_phase).to_string()
-        };
-        let response = ExecWorldSliceResponse {
-            world_id,
-            processed_ticks,
-            busy: managed.exec_is_busy(),
-            phase,
-            tick: managed.world.clock.tick as f64,
-        };
+        let response = world_use_cases::exec_world_slice(&mut self.service, world_id, work_budget)
+            .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!("failed to serialize exec_world_slice: {err}"))
         })
@@ -484,21 +97,8 @@ impl WorldSimController {
 
     #[wasm_bindgen(js_name = set_simulation_rate)]
     pub fn set_simulation_rate_js(&mut self, world_id: String, rate: f32) -> Result<(), JsValue> {
-        if !rate.is_finite() {
-            return Err(JsValue::from_str("rate must be finite"));
-        }
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let _ = archive.enqueue_intervention(
-            managed,
-            InterventionCommand::SetSimulationRate { value: rate },
-        );
-        Ok(())
+        world_use_cases::set_simulation_rate(&mut self.service, &world_id, rate)
+            .map_err(|err| JsValue::from_str(&err))
     }
 
     #[wasm_bindgen(js_name = set_target_sea_ratio)]
@@ -507,55 +107,17 @@ impl WorldSimController {
         world_id: String,
         target_sea_ratio: f32,
     ) -> Result<(), JsValue> {
-        if !target_sea_ratio.is_finite() {
-            return Err(JsValue::from_str("target_sea_ratio must be finite"));
-        }
-        let (worlds, archives) = (&mut self.worlds, &mut self.archives);
-        let managed = worlds
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let archive = archives
-            .get_mut(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?;
-        let _ = archive.enqueue_intervention(
-            managed,
-            InterventionCommand::SetTargetSeaRatio {
-                value: target_sea_ratio,
-            },
-        );
-        Ok(())
+        world_use_cases::set_target_sea_ratio(&mut self.service, &world_id, target_sea_ratio)
+            .map_err(|err| JsValue::from_str(&err))
     }
 
     #[wasm_bindgen(js_name = fork_world)]
     pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
-        let tick_u64 = validate_non_negative_tick(tick)?;
-        validate_integer_tick(tick, tick_u64)?;
+        let tick_u64 = validate_non_negative_tick(tick).map_err(|err| JsValue::from_str(&err))?;
+        validate_integer_tick(tick, tick_u64).map_err(|err| JsValue::from_str(&err))?;
 
-        let source_world = self
-            .worlds
-            .get(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?
-            .clone();
-        let source_archive = self
-            .archives
-            .get(&world_id)
-            .ok_or_else(|| world_not_found_error(&world_id))?
-            .clone();
-
-        let mut forked_world = source_world;
-        let mut forked_archive = source_archive;
-        replay_world_to_tick(&mut forked_world, &mut forked_archive, tick_u64)?;
-
-        let forked_world_id = self.next_world_id();
-        self.worlds.insert(forked_world_id.clone(), forked_world);
-        self.archives
-            .insert(forked_world_id.clone(), forked_archive);
-
-        let response = ForkWorldOutput {
-            source_world_id: world_id,
-            world_id: forked_world_id,
-            tick: tick_u64 as f64,
-        };
+        let response = world_use_cases::fork_world(&mut self.service, world_id, tick_u64)
+            .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize fork_world: {err}")))
     }
