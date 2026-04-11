@@ -404,6 +404,9 @@ enum CellFieldId {
     // Domesticates
     CropAdoption(CropId),
     LivestockAdoption(LivestockId),
+    // Domesticates feedback staging（Population -> Domesticates）
+    DomesticatesNeighborPopulationDensity,
+    DomesticatesIntensificationBonus,
 }
 
 enum FeedbackPayload {
@@ -420,6 +423,16 @@ enum FeedbackPayload {
     TriggerEpochTransition { to: Epoch },
 }
 ```
+
+`docs/modules/` で `FeedbackKind::DomesticatesSpread` / `FeedbackKind::DomesticatesPopulationPressure`
+のようなドメイン語を使う場合でも、transport 層の正本は上記 `FeedbackPayload` である。
+実装時は次の写像で統一する。
+
+- `DomesticatesSpread`
+  `DeltaF32 { field: CropAdoption(_)/LivestockAdoption(_), ... }` の組で表現する
+- `DomesticatesPopulationPressure`
+  `SetValue { field: DomesticatesNeighborPopulationDensity, ... }` と
+  `SetValue { field: DomesticatesIntensificationBonus, ... }` の組で表現する
 
 `FeedbackEntry.source` と `FeedbackEntry.target_module` は、どの `Module` 境界から出た影響か、
 どの `Module` 境界へ渡す影響かを示す。

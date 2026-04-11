@@ -321,6 +321,7 @@ MFD（Multiple Flow Direction）を採用する。
 - 土壌肥沃度 ← `Ecology` が書く
 - 前tickまでの作物・家畜普及度
 - FeedbackQueue（`Settlement` が積む拡散圧。`target_module = Domesticates`）
+- FeedbackQueue（`Population` が積む人口密度圧。`target_module = Domesticates`）
 
 ### 書くもの
 
@@ -340,7 +341,7 @@ MFD（Multiple Flow Direction）を採用する。
 
 環境条件から各作物・家畜の成立可能性を判定し、
 起源地シードと近傍セルからの内生拡散、
-および `Settlement -> Domesticates` feedback をもとに普及度を更新する。
+および `Settlement -> Domesticates` / `Population -> Domesticates` feedback をもとに普及度を更新する。
 `available` は内部判定用で、`Subsistence` は `adoption` のみを読む。
 
 ---
@@ -408,6 +409,9 @@ MFD（Multiple Flow Direction）を採用する。
 大虐殺など単発の大量死は人口を直接削る（`DeltaF32 { field: Population, delta }`）。
 
 `Disease`（Tier 2）が有効化された場合、死亡率への影響をFeedbackQueue経由で受け取る。
+
+`Population` は `Domesticates` に対して、人口密度由来の拡散・集約化圧を
+FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）。
 
 ---
 

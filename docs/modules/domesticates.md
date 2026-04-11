@@ -33,11 +33,15 @@ Domesticatesが読む主な値は次のとおり。
 - 前tickの `crop_adoption`
 - 前tickの `livestock_adoption`
 - FeedbackQueue（`Settlement` から届く拡散圧）
+- FeedbackQueue（`Population` から届く人口密度圧）
 
 `clock.epoch` は、先史期以降に Domesticates を有効化するために読む。
 初期成立中心シードはモジュール初回有効tickで初期化する。
-FeedbackQueue で受けるのは、近傍セルの自然拡散ではなく、
-移住・交易接触などで生じる長距離または非局所の追加圧だけである。
+
+FeedbackQueue で受けるのは、近傍セルの自然拡散ではなく、次の2種類の非局所圧だけである。
+
+- `Settlement` からの拡散圧：移住・交易接触・定住ネットワーク経由の持ち込み
+- `Population` からの人口密度圧：集約化インセンティブのスケーリング係数として使う
 
 ## 出力
 
@@ -148,7 +152,9 @@ fn gaussian_score(x: f32, mean: f32, sigma: f32) -> f32 {
 - `fertility_or_pasture_score`
 - `river_bonus`
 - `niche_score`
+- `terrain_conductance`
 - `spread_pressure`
+- `intensification_factor`
 
 ### available 判定
 
@@ -212,8 +218,9 @@ v1 では独立の人口モジュールに依存せず、少なくとも次の p
 - 極端環境ではないこと
 - 植生被覆が完全閉鎖でも完全裸地でもないこと
 
-将来的に `Settlement` や人口密度レイヤーが入る場合は、
-`human_management_score` に統合して精密化してよい。
+`Population` からの人口密度feedbackは adoption 側の集約化圧にのみ使う。
+起源シード抽出の `human_management_score` には直接入れず、
+初期成立条件と後期の人口集積効果を分離する。
 
 方針:
 
@@ -225,14 +232,24 @@ v1 では独立の人口モジュールに依存せず、少なくとも次の p
 
 ### adoption 更新
 
-`adoption` は、成立可能性と拡散圧の両方で決まる。
+`adoption` は、環境適合度・拡散圧・集約化インセンティブの3要素で決まる。
 
 概念式:
 
 ```text
+intensification_factor =
+    1.0 + population_pressure_bonus
+    // population_pressure_bonus は Population からの FeedbackQueue で上書きされる
+    // Population が未接続の tick では 0.0 固定（factor = 1.0）
+
 target_adoption =
-    available_gate
-  * max(origin_seed_strength, spread_pressure)
+    clamp01(
+        available_gate
+      * max(origin_seed_strength, spread_pressure)
+      * intensification_factor
+    )
+    // intensification_factor が 1.0 を超えても、target_adoption は 1.0 を上限とする
+    // clamp01 はここでのみ適用し、next_adoption への収束式には影響しない
 
 next_adoption =
     current
@@ -247,6 +264,7 @@ next_adoption =
 - 起源地では初期 `adoption` を持つため先に立ち上がる
 - 近傍からの拡散で周辺セルが遅れて追随する
 - 1tickで `0.0 -> 1.0` に飛ばさない
+- 人口密度が高いセルでは `intensification_factor` が上昇し、adoption の立ち上がりが加速する
 
 ここでの慣性は `current` 自体が担う。
 別の内部状態として `retained_tradition` は持たない。
@@ -256,16 +274,27 @@ next_adoption =
 
 ### spread_pressure
 
-v1 では、普及圧は近接伝播を主とする。
+普及圧は、地形摩擦を考慮した近傍伝播と、非局所feedbackの合算とする。
 
 ```text
-spread_pressure =
+terrain_conductance =
+    f(hydrology.river_flow, geology.height, ecology.biome)
+    // 河川・低地回廊で高く、山脈・砂漠・密林で低い
+    // corridor_score と同一の地理変数から導く
+
+local_spread =
     local_neighbor_adoption
+  * terrain_conductance
+
+spread_pressure =
+    local_spread
   + routed_feedback_bonus
 ```
 
 - `local_neighbor_adoption`
-  近傍セルまたは近傍地域の `adoption` から計算する内生拡散圧
+  近傍セルの `adoption` から計算する内生拡散圧
+- `terrain_conductance`
+  地形・水文による拡散速度の修飾。同一採用量でも、地形条件で広がりやすさが変わる
 - `routed_feedback_bonus`
   `Settlement` が前tickに積む追加圧
 
@@ -274,11 +303,13 @@ feedback の責務は次で固定する。
 - 近傍セルからの通常拡散は `Domesticates` 自身が現在tickの近傍 `adoption` を読んで計算する
 - `Domesticates` 自身は自分の inbox に feedback を積まない
 - `routed_feedback_bonus` は `Settlement` が、移住・交易接触・定住ネットワーク経由の持ち込みを表すときだけ積む
-- この feedback は `FeedbackEntry.target_module = ModuleId::Domesticates` で配送する
+- `population_pressure_bonus` は `Population` が、人口密度由来の集約化圧として積む
+- これらの feedback は `FeedbackEntry.target_module = ModuleId::Domesticates` で配送する
 
 概念例:
 
 ```rust
+// Settlement からの拡散圧
 FeedbackEntry {
     target_module: ModuleId::Domesticates,
     kind: FeedbackKind::DomesticatesSpread {
@@ -287,10 +318,20 @@ FeedbackEntry {
         livestock_delta: [f32; N_LIVESTOCK],
     },
 }
+
+// Population からの人口密度圧
+FeedbackEntry {
+    target_module: ModuleId::Domesticates,
+    kind: FeedbackKind::DomesticatesPopulationPressure {
+        cell: target_cell,
+        intensification_bonus: f32,    // population_pressure_bonus に使う
+    },
+}
 ```
 
-これにより、先史期の初期段階でも `Settlement` の成熟を前提にせず、
+これにより、先史期の初期段階でも `Settlement` や `Population` の成熟を前提にせず、
 Domesticates単体で起源地からの緩い拡散を表現できる。
+`Population` が接続されたあとは、人口密度の高い地域で採用強化が加速する挙動が自然に生まれる。
 
 ## 種ごとのニッチ方針
 
@@ -343,6 +384,7 @@ Domesticatesのパラメータは、将来的に専用設定ファイルへ切�
 - `tree_cover_preference`
 - `ground_cover_preference`
 - `river_bonus_weight`
+- `terrain_conductance_weights`（river_flow・height・biomeの重み）
 - `origin_count_limit`
 - `origin_seed_strength`
 - `growth_rate`
@@ -363,25 +405,74 @@ Domesticatesのパラメータは、将来的に専用設定ファイルへ切�
 6. 適地でも孤立セルは `adoption` が即座に上がらない
 7. 不適地へ入ると `adoption` は即座にゼロにならず、遅れて減衰する
 8. `Subsistence` は引き続き `crop_adoption` / `livestock_adoption` のみを読める
+9. 山脈・砂漠を挟んだセルへの拡散が、低地回廊経由より遅くなる（terrain_conductance）
+10. `Population` feedback未接続時、`intensification_factor = 1.0` で動作が変わらない
+11. `Population` feedback接続後、人口密度の高いセルで adoption の立ち上がりが加速する
 
-## 学術的な根拠の扱い
+## 学術的な立場
 
 このモジュールは、現実世界の作物史・家畜史を固定再現するものではない。
 生成世界に対して、文献で知られる大まかな環境ニッチと拡散の性質を移植する。
 
-参照の軸:
+### 各局面で依拠する理論
 
-- 作物の起源地からの拡散と新環境適応のレビュー  
+**O（起源・初期成立中心）**
+
+v1近似モデルの操作原則として、
+「環境適地」と「人間が継続的に試行・管理しやすい地理条件」の重なりが
+初期成立中心になりやすい、という前提を置く。
+これは `origin_potential = niche_score * corridor_score * human_management_score`
+として実装するための操作仮説である。
+
+hilly flanks / nuclear zone 仮説（Braidwood）は、
+このうち近東の穀物・家畜に関する代表的な地域仮説として参照するにとどめる。
+低湿地稲作、森林縁のブタ、塊茎作物の複数成立中心などを
+単一の地域仮説で説明することは意図しない。
+現実の固定原産地は使わず、生成世界の地形・水文・生態から毎回導出する。
+
+**D（拡散）**
+
+v1近似モデルの操作仮説として、demic×cultural 混合拡散モデル（Fort ほか）の枠組みを採用する。
+拡散速度は距離だけでなく地形摩擦によって変わる。
+河川・低地回廊は伝導路として機能し、山脈・砂漠は摩擦として機能する。
+これを `terrain_conductance` として `spread_pressure` に組み込む。
+近傍伝播（cultural diffusion 的）と長距離feedbackによる非局所圧（demic的接触）の混合で表現する。
+
+ただし、このモデルはもともと欧州新石器拡散の定量分析として提唱されたものであり、
+全地球・全カテゴリへの一般化には留保が必要である。
+v1では「地形が拡散速度を規定する」という操作原則のみを借用し、
+demic/cultural の比率推定や人口移動の明示的モデル化は行わない。
+
+**A（採用）**
+
+最適採食理論（OFT）を基底に、ボーセラップ的集約化を人口密度でスケーリングする形で統合する。
+環境適合度（`niche_score`）が高いほど採用の合理性が高く（OFT基底）、
+人口密度が高い地域では集約化圧が加速因子として乗る（ボーセラップ的スケーリング）。
+人口密度は `Population` からのfeedbackで供給され、`intensification_factor` として作用する。
+`Population` 未接続時は factor = 1.0 固定で、OFT基底のみで動作する。
+
+**M（維持）**
+
+管理連続体（野林ほか）の慣性的側面を採用する。
+`adoption` 値の収束式による慣性と、不適地での緩い `decay_rate` が、
+「過去に普及していたため急には消えない」という性質を表現する。
+Tier1スコープでは技術変化（二次産物革命）や制度的ロックインは扱わない。
+
+### 参照文献・データソース
+
+- 作物の起源地からの拡散と新環境適応のレビュー
   https://www.annualreviews.org/content/journals/10.1146/annurev-arplant-060223-030954?TRACK=RSS
-- 作物ごとの生態要求値参照には FAO Ecocrop を使う  
-  例: `Hordeum vulgare`  
+- 作物ごとの生態要求値参照には FAO Ecocrop を使う
+  例: `Hordeum vulgare`
   https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1232
-- 家畜の起源地・拡散の代表例として horse のレビュー  
+- 家畜の起源地・拡散の代表例として horse のレビュー
   https://pmc.ncbi.nlm.nih.gov/articles/PMC8550961/
-- 放牧家畜のエコゾーン分布の大枠確認として FAO の grazing systems  
+- 放牧家畜のエコゾーン分布の大枠確認として FAO の grazing systems
   https://www.fao.org/4/x5303e/x5303e0m.htm
+- demic×cultural 混合拡散の定量モデル
+  Fort et al. (2015) Demic and cultural diffusion propagated the Neolithic transition across different regions of Europe
 
-関連:
+## 関連
 
 - `docs/architecture/module_boundaries.md`
 - `docs/architecture/data_model.md`
