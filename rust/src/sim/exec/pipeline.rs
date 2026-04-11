@@ -98,12 +98,20 @@ pub(super) fn run_subsistence_stage(world: &mut World) {
     crate::sim::subsistence::update_subsistence(world, world.clock.budgets.civilization);
 }
 
-pub(super) fn run_population_stage(world: &mut World) {
-    crate::sim::population::update_population(world, world.clock.budgets.civilization);
+pub(super) fn run_population_stage(world: &mut World, feedback: &mut FeedbackQueue) {
+    crate::sim::population::update_population(
+        world,
+        world.clock.budgets.civilization,
+        Some(feedback),
+    );
 }
 
-pub(super) fn run_settlement_stage(world: &mut World) {
-    crate::sim::settlement::update_settlement(world, world.clock.budgets.civilization);
+pub(super) fn run_settlement_stage(world: &mut World, feedback: &mut FeedbackQueue) {
+    crate::sim::settlement::update_settlement(
+        world,
+        world.clock.budgets.civilization,
+        Some(feedback),
+    );
 }
 
 pub(super) fn run_polity_stage(world: &mut World) {

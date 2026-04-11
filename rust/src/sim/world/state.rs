@@ -482,7 +482,24 @@ pub struct DomesticatesState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DomesticatesInternal {
+    #[serde(default)]
     pub diffusion_memory: f32,
+    #[serde(default)]
+    pub origin_initialized: bool,
+    #[serde(default)]
+    pub origin_seed_crop: [f32; N_CROPS],
+    #[serde(default)]
+    pub origin_seed_livestock: [f32; N_LIVESTOCK],
+    #[serde(default)]
+    pub spread_pressure_crop: [f32; N_CROPS],
+    #[serde(default)]
+    pub spread_pressure_livestock: [f32; N_LIVESTOCK],
+    #[serde(default)]
+    pub routed_feedback_crop: [f32; N_CROPS],
+    #[serde(default)]
+    pub routed_feedback_livestock: [f32; N_LIVESTOCK],
+    #[serde(default)]
+    pub population_pressure_bonus: f32,
 }
 
 pub type CropBitmap = u8;

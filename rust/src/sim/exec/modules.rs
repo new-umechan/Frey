@@ -286,12 +286,12 @@ fn step_subsistence(world: &mut World, _ctx: &mut ModuleExecContext<'_>) {
     run_subsistence_stage(world);
 }
 
-fn step_population(world: &mut World, _ctx: &mut ModuleExecContext<'_>) {
-    run_population_stage(world);
+fn step_population(world: &mut World, ctx: &mut ModuleExecContext<'_>) {
+    run_population_stage(world, ctx.feedback);
 }
 
-fn step_settlement(world: &mut World, _ctx: &mut ModuleExecContext<'_>) {
-    run_settlement_stage(world);
+fn step_settlement(world: &mut World, ctx: &mut ModuleExecContext<'_>) {
+    run_settlement_stage(world, ctx.feedback);
 }
 
 fn step_polity(world: &mut World, _ctx: &mut ModuleExecContext<'_>) {

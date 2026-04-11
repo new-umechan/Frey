@@ -213,6 +213,97 @@ fn exec_feedback_stage_does_not_consume_other_module_entries() {
 }
 
 #[test]
+fn domesticates_feedback_payload_updates_internal_pressure() {
+    let mut world = build_test_world();
+    world.clock.tick = 5;
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
+    feedback.push(FeedbackEntry {
+        source: ModuleId::Settlement,
+        target_module: ModuleId::Domesticates,
+        target_ref: TargetRef::Cell(CellId(0)),
+        enqueued_tick: 4,
+        payload: FeedbackPayload::DomesticatesSpread {
+            cell: CellId(0),
+            crop_delta: [0.03; crate::sim::world::N_CROPS],
+            livestock_delta: [0.02; crate::sim::world::N_LIVESTOCK],
+        },
+    });
+    feedback.push(FeedbackEntry {
+        source: ModuleId::Population,
+        target_module: ModuleId::Domesticates,
+        target_ref: TargetRef::Cell(CellId(0)),
+        enqueued_tick: 4,
+        payload: FeedbackPayload::DomesticatesPopulationPressure {
+            cell: CellId(0),
+            intensification_bonus: 0.4,
+        },
+    });
+
+    super::feedback::apply_feedback_queue_for_module(
+        &mut world,
+        &mut feedback,
+        ModuleId::Domesticates,
+    );
+
+    assert!(feedback.entries.is_empty());
+    assert!(
+        world.state.domesticates.domesticates_internal[0].routed_feedback_crop[0] > 0.0,
+        "crop routed feedback was not applied"
+    );
+    assert!(
+        world.state.domesticates.domesticates_internal[0].routed_feedback_livestock[0] > 0.0,
+        "livestock routed feedback was not applied"
+    );
+    assert!(
+        world.state.domesticates.domesticates_internal[0].population_pressure_bonus > 0.0,
+        "population pressure bonus was not applied"
+    );
+}
+
+#[test]
+fn population_stage_enqueues_domesticates_population_pressure() {
+    let mut world = build_test_world();
+    world.clock.tick = 8;
+    world.clock.budgets.civilization = 4;
+    world.state.geology.height = vec![0.3, 0.2, 0.1, 0.2];
+    world.state.population.population = vec![180.0, 0.0, 0.0, 0.0];
+    world.state.subsistence.food_production = vec![0.9, 0.0, 0.0, 0.0];
+    world.state.subsistence.freshwater_access = vec![0.9, 0.0, 0.0, 0.0];
+    world.state.ecology.soil_fertility = vec![0.8, 0.0, 0.0, 0.0];
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
+
+    super::pipeline::run_population_stage(&mut world, &mut feedback);
+
+    assert!(feedback.entries.iter().any(|entry| {
+        matches!(
+            entry.payload,
+            FeedbackPayload::DomesticatesPopulationPressure { .. }
+        ) && entry.target_module == ModuleId::Domesticates
+            && entry.source == ModuleId::Population
+    }));
+}
+
+#[test]
+fn settlement_stage_enqueues_domesticates_spread_feedback() {
+    let mut world = build_test_world();
+    world.clock.tick = 9;
+    world.clock.budgets.civilization = 4;
+    world.state.geology.height = vec![0.3, 0.2, 0.1, 0.2];
+    world.state.population.population = vec![120.0, 40.0, 0.0, 0.0];
+    world.state.domesticates.crop_adoption[0][0] = 0.7;
+    world.state.domesticates.livestock_adoption[0][0] = 0.6;
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
+
+    super::pipeline::run_settlement_stage(&mut world, &mut feedback);
+
+    assert!(feedback.entries.iter().any(|entry| {
+        matches!(entry.payload, FeedbackPayload::DomesticatesSpread { .. })
+            && entry.target_module == ModuleId::Domesticates
+            && entry.source == ModuleId::Settlement
+    }));
+}
+
+#[test]
 fn module_manifest_includes_generated_dependencies() {
     let manifests = module_manifests();
     let ecology = manifests

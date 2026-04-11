@@ -1,6 +1,6 @@
 use crate::sim::world::{
     CellFieldId, ComponentPatch, EntityBundle, FeedbackEntry, FeedbackPayload, FeedbackQueue,
-    FieldValue, ModuleId, TargetRef, World,
+    FieldValue, ModuleId, TargetRef, World, N_CROPS, N_LIVESTOCK,
 };
 
 pub(super) fn apply_feedback_queue(world: &mut World, feedback: &mut FeedbackQueue) {
@@ -73,6 +73,30 @@ fn apply_feedback_entries(world: &mut World, entries: Vec<FeedbackEntry>) {
                 apply_mutate_entity(world, &entry.target_ref, &entity, patch);
             }
             FeedbackPayload::TriggerEpochTransition { .. } => {}
+            FeedbackPayload::DomesticatesSpread {
+                cell,
+                crop_delta,
+                livestock_delta,
+            } => {
+                apply_domesticates_spread(
+                    world,
+                    cell.as_usize(),
+                    crop_delta,
+                    livestock_delta,
+                    cell_count,
+                );
+            }
+            FeedbackPayload::DomesticatesPopulationPressure {
+                cell,
+                intensification_bonus,
+            } => {
+                apply_domesticates_population_pressure(
+                    world,
+                    cell.as_usize(),
+                    intensification_bonus,
+                    cell_count,
+                );
+            }
             _ => {}
         }
     }
@@ -149,4 +173,44 @@ fn apply_mutate_entity(
     patch: ComponentPatch,
 ) {
     world.entities.mutate_entity(target_ref, entity, patch);
+}
+
+fn apply_domesticates_spread(
+    world: &mut World,
+    cell: usize,
+    crop_delta: [f32; N_CROPS],
+    livestock_delta: [f32; N_LIVESTOCK],
+    cell_count: usize,
+) {
+    if cell >= cell_count {
+        return;
+    }
+    let internal = &mut world.state.domesticates.domesticates_internal[cell];
+    for (dst, src) in internal
+        .routed_feedback_crop
+        .iter_mut()
+        .zip(crop_delta.iter())
+    {
+        *dst += *src;
+    }
+    for (dst, src) in internal
+        .routed_feedback_livestock
+        .iter_mut()
+        .zip(livestock_delta.iter())
+    {
+        *dst += *src;
+    }
+}
+
+fn apply_domesticates_population_pressure(
+    world: &mut World,
+    cell: usize,
+    intensification_bonus: f32,
+    cell_count: usize,
+) {
+    if cell >= cell_count {
+        return;
+    }
+    let internal = &mut world.state.domesticates.domesticates_internal[cell];
+    internal.population_pressure_bonus += intensification_bonus;
 }

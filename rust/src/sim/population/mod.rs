@@ -3,9 +3,15 @@ pub mod types;
 #[allow(unused_imports)]
 pub use crate::sim::population::types::*;
 
-use crate::sim::world::World;
+use crate::sim::world::{
+    CellId, FeedbackEntry, FeedbackPayload, FeedbackQueue, ModuleId, TargetRef, World,
+};
 
-pub(crate) fn update_population(world: &mut World, budget: u32) {
+pub(crate) fn update_population(
+    world: &mut World,
+    budget: u32,
+    mut feedback: Option<&mut FeedbackQueue>,
+) {
     if budget == 0 {
         return;
     }
@@ -38,5 +44,21 @@ pub(crate) fn update_population(world: &mut World, budget: u32) {
         world.state.population.population[i] = next;
         world.state.population.birth_rate[i] = birth_rate;
         world.state.population.death_rate[i] = death_rate;
+
+        if let Some(queue) = feedback.as_deref_mut() {
+            let pressure = ((next / 120.0).clamp(0.0, 1.0) * 0.22).clamp(0.0, 0.22);
+            if pressure > 0.002 {
+                queue.push(FeedbackEntry {
+                    source: ModuleId::Population,
+                    target_module: ModuleId::Domesticates,
+                    target_ref: TargetRef::Cell(CellId(i as u32)),
+                    enqueued_tick: world.clock.tick,
+                    payload: FeedbackPayload::DomesticatesPopulationPressure {
+                        cell: CellId(i as u32),
+                        intensification_bonus: pressure,
+                    },
+                });
+            }
+        }
     }
 }

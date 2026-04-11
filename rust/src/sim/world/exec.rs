@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::era::EraKind;
 use super::state::{
     CellId, GeologyDynamicsState, PolityComponent, PolityId, RegionComponent, RegionId,
-    SettlementComponent, SettlementId,
+    SettlementComponent, SettlementId, N_CROPS, N_LIVESTOCK,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -134,6 +134,15 @@ pub enum FeedbackPayload {
     },
     TriggerEpochTransition {
         to: EraKind,
+    },
+    DomesticatesSpread {
+        cell: CellId,
+        crop_delta: [f32; N_CROPS],
+        livestock_delta: [f32; N_LIVESTOCK],
+    },
+    DomesticatesPopulationPressure {
+        cell: CellId,
+        intensification_bonus: f32,
     },
 }
 
