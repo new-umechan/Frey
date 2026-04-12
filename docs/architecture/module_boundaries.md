@@ -77,8 +77,7 @@ Tier1までのモジュールについて、詳細を決定している。
 
 実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。
 固定の hand-written DAG は正本にしない。
-生成結果は `docs/architecture/module_boundaries.generated.md` を参照する。
-更新は `npm run module:docs` で行う。
+更新は `pnpm run module:docs` で行う。
 
 `Terrain` は実行 module ではないため、実行 DAG ノードに含めない。
 理由は、`Terrain` が独立更新モジュールではなく、`Geology` と海面基準の結果から再構成される共有状態層だからである。
@@ -511,3 +510,39 @@ FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）�
 
 `Conflict` の結果はすべてFeedbackQueue経由で次tickに適用する。
 同一tick内で他モジュールを逆流更新しない。
+
+---
+
+<!-- auto_generated_start -->
+## tick内依存（Declaration DAG）
+
+実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。
+固定の hand-written DAG は正本にしない。
+更新は `pnpm run module:docs` で行う。
+
+### Phase 実行順
+
+prepare → exec_feedback → geology → climate → glaciology → hydrology → ecology → domesticates → subsistence → population → settlement → polity → conflict → transition → finalize
+
+### 依存エッジ一覧
+
+| from | to |
+| --- | --- |
+| climate (climate) | conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| domesticates (domesticates) | conflict (conflict), polity (polity), population (population), settlement (settlement), subsistence (subsistence) |
+| ecology (ecology) | conflict (conflict), domesticates (domesticates), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| exec_feedback (exec) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| geology (geology) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| glaciology (glaciology) | conflict (conflict), domesticates (domesticates), ecology (ecology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| hydrology (hydrology) | conflict (conflict), domesticates (domesticates), ecology (ecology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| polity (polity) | conflict (conflict) |
+| population (population) | conflict (conflict), polity (polity), settlement (settlement) |
+| prepare (exec) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), exec_feedback (exec), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| settlement (settlement) | conflict (conflict), polity (polity) |
+| subsistence (subsistence) | conflict (conflict), polity (polity), population (population), settlement (settlement) |
+| transition (exec) | finalize (exec) |
+
+module_count: 15
+edge_count: 88
+
+<!-- auto_generated_end -->

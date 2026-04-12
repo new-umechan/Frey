@@ -7,7 +7,7 @@
     "scripts": {
         "config:sync": "tsx tools/sync/config-sync.ts",
         "config:types": "tsx tools/sync/generate-config-types.ts",
-        "module:docs": "cargo run --manifest-path rust/Cargo.toml --bin generate_module_dag_docs -- docs/architecture/module_boundaries.generated.md",
+        "module:docs": "cargo run --manifest-path rust/Cargo.toml --bin generate_module_dag_docs",
         "dev": "pnpm config:sync && tsx tools/dev/dev-hotreload.ts",
         "build": "pnpm config:sync && pnpm wasm:build && vite build --config web/vite.config.ts",
         "preview": "vite preview --config web/vite.config.ts",
