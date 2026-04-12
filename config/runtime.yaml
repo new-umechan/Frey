@@ -1,17 +1,36 @@
-activity:
-  signal_gain:
-    terrain: 24.0
-    river: 1.0
-    climate: 3.5
-    ecology: 3.5
-    civilization: 1.0
-
-  step_baseline:
-    terrain: 0.06
-    river: 0.08
-    climate: 0.04
-    ecology: 0.03
-    civilization: 0.02
-
-  weight_mix: 0.45
-  queue_pressure_gain: 0.35
+activity_signal_gain_terrain:
+  type: f32
+  value: 24.0
+activity_signal_gain_river:
+  type: f32
+  value: 1.0
+activity_signal_gain_climate:
+  type: f32
+  value: 3.5
+activity_signal_gain_ecology:
+  type: f32
+  value: 3.5
+activity_signal_gain_civilization:
+  type: f32
+  value: 1.0
+activity_step_baseline_terrain:
+  type: f32
+  value: 0.06
+activity_step_baseline_river:
+  type: f32
+  value: 0.08
+activity_step_baseline_climate:
+  type: f32
+  value: 0.04
+activity_step_baseline_ecology:
+  type: f32
+  value: 0.03
+activity_step_baseline_civilization:
+  type: f32
+  value: 0.02
+activity_weight_mix:
+  type: f32
+  value: 0.45
+activity_queue_pressure_gain:
+  type: f32
+  value: 0.35

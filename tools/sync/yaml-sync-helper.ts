@@ -1,9 +1,108 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type SchemaEntry = [pathKey: string, outKey: string, typeHint?: string];
+export type TypeHint = "f32" | "u32";
 
-export type ParsedYaml = Map<string, { raw: string; value: number }>;
+export interface ParamEntry {
+    type: TypeHint;
+    value: number;
+    raw: string;
+}
+
+export type ParsedYaml = Map<string, ParamEntry>;
+
+/**
+ * Parse a self-describing YAML config file.
+ * Expected format (flat):
+ *   lapse_rate_c_per_km:
+ *     type: f32
+ *     value: 6.5
+ *   precip_min_mm:
+ *     type: f32
+ *     value: 25.0
+ */
+export function parseSelfDescribingYaml(text: string): ParsedYaml {
+    const result = new Map<string, ParamEntry>();
+    const lines = text.split(/\r?\n/);
+
+    // For flat format, we expect top-level keys with type/value children
+    let currentParamName: string | null = null;
+    let currentType: TypeHint | null = null;
+    let currentValue: number | null = null;
+    let currentRaw: string | null = null;
+
+    function flushParam() {
+        if (currentParamName !== null && currentType !== null && currentValue !== null) {
+            result.set(currentParamName, {
+                type: currentType,
+                value: currentValue,
+                raw: currentRaw!,
+            });
+        }
+    }
+
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+        const line = lines[lineIdx];
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+            continue;
+        }
+        if (/\t/.test(line)) {
+            throw new Error(`Invalid YAML line ${lineIdx + 1}: tab indentation is not allowed`);
+        }
+
+        const colonIndex = line.indexOf(":");
+        if (colonIndex < 0) {
+            throw new Error(`Invalid YAML line ${lineIdx + 1}: missing ":"`);
+        }
+
+        const indent = line.length - line.trimStart().length;
+        if (indent % 2 !== 0) {
+            throw new Error(`Invalid YAML line ${lineIdx + 1}: indentation must use 2-space units`);
+        }
+
+        const localKey = line.slice(0, colonIndex).trim();
+        const rawValue = stripInlineComment(line.slice(colonIndex + 1));
+
+        if (!localKey) {
+            throw new Error(`Invalid YAML line ${lineIdx + 1}: empty key`);
+        }
+
+        if (indent === 0) {
+            // Top-level key = parameter name
+            flushParam();
+            currentParamName = localKey;
+            currentType = null;
+            currentValue = null;
+            currentRaw = null;
+            continue;
+        }
+
+        if (indent === 2) {
+            // Child key = type or value
+            if (localKey === "type") {
+                if (rawValue !== "f32" && rawValue !== "u32") {
+                    throw new Error(`Invalid type "${rawValue}" at line ${lineIdx + 1}: expected "f32" or "u32"`);
+                }
+                currentType = rawValue as TypeHint;
+            } else if (localKey === "value") {
+                const isNumberLiteral = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(rawValue);
+                if (!isNumberLiteral) {
+                    throw new Error(`Invalid value "${rawValue}" at line ${lineIdx + 1}: expected numeric scalar`);
+                }
+                const num = Number(rawValue);
+                if (!Number.isFinite(num)) {
+                    throw new Error(`Invalid numeric value at line ${lineIdx + 1}`);
+                }
+                currentValue = num;
+                currentRaw = rawValue;
+            }
+        }
+    }
+
+    flushParam();
+    return result;
+}
 
 export function stripInlineComment(value: string): string {
     let inSingle = false;
@@ -27,119 +126,13 @@ export function stripInlineComment(value: string): string {
     return value.trim();
 }
 
-export function parseYamlNumericScalars(text: string): ParsedYaml {
-    type StackEntry = { key: string; indent: number };
-    const result = new Map<string, { raw: string; value: number }>();
-    const lines = text.split(/\r?\n/);
-    const stack: StackEntry[] = [];
-
-    lines.forEach((line: string, index: number) => {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) {
-            return;
+export function validateParams(parsed: ParsedYaml): void {
+    for (const [path, entry] of parsed) {
+        if (entry.type === "u32" && !Number.isInteger(entry.value)) {
+            throw new Error(`Key "${path}" must be an integer for type u32`);
         }
-        if (/\t/.test(line)) {
-            throw new Error(`Invalid YAML line ${index + 1}: tab indentation is not supported`);
-        }
-
-        const colonIndex = line.indexOf(":");
-        if (colonIndex < 0) {
-            throw new Error(`Invalid YAML line ${index + 1}: missing ":"`);
-        }
-
-        const indent = line.length - line.trimStart().length;
-        if (indent % 2 !== 0) {
-            throw new Error(`Invalid YAML line ${index + 1}: indentation must use 2-space units`);
-        }
-        while (stack.length > 0 && indent <= stack[stack.length - 1].indent) {
-            stack.pop();
-        }
-
-        const localKey = line.slice(0, colonIndex).trim();
-        const rawValue = stripInlineComment(line.slice(colonIndex + 1));
-        if (!localKey) {
-            throw new Error(`Invalid YAML line ${index + 1}: empty key`);
-        }
-
-        if (!rawValue) {
-            stack.push({ key: localKey, indent });
-            return;
-        }
-
-        const keyPath = [...stack.map((entry) => entry.key), localKey].join(".");
-        if (result.has(keyPath)) {
-            throw new Error(`Duplicate key "${keyPath}" at line ${index + 1}`);
-        }
-
-        const isNumberLiteral = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(rawValue);
-        if (!isNumberLiteral) {
-            throw new Error(
-                `Unsupported value for "${keyPath}" at line ${index + 1}: expected numeric scalar`,
-            );
-        }
-
-        const value = Number(rawValue);
-        if (!Number.isFinite(value)) {
-            throw new Error(`Invalid numeric value for "${keyPath}" at line ${index + 1}`);
-        }
-
-        result.set(keyPath, { raw: rawValue, value });
-    });
-
-    return result;
-}
-
-export function loadSchemaFromJson(schemaPath: string): SchemaEntry[] {
-    const raw = fs.readFileSync(schemaPath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-        throw new Error(`Invalid schema file: ${schemaPath} (expected array)`);
-    }
-    return parsed.map((entry, index) => {
-        if (!Array.isArray(entry) || entry.length < 2 || entry.length > 3) {
-            throw new Error(
-                `Invalid schema entry at index ${index} in ${schemaPath}: expected tuple [pathKey, outKey, typeHint?]`,
-            );
-        }
-        const [pathKey, outKey, typeHint] = entry;
-        if (typeof pathKey !== "string" || pathKey.length === 0) {
-            throw new Error(`Invalid pathKey at index ${index} in ${schemaPath}`);
-        }
-        if (typeof outKey !== "string" || outKey.length === 0) {
-            throw new Error(`Invalid outKey at index ${index} in ${schemaPath}`);
-        }
-        if (
-            typeHint !== undefined
-            && typeHint !== "u32"
-            && typeHint !== "f32"
-        ) {
-            throw new Error(`Invalid typeHint at index ${index} in ${schemaPath}: ${String(typeHint)}`);
-        }
-        return [pathKey, outKey, typeHint] as SchemaEntry;
-    });
-}
-
-export function validateAgainstSchema(parsed: ParsedYaml, schema: SchemaEntry[]): void {
-    const schemaKeys = new Set(schema.map(([pathKey]) => pathKey));
-    const parsedKeys = new Set(parsed.keys());
-
-    for (const key of schemaKeys) {
-        if (!parsedKeys.has(key)) {
-            throw new Error(`Missing key in YAML: "${key}"`);
-        }
-    }
-
-    for (const key of parsedKeys) {
-        if (!schemaKeys.has(key as string)) {
-            throw new Error(`Unknown key in YAML: "${key}"`);
-        }
-    }
-
-    // Rustのu32 型向けに整数チェック
-    for (const [pathKey, _outKey, typeHint] of schema) {
-        const entry = parsed.get(pathKey);
-        if (entry !== undefined && typeHint === "u32" && !Number.isInteger(entry.value)) {
-            throw new Error(`Key "${pathKey}" must be an integer for Rust type u32`);
+        if (entry.type === "u32" && entry.value < 0) {
+            throw new Error(`Key "${path}" must be non-negative for type u32`);
         }
     }
 }
@@ -158,7 +151,7 @@ export function writeFileIfChanged(filePath: string, nextContent: string): boole
     return true;
 }
 
-export function rustLiteral(raw: string, typeHint: string | undefined): string {
+export function rustLiteral(raw: string, typeHint: TypeHint): string {
     if (typeHint === "f32") {
         return `${raw}f32`;
     }
@@ -169,9 +162,5 @@ export function rustLiteral(raw: string, typeHint: string | undefined): string {
         }
         return `${parsed}`;
     }
-    return raw;
-}
-
-export function jsLiteral(raw: string): string {
     return raw;
 }

@@ -1,21 +1,36 @@
-temperature:
-  accum_temp_threshold_c: -2.0
-  ablation_temp_threshold_c: 0.5
-
-mass_balance:
-  accumulation_gain: 0.0012
-  accumulation_temp_sensitivity: 0.06
-  ablation_gain: 1.8
-  thickness_response_rate: 0.32
-  melt_runoff_gain: 0.85
-
-erosion:
-  erosion_gain: 0.00025
-  glacial_erosion_coupling: 0.9
-
-sea_level:
-  sea_level_coupling: 0.18
-
-isostasy:
-  ice_load_to_bedrock_coupling: 0.24
-  isostatic_adjustment_rate: 0.08
+accum_temp_threshold_c:
+  type: f32
+  value: -2.0
+ablation_temp_threshold_c:
+  type: f32
+  value: 0.5
+accumulation_gain:
+  type: f32
+  value: 0.0012
+accumulation_temp_sensitivity:
+  type: f32
+  value: 0.06
+ablation_gain:
+  type: f32
+  value: 1.8
+thickness_response_rate:
+  type: f32
+  value: 0.32
+melt_runoff_gain:
+  type: f32
+  value: 0.85
+erosion_gain:
+  type: f32
+  value: 0.00025
+glacial_erosion_coupling:
+  type: f32
+  value: 0.9
+sea_level_coupling:
+  type: f32
+  value: 0.18
+ice_load_to_bedrock_coupling:
+  type: f32
+  value: 0.24
+isostatic_adjustment_rate:
+  type: f32
+  value: 0.08

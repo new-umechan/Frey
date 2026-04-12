@@ -1,105 +1,276 @@
-mesh:
-  level: 6
-
-spectral:
-  harmonic_max_l: 4
-  spectral_alpha: 1.5
-
-plates:
-  plate_count_min: 8
-  plate_count_max: 18
-  ocean_plate_ratio: 0.65
-
-boundary:
-  boundary_band: 0.08
-  boundary_convergent_base_gain: 0.58
-  boundary_divergent_base_gain: 0.34
-  boundary_transform_relief_gain: 0.08
-  trench_gain: 0.34
-  arc_gain: 0.40
-  collision_gain: 0.44
-  rift_gain: 0.22
-  boundary_trench_width: 0.11
-  boundary_arc_width: 0.22
-  boundary_collision_width: 0.30
-  boundary_rift_width: 0.19
-  boundary_obliquity_mix: 0.50
-  boundary_distance_falloff: 1.0
-  boundary_anisotropy: 0.40
-  rollback_gain: 0.18
-  rollback_suppression: 0.40
-  rollback_fraction_max: 0.65
-  rollback_threshold: 0.12
-  backarc_tension_gain: 0.28
-  dip_density_scale: 0.20
-  subduction_depth_gain: 1.00
-  convergence_memory_rate: 0.08
-  convergence_memory_spatial_smooth: 0.15
-  arc_volcanism_gain: 0.32
-  ridge_volcanism_gain: 0.28
-  hotspot_volcanism_gain: 0.24
-  backarc_volcanism_gain: 0.20
-  volcanic_uplift_gain: 0.018
-  volcanic_thickening_gain: 0.014
-
-river:
-  river_rain_base: 0.5
-  river_accumulation_threshold: 0.035
-  sink_local_rebuild_radius: 3
-  sink_overflow_hysteresis: 0.0001
-  sink_min_capacity: 0.000001
-  erosion_iterations: 12
-  hydraulic_erosion_rate: 0.02
-  hydraulic_deposit_rate: 0.35
-  sediment_capacity_gain: 0.9
-  erosion_min_slope: 0.002
-  erosion_max_delta_per_iter: 0.015
-  coastal_deposit_rate: 0.45
-  shallow_sea_floor: -0.08
-  river_inertia_gain: 0.22
-  river_curvature_penalty: 0.18
-  baseflow_infiltration_rate: 0.22
-  baseflow_release_rate: 0.08
-  baseflow_storage_cap: 0.35
-
-continent:
-  continent_competence_noise_gain: 0.18
-  continent_competence_large_scale: 3.4
-  continent_competence_mid_scale: 7.8
-  continent_competence_weight_gain: 0.08
-  continent_foldability_from_competence: 0.65
-  continent_erodibility_from_competence: 0.70
-  mantle_density: 3.30
-  continental_crust_density: 2.70
-  oceanic_base_density: 2.90
-  age_density_gain: 0.25
-  erosion_thickness_coupling: 0.60
-  deposition_thickness_coupling: 0.40
-
-time_dynamics:
-  tectonic_uplift_gain: 0.065
-  plate_motion_gain: 1.0
-  boundary_reclassify_interval: 4
-  river_rebuild_interval_min: 1
-  river_rebuild_interval_max: 8
-  river_activity_high_threshold: 0.030
-  river_activity_low_threshold: 0.005
-  tectonic_subsidence_gain: 0.0
-  thermal_subsidence_gain: 0.0
-  stress_relaxation_rate: 0.15
-  isostatic_adjustment_rate: 0.012
-  subduction_age_coupling: 0.50
-  subduction_initiation_threshold: 0.55
-  subduction_density_threshold: 0.62
-  mantle_heat_input: 0.010
-  mantle_heat_loss: 0.008
-  mantle_diffusion_rate: 0.15
-  plume_threshold: 0.76
-  plume_gain: 0.030
-  plume_heat_release_rate: 0.65
-  uplift_saturation_soft: 0.45
-  uplift_saturation_hard: 0.75
-  age_advection_gain: 0.035
-  nonlinear_diffusion_gain: 0.020
-  isostatic_relax_gain: 0.012
-  age_ref: 1.00
+level:
+  type: u32
+  value: 6
+harmonic_max_l:
+  type: u32
+  value: 4
+spectral_alpha:
+  type: f32
+  value: 1.5
+plate_count_min:
+  type: u32
+  value: 8
+plate_count_max:
+  type: u32
+  value: 18
+ocean_plate_ratio:
+  type: f32
+  value: 0.65
+boundary_band:
+  type: f32
+  value: 0.08
+boundary_convergent_base_gain:
+  type: f32
+  value: 0.58
+boundary_divergent_base_gain:
+  type: f32
+  value: 0.34
+boundary_transform_relief_gain:
+  type: f32
+  value: 0.08
+trench_gain:
+  type: f32
+  value: 0.34
+arc_gain:
+  type: f32
+  value: 0.40
+collision_gain:
+  type: f32
+  value: 0.44
+rift_gain:
+  type: f32
+  value: 0.22
+boundary_trench_width:
+  type: f32
+  value: 0.11
+boundary_arc_width:
+  type: f32
+  value: 0.22
+boundary_collision_width:
+  type: f32
+  value: 0.30
+boundary_rift_width:
+  type: f32
+  value: 0.19
+boundary_obliquity_mix:
+  type: f32
+  value: 0.50
+boundary_distance_falloff:
+  type: f32
+  value: 1.0
+boundary_anisotropy:
+  type: f32
+  value: 0.40
+rollback_gain:
+  type: f32
+  value: 0.18
+rollback_suppression:
+  type: f32
+  value: 0.40
+rollback_fraction_max:
+  type: f32
+  value: 0.65
+rollback_threshold:
+  type: f32
+  value: 0.12
+backarc_tension_gain:
+  type: f32
+  value: 0.28
+dip_density_scale:
+  type: f32
+  value: 0.20
+subduction_depth_gain:
+  type: f32
+  value: 1.00
+convergence_memory_rate:
+  type: f32
+  value: 0.08
+convergence_memory_spatial_smooth:
+  type: f32
+  value: 0.15
+arc_volcanism_gain:
+  type: f32
+  value: 0.32
+ridge_volcanism_gain:
+  type: f32
+  value: 0.28
+hotspot_volcanism_gain:
+  type: f32
+  value: 0.24
+backarc_volcanism_gain:
+  type: f32
+  value: 0.20
+volcanic_uplift_gain:
+  type: f32
+  value: 0.018
+volcanic_thickening_gain:
+  type: f32
+  value: 0.014
+river_rain_base:
+  type: f32
+  value: 0.5
+river_accumulation_threshold:
+  type: f32
+  value: 0.035
+sink_local_rebuild_radius:
+  type: u32
+  value: 3
+sink_overflow_hysteresis:
+  type: f32
+  value: 0.0001
+sink_min_capacity:
+  type: f32
+  value: 0.000001
+erosion_iterations:
+  type: u32
+  value: 12
+hydraulic_erosion_rate:
+  type: f32
+  value: 0.02
+hydraulic_deposit_rate:
+  type: f32
+  value: 0.35
+sediment_capacity_gain:
+  type: f32
+  value: 0.9
+erosion_min_slope:
+  type: f32
+  value: 0.002
+erosion_max_delta_per_iter:
+  type: f32
+  value: 0.015
+coastal_deposit_rate:
+  type: f32
+  value: 0.45
+shallow_sea_floor:
+  type: f32
+  value: -0.08
+river_inertia_gain:
+  type: f32
+  value: 0.22
+river_curvature_penalty:
+  type: f32
+  value: 0.18
+baseflow_infiltration_rate:
+  type: f32
+  value: 0.22
+baseflow_release_rate:
+  type: f32
+  value: 0.08
+baseflow_storage_cap:
+  type: f32
+  value: 0.35
+continent_competence_noise_gain:
+  type: f32
+  value: 0.18
+continent_competence_large_scale:
+  type: f32
+  value: 3.4
+continent_competence_mid_scale:
+  type: f32
+  value: 7.8
+continent_competence_weight_gain:
+  type: f32
+  value: 0.08
+continent_foldability_from_competence:
+  type: f32
+  value: 0.65
+continent_erodibility_from_competence:
+  type: f32
+  value: 0.70
+mantle_density:
+  type: f32
+  value: 3.30
+continental_crust_density:
+  type: f32
+  value: 2.70
+oceanic_base_density:
+  type: f32
+  value: 2.90
+age_density_gain:
+  type: f32
+  value: 0.25
+erosion_thickness_coupling:
+  type: f32
+  value: 0.60
+deposition_thickness_coupling:
+  type: f32
+  value: 0.40
+tectonic_uplift_gain:
+  type: f32
+  value: 0.065
+plate_motion_gain:
+  type: f32
+  value: 1.0
+boundary_reclassify_interval:
+  type: u32
+  value: 4
+river_rebuild_interval_min:
+  type: u32
+  value: 1
+river_rebuild_interval_max:
+  type: u32
+  value: 8
+river_activity_high_threshold:
+  type: f32
+  value: 0.030
+river_activity_low_threshold:
+  type: f32
+  value: 0.005
+tectonic_subsidence_gain:
+  type: f32
+  value: 0.0
+thermal_subsidence_gain:
+  type: f32
+  value: 0.0
+stress_relaxation_rate:
+  type: f32
+  value: 0.15
+isostatic_adjustment_rate:
+  type: f32
+  value: 0.012
+subduction_age_coupling:
+  type: f32
+  value: 0.50
+subduction_initiation_threshold:
+  type: f32
+  value: 0.55
+subduction_density_threshold:
+  type: f32
+  value: 0.62
+mantle_heat_input:
+  type: f32
+  value: 0.010
+mantle_heat_loss:
+  type: f32
+  value: 0.008
+mantle_diffusion_rate:
+  type: f32
+  value: 0.15
+plume_threshold:
+  type: f32
+  value: 0.76
+plume_gain:
+  type: f32
+  value: 0.030
+plume_heat_release_rate:
+  type: f32
+  value: 0.65
+uplift_saturation_soft:
+  type: f32
+  value: 0.45
+uplift_saturation_hard:
+  type: f32
+  value: 0.75
+age_advection_gain:
+  type: f32
+  value: 0.035
+nonlinear_diffusion_gain:
+  type: f32
+  value: 0.020
+isostatic_relax_gain:
+  type: f32
+  value: 0.012
+age_ref:
+  type: f32
+  value: 1.00

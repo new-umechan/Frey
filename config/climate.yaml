@@ -1,53 +1,139 @@
-temperature:
-  lapse_rate_c_per_km: 6.5
-  height_to_meters: 6000.0
+lapse_rate_c_per_km:
+  type: f32
+  value: 6.5
+height_to_meters:
+  type: f32
+  value: 6000.0
 
-precipitation:
-  min_mm: 25.0
-  max_mm: 8000.0
-  hadley_anomaly_gain: 0.35
-  distance_scale_km: 1300.0
-  continentality_gain: 0.42
-  moisture_convergence_gain: 32000.0
-  convergence_min_mm: -260.0
-  convergence_max_mm: 480.0
-  convergence_blend: 0.18
-  cap_from_moisture: 2.2
-  hotspot_precip_gain_mm: 520.0
-  hotspot_coast_distance_km: 320.0
-  hotspot_fetch_weight: 0.55
-  hotspot_convergence_weight: 0.45
-orography:
-  uplift_gain_mm: 280.0
-  rise_scale_m: 900.0
-  trace_steps: 3
-  trace_alignment_min: 0.20
-  step_decay: 0.65
-  rain_shadow_gain: 1.4
-  rain_shadow_scale_m: 1400.0
-  rain_shadow_distance_km: 260.0
-  downwind_depletion_gain: 0.14
-  downwind_depletion_max: 0.12
-  downwind_depletion_steps: 3
-  downwind_depletion_passes: 2
-  downwind_depletion_decay: 0.72
-  downwind_alignment_min: 0.20
+precip_min_mm:
+  type: f32
+  value: 25.0
+precip_max_mm:
+  type: f32
+  value: 8000.0
+hadley_anomaly_gain:
+  type: f32
+  value: 0.35
+distance_scale_km:
+  type: f32
+  value: 1300.0
+continentality_gain:
+  type: f32
+  value: 0.42
+moisture_convergence_gain:
+  type: f32
+  value: 32000.0
+convergence_min_mm:
+  type: f32
+  value: -260.0
+convergence_max_mm:
+  type: f32
+  value: 480.0
+convergence_blend:
+  type: f32
+  value: 0.18
+precip_cap_from_moisture:
+  type: f32
+  value: 2.2
+hotspot_precip_gain_mm:
+  type: f32
+  value: 520.0
+hotspot_coast_distance_km:
+  type: f32
+  value: 320.0
+hotspot_fetch_weight:
+  type: f32
+  value: 0.55
+hotspot_convergence_weight:
+  type: f32
+  value: 0.45
 
-coastal:
-  cold_coast_gain: 0.80
-  cold_relax_hotspot_weight: 0.20
+orographic_uplift_gain_mm:
+  type: f32
+  value: 280.0
+orographic_rise_scale_m:
+  type: f32
+  value: 900.0
+orographic_trace_steps:
+  type: u32
+  value: 3
+orographic_trace_alignment_min:
+  type: f32
+  value: 0.20
+orographic_step_decay:
+  type: f32
+  value: 0.65
+rain_shadow_gain:
+  type: f32
+  value: 1.4
+rain_shadow_scale_m:
+  type: f32
+  value: 1400.0
+rain_shadow_distance_km:
+  type: f32
+  value: 260.0
+downwind_depletion_gain:
+  type: f32
+  value: 0.14
+downwind_depletion_max:
+  type: f32
+  value: 0.12
+downwind_depletion_steps:
+  type: u32
+  value: 3
+downwind_depletion_passes:
+  type: u32
+  value: 2
+downwind_depletion_decay:
+  type: f32
+  value: 0.72
+downwind_alignment_min:
+  type: f32
+  value: 0.20
 
-core:
-  substeps: 8
-  temperature_diffusion_gain: 0.10
-  moisture_transport_gain: 0.22
-  condense_excess_gain: 0.65
-  orographic_condense_gain: 0.04
-  ocean_evaporation_gain: 0.3
-  land_recycle_gain: 0.025
-  land_bucket_capacity_mm: 220.0
-  land_drainage_gain: 0.40
-  land_relaxation_years: 8000000.0
-  humidity_floor_mm: 4.0
-  humidity_ref_mm: 26.0
-  humidity_cc_rate_per_c: 0.067
+cold_coast_gain:
+  type: f32
+  value: 0.80
+cold_relax_hotspot_weight:
+  type: f32
+  value: 0.20
+
+core_substeps:
+  type: u32
+  value: 8
+core_temperature_diffusion_gain:
+  type: f32
+  value: 0.10
+core_moisture_transport_gain:
+  type: f32
+  value: 0.22
+core_condense_excess_gain:
+  type: f32
+  value: 0.65
+core_orographic_condense_gain:
+  type: f32
+  value: 0.04
+core_ocean_evaporation_gain:
+  type: f32
+  value: 0.3
+core_land_recycle_gain:
+  type: f32
+  value: 0.025
+core_land_bucket_capacity_mm:
+  type: f32
+  value: 220.0
+core_land_drainage_gain:
+  type: f32
+  value: 0.40
+core_land_relaxation_years:
+  type: f32
+  value: 8000000.0
+core_humidity_floor_mm:
+  type: f32
+  value: 4.0
+core_humidity_ref_mm:
+  type: f32
+  value: 26.0
+core_humidity_cc_rate_per_c:
+  type: f32
+  value: 0.067
