@@ -149,7 +149,12 @@ pub fn run_hydrology_step_with_state_for_bench(
     geology_budget: u32,
     run_mfd: bool,
 ) {
-    hydrology::run_hydrology_step_with_existing_state(world, hydrology_state, geology_budget, run_mfd);
+    hydrology::run_hydrology_step_with_existing_state(
+        world,
+        hydrology_state,
+        geology_budget,
+        run_mfd,
+    );
 }
 
 pub fn run_ecology_step_for_bench(world: &mut world::World, ecology_budget: u32) {

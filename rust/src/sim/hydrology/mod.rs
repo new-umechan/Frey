@@ -32,8 +32,8 @@ use routing::{apply_baseflow_storage, build_runoff_for_routing, should_rebuild_n
 pub(crate) use sync::sync_erosion_height;
 use sync::{erosion_state_matches_world, sync_erosion_rain};
 
-pub(crate) use fill_spill::sync_fill_spill_to_erosion;
 pub(crate) use fill_spill::apply_fill_spill_sink_rule_to_erosion_cell;
+pub(crate) use fill_spill::sync_fill_spill_to_erosion;
 
 const NETWORK_BLEND_ALPHA: f32 = 0.38;
 const FLUX_SCALE_EMA_ALPHA: f32 = 0.20;
@@ -603,9 +603,16 @@ mod tests {
                 continue;
             }
 
-            assert_eq!(downstream.len(), 1, "cell {cell} should expose one primary edge");
+            assert_eq!(
+                downstream.len(),
+                1,
+                "cell {cell} should expose one primary edge"
+            );
             assert_eq!(downstream[0].0, next as u32, "cell {cell} target mismatch");
-            assert!((downstream[0].1 - 1.0).abs() <= 1e-6, "cell {cell} weight mismatch");
+            assert!(
+                (downstream[0].1 - 1.0).abs() <= 1e-6,
+                "cell {cell} weight mismatch"
+            );
         }
     }
 }

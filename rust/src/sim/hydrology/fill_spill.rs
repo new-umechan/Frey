@@ -75,7 +75,16 @@ pub(crate) fn rebuild_fill_spill_state(
     rebuild_membership_csr(hydrology, &sink_members);
 
     for (sid, members) in sink_members.iter().enumerate() {
-        update_sink_for_sid(hydrology, sid, members, height, nbr_offsets, nbrs, params, &old_state);
+        update_sink_for_sid(
+            hydrology,
+            sid,
+            members,
+            height,
+            nbr_offsets,
+            nbrs,
+            params,
+            &old_state,
+        );
     }
 
     recompute_sink_storage_water(hydrology, height, water, params);
@@ -110,7 +119,8 @@ pub(crate) fn should_rebuild_fill_spill(
         0.0
     };
     changed_ratio >= FULL_REBUILD_CHANGED_RATIO
-        || state.tick.saturating_sub(state.last_sink_full_rebuild_tick) >= FULL_REBUILD_INTERVAL_TICKS
+        || state.tick.saturating_sub(state.last_sink_full_rebuild_tick)
+            >= FULL_REBUILD_INTERVAL_TICKS
 }
 
 pub(crate) fn refresh_fill_spill_storage_and_lakes(
@@ -133,14 +143,18 @@ pub(crate) fn sync_fill_spill_to_erosion(
     state.sink_route_next.clone_from(&hydrology.sink_route_next);
     state.sink_spill_cell.clone_from(&hydrology.sink_spill_cell);
     state.sink_spill_to.clone_from(&hydrology.sink_spill_to);
-    state.sink_capacity_total.clone_from(&hydrology.sink_capacity_total);
+    state
+        .sink_capacity_total
+        .clone_from(&hydrology.sink_capacity_total);
     state
         .sink_capacity_remaining
         .clone_from(&hydrology.sink_capacity_remaining);
     state
         .sink_storage_sediment
         .clone_from(&hydrology.sink_storage_sediment);
-    state.sink_spill_level.clone_from(&hydrology.sink_spill_level);
+    state
+        .sink_spill_level
+        .clone_from(&hydrology.sink_spill_level);
     state
         .sink_overflow_active
         .clone_from(&hydrology.sink_overflow_active);
@@ -161,14 +175,18 @@ pub(crate) fn sync_fill_spill_from_erosion(
     hydrology.sink_route_next.clone_from(&state.sink_route_next);
     hydrology.sink_spill_cell.clone_from(&state.sink_spill_cell);
     hydrology.sink_spill_to.clone_from(&state.sink_spill_to);
-    hydrology.sink_capacity_total.clone_from(&state.sink_capacity_total);
+    hydrology
+        .sink_capacity_total
+        .clone_from(&state.sink_capacity_total);
     hydrology
         .sink_capacity_remaining
         .clone_from(&state.sink_capacity_remaining);
     hydrology
         .sink_storage_sediment
         .clone_from(&state.sink_storage_sediment);
-    hydrology.sink_spill_level.clone_from(&state.sink_spill_level);
+    hydrology
+        .sink_spill_level
+        .clone_from(&state.sink_spill_level);
     hydrology
         .sink_overflow_active
         .clone_from(&state.sink_overflow_active);
@@ -316,7 +334,11 @@ fn snapshot_sink_state(hydrology: &HydrologyState) -> HashMap<(i32, i32), (f32, 
                     .get(sid)
                     .copied()
                     .unwrap_or(0.0),
-                hydrology.sink_storage_water.get(sid).copied().unwrap_or(0.0),
+                hydrology
+                    .sink_storage_water
+                    .get(sid)
+                    .copied()
+                    .unwrap_or(0.0),
                 hydrology
                     .sink_storage_sediment
                     .get(sid)
@@ -347,7 +369,9 @@ fn resize_sink_state_arrays(hydrology: &mut HydrologyState, sink_count: usize) {
 fn rebuild_membership_csr(hydrology: &mut HydrologyState, sink_members: &[Vec<usize>]) {
     hydrology.sink_member_offsets.clear();
     hydrology.sink_member_cells.clear();
-    hydrology.sink_member_offsets.reserve(sink_members.len() + 1);
+    hydrology
+        .sink_member_offsets
+        .reserve(sink_members.len() + 1);
     hydrology.sink_member_offsets.push(0);
     for members in sink_members {
         for &cell in members {
@@ -404,7 +428,11 @@ fn trace_terminal(i: usize, height: &[f32], downhill: &[i32], terminal: &mut [i3
             -1
         } else {
             let traced = trace_terminal(n, height, downhill, terminal);
-            if traced == -3 { i as i32 } else { traced }
+            if traced == -3 {
+                i as i32
+            } else {
+                traced
+            }
         }
     };
     terminal[i] = out;
@@ -620,7 +648,13 @@ fn recompute_sink_storage_water(
         if sid >= hydrology.sink_storage_water.len() {
             continue;
         }
-        if hydrology.sink_overflow_active.get(sid).copied().unwrap_or(1) != 0 {
+        if hydrology
+            .sink_overflow_active
+            .get(sid)
+            .copied()
+            .unwrap_or(1)
+            != 0
+        {
             continue;
         }
         let spill_level = hydrology
@@ -649,7 +683,11 @@ fn recompute_sink_storage_sediment(
         hydrology.sink_storage_sediment.fill(0.0);
     }
     let hysteresis = params.sink_overflow_hysteresis.max(0.0);
-    for cell in 0..height.len().min(sediment.len()).min(hydrology.sink_id.len()) {
+    for cell in 0..height
+        .len()
+        .min(sediment.len())
+        .min(hydrology.sink_id.len())
+    {
         let sid_raw = hydrology.sink_id[cell];
         if sid_raw < 0 {
             continue;
@@ -658,7 +696,13 @@ fn recompute_sink_storage_sediment(
         if sid >= hydrology.sink_storage_sediment.len() {
             continue;
         }
-        if hydrology.sink_overflow_active.get(sid).copied().unwrap_or(1) != 0 {
+        if hydrology
+            .sink_overflow_active
+            .get(sid)
+            .copied()
+            .unwrap_or(1)
+            != 0
+        {
             continue;
         }
         let spill_level = hydrology
