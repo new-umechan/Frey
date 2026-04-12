@@ -11,8 +11,6 @@
 ## Design Philosophy
 
 - 入力は文字列seed
-- 神（ユーザー）の手を途中で加えられるように。
-  介入logは保存しておく。
 - 同じseedとパラメータなら、だいたい同じ世界を再現。
   ある程度の揺らぎは許容するが、マクロな構造（大陸配置・河川系・文明分布）は再現したい
 
@@ -23,20 +21,6 @@
 - Vite: 開発サーバー
 - Typescript（レンダリングとUI）
 - Three.js（描画）
-
-## External Data
-
-ベンチマーク実行では外部実データを使用する。生データの配置先は `benches/raw/`。
-
-- ETOPO 2022 Ice Surface（`geology.height`、`benches/raw/geology/`）
-- WorldClim v2.1（`temperature` / `precipitation`、`benches/raw/climate/`）
-- ERA5-Land monthly means（`runoff` / `evapotranspiration`、`benches/raw/climate/`）
-- CGIAR Global Aridity Index（`aridity`、`benches/raw/climate/`）
-- GloFAS historical / ERA5系（`river_flow` 参照、`benches/raw/hydrology/`）
-- HydroLAKES（`is_lake` 参照、`benches/raw/hydrology/`）
-- MODIS MOD44B（`tree_cover` / `ground_cover` / `biome` 合成参照、`benches/raw/ecology/`）
-- MODIS MCD12Q1（`natural_mask` / `biome` 合成参照、`benches/raw/ecology/`）
-- SoilGrids（`soil_fertility` proxy、`benches/raw/ecology/soilgrids/`）
 
 ## Quality Gate
 
@@ -49,3 +33,13 @@
   - mode=`gate` (default): contract + seed regression
   - mode=`full`: gate + benchmark
   - mode=`validation`: reference-data validation
+
+## License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+### Note on Benchmark Data
+
+This project includes benchmark scripts that can download and process
+third-party datasets (e.g. WorldClim, Copernicus). These datasets are
+not distributed with this project and are subject to their own license terms.
