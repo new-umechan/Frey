@@ -14,7 +14,10 @@ fn generate_dag_content(
 
     lines.push("## tick内依存（Declaration DAG）".to_string());
     lines.push(String::new());
-    lines.push("実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。".to_string());
+    lines.push(
+        "実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。"
+            .to_string(),
+    );
     lines.push("固定の hand-written DAG は正本にしない。".to_string());
     lines.push("更新は `pnpm run module:docs` で行う。".to_string());
     lines.push(String::new());
@@ -29,7 +32,8 @@ fn generate_dag_content(
     lines.push(String::new());
     lines.push("| from | to |".to_string());
     lines.push("| --- | --- |".to_string());
-    let mut edges_by_from: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut edges_by_from: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for edge in &graph.edges {
         let from_key = format!("{} ({})", edge.from_phase, edge.from_module);
         let to_val = format!("{} ({})", edge.to_phase, edge.to_module);
@@ -63,12 +67,8 @@ fn main() -> Result<(), String> {
 
     let dag_content = generate_dag_content(&modules, &graph);
 
-    let file_content = fs::read_to_string(&output_path).map_err(|error| {
-        format!(
-            "failed to read {}: {error}",
-            output_path.display()
-        )
-    })?;
+    let file_content = fs::read_to_string(&output_path)
+        .map_err(|error| format!("failed to read {}: {error}", output_path.display()))?;
 
     let start_marker = "<!-- auto_generated_start -->";
     let end_marker = "<!-- auto_generated_end -->";
@@ -92,12 +92,8 @@ fn main() -> Result<(), String> {
 
     let new_content = format!("{}\n{}\n{}", before, dag_content, after);
 
-    fs::write(&output_path, new_content).map_err(|error| {
-        format!(
-            "failed to write {}: {error}",
-            output_path.display()
-        )
-    })?;
+    fs::write(&output_path, new_content)
+        .map_err(|error| format!("failed to write {}: {error}", output_path.display()))?;
     println!("updated {}", output_path.display());
     Ok(())
 }
