@@ -1,5 +1,5 @@
-import { getCellMetricMeta } from "../visualizers/cell-metric";
-import { type ClimateLegendElements } from "../../components/dom";
+import { getCellMetricMeta, isDomesticatesMetric } from "../visualizers/cell-metric";
+import { type ClimateLegendElements, type DomesticatesLegendElements } from "../../components/dom";
 import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
 
 function computeLegendStats(values: ArrayLike<number> | null) {
@@ -30,6 +30,7 @@ function computeLegendStats(values: ArrayLike<number> | null) {
 
 interface ClimateUiControllerOptions {
     climateLegend: ClimateLegendElements | null;
+    domesticatesLegend: DomesticatesLegendElements | null;
     getCurrentViewMode: () => string;
     getCurrentCellMetric: () => string;
     getCurrentTerrainData: () => CoreBuffers | null;
@@ -38,6 +39,7 @@ interface ClimateUiControllerOptions {
 export function createClimateUiController(options: ClimateUiControllerOptions) {
     const {
         climateLegend,
+        domesticatesLegend,
         getCurrentViewMode,
         getCurrentCellMetric,
         getCurrentTerrainData,
@@ -53,21 +55,37 @@ export function createClimateUiController(options: ClimateUiControllerOptions) {
     };
 
     const syncClimateUi = () => {
-        if (!climateLegend) {
-            return;
-        }
         const currentViewMode = getCurrentViewMode();
         const currentCellMetric = getCurrentCellMetric();
         const currentTerrainData = getCurrentTerrainData();
         const isMetricMode = currentViewMode === "metric";
-        climateLegend.panel.hidden = !isMetricMode;
-        climateLegend.panel.setAttribute("aria-hidden", String(!isMetricMode));
+        const domesticatesMetric = isMetricMode && isDomesticatesMetric(currentCellMetric);
+
+        if (climateLegend) {
+            climateLegend.panel.hidden = !isMetricMode || domesticatesMetric;
+            climateLegend.panel.setAttribute("aria-hidden", String(!isMetricMode || domesticatesMetric));
+        }
+        if (domesticatesLegend) {
+            domesticatesLegend.panel.hidden = !domesticatesMetric;
+            domesticatesLegend.panel.setAttribute("aria-hidden", String(!domesticatesMetric));
+        }
         if (!isMetricMode) {
             updateClimateHoverReadout(null);
             return;
         }
 
         const meta = getCellMetricMeta(currentCellMetric);
+        if (domesticatesMetric) {
+            if (domesticatesLegend) {
+                domesticatesLegend.title.textContent = meta.label;
+                domesticatesLegend.adoptionScale.textContent = "adoption: 赤グラデーション (0.0 - 1.0)";
+                domesticatesLegend.availableHint.textContent = "available: 青ハッチあり=1 / なし=0";
+            }
+            return;
+        }
+        if (!climateLegend) {
+            return;
+        }
         const metricValues = currentTerrainData?.[meta.dataKey] as TypedArray | undefined;
         const stats = computeLegendStats(metricValues ?? null);
         climateLegend.panel.dataset.metric = currentCellMetric;

@@ -62,6 +62,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         loadingOverlayCanvas,
         viewportPanel,
         climateLegend,
+        domesticatesLegend,
         plateHoverPopup,
     } = elements;
 
@@ -111,6 +112,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     });
     const climateUiController = createClimateUiController({
         climateLegend,
+        domesticatesLegend,
         getCurrentViewMode: () => getState().currentViewMode,
         getCurrentCellMetric: () => getState().currentCellMetric,
         getCurrentTerrainData,

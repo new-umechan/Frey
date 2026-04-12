@@ -10,6 +10,12 @@ function viewModeToNumber(mode: string): number {
 }
 
 function metricKeyToNumber(metricKey: string): number {
+    if (metricKey.startsWith("crop_adoption_") || metricKey.startsWith("livestock_adoption_")) {
+        return 14;
+    }
+    if (metricKey.startsWith("crop_available_") || metricKey.startsWith("livestock_available_")) {
+        return 15;
+    }
     const kindByKey: Record<string, number> = {
         height: 0,
         mantle_heat: 1,
@@ -75,6 +81,7 @@ export function createTerrainMaterial(): TerrainMaterialController {
                 `#include <common>
 attribute float terrainHeight;
 attribute float terrainMetric;
+attribute float terrainMetricOverlay;
 attribute float terrainLakeDepth;
 attribute float terrainDebugTrench;
 attribute float terrainDebugArc;
@@ -83,6 +90,7 @@ attribute float terrainDebugOceanOceanArc;
 attribute vec2 terrainUv;
 varying float vTerrainHeight;
 varying float vTerrainMetric;
+varying float vTerrainMetricOverlay;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
 varying float vTerrainDebugArc;
@@ -95,6 +103,7 @@ varying vec2 vTerrainUv;`,
                 `#include <begin_vertex>
 vTerrainHeight = terrainHeight;
 vTerrainMetric = terrainMetric;
+vTerrainMetricOverlay = terrainMetricOverlay;
 vTerrainLakeDepth = terrainLakeDepth;
 vTerrainDebugTrench = terrainDebugTrench;
 vTerrainDebugArc = terrainDebugArc;
@@ -120,6 +129,7 @@ uniform vec3 uDebugArcColor;
 uniform vec3 uDebugOceanOceanArcColor;
 varying float vTerrainHeight;
 varying float vTerrainMetric;
+varying float vTerrainMetricOverlay;
 varying float vTerrainLakeDepth;
 varying float vTerrainDebugTrench;
 varying float vTerrainDebugArc;
@@ -222,6 +232,17 @@ vec3 paletteTeal(float value) {
     return mix(vec3(0.84, 0.96, 0.94), vec3(0.06, 0.48, 0.45), t);
 }
 
+vec3 paletteAdoption(float value) {
+    float t = clamp(value, 0.0, 1.0);
+    vec3 c0 = vec3(0.96, 0.88, 0.86);
+    vec3 c1 = vec3(0.90, 0.61, 0.53);
+    vec3 c2 = vec3(0.78, 0.34, 0.25);
+    vec3 c3 = vec3(0.62, 0.17, 0.12);
+    if (t < 0.33) return mix(c0, c1, t / 0.33);
+    if (t < 0.66) return mix(c1, c2, (t - 0.33) / 0.33);
+    return mix(c2, c3, (t - 0.66) / 0.34);
+}
+
 vec3 freyMetricModeColor(float kind) {
     if (kind < 0.5) return paletteRiver(clamp((vTerrainMetric + 1.0) * 0.5, 0.0, 1.0));
     if (kind < 1.5) return paletteMagma(vTerrainMetric);
@@ -236,7 +257,9 @@ vec3 freyMetricModeColor(float kind) {
     if (kind < 10.5) return paletteRain(vTerrainMetric);
     if (kind < 11.5) return paletteCost(vTerrainMetric);
     if (kind < 12.5) return paletteIcePressure(vTerrainMetric);
-    return palettePlateId(vTerrainMetric);
+    if (kind < 13.5) return palettePlateId(vTerrainMetric);
+    if (kind < 14.5) return paletteAdoption(vTerrainMetric);
+    return mix(vec3(0.88, 0.93, 0.98), vec3(0.16, 0.44, 0.78), clamp(vTerrainMetric, 0.0, 1.0));
 }
 
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverMask) {
@@ -286,12 +309,18 @@ float riverMaskTex = texture2D(uRiverMask, vec2(fract(vTerrainUv.x), clamp(vTerr
 vec3 terrainColor = uViewMode > 0.5
     ? freyMetricModeColor(uMetricKind)
     : freyNormalModeColor(vTerrainHeight, vTerrainLakeDepth, riverMaskTex);
+if (uViewMode > 0.5 && uMetricKind >= 13.5 && uMetricKind < 14.5 && vTerrainMetricOverlay >= 0.5) {
+    vec3 overlayColor = vec3(0.15, 0.42, 0.82);
+    float hatch = step(0.72, fract((vTerrainUv.x + vTerrainUv.y) * 64.0));
+    float overlayAlpha = mix(0.22, 0.46, hatch);
+    terrainColor = mix(terrainColor, overlayColor, overlayAlpha);
+}
 terrainColor = freyApplyDebugOverlay(terrainColor);
 diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v5";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v6";
 
     const controller: TerrainMaterialController = {
         material,

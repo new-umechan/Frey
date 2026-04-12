@@ -38,6 +38,30 @@ export interface CoreBuffers {
     moistureFluxU: TypedArray;
     moistureFluxV: TypedArray;
     riverTransportCost: TypedArray;
+    cropAdoptionWheat: TypedArray;
+    cropAdoptionRice: TypedArray;
+    cropAdoptionMaize: TypedArray;
+    cropAdoptionMillet: TypedArray;
+    cropAdoptionTuber: TypedArray;
+    cropAdoptionLegume: TypedArray;
+    cropAdoptionBarley: TypedArray;
+    cropAvailableWheat: TypedArray;
+    cropAvailableRice: TypedArray;
+    cropAvailableMaize: TypedArray;
+    cropAvailableMillet: TypedArray;
+    cropAvailableTuber: TypedArray;
+    cropAvailableLegume: TypedArray;
+    cropAvailableBarley: TypedArray;
+    livestockAdoptionCattle: TypedArray;
+    livestockAdoptionHorse: TypedArray;
+    livestockAdoptionSheep: TypedArray;
+    livestockAdoptionPig: TypedArray;
+    livestockAdoptionCamel: TypedArray;
+    livestockAvailableCattle: TypedArray;
+    livestockAvailableHorse: TypedArray;
+    livestockAvailableSheep: TypedArray;
+    livestockAvailablePig: TypedArray;
+    livestockAvailableCamel: TypedArray;
     tectonicDebug?: TectonicDebugBuffers;
 }
 

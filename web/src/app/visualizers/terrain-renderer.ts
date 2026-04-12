@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { type TickPerfRecorder } from "../perf/recorder";
 import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
 import { type WorldChangeset } from "../sim/sync/constants";
+import { getCellMetricMeta } from "./cell-metric";
 
 interface TerrainMaterialController {
     setRiverMaskTexture: (texture: THREE.Texture) => void;
@@ -54,57 +55,52 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     let currentRiverMaskTexture: THREE.Texture | null = null;
     let positionBuffer: Float32Array | null = null;
     let metricBuffer: Float32Array | null = null;
+    let metricOverlayBuffer: Float32Array | null = null;
     let currentMetricKey = "height";
     let lastSurfaceMode: string | null = null;
     let lastNormalRefreshTick = -1;
 
     const CORE_ATTRIBUTE_MAP: Partial<Record<keyof WorldChangeset, string[]>> = {
         height: ["terrainHeight", "terrainLakeDepth"],
-        metric: ["terrainMetric"],
+        metric: ["terrainMetric", "terrainMetricOverlay"],
     };
 
-    function resolveMetricArray(currentTerrainData: CoreBuffers, metricKey: string): TypedArray {
-        switch (metricKey) {
-        case "mantle_heat":
-            return currentTerrainData.mantleHeat as Float32Array;
-        case "erosion_rate":
-            return currentTerrainData.erosionRate as Float32Array;
-        case "deposition_rate":
-            return currentTerrainData.depositionRate as Float32Array;
-        case "plate_id":
-            return currentTerrainData.plateId as Uint32Array;
-        case "temperature":
-            return currentTerrainData.temperature as Float32Array;
-        case "precipitation":
-            return currentTerrainData.precipitation as Float32Array;
-        case "evapotranspiration":
-            return currentTerrainData.evapotranspiration as Float32Array;
-        case "aridity":
-            return currentTerrainData.aridity as Float32Array;
-        case "ocean_temperature":
-            return currentTerrainData.oceanTemperature as Float32Array;
-        case "river_flux":
-            return currentTerrainData.riverFlux as Float32Array;
-        case "runoff":
-            return currentTerrainData.runoff as Float32Array;
-        case "ice_pressure":
-            return currentTerrainData.icePressure as Float32Array;
-        case "river_transport_cost":
-            return currentTerrainData.riverTransportCost as Float32Array;
-        case "height":
-        default:
-            return currentTerrainData.heightData as Float32Array;
+    function resolveMetricArrayByDataKey(currentTerrainData: CoreBuffers, dataKey: string): TypedArray {
+        const source = currentTerrainData[dataKey];
+        if (source instanceof Float32Array || source instanceof Int32Array || source instanceof Uint32Array) {
+            return source;
         }
+        console.warn(`resolveMetricArrayByDataKey: dataKey "${dataKey}" not found in CoreBuffers, falling back to heightData`);
+        return currentTerrainData.heightData as Float32Array;
     }
 
     function updateMetricAttribute(currentTerrainData: CoreBuffers) {
-        const source = resolveMetricArray(currentTerrainData, currentMetricKey);
+        const metricMeta = getCellMetricMeta(currentMetricKey);
+        const source = resolveMetricArrayByDataKey(currentTerrainData, metricMeta.dataKey);
         if (!metricBuffer || metricBuffer.length !== source.length) {
             metricBuffer = new Float32Array(source.length);
         }
         metricBuffer.set(source as ArrayLike<number>);
         const metricAttr = ensureAttribute("terrainMetric", metricBuffer, 1);
         metricAttr.needsUpdate = true;
+
+        const overlaySource = metricMeta.overlayDataKey
+            ? resolveMetricArrayByDataKey(currentTerrainData, metricMeta.overlayDataKey)
+            : null;
+        if (overlaySource) {
+            if (!metricOverlayBuffer || metricOverlayBuffer.length !== source.length) {
+                metricOverlayBuffer = new Float32Array(source.length);
+            }
+            metricOverlayBuffer.set(overlaySource as ArrayLike<number>);
+            const overlayAttr = ensureAttribute("terrainMetricOverlay", metricOverlayBuffer, 1);
+            overlayAttr.needsUpdate = true;
+        } else if (metricOverlayBuffer) {
+            metricOverlayBuffer.fill(0.0);
+            const overlayAttr = geometry.getAttribute("terrainMetricOverlay");
+            if (overlayAttr) {
+                overlayAttr.needsUpdate = true;
+            }
+        }
     }
 
     function ensureAttribute(name: string, array: ArrayLike<number>, itemSize: number): THREE.BufferAttribute {

@@ -7,7 +7,55 @@ export interface CellMetricDef {
     category: string;
     palette: string;
     formatter: (value: number) => string;
+    overlayFieldKind?: string;
+    overlayDataKey?: string;
 }
+
+const CROPS = Object.freeze(["wheat", "rice", "maize", "millet", "tuber", "legume", "barley"] as const);
+const LIVESTOCK = Object.freeze(["cattle", "horse", "sheep", "pig", "camel"] as const);
+
+function cropLabel(name: string): string {
+    return `作物 ${name[0].toUpperCase()}${name.slice(1)}`;
+}
+
+function livestockLabel(name: string): string {
+    return `家畜 ${name[0].toUpperCase()}${name.slice(1)}`;
+}
+
+function makeCropMetric(name: string): CellMetricDef {
+    return {
+        key: `crop_adoption_${name}`,
+        fieldKind: `crop_adoption_${name}`,
+        dataKey: `cropAdoption${name[0].toUpperCase()}${name.slice(1)}`,
+        label: cropLabel(name),
+        unit: "adoption",
+        category: "domesticates",
+        palette: "adoption",
+        formatter: (value) => value.toFixed(3),
+        overlayFieldKind: `crop_available_${name}`,
+        overlayDataKey: `cropAvailable${name[0].toUpperCase()}${name.slice(1)}`,
+    };
+}
+
+function makeLivestockMetric(name: string): CellMetricDef {
+    return {
+        key: `livestock_adoption_${name}`,
+        fieldKind: `livestock_adoption_${name}`,
+        dataKey: `livestockAdoption${name[0].toUpperCase()}${name.slice(1)}`,
+        label: livestockLabel(name),
+        unit: "adoption",
+        category: "domesticates",
+        palette: "adoption",
+        formatter: (value) => value.toFixed(3),
+        overlayFieldKind: `livestock_available_${name}`,
+        overlayDataKey: `livestockAvailable${name[0].toUpperCase()}${name.slice(1)}`,
+    };
+}
+
+const DOMESTICATES_METRICS: readonly CellMetricDef[] = Object.freeze([
+    ...CROPS.map(makeCropMetric),
+    ...LIVESTOCK.map(makeLivestockMetric),
+]);
 
 const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
     {
@@ -150,6 +198,7 @@ const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
         palette: "cost",
         formatter: (value) => value.toFixed(3),
     },
+    ...DOMESTICATES_METRICS,
 ]);
 
 export interface CategoryMeta {
@@ -196,6 +245,15 @@ export function getCellMetricMeta(metricKey: string): CellMetricDef {
     return METRIC_BY_KEY.get(normalizeCellMetric(metricKey)) ?? CELL_METRIC_DEFS[0];
 }
 
+export function getOverlayFieldKindForMetric(metricKey: string): string | null {
+    const metric = getCellMetricMeta(metricKey);
+    return metric.overlayFieldKind ?? null;
+}
+
+export function isDomesticatesMetric(metricKey: string): boolean {
+    return getCellMetricMeta(metricKey).category === "domesticates";
+}
+
 export interface MetricCategory extends CategoryMeta {
     metrics: CellMetricDef[];
 }
@@ -218,7 +276,7 @@ export function getMetricCategories(): MetricCategory[] {
         },
         {
             ...CATEGORY_META.ecology_domesticates,
-            metrics: [],
+            metrics: CELL_METRIC_DEFS.filter((metric) => metric.category === "domesticates"),
         },
         {
             ...CATEGORY_META.population,

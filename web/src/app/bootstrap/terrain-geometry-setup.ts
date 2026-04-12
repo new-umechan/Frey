@@ -25,6 +25,7 @@ export function setupTerrainGeometryAttributes({
     geometry.setAttribute("terrainUv", new THREE.BufferAttribute(terrainUv, 2));
     geometry.setAttribute("terrainHeight", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainMetric", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
+    geometry.setAttribute("terrainMetricOverlay", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainLakeDepth", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainDebugTrench", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));
     geometry.setAttribute("terrainDebugArc", new THREE.BufferAttribute(new Float32Array(vertexCount), 1));

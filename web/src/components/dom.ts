@@ -35,6 +35,26 @@ function collectClimateLegend(): ClimateLegendElements | null {
     };
 }
 
+export interface DomesticatesLegendElements {
+    panel: HTMLElement;
+    title: HTMLElement;
+    adoptionScale: HTMLElement;
+    availableHint: HTMLElement;
+}
+
+function collectDomesticatesLegend(): DomesticatesLegendElements | null {
+    const panel = optionalElement("domesticates-legend-panel", HTMLElement);
+    if (!panel) {
+        return null;
+    }
+    return {
+        panel,
+        title: requireElement("domesticates-legend-title", HTMLElement),
+        adoptionScale: requireElement("domesticates-legend-adoption", HTMLElement),
+        availableHint: requireElement("domesticates-legend-available", HTMLElement),
+    };
+}
+
 export interface PlaybackControlsElements {
     overlay: HTMLElement;
     playToggleButton: HTMLButtonElement;
@@ -143,6 +163,7 @@ export interface AppElements {
     eraScaleWeightFields: EraScaleWeightFields;
     viewModeInputs: HTMLInputElement[];
     climateLegend: ClimateLegendElements | null;
+    domesticatesLegend: DomesticatesLegendElements | null;
     controlHelpModal: HTMLDivElement | null;
     controlHelpCloseButton: HTMLButtonElement | null;
     playbackControls: PlaybackControlsElements;
@@ -178,6 +199,7 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
         .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
 
     const climateLegend = collectClimateLegend();
+    const domesticatesLegend = collectDomesticatesLegend();
     const controlHelpModal = optionalElement("control-help-modal", HTMLDivElement);
     const controlHelpCloseButton = optionalElement("control-help-close", HTMLButtonElement);
     const playbackControls = collectPlaybackControls();
@@ -216,6 +238,7 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
         eraScaleWeightFields,
         viewModeInputs,
         climateLegend,
+        domesticatesLegend,
         controlHelpModal,
         controlHelpCloseButton,
         playbackControls,

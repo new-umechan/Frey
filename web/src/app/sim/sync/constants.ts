@@ -18,7 +18,31 @@ export type FieldKind =
     | "wind_v"
     | "moisture_flux_u"
     | "moisture_flux_v"
-    | "river_transport_cost";
+    | "river_transport_cost"
+    | "crop_adoption_wheat"
+    | "crop_adoption_rice"
+    | "crop_adoption_maize"
+    | "crop_adoption_millet"
+    | "crop_adoption_tuber"
+    | "crop_adoption_legume"
+    | "crop_adoption_barley"
+    | "crop_available_wheat"
+    | "crop_available_rice"
+    | "crop_available_maize"
+    | "crop_available_millet"
+    | "crop_available_tuber"
+    | "crop_available_legume"
+    | "crop_available_barley"
+    | "livestock_adoption_cattle"
+    | "livestock_adoption_horse"
+    | "livestock_adoption_sheep"
+    | "livestock_adoption_pig"
+    | "livestock_adoption_camel"
+    | "livestock_available_cattle"
+    | "livestock_available_horse"
+    | "livestock_available_sheep"
+    | "livestock_available_pig"
+    | "livestock_available_camel";
 
 export const FLOAT32_FIELDS = new Set<FieldKind>([
     "height",
@@ -39,6 +63,30 @@ export const FLOAT32_FIELDS = new Set<FieldKind>([
     "moisture_flux_u",
     "moisture_flux_v",
     "river_transport_cost",
+    "crop_adoption_wheat",
+    "crop_adoption_rice",
+    "crop_adoption_maize",
+    "crop_adoption_millet",
+    "crop_adoption_tuber",
+    "crop_adoption_legume",
+    "crop_adoption_barley",
+    "crop_available_wheat",
+    "crop_available_rice",
+    "crop_available_maize",
+    "crop_available_millet",
+    "crop_available_tuber",
+    "crop_available_legume",
+    "crop_available_barley",
+    "livestock_adoption_cattle",
+    "livestock_adoption_horse",
+    "livestock_adoption_sheep",
+    "livestock_adoption_pig",
+    "livestock_adoption_camel",
+    "livestock_available_cattle",
+    "livestock_available_horse",
+    "livestock_available_sheep",
+    "livestock_available_pig",
+    "livestock_available_camel",
 ]);
 
 export const OPTIONAL_FIELD_KINDS = new Set<FieldKind>([
@@ -96,6 +144,30 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     moisture_flux_u: "moistureFluxU",
     moisture_flux_v: "moistureFluxV",
     river_transport_cost: "riverTransportCost",
+    crop_adoption_wheat: "cropAdoptionWheat",
+    crop_adoption_rice: "cropAdoptionRice",
+    crop_adoption_maize: "cropAdoptionMaize",
+    crop_adoption_millet: "cropAdoptionMillet",
+    crop_adoption_tuber: "cropAdoptionTuber",
+    crop_adoption_legume: "cropAdoptionLegume",
+    crop_adoption_barley: "cropAdoptionBarley",
+    crop_available_wheat: "cropAvailableWheat",
+    crop_available_rice: "cropAvailableRice",
+    crop_available_maize: "cropAvailableMaize",
+    crop_available_millet: "cropAvailableMillet",
+    crop_available_tuber: "cropAvailableTuber",
+    crop_available_legume: "cropAvailableLegume",
+    crop_available_barley: "cropAvailableBarley",
+    livestock_adoption_cattle: "livestockAdoptionCattle",
+    livestock_adoption_horse: "livestockAdoptionHorse",
+    livestock_adoption_sheep: "livestockAdoptionSheep",
+    livestock_adoption_pig: "livestockAdoptionPig",
+    livestock_adoption_camel: "livestockAdoptionCamel",
+    livestock_available_cattle: "livestockAvailableCattle",
+    livestock_available_horse: "livestockAvailableHorse",
+    livestock_available_sheep: "livestockAvailableSheep",
+    livestock_available_pig: "livestockAvailablePig",
+    livestock_available_camel: "livestockAvailableCamel",
 });
 
 const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Object.freeze({
@@ -119,6 +191,30 @@ const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Objec
     moisture_flux_u: "metric",
     moisture_flux_v: "metric",
     river_transport_cost: "metric",
+    crop_adoption_wheat: "metric",
+    crop_adoption_rice: "metric",
+    crop_adoption_maize: "metric",
+    crop_adoption_millet: "metric",
+    crop_adoption_tuber: "metric",
+    crop_adoption_legume: "metric",
+    crop_adoption_barley: "metric",
+    crop_available_wheat: "metric",
+    crop_available_rice: "metric",
+    crop_available_maize: "metric",
+    crop_available_millet: "metric",
+    crop_available_tuber: "metric",
+    crop_available_legume: "metric",
+    crop_available_barley: "metric",
+    livestock_adoption_cattle: "metric",
+    livestock_adoption_horse: "metric",
+    livestock_adoption_sheep: "metric",
+    livestock_adoption_pig: "metric",
+    livestock_adoption_camel: "metric",
+    livestock_available_cattle: "metric",
+    livestock_available_horse: "metric",
+    livestock_available_sheep: "metric",
+    livestock_available_pig: "metric",
+    livestock_available_camel: "metric",
 });
 
 export function createWorldChangeset(): WorldChangeset {
