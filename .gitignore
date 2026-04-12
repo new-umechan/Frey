@@ -23,3 +23,6 @@ tests/perf/history/
 .pnpm-store/
 .worktrees
 .git/info/exclude
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
