@@ -121,6 +121,30 @@ pub(crate) struct WorldTransportCache {
     pub moisture_flux_u: F32FieldTracker,
     pub moisture_flux_v: F32FieldTracker,
     pub river_transport_cost: F32FieldTracker,
+    pub crop_adoption_wheat: F32FieldTracker,
+    pub crop_adoption_rice: F32FieldTracker,
+    pub crop_adoption_maize: F32FieldTracker,
+    pub crop_adoption_millet: F32FieldTracker,
+    pub crop_adoption_tuber: F32FieldTracker,
+    pub crop_adoption_legume: F32FieldTracker,
+    pub crop_adoption_barley: F32FieldTracker,
+    pub crop_available_wheat: F32FieldTracker,
+    pub crop_available_rice: F32FieldTracker,
+    pub crop_available_maize: F32FieldTracker,
+    pub crop_available_millet: F32FieldTracker,
+    pub crop_available_tuber: F32FieldTracker,
+    pub crop_available_legume: F32FieldTracker,
+    pub crop_available_barley: F32FieldTracker,
+    pub livestock_adoption_cattle: F32FieldTracker,
+    pub livestock_adoption_horse: F32FieldTracker,
+    pub livestock_adoption_sheep: F32FieldTracker,
+    pub livestock_adoption_pig: F32FieldTracker,
+    pub livestock_adoption_camel: F32FieldTracker,
+    pub livestock_available_cattle: F32FieldTracker,
+    pub livestock_available_horse: F32FieldTracker,
+    pub livestock_available_sheep: F32FieldTracker,
+    pub livestock_available_pig: F32FieldTracker,
+    pub livestock_available_camel: F32FieldTracker,
 }
 
 #[derive(Clone)]
@@ -614,6 +638,48 @@ fn collect_plate_ids(world: &world::World) -> Vec<u32> {
         .collect()
 }
 
+fn collect_crop_adoption_for_kind(world: &world::World, kind_index: usize) -> Vec<f32> {
+    world
+        .state
+        .domesticates
+        .crop_adoption
+        .iter()
+        .map(|values| values.get(kind_index).copied().unwrap_or(0.0))
+        .collect()
+}
+
+fn collect_crop_available_for_kind(world: &world::World, kind_index: usize) -> Vec<f32> {
+    let mask = 1u8 << kind_index;
+    world
+        .state
+        .domesticates
+        .crop_available
+        .iter()
+        .map(|value| if (*value & mask) != 0 { 1.0 } else { 0.0 })
+        .collect()
+}
+
+fn collect_livestock_adoption_for_kind(world: &world::World, kind_index: usize) -> Vec<f32> {
+    world
+        .state
+        .domesticates
+        .livestock_adoption
+        .iter()
+        .map(|values| values.get(kind_index).copied().unwrap_or(0.0))
+        .collect()
+}
+
+fn collect_livestock_available_for_kind(world: &world::World, kind_index: usize) -> Vec<f32> {
+    let mask = 1u8 << kind_index;
+    world
+        .state
+        .domesticates
+        .livestock_available
+        .iter()
+        .map(|value| if (*value & mask) != 0 { 1.0 } else { 0.0 })
+        .collect()
+}
+
 impl WorldTransportCache {
     pub fn from_world(
         world: &world::World,
@@ -652,6 +718,50 @@ impl WorldTransportCache {
             moisture_flux_u: F32FieldTracker::new(&world.state.climate.moisture_flux_u),
             moisture_flux_v: F32FieldTracker::new(&world.state.climate.moisture_flux_v),
             river_transport_cost: F32FieldTracker::new(&world.state.hydrology.river_transport_cost),
+            crop_adoption_wheat: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 0)),
+            crop_adoption_rice: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 1)),
+            crop_adoption_maize: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 2)),
+            crop_adoption_millet: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 3)),
+            crop_adoption_tuber: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 4)),
+            crop_adoption_legume: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 5)),
+            crop_adoption_barley: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 6)),
+            crop_available_wheat: F32FieldTracker::new(&collect_crop_available_for_kind(world, 0)),
+            crop_available_rice: F32FieldTracker::new(&collect_crop_available_for_kind(world, 1)),
+            crop_available_maize: F32FieldTracker::new(&collect_crop_available_for_kind(world, 2)),
+            crop_available_millet: F32FieldTracker::new(&collect_crop_available_for_kind(world, 3)),
+            crop_available_tuber: F32FieldTracker::new(&collect_crop_available_for_kind(world, 4)),
+            crop_available_legume: F32FieldTracker::new(&collect_crop_available_for_kind(world, 5)),
+            crop_available_barley: F32FieldTracker::new(&collect_crop_available_for_kind(world, 6)),
+            livestock_adoption_cattle: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
+                world, 0,
+            )),
+            livestock_adoption_horse: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
+                world, 1,
+            )),
+            livestock_adoption_sheep: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
+                world, 2,
+            )),
+            livestock_adoption_pig: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
+                world, 3,
+            )),
+            livestock_adoption_camel: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
+                world, 4,
+            )),
+            livestock_available_cattle: F32FieldTracker::new(
+                &collect_livestock_available_for_kind(world, 0),
+            ),
+            livestock_available_horse: F32FieldTracker::new(&collect_livestock_available_for_kind(
+                world, 1,
+            )),
+            livestock_available_sheep: F32FieldTracker::new(&collect_livestock_available_for_kind(
+                world, 2,
+            )),
+            livestock_available_pig: F32FieldTracker::new(&collect_livestock_available_for_kind(
+                world, 3,
+            )),
+            livestock_available_camel: F32FieldTracker::new(&collect_livestock_available_for_kind(
+                world, 4,
+            )),
         }
     }
 
@@ -705,6 +815,54 @@ impl WorldTransportCache {
             .observe(&world.state.climate.moisture_flux_v);
         self.river_transport_cost
             .observe(&world.state.hydrology.river_transport_cost);
+        self.crop_adoption_wheat
+            .observe(&collect_crop_adoption_for_kind(world, 0));
+        self.crop_adoption_rice
+            .observe(&collect_crop_adoption_for_kind(world, 1));
+        self.crop_adoption_maize
+            .observe(&collect_crop_adoption_for_kind(world, 2));
+        self.crop_adoption_millet
+            .observe(&collect_crop_adoption_for_kind(world, 3));
+        self.crop_adoption_tuber
+            .observe(&collect_crop_adoption_for_kind(world, 4));
+        self.crop_adoption_legume
+            .observe(&collect_crop_adoption_for_kind(world, 5));
+        self.crop_adoption_barley
+            .observe(&collect_crop_adoption_for_kind(world, 6));
+        self.crop_available_wheat
+            .observe(&collect_crop_available_for_kind(world, 0));
+        self.crop_available_rice
+            .observe(&collect_crop_available_for_kind(world, 1));
+        self.crop_available_maize
+            .observe(&collect_crop_available_for_kind(world, 2));
+        self.crop_available_millet
+            .observe(&collect_crop_available_for_kind(world, 3));
+        self.crop_available_tuber
+            .observe(&collect_crop_available_for_kind(world, 4));
+        self.crop_available_legume
+            .observe(&collect_crop_available_for_kind(world, 5));
+        self.crop_available_barley
+            .observe(&collect_crop_available_for_kind(world, 6));
+        self.livestock_adoption_cattle
+            .observe(&collect_livestock_adoption_for_kind(world, 0));
+        self.livestock_adoption_horse
+            .observe(&collect_livestock_adoption_for_kind(world, 1));
+        self.livestock_adoption_sheep
+            .observe(&collect_livestock_adoption_for_kind(world, 2));
+        self.livestock_adoption_pig
+            .observe(&collect_livestock_adoption_for_kind(world, 3));
+        self.livestock_adoption_camel
+            .observe(&collect_livestock_adoption_for_kind(world, 4));
+        self.livestock_available_cattle
+            .observe(&collect_livestock_available_for_kind(world, 0));
+        self.livestock_available_horse
+            .observe(&collect_livestock_available_for_kind(world, 1));
+        self.livestock_available_sheep
+            .observe(&collect_livestock_available_for_kind(world, 2));
+        self.livestock_available_pig
+            .observe(&collect_livestock_available_for_kind(world, 3));
+        self.livestock_available_camel
+            .observe(&collect_livestock_available_for_kind(world, 4));
     }
 
     pub fn take_world_field_deltas<F>(&mut self, mut include_field: F) -> Vec<FieldDeltaResponse>
@@ -865,6 +1023,213 @@ impl WorldTransportCache {
             }
         } else {
             self.river_transport_cost.discard_pending();
+        }
+        if include_field("crop_adoption_wheat") {
+            if let Some(delta) = self.crop_adoption_wheat.take_delta("crop_adoption_wheat") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_wheat.discard_pending();
+        }
+        if include_field("crop_adoption_rice") {
+            if let Some(delta) = self.crop_adoption_rice.take_delta("crop_adoption_rice") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_rice.discard_pending();
+        }
+        if include_field("crop_adoption_maize") {
+            if let Some(delta) = self.crop_adoption_maize.take_delta("crop_adoption_maize") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_maize.discard_pending();
+        }
+        if include_field("crop_adoption_millet") {
+            if let Some(delta) = self.crop_adoption_millet.take_delta("crop_adoption_millet") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_millet.discard_pending();
+        }
+        if include_field("crop_adoption_tuber") {
+            if let Some(delta) = self.crop_adoption_tuber.take_delta("crop_adoption_tuber") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_tuber.discard_pending();
+        }
+        if include_field("crop_adoption_legume") {
+            if let Some(delta) = self.crop_adoption_legume.take_delta("crop_adoption_legume") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_legume.discard_pending();
+        }
+        if include_field("crop_adoption_barley") {
+            if let Some(delta) = self.crop_adoption_barley.take_delta("crop_adoption_barley") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_barley.discard_pending();
+        }
+        if include_field("crop_available_wheat") {
+            if let Some(delta) = self.crop_available_wheat.take_delta("crop_available_wheat") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_wheat.discard_pending();
+        }
+        if include_field("crop_available_rice") {
+            if let Some(delta) = self.crop_available_rice.take_delta("crop_available_rice") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_rice.discard_pending();
+        }
+        if include_field("crop_available_maize") {
+            if let Some(delta) = self.crop_available_maize.take_delta("crop_available_maize") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_maize.discard_pending();
+        }
+        if include_field("crop_available_millet") {
+            if let Some(delta) = self
+                .crop_available_millet
+                .take_delta("crop_available_millet")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_millet.discard_pending();
+        }
+        if include_field("crop_available_tuber") {
+            if let Some(delta) = self.crop_available_tuber.take_delta("crop_available_tuber") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_tuber.discard_pending();
+        }
+        if include_field("crop_available_legume") {
+            if let Some(delta) = self
+                .crop_available_legume
+                .take_delta("crop_available_legume")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_legume.discard_pending();
+        }
+        if include_field("crop_available_barley") {
+            if let Some(delta) = self
+                .crop_available_barley
+                .take_delta("crop_available_barley")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_barley.discard_pending();
+        }
+        if include_field("livestock_adoption_cattle") {
+            if let Some(delta) = self
+                .livestock_adoption_cattle
+                .take_delta("livestock_adoption_cattle")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_adoption_cattle.discard_pending();
+        }
+        if include_field("livestock_adoption_horse") {
+            if let Some(delta) = self
+                .livestock_adoption_horse
+                .take_delta("livestock_adoption_horse")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_adoption_horse.discard_pending();
+        }
+        if include_field("livestock_adoption_sheep") {
+            if let Some(delta) = self
+                .livestock_adoption_sheep
+                .take_delta("livestock_adoption_sheep")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_adoption_sheep.discard_pending();
+        }
+        if include_field("livestock_adoption_pig") {
+            if let Some(delta) = self
+                .livestock_adoption_pig
+                .take_delta("livestock_adoption_pig")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_adoption_pig.discard_pending();
+        }
+        if include_field("livestock_adoption_camel") {
+            if let Some(delta) = self
+                .livestock_adoption_camel
+                .take_delta("livestock_adoption_camel")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_adoption_camel.discard_pending();
+        }
+        if include_field("livestock_available_cattle") {
+            if let Some(delta) = self
+                .livestock_available_cattle
+                .take_delta("livestock_available_cattle")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_available_cattle.discard_pending();
+        }
+        if include_field("livestock_available_horse") {
+            if let Some(delta) = self
+                .livestock_available_horse
+                .take_delta("livestock_available_horse")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_available_horse.discard_pending();
+        }
+        if include_field("livestock_available_sheep") {
+            if let Some(delta) = self
+                .livestock_available_sheep
+                .take_delta("livestock_available_sheep")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_available_sheep.discard_pending();
+        }
+        if include_field("livestock_available_pig") {
+            if let Some(delta) = self
+                .livestock_available_pig
+                .take_delta("livestock_available_pig")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_available_pig.discard_pending();
+        }
+        if include_field("livestock_available_camel") {
+            if let Some(delta) = self
+                .livestock_available_camel
+                .take_delta("livestock_available_camel")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.livestock_available_camel.discard_pending();
         }
         deltas
     }
@@ -1082,6 +1447,30 @@ mod tests {
             moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
             river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
+            crop_adoption_wheat: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_maize: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_millet: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_tuber: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_legume: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_wheat: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_rice: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_maize: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_millet: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_tuber: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_legume: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_cattle: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_horse: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_sheep: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_pig: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_camel: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_cattle: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_horse: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_sheep: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_pig: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_camel: F32FieldTracker::new(&[0.0, 0.0]),
         };
 
         state.height.observe(&[2.0, 1.0]);
@@ -1121,6 +1510,30 @@ mod tests {
             moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
             river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
+            crop_adoption_wheat: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_maize: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_millet: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_tuber: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_legume: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_wheat: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_rice: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_maize: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_millet: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_tuber: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_legume: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_cattle: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_horse: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_sheep: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_pig: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_adoption_camel: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_cattle: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_horse: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_sheep: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_pig: F32FieldTracker::new(&[0.0, 0.0]),
+            livestock_available_camel: F32FieldTracker::new(&[0.0, 0.0]),
         };
 
         state.ice_pressure.observe(&[0.0, 0.7]);

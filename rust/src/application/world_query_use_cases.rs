@@ -11,9 +11,42 @@ use crate::application::world_service::WorldService;
 use crate::application::world_support::{
     sample_f32, sample_i32, sample_u32_from_plate_id, sampled_len,
 };
+use crate::sim::world::{N_CROPS, N_LIVESTOCK};
 
 fn world_not_found_error(world_id: &str) -> String {
     format!("world not found: {world_id}")
+}
+
+fn sample_crop_adoption_by_kind(
+    values: &[[f32; N_CROPS]],
+    kind_index: usize,
+    stride: u32,
+) -> Vec<f32> {
+    values
+        .iter()
+        .step_by(stride.max(1) as usize)
+        .map(|entry| entry.get(kind_index).copied().unwrap_or(0.0))
+        .collect()
+}
+
+fn sample_livestock_adoption_by_kind(
+    values: &[[f32; N_LIVESTOCK]],
+    kind_index: usize,
+    stride: u32,
+) -> Vec<f32> {
+    values
+        .iter()
+        .step_by(stride.max(1) as usize)
+        .map(|entry| entry.get(kind_index).copied().unwrap_or(0.0))
+        .collect()
+}
+
+fn sample_bitmap_available(values: &[u8], mask: u8, stride: u32) -> Vec<f32> {
+    values
+        .iter()
+        .step_by(stride.max(1) as usize)
+        .map(|value| if (*value & mask) != 0 { 1.0 } else { 0.0 })
+        .collect()
 }
 
 pub(crate) fn get_field(
@@ -237,6 +270,348 @@ pub(crate) fn get_field(
             ),
             f32_data: Some(sample_f32(
                 &world_ref.state.hydrology.river_transport_cost,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_wheat" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                0,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_rice" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                1,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_maize" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                2,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_millet" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                3,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_tuber" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                4,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_legume" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                5,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_barley" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                6,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_adoption_cattle" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_adoption.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_adoption.len(),
+                stride,
+            ),
+            f32_data: Some(sample_livestock_adoption_by_kind(
+                &world_ref.state.domesticates.livestock_adoption,
+                0,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_adoption_horse" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_adoption.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_adoption.len(),
+                stride,
+            ),
+            f32_data: Some(sample_livestock_adoption_by_kind(
+                &world_ref.state.domesticates.livestock_adoption,
+                1,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_adoption_sheep" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_adoption.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_adoption.len(),
+                stride,
+            ),
+            f32_data: Some(sample_livestock_adoption_by_kind(
+                &world_ref.state.domesticates.livestock_adoption,
+                2,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_adoption_pig" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_adoption.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_adoption.len(),
+                stride,
+            ),
+            f32_data: Some(sample_livestock_adoption_by_kind(
+                &world_ref.state.domesticates.livestock_adoption,
+                3,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_adoption_camel" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_adoption.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_adoption.len(),
+                stride,
+            ),
+            f32_data: Some(sample_livestock_adoption_by_kind(
+                &world_ref.state.domesticates.livestock_adoption,
+                4,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_wheat" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 0,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_rice" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 1,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_maize" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 2,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_millet" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 3,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_tuber" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 4,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_legume" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 5,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_barley" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 6,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_available_cattle" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_available.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_available.len(),
+                stride,
+            ),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.livestock_available,
+                1u8 << 0,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_available_horse" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_available.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_available.len(),
+                stride,
+            ),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.livestock_available,
+                1u8 << 1,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_available_sheep" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_available.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_available.len(),
+                stride,
+            ),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.livestock_available,
+                1u8 << 2,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_available_pig" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_available.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_available.len(),
+                stride,
+            ),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.livestock_available,
+                1u8 << 3,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "livestock_available_camel" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.livestock_available.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.domesticates.livestock_available.len(),
+                stride,
+            ),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.livestock_available,
+                1u8 << 4,
                 stride,
             )),
             u32_data: None,
