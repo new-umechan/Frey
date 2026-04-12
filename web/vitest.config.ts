@@ -7,6 +7,8 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
     test: {
         environment: "jsdom",
+        pool: "forks",
+        fileParallelism: false,
         setupFiles: [path.resolve(configDir, "tests/setup.ts")],
         include: [path.resolve(configDir, "**/*.test.ts")],
         exclude: ["node_modules", "dist"],

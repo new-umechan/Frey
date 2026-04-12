@@ -1,6 +1,7 @@
 use super::*;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::hydrology::downstream_from_csr;
+use crate::sim::hydrology::sanitize_primary_next_no_cycle;
 
 pub(super) fn run_river_fallback(
     world: &mut World,
@@ -48,6 +49,7 @@ pub(super) fn run_river_fallback(
         },
         &mut constraint_buffers,
     );
+    sanitize_primary_next_no_cycle(&mut rebuilt.primary_next);
 
     world.state.hydrology.river_next = rebuilt.primary_next;
     world.state.hydrology.river_flow = rebuilt.flux;

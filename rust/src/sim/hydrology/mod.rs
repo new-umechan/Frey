@@ -217,6 +217,7 @@ fn run_river_step_with_erosion_state(
             },
             &mut constraint_buffers,
         );
+        sanitize_primary_next_no_cycle(&mut rebuilt.primary_next);
         align_flow_heading(&mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
         state.prev_river_next.clone_from(&state.river_next);
         state.river_flux = rebuilt.flux; // 正規化済み（内部処理用）
@@ -299,6 +300,7 @@ fn run_river_flow_only_with_state(
     );
     detail.river_network_ms += profile_elapsed_ms(phase_start);
 
+    sanitize_primary_next_no_cycle(&mut state.river_next);
     state.prev_river_next.clone_from(&state.river_next);
     state.river_flux = flux;
     state.scratch_effective_runoff = effective_runoff;
@@ -403,4 +405,48 @@ pub(crate) fn downstream_from_csr(
         }
     }
     result
+}
+
+pub(super) fn sanitize_primary_next_no_cycle(river_next: &mut [i32]) {
+    let count = river_next.len();
+    if count == 0 {
+        return;
+    }
+
+    for next in river_next.iter_mut() {
+        if *next >= 0 && (*next as usize) >= count {
+            *next = -1;
+        }
+    }
+
+    let mut visit_state = vec![0u8; count];
+    let mut path = Vec::<usize>::with_capacity(32);
+    for start in 0..count {
+        if visit_state[start] != 0 {
+            continue;
+        }
+        let mut node = start as i32;
+        while node >= 0 {
+            let idx = node as usize;
+            if idx >= count {
+                break;
+            }
+            match visit_state[idx] {
+                0 => {
+                    visit_state[idx] = 1;
+                    path.push(idx);
+                    node = river_next[idx];
+                }
+                1 => {
+                    river_next[idx] = -1;
+                    break;
+                }
+                _ => break,
+            }
+        }
+        for &idx in &path {
+            visit_state[idx] = 2;
+        }
+        path.clear();
+    }
 }
