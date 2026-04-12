@@ -57,6 +57,13 @@ struct DiagnosticSummary {
     coverage_ratio: f32,
 }
 
+struct FillSpillDiagnosticSummary {
+    active_sink_count: usize,
+    overflow_active_ratio: f32,
+    mean_sink_fill_ratio: f32,
+    ponded_cell_count: usize,
+}
+
 struct FlowMetricResult {
     rho: f32,
 }
@@ -89,6 +96,9 @@ struct BenchRunMetadata {
     repeat_total: Option<u32>,
     git_commit: Option<String>,
 }
+
+const DEFAULT_STABILIZATION_TICKS: usize = 8;
+const DEFAULT_SAMPLE_TICKS: usize = 3;
 
 const REGIONS: &[Region] = &[
     Region {
@@ -179,6 +189,11 @@ fn main() {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .or_else(resolve_git_commit);
+    let stabilization_ticks = parse_env_usize("HYDROLOGY_BENCH_STABILIZATION_TICKS")
+        .unwrap_or(DEFAULT_STABILIZATION_TICKS);
+    let sample_ticks = parse_env_usize("HYDROLOGY_BENCH_SAMPLE_TICKS")
+        .unwrap_or(DEFAULT_SAMPLE_TICKS)
+        .max(1);
 
     let (mut terrain, positions, nbr_offsets, nbrs) =
         sim::build_geology_with_mesh(seed, geology_params.clone());
@@ -274,18 +289,35 @@ fn main() {
     sim_world.state.climate.runoff = hydro_input.runoff;
     sim_world.state.hydrology.river_flow = terrain.river_flux;
     sim_world.state.hydrology.river_next = terrain.river_next;
-    let _erosion_state = sim::build_hydrology_state_for_bench(&sim_world, geology_params);
+    let mut erosion_state = sim::build_hydrology_state_for_bench(&sim_world, geology_params);
     let geology_budget = sim_world.clock.budgets.geology;
-    let hydro_started_at = Instant::now();
-    sim::run_hydrology_step_for_bench(&mut sim_world, geology_budget, true);
-    let hydrology_step_ms = hydro_started_at.elapsed().as_secs_f64() * 1000.0;
+    let mut sampled_runtime_ms = Vec::with_capacity(sample_ticks);
+    let total_ticks = stabilization_ticks + sample_ticks;
+    for tick_index in 0..total_ticks {
+        let hydro_started_at = Instant::now();
+        sim::run_hydrology_step_with_state_for_bench(
+            &mut sim_world,
+            &mut erosion_state,
+            geology_budget,
+            true,
+        );
+        let elapsed_ms = hydro_started_at.elapsed().as_secs_f64() * 1000.0;
+        if tick_index >= stabilization_ticks {
+            sampled_runtime_ms.push(elapsed_ms as f32);
+        }
+        sim_world.clock.tick = sim_world.clock.tick.saturating_add(1);
+    }
+    let hydrology_step_ms = percentile_in_place(&mut sampled_runtime_ms, 0.95);
+    let fill_spill_diagnostics = summarize_fill_spill_diagnostics(&sim_world);
 
     println!("=== Hydrology Solo Bench ===");
     println!("-- Terrain Source: {} --", terrain_ref_path.display());
     println!("-- Hydro Input Source: {} --", hydro_input_path.display());
     println!(
-        "-- Runtime Diagnostics: hydrology_step_ms={:.3} --",
-        hydrology_step_ms
+        "-- Runtime Diagnostics: hydrology_step_ms={:.3} stabilization_ticks={} sample_ticks={} --",
+        hydrology_step_ms,
+        stabilization_ticks,
+        sample_ticks
     );
     println!();
     println!("-- Main Evaluation 1-A: river_flow Spearman (log scale, land cells only) --");
@@ -384,6 +416,13 @@ fn main() {
         "-- Diagnostic Evaluation 2-A Summary: matched={}/{} coverage_ratio={:.3} --",
         diagnostic_summary.matched, diagnostic_summary.total, diagnostic_summary.coverage_ratio
     );
+    println!(
+        "-- Diagnostic Evaluation 2-C: Fill-Spill active_sink_count={} overflow_active_ratio={:.3} mean_sink_fill_ratio={:.3} ponded_cell_count={} --",
+        fill_spill_diagnostics.active_sink_count,
+        fill_spill_diagnostics.overflow_active_ratio,
+        fill_spill_diagnostics.mean_sink_fill_ratio,
+        fill_spill_diagnostics.ponded_cell_count,
+    );
 
     match &main_eval_state {
         MainEvaluationState::Ready { .. } => println!("-- Main Evaluation State: READY --"),
@@ -405,6 +444,7 @@ fn main() {
         mesh_level,
         cell_count,
         &diagnostic_summary,
+        &fill_spill_diagnostics,
         hydrology_step_ms as f32,
     ) {
         println!("-- Score Save: ERROR ({}) --", error);
@@ -599,10 +639,23 @@ fn percentile_sorted(values: &[f32], quantile: f32) -> f32 {
     values[lower] * (1.0 - weight) + values[upper] * weight
 }
 
+fn percentile_in_place(values: &mut [f32], quantile: f32) -> f32 {
+    if values.is_empty() {
+        return f32::NAN;
+    }
+    values.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    let q = quantile.clamp(0.0, 1.0);
+    let index = (((values.len() - 1) as f32) * q).round() as usize;
+    values[index.min(values.len() - 1)]
+}
+
 fn find_terrain_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
+        Path::new("data/terrain_ref.bin"),
+        Path::new("../data/terrain_ref.bin"),
         Path::new("benches/data/terrain_ref.bin"),
         Path::new("../benches/data/terrain_ref.bin"),
+        Path::new("../../benches/data/terrain_ref.bin"),
     ];
     candidates
         .iter()
@@ -612,8 +665,11 @@ fn find_terrain_ref_cache_path() -> Option<PathBuf> {
 
 fn find_hydro_input_cache_path() -> Option<PathBuf> {
     let candidates = [
+        Path::new("data/hydro_input.bin"),
+        Path::new("../data/hydro_input.bin"),
         Path::new("benches/data/hydro_input.bin"),
         Path::new("../benches/data/hydro_input.bin"),
+        Path::new("../../benches/data/hydro_input.bin"),
     ];
     candidates
         .iter()
@@ -623,8 +679,11 @@ fn find_hydro_input_cache_path() -> Option<PathBuf> {
 
 fn find_hydro_ref_cache_path() -> Option<PathBuf> {
     let candidates = [
+        Path::new("data/hydro_ref.bin"),
+        Path::new("../data/hydro_ref.bin"),
         Path::new("benches/data/hydro_ref.bin"),
         Path::new("../benches/data/hydro_ref.bin"),
+        Path::new("../../benches/data/hydro_ref.bin"),
     ];
     candidates
         .iter()
@@ -844,6 +903,57 @@ fn summarize_diagnostics(outcomes: &[AssertionOutcome]) -> DiagnosticSummary {
     }
 }
 
+fn summarize_fill_spill_diagnostics(world: &world::World) -> FillSpillDiagnosticSummary {
+    let hydrology = &world.state.hydrology;
+    let active_sink_count = hydrology
+        .sink_spill_cell
+        .iter()
+        .copied()
+        .filter(|spill_cell| *spill_cell >= 0)
+        .count();
+    let overflow_active_count = hydrology
+        .sink_overflow_active
+        .iter()
+        .copied()
+        .filter(|active| *active != 0)
+        .count();
+    let overflow_active_ratio = if active_sink_count > 0 {
+        overflow_active_count as f32 / active_sink_count as f32
+    } else {
+        0.0
+    };
+
+    let mut fill_sum = 0.0f32;
+    let mut fill_count = 0usize;
+    for sid in 0..hydrology.sink_capacity_total.len() {
+        let total = hydrology.sink_capacity_total[sid];
+        if !total.is_finite() || total <= 1e-6 {
+            continue;
+        }
+        let remain = hydrology
+            .sink_capacity_remaining
+            .get(sid)
+            .copied()
+            .unwrap_or(total)
+            .clamp(0.0, total);
+        fill_sum += (1.0 - remain / total).clamp(0.0, 1.0);
+        fill_count += 1;
+    }
+    let mean_sink_fill_ratio = if fill_count > 0 {
+        fill_sum / fill_count as f32
+    } else {
+        0.0
+    };
+    let ponded_cell_count = hydrology.is_lake.iter().copied().filter(|value| *value).count();
+
+    FillSpillDiagnosticSummary {
+        active_sink_count,
+        overflow_active_ratio,
+        mean_sink_fill_ratio,
+        ponded_cell_count,
+    }
+}
+
 fn default_run_id() -> String {
     format!(
         "default-{}",
@@ -859,6 +969,13 @@ fn parse_env_u32(key: &str) -> Option<u32> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .and_then(|value| value.parse::<u32>().ok())
+}
+
+fn parse_env_usize(key: &str) -> Option<usize> {
+    env::var(key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|value| value.parse::<usize>().ok())
 }
 
 fn resolve_git_commit() -> Option<String> {
@@ -916,6 +1033,7 @@ fn append_score_record_jsonl(
     mesh_level: u32,
     cell_count: usize,
     diagnostic_summary: &DiagnosticSummary,
+    fill_spill_diagnostics: &FillSpillDiagnosticSummary,
     hydrology_step_ms: f32,
 ) -> Result<(), String> {
     let timestamp_unix_ms = SystemTime::now()
@@ -955,7 +1073,7 @@ fn append_score_record_jsonl(
     };
 
     let line = format!(
-        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}}}}\n",
+        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"fill_spill_stats\":{{\"active_sink_count\":{},\"overflow_active_ratio\":{},\"mean_sink_fill_ratio\":{},\"ponded_cell_count\":{}}}}}}}\n",
         timestamp_unix_ms,
         json_escape(&run_metadata.run_id),
         run_metadata
@@ -988,6 +1106,10 @@ fn append_score_record_jsonl(
         diagnostic_summary.matched,
         diagnostic_summary.total,
         format_json_number(diagnostic_summary.coverage_ratio),
+        fill_spill_diagnostics.active_sink_count,
+        format_json_number(fill_spill_diagnostics.overflow_active_ratio),
+        format_json_number(fill_spill_diagnostics.mean_sink_fill_ratio),
+        fill_spill_diagnostics.ponded_cell_count,
     );
 
     let output_path = score_output_path();

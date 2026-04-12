@@ -1,6 +1,6 @@
 use super::*;
 use crate::sim::erosion::ErosionAutomatonState;
-use crate::sim::hydrology::downstream_from_csr;
+use crate::sim::hydrology::rebuild_mfd_from_primary;
 use crate::sim::hydrology::sanitize_primary_next_no_cycle;
 
 pub(super) fn run_river_fallback(
@@ -15,6 +15,22 @@ pub(super) fn run_river_fallback(
 
     let previous_flux = vec![0.0; cell_count];
     let params = &world.control.geology_params;
+    let mesh_nbr_offsets = world.mesh().nbr_offsets.clone();
+    let mesh_nbrs = world.mesh().nbrs.clone();
+    let mut state = state;
+    rebuild_fill_spill_state(
+        &mut world.state.hydrology,
+        &world.state.geology.height,
+        &mesh_nbr_offsets,
+        &mesh_nbrs,
+        params,
+        state.as_deref().map(|value| value.water.as_slice()),
+        state.as_deref().map(|value| value.sediment.as_slice()),
+    );
+    if let Some(state_ref) = state.as_deref_mut() {
+        sync_fill_spill_to_erosion(state_ref, &world.state.hydrology);
+    }
+    let network_state = state.as_deref();
 
     let mut rebuilt = build_river_network(
         &world.mesh().positions,
@@ -23,7 +39,7 @@ pub(super) fn run_river_fallback(
         &world.state.geology.height,
         runoff,
         params,
-        None,
+        network_state,
     );
 
     let mut flux_scale_ema = 1.0;
@@ -53,13 +69,12 @@ pub(super) fn run_river_fallback(
 
     world.state.hydrology.river_next = rebuilt.primary_next;
     world.state.hydrology.river_flow = rebuilt.flux;
-    world.state.hydrology.river_downstream = downstream_from_csr(
-        world.state.hydrology.river_next.len(),
-        &rebuilt.downstream_offsets,
-        &rebuilt.downstream_cells,
-        &rebuilt.downstream_weights,
+    rebuild_mfd_from_primary(&mut world.state.hydrology);
+    update_public_lake_flags(
+        &mut world.state.hydrology,
+        &world.state.geology.height,
+        params,
     );
-    world.state.hydrology.is_lake.fill(false);
     if let Some(state) = state {
         if state.river_flux.len() == world.state.hydrology.river_flow.len() {
             sync_erosion_rain(state, runoff);
@@ -71,6 +86,7 @@ pub(super) fn run_river_fallback(
                 .river_next
                 .clone_from(&world.state.hydrology.river_next);
             state.height.clone_from(&world.state.geology.height);
+            sync_fill_spill_to_erosion(state, &world.state.hydrology);
             state.last_rebuild_tick = world.clock.tick;
             state.flux_scale_ema = 1.0;
             state.last_river_driver = 1.0;

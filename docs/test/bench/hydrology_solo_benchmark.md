@@ -3,7 +3,7 @@
 ## 概要
 
 入力として実地形（`geology.height`、固定）と実気候データ（`climate.runoff`、ERA5-Land由来）を与え、
-1 tick実行した結果の `river_flow`・`is_lake` を主指標として評価する。
+安定化 tick 実行後の `river_flow`・`is_lake` を主指標として評価する。
 `erosion_rate`・`deposition_rate` は実データが粗いため参考値として記録する。
 
 Hydrologyモジュール単体の評価が目的であり、Climateの誤差を混入させないため
@@ -17,6 +17,16 @@ Hydrologyモジュール単体の評価が目的であり、Climateの誤差を�
 # repo root から実行
 cargo bench --manifest-path benches/rust/Cargo.toml --bench hydrology_solo
 ```
+
+## 評価時点
+
+fill-spill の sink / spill 状態を落ち着かせるため、ベンチは次の手順で評価する。
+
+1. 初期 world を構築する
+2. `stabilization_ticks = 8` tick 実行する
+3. 続く `sample_ticks = 3` tick を計測する
+4. runtime は sample tick 群の p95 を採用する
+5. 品質指標は最終 tick の `river_flow` / `is_lake` を使う
 
 ## 入力の準備
 

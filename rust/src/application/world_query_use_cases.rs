@@ -511,28 +511,17 @@ pub(crate) fn list_history_ticks(
     })
 }
 
-fn matched_sink_state(
-    managed: &ManagedWorld,
-) -> Option<&crate::sim::erosion::ErosionAutomatonState> {
-    managed.matched_hydrology_dynamics()
-}
-
 fn sink_id_values_by_cell(managed: &ManagedWorld) -> Vec<i32> {
-    if let Some(state) = matched_sink_state(managed) {
-        return state.sink_id.clone();
-    }
-    vec![-1; managed.world.state.geology.height.len()]
+    managed.world.state.hydrology.sink_id.clone()
 }
 
 fn map_sink_i32_by_cell(
     managed: &ManagedWorld,
     default_value: i32,
-    mapper: impl Fn(&crate::sim::erosion::ErosionAutomatonState, usize, usize) -> i32,
+    mapper: impl Fn(&crate::sim::world::HydrologyState, usize, usize) -> i32,
 ) -> Vec<i32> {
     let cell_count = managed.world.state.geology.height.len();
-    let Some(state) = matched_sink_state(managed) else {
-        return vec![default_value; cell_count];
-    };
+    let state = &managed.world.state.hydrology;
     let mut out = vec![default_value; cell_count];
     for (i, value) in out.iter_mut().enumerate() {
         let sid = state.sink_id.get(i).copied().unwrap_or(-1);
@@ -548,12 +537,10 @@ fn map_sink_i32_by_cell(
 fn map_sink_f32_by_cell(
     managed: &ManagedWorld,
     default_value: f32,
-    mapper: impl Fn(&crate::sim::erosion::ErosionAutomatonState, usize, usize) -> f32,
+    mapper: impl Fn(&crate::sim::world::HydrologyState, usize, usize) -> f32,
 ) -> Vec<f32> {
     let cell_count = managed.world.state.geology.height.len();
-    let Some(state) = matched_sink_state(managed) else {
-        return vec![default_value; cell_count];
-    };
+    let state = &managed.world.state.hydrology;
     let mut out = vec![default_value; cell_count];
     for (i, value) in out.iter_mut().enumerate() {
         let sid = state.sink_id.get(i).copied().unwrap_or(-1);

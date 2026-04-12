@@ -31,17 +31,24 @@ interface HydrologyScoreRecord {
     diagnostics?: {
         flow_stats?: Record<string, number | null>;
         lake_stats?: Record<string, number | null>;
+        fill_spill_stats?: Record<string, number | null>;
     };
 }
 
 const METRIC_KEYS = [
-    "river_flow",
-    "lake_precision",
-    "lake_recall",
-    "lake_f1",
+    "river_flow_rho",
+    "is_lake_precision",
+    "is_lake_recall",
+    "is_lake_f1",
 ] as const;
 
 const PHASE1_KEYS = ["river_flow_ranking"] as const;
+const FILL_SPILL_DIAGNOSTIC_KEYS = [
+    "active_sink_count",
+    "overflow_active_ratio",
+    "mean_sink_fill_ratio",
+    "ponded_cell_count",
+] as const;
 
 function parseArgs(argv: string[]): Args {
     const args: Args = {
@@ -190,6 +197,15 @@ async function main() {
             label: key,
             current: current.phase1?.[key]?.coverage_ratio,
             baseline: baseline.phase1?.[key]?.coverage_ratio,
+        })),
+    );
+
+    printMetricSection(
+        "-- Fill-Spill Diagnostics --",
+        FILL_SPILL_DIAGNOSTIC_KEYS.map((key) => ({
+            label: key,
+            current: current.diagnostics?.fill_spill_stats?.[key],
+            baseline: baseline.diagnostics?.fill_spill_stats?.[key],
         })),
     );
 }

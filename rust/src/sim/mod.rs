@@ -116,15 +116,15 @@ pub fn build_hydrology_state_for_bench(
         scratch_changed_mark: vec![0; cell_count],
         scratch_flux_samples: Vec::with_capacity(cell_count / 2),
         recent_changed: Vec::new(),
-        sink_id: vec![-1; cell_count],
-        sink_route_next: vec![-1; cell_count],
-        sink_spill_cell: Vec::new(),
-        sink_spill_to: Vec::new(),
-        sink_capacity_total: Vec::new(),
-        sink_capacity_remaining: Vec::new(),
-        sink_storage_sediment: Vec::new(),
-        sink_spill_level: Vec::new(),
-        sink_overflow_active: Vec::new(),
+        sink_id: world.state.hydrology.sink_id.clone(),
+        sink_route_next: world.state.hydrology.sink_route_next.clone(),
+        sink_spill_cell: world.state.hydrology.sink_spill_cell.clone(),
+        sink_spill_to: world.state.hydrology.sink_spill_to.clone(),
+        sink_capacity_total: world.state.hydrology.sink_capacity_total.clone(),
+        sink_capacity_remaining: world.state.hydrology.sink_capacity_remaining.clone(),
+        sink_storage_sediment: world.state.hydrology.sink_storage_sediment.clone(),
+        sink_spill_level: world.state.hydrology.sink_spill_level.clone(),
+        sink_overflow_active: world.state.hydrology.sink_overflow_active.clone(),
         sink_dirty: vec![1; cell_count],
         params,
     }
@@ -141,6 +141,15 @@ pub fn run_hydrology_step_for_bench(world: &mut world::World, geology_budget: u3
     } else {
         hydrology::run_hydrology_flow_step(world, &mut hydrology_state, geology_budget);
     }
+}
+
+pub fn run_hydrology_step_with_state_for_bench(
+    world: &mut world::World,
+    hydrology_state: &mut erosion::ErosionAutomatonState,
+    geology_budget: u32,
+    run_mfd: bool,
+) {
+    hydrology::run_hydrology_step_with_existing_state(world, hydrology_state, geology_budget, run_mfd);
 }
 
 pub fn run_ecology_step_for_bench(world: &mut world::World, ecology_budget: u32) {

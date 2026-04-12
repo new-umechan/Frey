@@ -56,11 +56,41 @@ Hydrologyは次の配列を全セル分持つ。
 
 ```rust
 river_downstream: Vec<SmallVec<[(CellId, f32); 3]>>,
+river_next:       Vec<i32>,
 is_lake:          Vec<bool>,
+sink_id:          Vec<i32>,
+sink_route_next:  Vec<i32>,
+sink_spill_cell:  Vec<i32>,
+sink_spill_to:    Vec<i32>,
+sink_spill_level: Vec<f32>,
 ```
 
 `river_downstream` の各要素は `(流下先CellId, 分配率f32)` のペアである。
 1セルあたりの流下先は通常1〜3個程度であり、SmallVecの内部バッファサイズを3とする。
+
+現行ランタイムでは `river_next` を主流路の代表として保持する。
+公開状態としての `river_downstream` は、この `river_next` から再構築される単一 edge の DAG とみなす。
+つまり現状の `river_downstream` は仕様文中の理想的な MFD をまだ完全には表していない。
+
+一方で sink / lake / spill の正本は HydrologyState に持つ。
+Erosion はその fill-spill 状態を参照して堆積・溢流を進める。
+
+## 現行実装の制約
+
+- `river_next` は必ず非循環でなければならない
+- cycle を見つけた場合は、その場で1本切って `-1` に落とし、終端 sink として扱う
+- この sanitize は数値安定性と再現性のための安全策であり、湖・内陸盆地・spill を物理的に十分表現するものではない
+- `is_lake` は fill-spill 正本から導出される公開ビューであり、「まだ overflow していない貯留セル」を表す
+
+理由は、現行の流量伝播と多くの集計処理が「主流路は DAG」という前提で上流から下流へ累積しているためである。
+この前提を崩して cycle を許容すると、流量の二重加算、tick ごとの非再現、デバッグ検証の破綻が起きる。
+
+学術的に厳密化する場合は、cycle を許容するのではなく、次のどちらかへ移行する。
+
+- fill-spill 型の depression handling を入れ、sink 容量と spill 閾値を明示する
+- depression hierarchy を導入し、閉じた basin と overflow 経路を明示的に管理する
+
+したがって `sanitize_primary_next_no_cycle` は現行モデルでは妥当だが、位置づけは「仕様そのもの」ではなく「暫定安全装置」である。
 
 ## MFDモデル（HydrologyMFDSystem）
 

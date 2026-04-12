@@ -12,12 +12,17 @@ use crate::sim::exec::{geology_river_budget, CRUST_RAIN_LAND, CRUST_RAIN_SEA};
 pub mod surface;
 
 mod fallback;
+mod fill_spill;
 mod network;
 mod profiling;
 mod routing;
 mod sync;
 
 use fallback::run_river_fallback;
+use fill_spill::{
+    rebuild_fill_spill_state, refresh_fill_spill_storage_and_lakes, should_rebuild_fill_spill,
+    sync_fill_spill_from_erosion, update_public_lake_flags,
+};
 use network::{
     align_flow_heading, apply_river_network_constraints, build_river_network,
     smooth_and_normalize_flux, RiverNetworkConstraintBuffers, RiverNetworkConstraintInput,
@@ -26,6 +31,9 @@ use profiling::{profile_elapsed_ms, profile_now};
 use routing::{apply_baseflow_storage, build_runoff_for_routing, should_rebuild_network};
 pub(crate) use sync::sync_erosion_height;
 use sync::{erosion_state_matches_world, sync_erosion_rain};
+
+pub(crate) use fill_spill::sync_fill_spill_to_erosion;
+pub(crate) use fill_spill::apply_fill_spill_sink_rule_to_erosion_cell;
 
 const NETWORK_BLEND_ALPHA: f32 = 0.38;
 const FLUX_SCALE_EMA_ALPHA: f32 = 0.20;
@@ -92,7 +100,23 @@ pub fn apply_hydrology_state_view(
         cells.apply_hydrology_view(state)?;
     }
     world.refresh_terrain_state();
+    let mesh_nbr_offsets = world.mesh().nbr_offsets.clone();
+    let mesh_nbrs = world.mesh().nbrs.clone();
+    rebuild_fill_spill_state(
+        &mut world.state.hydrology,
+        &world.state.geology.height,
+        &mesh_nbr_offsets,
+        &mesh_nbrs,
+        &world.control.geology_params,
+        Some(&state.water),
+        Some(&state.sediment),
+    );
     rebuild_mfd_from_primary(&mut world.state.hydrology);
+    update_public_lake_flags(
+        &mut world.state.hydrology,
+        &world.state.geology.height,
+        &world.control.geology_params,
+    );
     Ok(())
 }
 
@@ -117,6 +141,24 @@ pub(crate) fn run_hydrology_flow_step(
         world.state.geology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
         detail.fallback_count = detail.fallback_count.saturating_add(1);
+    }
+    detail
+}
+
+pub(crate) fn run_hydrology_step_with_existing_state(
+    world: &mut World,
+    hydrology_state: &mut ErosionAutomatonState,
+    geology_budget: u32,
+    run_mfd: bool,
+) -> HydrologyStepDetailBreakdown {
+    let mut state = Some(hydrology_state.clone());
+    let detail = if run_mfd {
+        run_hydrology_step(world, &mut state, geology_budget, None)
+    } else {
+        run_hydrology_flow_step(world, &mut state, geology_budget)
+    };
+    if let Some(updated) = state {
+        *hydrology_state = updated;
     }
     detail
 }
@@ -146,6 +188,8 @@ fn run_river_step_with_erosion_state(
         return false;
     }
     state.height.clone_from(&geology.height);
+
+    sync_fill_spill_to_erosion(state, hydrology);
 
     let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
     let phase_start = profile_now();
@@ -180,6 +224,31 @@ fn run_river_step_with_erosion_state(
     detail.sink_rebuild_fallback_full_count = detail
         .sink_rebuild_fallback_full_count
         .saturating_add(automaton_breakdown.sink_rebuild_fallback_full_count);
+    sync_fill_spill_from_erosion(hydrology, &state.height, &state.params, state);
+    if should_rebuild_fill_spill(hydrology, state) {
+        let phase_start = profile_now();
+        rebuild_fill_spill_state(
+            hydrology,
+            &state.height,
+            &mesh_nbr_offsets,
+            &mesh_nbrs,
+            &state.params,
+            Some(&state.water),
+            Some(&state.sediment),
+        );
+        state.last_sink_full_rebuild_tick = state.tick;
+        detail.river_automaton_sink_ms += profile_elapsed_ms(phase_start);
+        detail.sink_rebuild_full_count = detail.sink_rebuild_full_count.saturating_add(1);
+    } else {
+        refresh_fill_spill_storage_and_lakes(
+            hydrology,
+            &state.height,
+            Some(&state.water),
+            Some(&state.sediment),
+            &state.params,
+        );
+        detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
+    }
 
     state.last_river_driver = river_driver;
     if should_rebuild_network(tick, state, river_driver) {
@@ -236,6 +305,8 @@ fn run_river_step_with_erosion_state(
 
         // raw_flux を state に保存（river_flow 用）
         state.raw_river_flux = raw_flux;
+    } else {
+        rebuild_mfd_from_primary(hydrology);
     }
     state.scratch_effective_runoff = effective_runoff;
 
@@ -245,7 +316,7 @@ fn run_river_step_with_erosion_state(
     hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
     rebuild_mfd_from_primary(hydrology);
-    hydrology.is_lake.fill(false);
+    update_public_lake_flags(hydrology, &state.height, &state.params);
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
@@ -275,6 +346,20 @@ fn run_river_flow_only_with_state(
     }
     state.height.clone_from(&geology.height);
 
+    if should_rebuild_fill_spill(hydrology, state) {
+        rebuild_fill_spill_state(
+            hydrology,
+            &state.height,
+            &mesh_nbr_offsets,
+            &mesh_nbrs,
+            &state.params,
+            Some(&state.water),
+            Some(&state.sediment),
+        );
+        state.last_sink_full_rebuild_tick = state.tick;
+    }
+    sync_fill_spill_to_erosion(state, hydrology);
+
     let mut effective_runoff = std::mem::take(&mut state.scratch_effective_runoff);
     let phase_start = profile_now();
     apply_baseflow_storage(
@@ -290,6 +375,7 @@ fn run_river_flow_only_with_state(
     detail.river_prepare_ms += profile_elapsed_ms(phase_start);
 
     let phase_start = profile_now();
+    sanitize_primary_next_no_cycle(&mut state.river_next);
     let mut flux =
         flow_flux_on_primary_network(&geology.height, &state.river_next, &effective_runoff);
     smooth_and_normalize_flux(
@@ -300,17 +386,24 @@ fn run_river_flow_only_with_state(
     );
     detail.river_network_ms += profile_elapsed_ms(phase_start);
 
-    sanitize_primary_next_no_cycle(&mut state.river_next);
     state.prev_river_next.clone_from(&state.river_next);
     state.river_flux = flux;
     state.scratch_effective_runoff = effective_runoff;
     state.last_river_driver = 0.0;
+    sync_fill_spill_from_erosion(hydrology, &state.height, &state.params, state);
+    refresh_fill_spill_storage_and_lakes(
+        hydrology,
+        &state.height,
+        Some(&state.water),
+        Some(&state.sediment),
+        &state.params,
+    );
 
     let phase_start = profile_now();
     hydrology.river_flow.clone_from(&state.river_flux);
     hydrology.river_next.clone_from(&state.river_next);
     rebuild_mfd_from_primary(hydrology);
-    hydrology.is_lake.fill(false);
+    update_public_lake_flags(hydrology, &state.height, &state.params);
     geology.erosion_rate.fill(0.0);
     geology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {
@@ -448,5 +541,71 @@ pub(super) fn sanitize_primary_next_no_cycle(river_next: &mut [i32]) {
             visit_state[idx] = 2;
         }
         path.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sim::world::{GeologyState, World, WorldMesh};
+    use crate::PlateId;
+
+    fn build_test_world() -> World {
+        World::new(
+            WorldMesh {
+                positions: vec![
+                    [0.0, 0.0, 1.0],
+                    [0.2, 0.0, 0.98],
+                    [0.0, 0.2, 0.98],
+                    [-0.2, 0.0, 0.98],
+                ],
+                nbr_offsets: vec![0, 3, 5, 7, 8],
+                nbrs: vec![1, 2, 3, 0, 2, 0, 1, 0],
+            },
+            GeologyState {
+                height: vec![1.2, 0.9, 0.6, -0.2],
+                lake_depth: vec![0.0; 4],
+                plate_id: vec![PlateId(0); 4],
+                erosion_rate: vec![0.0; 4],
+                deposition_rate: vec![0.0; 4],
+                volcanism: vec![0.0; 4],
+                vertex_buoyancy: vec![0.0; 4],
+                geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
+                boundary_condition: vec![0.0; 4],
+            },
+        )
+    }
+
+    #[test]
+    fn sanitize_primary_next_breaks_cycle_into_sink() {
+        let mut river_next = vec![1, 2, 0, -1];
+
+        sanitize_primary_next_no_cycle(&mut river_next);
+
+        assert_eq!(river_next, vec![-1, 2, 0, -1]);
+    }
+
+    #[test]
+    fn fallback_rebuilds_public_downstream_from_primary_next() {
+        let mut world = build_test_world();
+        let runoff = vec![1.0, 0.8, 0.6, 0.0];
+
+        fallback::run_river_fallback(&mut world, &runoff, None);
+
+        assert_eq!(
+            world.state.hydrology.river_downstream.len(),
+            world.state.hydrology.river_next.len()
+        );
+        for (cell, downstream) in world.state.hydrology.river_downstream.iter().enumerate() {
+            let next = world.state.hydrology.river_next[cell];
+            if next < 0 {
+                assert!(downstream.is_empty(), "cell {cell} should terminate");
+                continue;
+            }
+
+            assert_eq!(downstream.len(), 1, "cell {cell} should expose one primary edge");
+            assert_eq!(downstream[0].0, next as u32, "cell {cell} target mismatch");
+            assert!((downstream[0].1 - 1.0).abs() <= 1e-6, "cell {cell} weight mismatch");
+        }
     }
 }

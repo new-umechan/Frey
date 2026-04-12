@@ -438,6 +438,30 @@ pub struct HydrologyState {
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]
     pub is_lake: Vec<bool>,
+    #[serde(default)]
+    pub sink_id: Vec<i32>,
+    #[serde(default)]
+    pub sink_route_next: Vec<i32>,
+    #[serde(default)]
+    pub sink_member_offsets: Vec<u32>,
+    #[serde(default)]
+    pub sink_member_cells: Vec<u32>,
+    #[serde(default)]
+    pub sink_spill_cell: Vec<i32>,
+    #[serde(default)]
+    pub sink_spill_to: Vec<i32>,
+    #[serde(default)]
+    pub sink_spill_level: Vec<f32>,
+    #[serde(default)]
+    pub sink_capacity_total: Vec<f32>,
+    #[serde(default)]
+    pub sink_capacity_remaining: Vec<f32>,
+    #[serde(default)]
+    pub sink_storage_water: Vec<f32>,
+    #[serde(default)]
+    pub sink_storage_sediment: Vec<f32>,
+    #[serde(default)]
+    pub sink_overflow_active: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

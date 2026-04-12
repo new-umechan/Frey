@@ -24,6 +24,9 @@ interface HydrologyRecord {
     phase2?: {
         metrics?: Record<string, NumberLike>;
     };
+    diagnostics?: {
+        fill_spill_stats?: Record<string, NumberLike>;
+    };
 }
 
 function parseArgs(argv: string[]): Args {
@@ -115,6 +118,10 @@ function extractMetric(record: HydrologyRecord, key: string): number | null {
     return toFinite(record.phase2?.metrics?.[key]);
 }
 
+function extractFillSpillDiagnostic(record: HydrologyRecord, key: string): number | null {
+    return toFinite(record.diagnostics?.fill_spill_stats?.[key]);
+}
+
 async function loadJsonlRecords(pathname: string): Promise<HydrologyRecord[]> {
     const content = await readFile(resolve(pathname), "utf8");
     return content
@@ -167,6 +174,23 @@ async function main() {
             baseline: baselineValue,
         };
     });
+    const diagnosticKeys = [
+        "active_sink_count",
+        "overflow_active_ratio",
+        "mean_sink_fill_ratio",
+        "ponded_cell_count",
+    ];
+    const diagnosticRows = diagnosticKeys.map((key) => {
+        const currentValues = currentRecords
+            .map((record) => extractFillSpillDiagnostic(record, key))
+            .filter((value): value is number => value !== null);
+        const baselineValue = extractFillSpillDiagnostic(baseline, key);
+        return {
+            key,
+            current: median(currentValues),
+            baseline: baselineValue,
+        };
+    });
 
     const failures: string[] = [];
     const allowedRuntime = baselineRuntime * (1 + args.thresholdRuntime);
@@ -196,6 +220,11 @@ async function main() {
     for (const row of metricRows) {
         console.log(
             `${row.key}_median_current=${format(row.current)} baseline=${format(row.baseline ?? Number.NaN)} min_allowed=${format((row.baseline ?? Number.NaN) - row.maxDrop)}`,
+        );
+    }
+    for (const row of diagnosticRows) {
+        console.log(
+            `${row.key}_median_current=${format(row.current)} baseline=${format(row.baseline ?? Number.NaN)}`,
         );
     }
 
