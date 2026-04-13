@@ -23,16 +23,18 @@ export type FieldKind =
     | "crop_adoption_rice"
     | "crop_adoption_maize"
     | "crop_adoption_millet"
-    | "crop_adoption_tuber"
-    | "crop_adoption_legume"
-    | "crop_adoption_barley"
+    | "crop_adoption_potato"
+    | "crop_adoption_cassava"
+    | "crop_adoption_sorghum"
+    | "crop_adoption_yam"
     | "crop_available_wheat"
     | "crop_available_rice"
     | "crop_available_maize"
     | "crop_available_millet"
-    | "crop_available_tuber"
-    | "crop_available_legume"
-    | "crop_available_barley"
+    | "crop_available_potato"
+    | "crop_available_cassava"
+    | "crop_available_sorghum"
+    | "crop_available_yam"
     | "livestock_adoption_cattle"
     | "livestock_adoption_horse"
     | "livestock_adoption_sheep"
@@ -67,16 +69,18 @@ export const FLOAT32_FIELDS = new Set<FieldKind>([
     "crop_adoption_rice",
     "crop_adoption_maize",
     "crop_adoption_millet",
-    "crop_adoption_tuber",
-    "crop_adoption_legume",
-    "crop_adoption_barley",
+    "crop_adoption_potato",
+    "crop_adoption_cassava",
+    "crop_adoption_sorghum",
+    "crop_adoption_yam",
     "crop_available_wheat",
     "crop_available_rice",
     "crop_available_maize",
     "crop_available_millet",
-    "crop_available_tuber",
-    "crop_available_legume",
-    "crop_available_barley",
+    "crop_available_potato",
+    "crop_available_cassava",
+    "crop_available_sorghum",
+    "crop_available_yam",
     "livestock_adoption_cattle",
     "livestock_adoption_horse",
     "livestock_adoption_sheep",
@@ -148,16 +152,18 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     crop_adoption_rice: "cropAdoptionRice",
     crop_adoption_maize: "cropAdoptionMaize",
     crop_adoption_millet: "cropAdoptionMillet",
-    crop_adoption_tuber: "cropAdoptionTuber",
-    crop_adoption_legume: "cropAdoptionLegume",
-    crop_adoption_barley: "cropAdoptionBarley",
+    crop_adoption_potato: "cropAdoptionPotato",
+    crop_adoption_cassava: "cropAdoptionCassava",
+    crop_adoption_sorghum: "cropAdoptionSorghum",
+    crop_adoption_yam: "cropAdoptionYam",
     crop_available_wheat: "cropAvailableWheat",
     crop_available_rice: "cropAvailableRice",
     crop_available_maize: "cropAvailableMaize",
     crop_available_millet: "cropAvailableMillet",
-    crop_available_tuber: "cropAvailableTuber",
-    crop_available_legume: "cropAvailableLegume",
-    crop_available_barley: "cropAvailableBarley",
+    crop_available_potato: "cropAvailablePotato",
+    crop_available_cassava: "cropAvailableCassava",
+    crop_available_sorghum: "cropAvailableSorghum",
+    crop_available_yam: "cropAvailableYam",
     livestock_adoption_cattle: "livestockAdoptionCattle",
     livestock_adoption_horse: "livestockAdoptionHorse",
     livestock_adoption_sheep: "livestockAdoptionSheep",
@@ -195,16 +201,18 @@ const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Objec
     crop_adoption_rice: "metric",
     crop_adoption_maize: "metric",
     crop_adoption_millet: "metric",
-    crop_adoption_tuber: "metric",
-    crop_adoption_legume: "metric",
-    crop_adoption_barley: "metric",
+    crop_adoption_potato: "metric",
+    crop_adoption_cassava: "metric",
+    crop_adoption_sorghum: "metric",
+    crop_adoption_yam: "metric",
     crop_available_wheat: "metric",
     crop_available_rice: "metric",
     crop_available_maize: "metric",
     crop_available_millet: "metric",
-    crop_available_tuber: "metric",
-    crop_available_legume: "metric",
-    crop_available_barley: "metric",
+    crop_available_potato: "metric",
+    crop_available_cassava: "metric",
+    crop_available_sorghum: "metric",
+    crop_available_yam: "metric",
     livestock_adoption_cattle: "metric",
     livestock_adoption_horse: "metric",
     livestock_adoption_sheep: "metric",

@@ -125,16 +125,18 @@ pub(crate) struct WorldTransportCache {
     pub crop_adoption_rice: F32FieldTracker,
     pub crop_adoption_maize: F32FieldTracker,
     pub crop_adoption_millet: F32FieldTracker,
-    pub crop_adoption_tuber: F32FieldTracker,
-    pub crop_adoption_legume: F32FieldTracker,
-    pub crop_adoption_barley: F32FieldTracker,
+    pub crop_adoption_potato: F32FieldTracker,
+    pub crop_adoption_cassava: F32FieldTracker,
+    pub crop_adoption_sorghum: F32FieldTracker,
+    pub crop_adoption_yam: F32FieldTracker,
     pub crop_available_wheat: F32FieldTracker,
     pub crop_available_rice: F32FieldTracker,
     pub crop_available_maize: F32FieldTracker,
     pub crop_available_millet: F32FieldTracker,
-    pub crop_available_tuber: F32FieldTracker,
-    pub crop_available_legume: F32FieldTracker,
-    pub crop_available_barley: F32FieldTracker,
+    pub crop_available_potato: F32FieldTracker,
+    pub crop_available_cassava: F32FieldTracker,
+    pub crop_available_sorghum: F32FieldTracker,
+    pub crop_available_yam: F32FieldTracker,
     pub livestock_adoption_cattle: F32FieldTracker,
     pub livestock_adoption_horse: F32FieldTracker,
     pub livestock_adoption_sheep: F32FieldTracker,
@@ -722,16 +724,22 @@ impl WorldTransportCache {
             crop_adoption_rice: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 1)),
             crop_adoption_maize: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 2)),
             crop_adoption_millet: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 3)),
-            crop_adoption_tuber: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 4)),
-            crop_adoption_legume: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 5)),
-            crop_adoption_barley: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 6)),
+            crop_adoption_potato: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 4)),
+            crop_adoption_cassava: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 5)),
+            crop_adoption_sorghum: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 6)),
+            crop_adoption_yam: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 7)),
             crop_available_wheat: F32FieldTracker::new(&collect_crop_available_for_kind(world, 0)),
             crop_available_rice: F32FieldTracker::new(&collect_crop_available_for_kind(world, 1)),
             crop_available_maize: F32FieldTracker::new(&collect_crop_available_for_kind(world, 2)),
             crop_available_millet: F32FieldTracker::new(&collect_crop_available_for_kind(world, 3)),
-            crop_available_tuber: F32FieldTracker::new(&collect_crop_available_for_kind(world, 4)),
-            crop_available_legume: F32FieldTracker::new(&collect_crop_available_for_kind(world, 5)),
-            crop_available_barley: F32FieldTracker::new(&collect_crop_available_for_kind(world, 6)),
+            crop_available_potato: F32FieldTracker::new(&collect_crop_available_for_kind(world, 4)),
+            crop_available_cassava: F32FieldTracker::new(&collect_crop_available_for_kind(
+                world, 5,
+            )),
+            crop_available_sorghum: F32FieldTracker::new(&collect_crop_available_for_kind(
+                world, 6,
+            )),
+            crop_available_yam: F32FieldTracker::new(&collect_crop_available_for_kind(world, 7)),
             livestock_adoption_cattle: F32FieldTracker::new(&collect_livestock_adoption_for_kind(
                 world, 0,
             )),
@@ -823,12 +831,14 @@ impl WorldTransportCache {
             .observe(&collect_crop_adoption_for_kind(world, 2));
         self.crop_adoption_millet
             .observe(&collect_crop_adoption_for_kind(world, 3));
-        self.crop_adoption_tuber
+        self.crop_adoption_potato
             .observe(&collect_crop_adoption_for_kind(world, 4));
-        self.crop_adoption_legume
+        self.crop_adoption_cassava
             .observe(&collect_crop_adoption_for_kind(world, 5));
-        self.crop_adoption_barley
+        self.crop_adoption_sorghum
             .observe(&collect_crop_adoption_for_kind(world, 6));
+        self.crop_adoption_yam
+            .observe(&collect_crop_adoption_for_kind(world, 7));
         self.crop_available_wheat
             .observe(&collect_crop_available_for_kind(world, 0));
         self.crop_available_rice
@@ -837,12 +847,14 @@ impl WorldTransportCache {
             .observe(&collect_crop_available_for_kind(world, 2));
         self.crop_available_millet
             .observe(&collect_crop_available_for_kind(world, 3));
-        self.crop_available_tuber
+        self.crop_available_potato
             .observe(&collect_crop_available_for_kind(world, 4));
-        self.crop_available_legume
+        self.crop_available_cassava
             .observe(&collect_crop_available_for_kind(world, 5));
-        self.crop_available_barley
+        self.crop_available_sorghum
             .observe(&collect_crop_available_for_kind(world, 6));
+        self.crop_available_yam
+            .observe(&collect_crop_available_for_kind(world, 7));
         self.livestock_adoption_cattle
             .observe(&collect_livestock_adoption_for_kind(world, 0));
         self.livestock_adoption_horse
@@ -1052,26 +1064,39 @@ impl WorldTransportCache {
         } else {
             self.crop_adoption_millet.discard_pending();
         }
-        if include_field("crop_adoption_tuber") {
-            if let Some(delta) = self.crop_adoption_tuber.take_delta("crop_adoption_tuber") {
+        if include_field("crop_adoption_potato") {
+            if let Some(delta) = self.crop_adoption_potato.take_delta("crop_adoption_potato") {
                 deltas.push(delta);
             }
         } else {
-            self.crop_adoption_tuber.discard_pending();
+            self.crop_adoption_potato.discard_pending();
         }
-        if include_field("crop_adoption_legume") {
-            if let Some(delta) = self.crop_adoption_legume.take_delta("crop_adoption_legume") {
+        if include_field("crop_adoption_cassava") {
+            if let Some(delta) = self
+                .crop_adoption_cassava
+                .take_delta("crop_adoption_cassava")
+            {
                 deltas.push(delta);
             }
         } else {
-            self.crop_adoption_legume.discard_pending();
+            self.crop_adoption_cassava.discard_pending();
         }
-        if include_field("crop_adoption_barley") {
-            if let Some(delta) = self.crop_adoption_barley.take_delta("crop_adoption_barley") {
+        if include_field("crop_adoption_sorghum") {
+            if let Some(delta) = self
+                .crop_adoption_sorghum
+                .take_delta("crop_adoption_sorghum")
+            {
                 deltas.push(delta);
             }
         } else {
-            self.crop_adoption_barley.discard_pending();
+            self.crop_adoption_sorghum.discard_pending();
+        }
+        if include_field("crop_adoption_yam") {
+            if let Some(delta) = self.crop_adoption_yam.take_delta("crop_adoption_yam") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_adoption_yam.discard_pending();
         }
         if include_field("crop_available_wheat") {
             if let Some(delta) = self.crop_available_wheat.take_delta("crop_available_wheat") {
@@ -1104,32 +1129,42 @@ impl WorldTransportCache {
         } else {
             self.crop_available_millet.discard_pending();
         }
-        if include_field("crop_available_tuber") {
-            if let Some(delta) = self.crop_available_tuber.take_delta("crop_available_tuber") {
-                deltas.push(delta);
-            }
-        } else {
-            self.crop_available_tuber.discard_pending();
-        }
-        if include_field("crop_available_legume") {
+        if include_field("crop_available_potato") {
             if let Some(delta) = self
-                .crop_available_legume
-                .take_delta("crop_available_legume")
+                .crop_available_potato
+                .take_delta("crop_available_potato")
             {
                 deltas.push(delta);
             }
         } else {
-            self.crop_available_legume.discard_pending();
+            self.crop_available_potato.discard_pending();
         }
-        if include_field("crop_available_barley") {
+        if include_field("crop_available_cassava") {
             if let Some(delta) = self
-                .crop_available_barley
-                .take_delta("crop_available_barley")
+                .crop_available_cassava
+                .take_delta("crop_available_cassava")
             {
                 deltas.push(delta);
             }
         } else {
-            self.crop_available_barley.discard_pending();
+            self.crop_available_cassava.discard_pending();
+        }
+        if include_field("crop_available_sorghum") {
+            if let Some(delta) = self
+                .crop_available_sorghum
+                .take_delta("crop_available_sorghum")
+            {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_sorghum.discard_pending();
+        }
+        if include_field("crop_available_yam") {
+            if let Some(delta) = self.crop_available_yam.take_delta("crop_available_yam") {
+                deltas.push(delta);
+            }
+        } else {
+            self.crop_available_yam.discard_pending();
         }
         if include_field("livestock_adoption_cattle") {
             if let Some(delta) = self
@@ -1445,16 +1480,18 @@ mod tests {
             crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_maize: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_millet: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_tuber: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_legume: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_potato: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_cassava: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_sorghum: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_yam: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_wheat: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_rice: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_maize: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_millet: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_tuber: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_legume: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_potato: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_cassava: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_sorghum: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_yam: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_cattle: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_horse: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_sheep: F32FieldTracker::new(&[0.0, 0.0]),
@@ -1508,16 +1545,18 @@ mod tests {
             crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_maize: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_millet: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_tuber: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_legume: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_adoption_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_potato: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_cassava: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_sorghum: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_adoption_yam: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_wheat: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_rice: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_maize: F32FieldTracker::new(&[0.0, 0.0]),
             crop_available_millet: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_tuber: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_legume: F32FieldTracker::new(&[0.0, 0.0]),
-            crop_available_barley: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_potato: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_cassava: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_sorghum: F32FieldTracker::new(&[0.0, 0.0]),
+            crop_available_yam: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_cattle: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_horse: F32FieldTracker::new(&[0.0, 0.0]),
             livestock_adoption_sheep: F32FieldTracker::new(&[0.0, 0.0]),

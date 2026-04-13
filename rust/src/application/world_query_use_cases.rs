@@ -327,7 +327,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_adoption_tuber" => FieldResponse {
+        "crop_adoption_potato" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
@@ -340,7 +340,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_adoption_legume" => FieldResponse {
+        "crop_adoption_cassava" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
@@ -353,7 +353,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_adoption_barley" => FieldResponse {
+        "crop_adoption_sorghum" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
@@ -361,6 +361,19 @@ pub(crate) fn get_field(
             f32_data: Some(sample_crop_adoption_by_kind(
                 &world_ref.state.domesticates.crop_adoption,
                 6,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_adoption_yam" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_adoption.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_adoption.len(), stride),
+            f32_data: Some(sample_crop_adoption_by_kind(
+                &world_ref.state.domesticates.crop_adoption,
+                7,
                 stride,
             )),
             u32_data: None,
@@ -498,7 +511,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_available_tuber" => FieldResponse {
+        "crop_available_potato" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_available.len() as u32,
@@ -511,7 +524,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_available_legume" => FieldResponse {
+        "crop_available_cassava" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_available.len() as u32,
@@ -524,7 +537,7 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
-        "crop_available_barley" => FieldResponse {
+        "crop_available_sorghum" => FieldResponse {
             field_kind,
             stride,
             cell_count: world_ref.state.domesticates.crop_available.len() as u32,
@@ -532,6 +545,19 @@ pub(crate) fn get_field(
             f32_data: Some(sample_bitmap_available(
                 &world_ref.state.domesticates.crop_available,
                 1u8 << 6,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "crop_available_yam" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.domesticates.crop_available.len() as u32,
+            sampled_count: sampled_len(world_ref.state.domesticates.crop_available.len(), stride),
+            f32_data: Some(sample_bitmap_available(
+                &world_ref.state.domesticates.crop_available,
+                1u8 << 7,
                 stride,
             )),
             u32_data: None,

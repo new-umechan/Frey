@@ -11,7 +11,16 @@ export interface CellMetricDef {
     overlayDataKey?: string;
 }
 
-const CROPS = Object.freeze(["wheat", "rice", "maize", "millet", "tuber", "legume", "barley"] as const);
+const CROPS = Object.freeze([
+    "wheat",
+    "rice",
+    "maize",
+    "millet",
+    "potato",
+    "cassava",
+    "sorghum",
+    "yam",
+] as const);
 const LIVESTOCK = Object.freeze(["cattle", "horse", "sheep", "pig", "camel"] as const);
 
 function cropLabel(name: string): string {

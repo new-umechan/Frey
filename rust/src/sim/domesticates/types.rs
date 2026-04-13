@@ -7,9 +7,10 @@ pub enum CropKind {
     Rice = 1,
     Maize = 2,
     Millet = 3,
-    Tuber = 4,
-    Legume = 5,
-    Barley = 6,
+    Potato = 4,
+    Cassava = 5,
+    Sorghum = 6,
+    Yam = 7,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,9 +28,10 @@ pub const ALL_CROPS: [CropKind; N_CROPS] = [
     CropKind::Rice,
     CropKind::Maize,
     CropKind::Millet,
-    CropKind::Tuber,
-    CropKind::Legume,
-    CropKind::Barley,
+    CropKind::Potato,
+    CropKind::Cassava,
+    CropKind::Sorghum,
+    CropKind::Yam,
 ];
 
 pub const ALL_LIVESTOCK: [LivestockKind; N_LIVESTOCK] = [

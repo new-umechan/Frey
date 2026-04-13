@@ -528,7 +528,7 @@ pub struct DomesticatesInternal {
 
 pub type CropBitmap = u8;
 pub type LivestockBitmap = u8;
-pub const N_CROPS: usize = 7;
+pub const N_CROPS: usize = 8;
 pub const N_LIVESTOCK: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]

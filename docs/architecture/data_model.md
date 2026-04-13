@@ -380,9 +380,9 @@ enum TargetRef {
     Global,
 }
 
-// u8で7種の作物をビット管理
+// u8で8種の作物をビット管理
 // bit0: Wheat, bit1: Rice, bit2: Maize, bit3: Millet
-// bit4: Tuber, bit5: Legume, bit6: Barley
+// bit4: Potato, bit5: Cassava, bit6: Sorghum, bit7: Yam
 type CropBitmap = u8;
 
 // u8で5種の家畜をビット管理
