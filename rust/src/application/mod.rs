@@ -1,5 +1,3 @@
-#![cfg(feature = "wasm_transport")]
-
 pub mod world_dto;
 pub mod world_query_use_cases;
 pub mod world_runtime;

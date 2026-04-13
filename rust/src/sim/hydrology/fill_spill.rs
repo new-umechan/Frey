@@ -258,6 +258,7 @@ pub(crate) fn update_public_lake_flags(
     }
 
     let hysteresis = params.sink_overflow_hysteresis.max(0.0);
+    #[allow(clippy::needless_range_loop)]
     for cell in 0..cell_count {
         if height[cell] <= 0.0 {
             continue;
@@ -512,6 +513,7 @@ fn build_sink_members(height: &[f32], terminal: &[i32], sink_id: &mut [i32]) -> 
     sink_members
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_sink_for_sid(
     hydrology: &mut HydrologyState,
     sid: usize,

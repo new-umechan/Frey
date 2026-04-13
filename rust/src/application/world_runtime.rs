@@ -1242,12 +1242,6 @@ impl ManagedWorld {
             .filter(|state| state.vertex_states.len() == self.world.state.geology.height.len())
     }
 
-    pub fn matched_hydrology_dynamics(&self) -> Option<&ErosionAutomatonState> {
-        self.hydrology_dynamics
-            .as_ref()
-            .filter(|state| state.sink_id.len() == self.world.state.geology.height.len())
-    }
-
     pub fn with_exec_states<R>(
         &mut self,
         run: impl FnOnce(

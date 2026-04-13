@@ -10,20 +10,18 @@ fn generate_dag_content(
     modules: &[frey_wasm::sim::exec::ModuleDocRecord],
     graph: &frey_wasm::sim::exec::ModuleGraphRecord,
 ) -> String {
-    let mut lines: Vec<String> = Vec::new();
-
-    lines.push("## tick内依存（Declaration DAG）".to_string());
-    lines.push(String::new());
-    lines.push(
+    let mut lines = vec![
+        "## tick内依存（Declaration DAG）".to_string(),
+        String::new(),
         "実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。"
             .to_string(),
-    );
-    lines.push("固定の hand-written DAG は正本にしない。".to_string());
-    lines.push("更新は `pnpm run module:docs` で行う。".to_string());
-    lines.push(String::new());
+        "固定の hand-written DAG は正本にしない。".to_string(),
+        "更新は `pnpm run module:docs` で行う。".to_string(),
+        String::new(),
+        "### Phase 実行順".to_string(),
+        String::new(),
+    ];
 
-    lines.push("### Phase 実行順".to_string());
-    lines.push(String::new());
     let phase_order: Vec<&str> = modules.iter().map(|m| m.phase).collect();
     lines.push(phase_order.join(" → "));
     lines.push(String::new());

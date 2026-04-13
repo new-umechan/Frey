@@ -951,6 +951,10 @@ impl<'a> CellStoreMut<'a> {
         self.height.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.height.is_empty()
+    }
+
     pub fn apply_hydrology_view(
         &mut self,
         state: &crate::sim::erosion::ErosionAutomatonState,
