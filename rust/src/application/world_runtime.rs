@@ -64,7 +64,7 @@ fn range_cell_count(ranges: &[RangeDelta], max_len: usize) -> usize {
 }
 
 fn should_emit_bitmap(bitmap_words: usize, range_count: usize) -> bool {
-    range_count > 0 && bitmap_words < range_count.saturating_mul(2)
+    bitmap_words >= 4 && range_count >= 4
 }
 
 #[derive(Clone)]
