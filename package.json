@@ -15,7 +15,6 @@
         "test:ui": "vitest -c web/vitest.config.ts --ui",
         "test:run": "vitest -c web/vitest.config.ts run",
         "test:run:ci": "CI=true vitest -c web/vitest.config.ts run",
-        "type:no-any": "tsx tools/quality/check-no-any.ts",
         "lint:web": "oxlint web/src",
         "format:rust": "cargo fmt --manifest-path rust/Cargo.toml",
         "lint:rust": "cargo fmt --manifest-path rust/Cargo.toml -- --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets",
