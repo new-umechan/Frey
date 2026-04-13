@@ -48,16 +48,16 @@ FeedbackQueue で受けるのは、近傍セルの自然拡散ではなく、次
 Domesticatesは次の配列を全セル分持つ。
 
 ```rust
-// u8で7種の作物をビット管理
-// bit0: Wheat, bit1: Rice, bit2: Maize, bit3: Millet
-// bit4: Tuber, bit5: Legume, bit6: Barley
+// u8で8種の作物をビット管理
+// bit0: Wheat, bit1: Rice, bit2: Maize,    bit3: Millet
+// bit4: Potato, bit5: Cassava, bit6: Sorghum, bit7: Yam
 type CropBitmap = u8;
 
 // u8で5種の家畜をビット管理
 // bit0: Cattle, bit1: Horse, bit2: Sheep, bit3: Pig, bit4: Camel
 type LivestockBitmap = u8;
 
-const N_CROPS: usize = 7;
+const N_CROPS: usize = 8;
 const N_LIVESTOCK: usize = 5;
 ```
 
@@ -83,19 +83,21 @@ const N_LIVESTOCK: usize = 5;
 「下流の生業差分に必要な代表的アーキタイプ」として扱う。
 
 - `Wheat`
-  温帯寄りのコムギ類
-- `Barley`
-  乾燥・寒冷耐性が相対的に高いオオムギ類
+  温帯寄りのコムギ類。冷涼〜温暖の中庸環境を基準にする基幹穀物
 - `Rice`
-  高温多水・低地水利用寄りのイネ類
-- `Millet`
-  半乾燥・短期栽培寄りの雑穀類
+  高温多水・低地水利用寄りのイネ類。湿田稲作を主対象とする
 - `Maize`
-  暖温帯から熱帯寄りのトウモロコシ類
-- `Legume`
-  マメ類の代表カテゴリ
-- `Tuber`
-  地下器官作物の代表カテゴリ
+  暖温帯から熱帯寄りのトウモロコシ類。高温で中〜高水分域に強い
+- `Millet`
+  半乾燥・短期栽培寄りの雑穀類。アフリカ・内陸アジアの乾燥適応を代表する
+- `Potato`
+  冷涼高地寄りの塊茎作物。高原・山麓の低温環境に強い
+- `Cassava`
+  高温乾燥耐性の塊茎作物。熱帯低地の半乾燥〜中水分域を代表する
+- `Sorghum`
+  高温かつ最も強い乾燥耐性を持つ穀物。アフリカ半乾燥帯の基幹作物
+- `Yam`
+  高温多湿・森林縁寄りの塊茎作物。熱帯湿潤域の補完的食料源
 
 - `Cattle`
   開放地・草地寄りの大型反芻家畜
@@ -110,9 +112,10 @@ const N_LIVESTOCK: usize = 5;
 
 学術的には粗いカテゴリであるため、次を明記する。
 
-- `Tuber` はジャガイモ・ヤム・キャッサバなどを厳密には分けない
-- `Legume` はダイズ・エンドウ・レンズマメ・インゲン類などを束ねる
+- `Millet` はトウジンビエ・シコクビエ・キビ・アワなどを束ねる
+- `Yam` はDioscorea属各種を束ねる。`Cassava` とは起源・ニッチが異なるため分離する
 - v1 では分類学的厳密性よりも、生業分化に必要な環境ニッチ差を優先する
+- `Subsistence` は上位2〜3作物の `adoption` バランスで混合農耕を判定する。カテゴリ数による混合判定は行わない
 
 ## 処理ロジック
 
@@ -175,7 +178,7 @@ available = niche_score >= species_threshold
             and not hard_exclusion
 ```
 
-`river_bonus` は主に `Rice` と湿潤寄り `Tuber` の適地補正に使う。
+`river_bonus` は主に `Rice`、`Yam`、`Pig` の適地補正に使う。
 `hard_exclusion` は少数に限定する。
 
 例:
@@ -338,35 +341,335 @@ Domesticates単体で起源地からの緩い拡散を表現できる。
 具体的なパラメータ値は実装時に調整するが、
 仕様として必要な環境方向性は次で固定する。
 
+### 評価軸の使い分け
+
+各カテゴリは共通の内部評価量を使うが、どの軸を強く効かせるかは異なる。
+実装時は一律の重みではなく、カテゴリごとに強弱を分ける。
+
+- 温度依存が強いカテゴリ
+  `Rice`、`Maize`、`Sorghum`、`Cassava`、`Yam`、`Camel`
+- 水分依存が強いカテゴリ
+  `Rice`、`Yam`、`Pig`
+- 乾燥耐性が強いカテゴリ
+  `Sorghum`、`Cassava`、`Millet`、`Camel`、`Sheep`
+- 地形依存が強いカテゴリ
+  `Potato`（高地）、`Horse`（平坦開放地）
+- 植生被覆依存が強いカテゴリ
+  `Pig`、`Yam`（森林縁）、`Horse`、`Camel`（開放地）
+- 河川・低地補正が強いカテゴリ
+  `Rice`、`Yam`、`Pig`
+- `terrain_conductance` をカテゴリ別にパラメータ化する
+  同一の `terrain_conductance_weights`（river_flow_w・height_w・biome_w）を全カテゴリ共通にせず、
+  カテゴリごとに独立した重みを持つ。拡散ネットワークの種別差を表現するための主要手段とする
+
 ### 作物
 
-- `Wheat`
-  温帯寄り。過湿より中庸な降水を好み、低木被覆または開放地で高い
-- `Barley`
-  `Wheat` より寒冷・乾燥側まで成立しやすい。高地耐性も相対的に高い
-- `Rice`
-  高温多水で、河川・低地・湿地近接で強い補正を与える
-- `Millet`
-  半乾燥・短い生育期間向き。草地・疎林でも成立しやすい
-- `Maize`
-  暖温帯から熱帯寄り。低温で強く不利
-- `Legume`
-  中庸な環境で広く成立する補助作物群として扱う
-- `Tuber`
-  水分要求は比較的高いが、種内差が大きいためv1では広めに許容する
+#### `Wheat`
+
+温帯の中庸環境を基準にする基幹穀物カテゴリ。
+
+- `temperature_score`
+  中温域で最大。高温多湿より、冷涼から温暖の安定域を高く評価する
+- `moisture_score`
+  極端な乾燥と過湿を避ける。中程度降水で高い
+- `terrain_score`
+  極端な高地で減点するが、低地専用ではない
+- `cover_score`
+  密林より、疎林から開放地で高い
+- `fertility_or_pasture_score`
+  `ecology.soil_fertility` を比較的強く効かせる
+- `river_bonus`
+  あってよいが主役ではない。氾濫原での成立補助程度にとどめる
+- `hard_exclusion`
+  極端な寒冷、極端な湿潤湛水、極端な乾燥で除外候補
+- `origin_potential`
+  中低地の回廊と開けた肥沃地を優先する
+
+#### `Rice`
+
+高温多水かつ低地水利用を強く必要とする水分依存カテゴリ。湿田稲作を主対象とする。
+
+- `temperature_score`
+  高温域で最大。低温側は急減させる
+- `moisture_score`
+  高降水で高い。乾燥側では急減する
+- `terrain_score`
+  低地・平坦地を優遇する。急峻地形は不利
+- `cover_score`
+  密林そのものではなく、低地湿潤で管理可能な開放域または森林縁を高くみる
+- `fertility_or_pasture_score`
+  `soil_fertility` も見るが、水条件の優先度を上回らない
+- `river_bonus`
+  最も強く効かせる。`hydrology.river_flow` と低標高の組み合わせで大きく上がる
+- `hard_exclusion`
+  極端な乾燥セルは除外する
+- `origin_potential`
+  河川下流、デルタ、氾濫原、湖沼周辺低地を優先する
+- `terrain_conductance_weights`
+  river_flow_w を最大にする。山地越えで伝導度を大きく落とす
+
+#### `Maize`
+
+暖温帯から熱帯に寄る高温要求作物として扱う。
+
+- `temperature_score`
+  高温域で最大。低温に強い罰則を入れる
+- `moisture_score`
+  中程度からやや高めの水分で高い。`Rice` ほど多水専用ではなく、`Sorghum` より水分要求が高い
+- `terrain_score`
+  極端な高地や寒冷高原では不利。低地〜温暖高原縁まで許容する
+- `cover_score`
+  開放地から森林縁で高い
+- `fertility_or_pasture_score`
+  `soil_fertility` の影響を比較的受ける
+- `river_bonus`
+  中程度。水利があれば伸びるが必須ではない
+- `hard_exclusion`
+  低温を主要除外条件にする
+- `origin_potential`
+  温暖低地から温暖高原縁まで候補を持てる
+- `terrain_conductance_weights`
+  biome_w を中程度。熱帯〜暖温帯バイオーム内で広がる
+
+#### `Millet`
+
+短期栽培・半乾燥適応の雑穀カテゴリ。
+
+- `temperature_score`
+  中温からやや高温で安定し、低温では減衰する
+- `moisture_score`
+  中低水分域で高く、過湿で下がる。`Sorghum` より水分要求がやや高い
+- `terrain_score`
+  平地偏重ではなく、やや粗い地形でも成立しうる
+- `cover_score`
+  草地・疎林・耕作開放地で高い
+- `fertility_or_pasture_score`
+  低肥沃耐性を比較的広く取る
+- `river_bonus`
+  小さい。河川補正がなくても成立しうる
+- `hard_exclusion`
+  恒常的な過湿低地を不利にする
+- `origin_potential`
+  半乾燥回廊、内陸盆地、草地縁で候補が立ちやすい
+- `terrain_conductance_weights`
+  height_w を低め。やや粗い地形でも伝わる
+
+#### `Potato`
+
+冷涼高地に適応した塊茎作物カテゴリ。
+
+- `temperature_score`
+  冷涼〜温帯で最大。高温で急減する。`Wheat` より低温側に最適域を持つ
+- `moisture_score`
+  中程度。過湿・過乾燥を避けるが `Rice` ほど水分依存は強くない
+- `terrain_score`
+  高地・丘陵を許容する。高地減点を `Wheat` より弱める
+- `cover_score`
+  開放地から疎林で高い
+- `fertility_or_pasture_score`
+  中程度。高地痩地でも即不成立にはしない
+- `river_bonus`
+  小さい
+- `hard_exclusion`
+  高温低地を主要除外条件にする
+- `origin_potential`
+  高原縁、山麓、冷涼中緯度帯で候補が立つ
+- `terrain_conductance_weights`
+  height_w を低め。高地でも伝導度を落としすぎない
+
+#### `Cassava`
+
+高温乾燥耐性の塊茎作物カテゴリ。熱帯低地の半乾燥〜中水分域を代表する。
+
+- `temperature_score`
+  高温域で最大。低温で急減する
+- `moisture_score`
+  半乾燥〜中水分域で高い。`Sorghum` より水分要求がやや高いが乾燥耐性は `Maize` より強い
+- `terrain_score`
+  低地から中程度の斜面まで。極端な高地は不利
+- `cover_score`
+  開放地から森林縁まで比較的広く受ける
+- `fertility_or_pasture_score`
+  痩地耐性が比較的強い。低肥沃でも成立しうる
+- `river_bonus`
+  小さい
+- `hard_exclusion`
+  低温を主要除外条件にする
+- `origin_potential`
+  熱帯低地、サバンナ縁、半乾燥森林縁で候補が立つ
+- `terrain_conductance_weights`
+  biome_w を中程度。熱帯バイオーム内で広がる
+
+#### `Sorghum`
+
+高温かつ最も強い乾燥耐性を持つ穀物カテゴリ。アフリカ半乾燥帯の基幹作物。
+
+- `temperature_score`
+  高温域で最大。低温で急減する
+- `moisture_score`
+  低水分域で最も高い。3作物（`Maize`・`Cassava`・`Sorghum`）の中で最も乾燥側に最適域を置く
+- `terrain_score`
+  平地から緩斜面で高い。急峻地形は不利
+- `cover_score`
+  開放地・サバンナ・疎林で高い
+- `fertility_or_pasture_score`
+  痩地耐性が強い
+- `river_bonus`
+  局所水場として弱く効かせる。湿潤低地補正にはしない
+- `hard_exclusion`
+  低温と恒常的な過湿低地を除外する
+- `origin_potential`
+  半乾燥内陸、サバンナ帯、乾燥草地縁で候補が立つ
+- `terrain_conductance_weights`
+  biome_w を高め。乾燥バイオーム内で維持しやすく、湿潤帯に入ると減衰する
+
+#### `Yam`
+
+高温多湿・森林縁寄りの塊茎作物カテゴリ。熱帯湿潤域の補完的食料源。
+
+- `temperature_score`
+  高温域で最大。低温で急減する
+- `moisture_score`
+  高めの水分で有利。`Rice` に次ぐ水分依存度を持つ
+- `terrain_score`
+  低地から中程度の斜面。急峻地形は不利
+- `cover_score`
+  中〜高 `tree_cover` の森林縁で高い。完全閉鎖林は下げる
+- `fertility_or_pasture_score`
+  中程度
+- `river_bonus`
+  中程度。湿潤低地・河谷で補正する
+- `hard_exclusion`
+  極端乾燥と低温を除外する
+- `origin_potential`
+  熱帯湿潤低地、河谷森林縁、混合植生帯で高い
+- `terrain_conductance_weights`
+  river_flow_w を中程度、biome_w を高め。湿潤熱帯バイオーム内で広がり、乾燥帯への伝導は遅い
 
 ### 家畜
 
-- `Cattle`
-  草地・サバンナ・開放地で高い
-- `Sheep`
-  乾燥・半乾燥・粗放草地で高い
-- `Pig`
-  森林縁・湿潤域・農耕近接で高い
-- `Horse`
-  開放草地・ステップで高く、密林で低い
-- `Camel`
-  高温乾燥・疎植生で高い
+#### `Cattle`
+
+大型反芻家畜の代表カテゴリで、放牧可能な開放地依存が強い。
+
+- `temperature_score`
+  中温から高温で安定し、極寒は不利
+- `moisture_score`
+  中庸域で高い。極端乾燥では下がるが `Pig` ほど敏感ではない
+- `terrain_score`
+  急峻地で減点する
+- `cover_score`
+  `ground_cover` が高く、`tree_cover` が低いほど高い
+- `fertility_or_pasture_score`
+  `ground_cover` を主要 proxy とし、草資源量を近似する
+- `river_bonus`
+  水飲み場・移動回廊として弱く効かせてよい
+- `hard_exclusion`
+  密林と極高山を不利にする
+- `origin_potential`
+  草地、サバンナ、河谷沿い開放地で候補が立つ
+
+#### `Sheep`
+
+粗放草地・半乾燥域に強い小型反芻家畜カテゴリ。
+
+- `temperature_score`
+  冷涼から温暖まで広め
+- `moisture_score`
+  乾燥から半乾燥で高く、過湿で下げる
+- `terrain_score`
+  丘陵・高原を比較的許容する
+- `cover_score`
+  開放草地で高い。密林では低い
+- `fertility_or_pasture_score`
+  低い `ground_cover` でも一定成立を残す
+- `river_bonus`
+  小さい
+- `hard_exclusion`
+  常時湿潤で閉鎖林優勢のセルを不利にする
+- `origin_potential`
+  内陸草地、乾燥高原、山麓草原で候補が立ちやすい
+
+#### `Pig`
+
+湿潤・森林縁・定住近接で成立しやすい家畜カテゴリ。
+
+- `temperature_score`
+  中温から高温で高い
+- `moisture_score`
+  高めの水分で有利
+- `terrain_score`
+  極端な山地は不利だが、低地偏重にしすぎない
+- `cover_score`
+  中から高 `tree_cover`、ただし完全閉鎖林はやや下げる
+- `fertility_or_pasture_score`
+  草資源より、人為管理しやすさ proxy を重視する
+- `river_bonus`
+  中程度。湿潤低地・河谷で補正する
+- `hard_exclusion`
+  極端乾燥かつ開放地優勢のセルを強く不利にする
+- `origin_potential`
+  河谷森林縁、湿潤低地、混合植生帯で高い
+- `spread_pressure`
+  完全開放乾燥帯をまたぐ拡散は遅く、農耕近接帯で強まる
+
+#### `Horse`
+
+開放草地と長距離移動性に寄る家畜カテゴリ。
+
+- `temperature_score`
+  冷涼から温暖まで広い
+- `moisture_score`
+  中低水分域で高い
+- `terrain_score`
+  平坦から緩斜面で高く、急峻高山で下げる
+- `cover_score`
+  低 `tree_cover`・高 `ground_cover` を強く好む
+- `fertility_or_pasture_score`
+  `ground_cover` と移動容易性を合わせて評価する
+- `river_bonus`
+  河川そのものより低地回廊効果として効かせる
+- `hard_exclusion`
+  密林と高山で強く不利
+- `origin_potential`
+  広い草原帯、内陸低地回廊、乾燥ステップで高い
+- `spread_pressure`
+  回廊地形で高く、森林帯では伝導度を大きく落とす
+
+#### `Camel`
+
+高温乾燥・疎植生帯に特化した家畜カテゴリ。
+
+- `temperature_score`
+  高温域で最大
+- `moisture_score`
+  低水分域で最大。湿潤化で急減する
+- `terrain_score`
+  平坦から緩い乾燥地形で高い
+- `cover_score`
+  低 `tree_cover`・低から中 `ground_cover` で高い
+- `fertility_or_pasture_score`
+  草資源要求は低めに置く
+- `river_bonus`
+  局所水場としては有効だが、湿潤低地補正にはしない
+- `hard_exclusion`
+  湿潤森林優勢セルは除外する
+- `origin_potential`
+  乾燥低地回廊、砂漠縁、疎植生ステップで候補が立つ
+- `spread_pressure`
+  乾燥回廊では維持しやすく、湿潤森林帯へ入ると減衰しやすい
+
+### 実装上の最低要件
+
+上記の種類別差分は、少なくとも次の3層に反映されていなければならない。
+
+- `niche_score` の最適域と重み
+- `hard_exclusion` の有無と強さ
+- `origin_potential` / `terrain_conductance` のカテゴリ差
+
+つまり、種別差を `species_threshold` のみで表現してはならない。
+少なくとも温度・水分・被覆・回廊補正のうち2軸以上で、
+カテゴリごとの非対称性が実装に現れる必要がある。
 
 ## パラメータ管理
 
@@ -384,7 +687,7 @@ Domesticatesのパラメータは、将来的に専用設定ファイルへ切�
 - `tree_cover_preference`
 - `ground_cover_preference`
 - `river_bonus_weight`
-- `terrain_conductance_weights`（river_flow・height・biomeの重み）
+- `terrain_conductance_weights`（カテゴリごとに独立。river_flow_w・height_w・biome_wの3値。全カテゴリ共通にしない）
 - `origin_count_limit`
 - `origin_seed_strength`
 - `growth_rate`
@@ -398,16 +701,21 @@ Domesticatesのパラメータは、将来的に専用設定ファイルへ切�
 最低限、次のシナリオを満たすこと。
 
 1. 高温多水低地で `Rice.available` が高く、乾燥高地より有利になる
-2. 半乾燥冷涼セルで `Barley` と `Millet` が `Rice` より有利になる
-3. 乾燥開放地で `Camel` / `Sheep` が高く、`Pig` が低くなる
-4. 起源地シードが全カテゴリで0件にならない
-5. 低適地セルが起源地に選ばれない
-6. 適地でも孤立セルは `adoption` が即座に上がらない
-7. 不適地へ入ると `adoption` は即座にゼロにならず、遅れて減衰する
-8. `Subsistence` は引き続き `crop_adoption` / `livestock_adoption` のみを読める
-9. 山脈・砂漠を挟んだセルへの拡散が、低地回廊経由より遅くなる（terrain_conductance）
-10. `Population` feedback未接続時、`intensification_factor = 1.0` で動作が変わらない
-11. `Population` feedback接続後、人口密度の高いセルで adoption の立ち上がりが加速する
+2. 半乾燥冷涼セルで `Millet` と `Sorghum` が `Rice` より有利になる
+3. 冷涼高地で `Potato` が `Maize` / `Cassava` / `Yam` より有利になる
+4. 高温乾燥開放地で `Sorghum` の `niche_score` が `Cassava` より高く、`Maize` より大幅に高くなる
+5. 熱帯湿潤森林縁で `Yam` の `niche_score` が `Sorghum` より高くなる
+6. 乾燥開放地で `Camel` / `Sheep` が高く、`Pig` が低くなる
+7. 起源地シードが全カテゴリで0件にならない
+8. 低適地セルが起源地に選ばれない
+9. 適地でも孤立セルは `adoption` が即座に上がらない
+10. 不適地へ入ると `adoption` は即座にゼロにならず、遅れて減衰する
+11. `Subsistence` は引き続き `crop_adoption` / `livestock_adoption` のみを読める
+12. 山脈・砂漠を挟んだセルへの拡散が、低地回廊経由より遅くなる（terrain_conductance）
+13. `Rice` の拡散が `Millet` より山地越えで遅く、河川沿いで速い（terrain_conductance カテゴリ差）
+14. `Horse` の拡散が森林帯で大きく落ち、ステップ回廊で速い（terrain_conductance カテゴリ差）
+15. `Population` feedback未接続時、`intensification_factor = 1.0` で動作が変わらない
+16. `Population` feedback接続後、人口密度の高いセルで adoption の立ち上がりが加速する
 
 ## 学術的な立場
 
