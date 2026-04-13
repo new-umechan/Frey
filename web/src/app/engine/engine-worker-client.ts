@@ -44,6 +44,7 @@ export class EngineWorkerClient implements EngineClient {
         }
         this.pending.delete(response.id);
         if (response.ok) {
+            // Transferableとして受け取ったArrayBuffer/TypedArrayを保持
             request.resolve(response.payload);
             return;
         }

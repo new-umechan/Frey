@@ -1,11 +1,21 @@
-use wasm_bindgen::prelude::JsValue;
+use js_sys::{Float32Array, Uint32Array};
+use wasm_bindgen::prelude::*;
 
 pub use crate::wasm_api::world_sim::WorldSimController;
 
 pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
     let output = crate::core_api::generate_mesh(level).map_err(|err| JsValue::from_str(&err))?;
-    serde_wasm_bindgen::to_value(&output)
-        .map_err(|err| JsValue::from_str(&format!("failed to serialize mesh output: {err}")))
+
+    let positions = Float32Array::from(&output.positions[..]);
+    let indices = Uint32Array::from(&output.indices[..]);
+
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("positions"), &positions.into())
+        .map_err(|_| JsValue::from_str("failed to set positions"))?;
+    js_sys::Reflect::set(&result, &JsValue::from_str("indices"), &indices.into())
+        .map_err(|_| JsValue::from_str("failed to set indices"))?;
+
+    Ok(result.into())
 }
 
 pub fn generate_geology(seed: String, params_js: JsValue) -> Result<JsValue, JsValue> {

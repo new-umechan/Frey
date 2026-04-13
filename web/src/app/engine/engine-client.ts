@@ -72,10 +72,10 @@ export interface FieldDeltaResult {
     field_kind: string;
     mode: "full" | "delta" | "bitmap";
     ranges: DeltaRangeResult[];
-    dirty_bitmap?: number[] | null;
-    f32_data?: number[] | null;
-    u32_data?: number[] | null;
-    i32_data?: number[] | null;
+    dirty_bitmap?: number[] | Uint32Array | null;
+    f32_data?: number[] | Float32Array | null;
+    u32_data?: number[] | Uint32Array | null;
+    i32_data?: number[] | Int32Array | null;
 }
 
 export interface ViewDeltaResult {

@@ -6,7 +6,7 @@ import {
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
 type WorkerScope = {
-    postMessage: (message: EngineWorkerResponse) => void;
+    postMessage: (message: EngineWorkerResponse, transfer?: Transferable[]) => void;
     onmessage: ((event: MessageEvent<EngineWorkerRequest>) => void) | null;
 };
 
@@ -24,8 +24,51 @@ async function ensureController(): Promise<WorldSimController> {
     return controller as WorldSimController;
 }
 
-function post(response: EngineWorkerResponse) {
-    workerScope.postMessage(response);
+function post(response: EngineWorkerResponse, transferables?: Transferable[]) {
+    if (transferables && transferables.length > 0) {
+        workerScope.postMessage(response, transferables);
+    } else {
+        workerScope.postMessage(response);
+    }
+}
+
+function extractTransferables(payload: unknown, seen: Set<ArrayBuffer> = new Set()): Transferable[] {
+    const transferables: Transferable[] = [];
+
+    function walk(value: unknown): void {
+        if (value === null || value === undefined) {
+            return;
+        }
+        if (value instanceof ArrayBuffer) {
+            if (!seen.has(value)) {
+                seen.add(value);
+                transferables.push(value);
+            }
+            return;
+        }
+        if (ArrayBuffer.isView(value)) {
+            const buffer = (value as ArrayBufferView).buffer as ArrayBuffer;
+            if (!seen.has(buffer)) {
+                seen.add(buffer);
+                transferables.push(buffer);
+            }
+            return;
+        }
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                walk(item);
+            }
+            return;
+        }
+        if (typeof value === "object") {
+            for (const item of Object.values(value as Record<string, unknown>)) {
+                walk(item);
+            }
+        }
+    }
+
+    walk(payload);
+    return transferables;
 }
 
 workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
@@ -35,7 +78,8 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
         switch (request.kind) {
             case "generate_mesh": {
                 const result = generate_mesh(request.payload.level);
-                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                const transferables = extractTransferables(result);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result }, transferables);
                 return;
             }
             case "init_world": {
@@ -65,7 +109,8 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                     request.payload.worldId,
                     request.payload.options ?? null,
                 );
-                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                const transferables = extractTransferables(result);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result }, transferables);
                 return;
             }
             case "get_metrics": {
@@ -79,7 +124,8 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                     request.payload.fieldKind,
                     request.payload.window,
                 );
-                post({ id: request.id, ok: true, kind: request.kind, payload: result });
+                const transferables = extractTransferables(result);
+                post({ id: request.id, ok: true, kind: request.kind, payload: result }, transferables);
                 return;
             }
             case "list_history_ticks": {

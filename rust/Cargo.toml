@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
+default = ["wasm_transport"]
 wasm_transport = ["dep:js-sys", "dep:serde-wasm-bindgen", "dep:wasm-bindgen"]
 
 [lib]

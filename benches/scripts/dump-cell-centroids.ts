@@ -88,7 +88,7 @@ async function main() {
 
     const meshJs = await generate_mesh(args.level);
     const mesh = meshJs && typeof meshJs === "object" ? meshJs : {};
-    const positions = Array.isArray(mesh.positions) ? mesh.positions : [];
+    const positions = (mesh.positions && mesh.positions.length > 0) ? mesh.positions : [];
     if (positions.length === 0) {
         throw new Error("generate_mesh returned empty positions");
     }
