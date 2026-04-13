@@ -9,6 +9,7 @@ import {
     type SyncDeltaResult,
 } from "./types";
 import { type WorldChangeset } from "./constants";
+import { type FieldDelta } from "../../perf/world-core";
 
 function sanitizeTick(rawTick: unknown): number {
     const tick = Math.floor(Number(rawTick));
@@ -102,7 +103,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
             ecology?: unknown;
             civilization?: unknown;
         };
-        deltas?: unknown[];
+        deltas?: FieldDelta[];
     };
     world.tick = sanitizeTick(deltaView.tick);
     world.engineView.tick = world.tick;
@@ -115,7 +116,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         ecology: sanitizeBudget(deltaView.budgets?.ecology),
         civilization: sanitizeBudget(deltaView.budgets?.civilization),
     };
-    const changes = applyWorldDeltaToCore(core, deltaView);
+    const changes = applyWorldDeltaToCore(core, deltaView as { deltas?: FieldDelta[] });
     world.engineView.deltaRevision += 1;
 
     let eraMetrics = null;
@@ -141,8 +142,8 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
 
 export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions): Promise<WorldChangeset> {
     const { engineClient, worldId, core, fieldKinds } = options;
-    const worldDelta = await engineClient.get_world_delta(worldId, {
+    const worldDelta = (await engineClient.get_world_delta(worldId, {
         include_fields: fieldKinds,
-    });
-    return applyWorldDeltaToCore(core, worldDelta);
+    })) as { deltas?: FieldDelta[] };
+    return applyWorldDeltaToCore(core, worldDelta as { deltas?: FieldDelta[] });
 }

@@ -1,5 +1,5 @@
 import { buildCoreBuffers, type CoreBuffers } from "./world-core";
-import { type WorldSimController } from "../../interface/wasm";
+import { type WorldSimController } from "../../transport/wasm/frey-wasm-module";
 import { type PerfProfile } from "./recorder";
 
 export interface ControllerState {

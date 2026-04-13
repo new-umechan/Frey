@@ -1,5 +1,6 @@
 import { FLOAT32_FIELDS } from "./constants";
-import { type WorldSimController } from "../../interface/wasm";
+import { type WorldSimController } from "../../transport/wasm/frey-wasm-module";
+import { type FieldKind } from "../sim/sync/constants";
 
 const OPTIONAL_FIELD_KINDS = new Set([
     "erosion_rate",
@@ -22,17 +23,17 @@ interface DeltaRange {
     end: number;
 }
 
-interface FieldDelta {
-    mode?: "full" | "range" | "delta" | "bitmap";
-    field_kind?: string;
-    ranges?: DeltaRange[];
-    dirty_bitmap?: ArrayLike<number>;
+interface FieldResponse {
     f32_data?: Float32Array;
     i32_data?: Int32Array;
     u32_data?: Uint32Array;
 }
 
-interface FieldResponse {
+export interface FieldDelta {
+    mode?: "full" | "range" | "delta" | "bitmap";
+    field_kind?: FieldKind;
+    ranges?: DeltaRange[];
+    dirty_bitmap?: ArrayLike<number>;
     f32_data?: Float32Array;
     i32_data?: Int32Array;
     u32_data?: Uint32Array;

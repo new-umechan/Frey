@@ -1,6 +1,6 @@
 import { type StatFields } from "../../../components/dom";
 import { type WorldState } from "../../state/app-state";
-import { type EngineClient, type MetricsResult } from "../../engine/engine-client";
+import { type EngineClient } from "../../engine/engine-client";
 
 function formatPercent(ratio: number): string {
     if (!Number.isFinite(ratio)) {

@@ -4,6 +4,8 @@ import path from "node:path";
 export type TypeHint = "f32" | "u32";
 
 export interface ParamEntry {
+    yamlPath: string;
+    fieldName: string;
     type: TypeHint;
     value: number;
     raw: string;
@@ -34,6 +36,8 @@ export function parseSelfDescribingYaml(text: string): ParsedYaml {
     function flushParam() {
         if (currentParamName !== null && currentType !== null && currentValue !== null) {
             result.set(currentParamName, {
+                yamlPath: currentParamName,
+                fieldName: currentParamName,
                 type: currentType,
                 value: currentValue,
                 raw: currentRaw!,

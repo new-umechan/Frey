@@ -2,27 +2,12 @@ import {
     CORE_KEY_BY_FIELD_KIND,
     createWorldChangeset,
     markFieldChange,
-    type FieldKind,
     type WorldChangeset,
 } from "./constants";
 import { type CoreBuffers, type TypedArray } from "./types";
+import { type FieldDelta } from "../../perf/world-core";
 
 type NumericArray = TypedArray | number[];
-
-interface DeltaRange {
-    start: number;
-    end: number;
-}
-
-interface FieldDelta {
-    mode?: "full" | "delta" | "bitmap";
-    field_kind?: FieldKind;
-    ranges?: DeltaRange[];
-    dirty_bitmap?: Uint32Array | number[];
-    f32_data?: NumericArray;
-    i32_data?: NumericArray;
-    u32_data?: NumericArray;
-}
 
 function applyNumericDelta(target: NumericArray, fieldDelta: FieldDelta): boolean {
     const ranges = Array.isArray(fieldDelta?.ranges) ? fieldDelta.ranges : [];

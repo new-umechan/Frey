@@ -1,7 +1,8 @@
-import initWasm, {
+import {
     WorldSimController,
     build_render_positions,
     generate_mesh,
+    initializeFreyWasm,
 } from "../transport/wasm/frey-wasm-module";
 import { createPerfRunner } from "../app/perf/runner";
 
@@ -15,14 +16,14 @@ let wasmReadyPromise: Promise<unknown> | null = null;
 
 function ensureWasmReady() {
     if (!wasmReadyPromise) {
-        wasmReadyPromise = initWasm();
+        wasmReadyPromise = initializeFreyWasm();
     }
     return wasmReadyPromise;
 }
 
 interface BenchmarkMessage {
     type: "run";
-    runId: number;
+    runId: string;
     profile?: Record<string, unknown>;
     level?: number;
     terrainParams?: Record<string, unknown>;

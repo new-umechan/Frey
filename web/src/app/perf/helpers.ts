@@ -42,7 +42,7 @@ export function formatError(error: unknown): string {
     return String(error);
 }
 
-export function getDeltaFieldKindsForProfile(profile: PerfProfile): string[] {
+export function getDeltaFieldKindsForProfile(profile: PerfProfile | undefined | null): string[] {
     if (profile?.viewMode === "metric") {
         const metricKey = typeof profile?.cellMetric === "string" ? profile.cellMetric : "height";
         const metricField = FIELD_KIND_BY_CELL_METRIC[metricKey] ?? "height";

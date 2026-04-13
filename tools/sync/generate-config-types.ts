@@ -37,11 +37,13 @@ function readSchemaFromYaml(yamlName: string): SchemaFile {
     validateParams(parsed);
 
     const entries: ParamEntry[] = [];
-    for (const [fieldName, entry] of parsed) {
+    for (const [_fieldName, entry] of parsed) {
         entries.push({
-            yamlPath: fieldName,
-            fieldName,
+            yamlPath: entry.yamlPath,
+            fieldName: entry.fieldName,
             type: entry.type,
+            value: entry.value,
+            raw: entry.raw,
         });
     }
 

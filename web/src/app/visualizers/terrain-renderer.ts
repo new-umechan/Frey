@@ -103,7 +103,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         }
     }
 
-    function ensureAttribute(name: string, array: ArrayLike<number>, itemSize: number): THREE.BufferAttribute {
+    function ensureAttribute(name: string, array: TypedArray, itemSize: number): THREE.BufferAttribute {
         const current = geometry.getAttribute(name);
         if (current?.array === array) {
             return current as THREE.BufferAttribute;

@@ -85,19 +85,19 @@ export function createMutableStateStore(options: {
 
     const stateSetters: Record<string, (value: unknown) => void> = {
         currentSeed: (value) => {
-            currentSeed = value;
+            currentSeed = String(value);
         },
         currentSurfaceMode: (value) => {
-            currentSurfaceMode = value;
+            currentSurfaceMode = String(value);
         },
         currentViewMode: (value) => {
-            currentViewMode = value;
+            currentViewMode = String(value);
         },
         currentCellMetric: (value) => {
-            currentCellMetric = value;
+            currentCellMetric = String(value);
         },
         currentEraScale: (value) => {
-            currentEraScale = value;
+            currentEraScale = String(value);
         },
         debugEnabled: (value) => {
             debugEnabled = Boolean(value);

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { applyWorldDeltaToCore } from "./delta-sync";
 import { getDeltaFieldKindsForView } from "./view-mode";
 import { type CoreBuffers } from "./types";
@@ -39,7 +40,7 @@ describe("plate_id sync", () => {
                 mode: "bitmap",
                 ranges: [],
                 dirty_bitmap: [0b00101010],
-                u32_data: [8, 9, 10],
+                u32_data: new Uint32Array([8, 9, 10]),
             }],
         });
 

@@ -182,7 +182,7 @@ export function createPlaybackController({
         playbackControls.playToggleButton.setAttribute("aria-label", playbackState.isPlaying ? "停止" : "再生");
 
         const hasWorld = Boolean(getActiveWorldId()) && Boolean(getCurrentTerrainData());
-        const hasTicks = getAvailableTicks().length > 0;
+        // const _hasTicks = getAvailableTicks().length > 0; // 将来使用予定
         const sliceBusy = worldState.sliceBusy === true;
 
         playbackControls.playToggleButton.disabled = !hasWorld;
