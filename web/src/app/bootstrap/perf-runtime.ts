@@ -10,8 +10,8 @@ export interface PerfRuntimeOptions {
     terrainParams: Record<string, unknown>;
     level: number;
     createPerfProfile: (overrides?: Partial<PerfProfile>) => PerfProfile;
-    createPerfConsoleTable: (result: any) => unknown;
-    formatPerfSummaryLine: (result: any) => string;
+    createPerfConsoleTable: (result: unknown) => unknown;
+    formatPerfSummaryLine: (result: unknown) => string;
     getRuntimeMeta: () => Record<string, unknown>;
     canRunBenchmark: () => boolean;
     setPlaybackRunning: (nextPlaying: boolean) => boolean;

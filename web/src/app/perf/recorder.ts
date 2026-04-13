@@ -110,7 +110,7 @@ export function createPerfProfile(overrides: Partial<PerfProfile> = {}): PerfPro
     };
 }
 
-export function createPerfConsoleTable(result: PerfResult): Array<{
+export function createPerfConsoleTable(result: unknown): Array<{
     metric: string;
     count: number;
     mean_ms: number;
@@ -120,10 +120,11 @@ export function createPerfConsoleTable(result: PerfResult): Array<{
     min_ms: number;
     max_ms: number;
 }> {
-    if (!result?.metrics) {
+    const perfResult = result as PerfResult | null;
+    if (!perfResult?.metrics) {
         return [];
     }
-    return Object.entries(result.metrics).map(([name, stats]) => ({
+    return Object.entries(perfResult.metrics).map(([name, stats]) => ({
         metric: name,
         count: stats.count,
         mean_ms: stats.mean,
@@ -135,15 +136,16 @@ export function createPerfConsoleTable(result: PerfResult): Array<{
     }));
 }
 
-export function formatPerfSummaryLine(result: PerfResult): string {
-    if (!result?.metrics?.tick_total) {
+export function formatPerfSummaryLine(result: unknown): string {
+    const perfResult = result as PerfResult | null;
+    if (!perfResult?.metrics?.tick_total) {
         return "No performance data.";
     }
-    const tickTotal = result.metrics.tick_total;
-    const step = result.metrics.exec_world;
-    const delta = result.metrics.delta_sync;
-    const geom = result.metrics.geometry_update;
-    const river = result.metrics.river_mask_update;
+    const tickTotal = perfResult.metrics.tick_total;
+    const step = perfResult.metrics.exec_world;
+    const delta = perfResult.metrics.delta_sync;
+    const geom = perfResult.metrics.geometry_update;
+    const river = perfResult.metrics.river_mask_update;
     return [
         `p50=${tickTotal.p50}ms`,
         `p95=${tickTotal.p95}ms`,
