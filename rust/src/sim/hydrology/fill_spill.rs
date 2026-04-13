@@ -139,25 +139,77 @@ pub(crate) fn sync_fill_spill_to_erosion(
     state: &mut ErosionAutomatonState,
     hydrology: &HydrologyState,
 ) {
-    state.sink_id.clone_from(&hydrology.sink_id);
-    state.sink_route_next.clone_from(&hydrology.sink_route_next);
-    state.sink_spill_cell.clone_from(&hydrology.sink_spill_cell);
-    state.sink_spill_to.clone_from(&hydrology.sink_spill_to);
-    state
-        .sink_capacity_total
-        .clone_from(&hydrology.sink_capacity_total);
-    state
-        .sink_capacity_remaining
-        .clone_from(&hydrology.sink_capacity_remaining);
-    state
-        .sink_storage_sediment
-        .clone_from(&hydrology.sink_storage_sediment);
-    state
-        .sink_spill_level
-        .clone_from(&hydrology.sink_spill_level);
-    state
-        .sink_overflow_active
-        .clone_from(&hydrology.sink_overflow_active);
+    if state.sink_id.len() == hydrology.sink_id.len() {
+        state.sink_id.copy_from_slice(&hydrology.sink_id);
+    } else {
+        state.sink_id.clone_from(&hydrology.sink_id);
+    }
+    if state.sink_route_next.len() == hydrology.sink_route_next.len() {
+        state
+            .sink_route_next
+            .copy_from_slice(&hydrology.sink_route_next);
+    } else {
+        state.sink_route_next.clone_from(&hydrology.sink_route_next);
+    }
+    if state.sink_spill_cell.len() == hydrology.sink_spill_cell.len() {
+        state
+            .sink_spill_cell
+            .copy_from_slice(&hydrology.sink_spill_cell);
+    } else {
+        state.sink_spill_cell.clone_from(&hydrology.sink_spill_cell);
+    }
+    if state.sink_spill_to.len() == hydrology.sink_spill_to.len() {
+        state
+            .sink_spill_to
+            .copy_from_slice(&hydrology.sink_spill_to);
+    } else {
+        state.sink_spill_to.clone_from(&hydrology.sink_spill_to);
+    }
+    if state.sink_capacity_total.len() == hydrology.sink_capacity_total.len() {
+        state
+            .sink_capacity_total
+            .copy_from_slice(&hydrology.sink_capacity_total);
+    } else {
+        state
+            .sink_capacity_total
+            .clone_from(&hydrology.sink_capacity_total);
+    }
+    if state.sink_capacity_remaining.len() == hydrology.sink_capacity_remaining.len() {
+        state
+            .sink_capacity_remaining
+            .copy_from_slice(&hydrology.sink_capacity_remaining);
+    } else {
+        state
+            .sink_capacity_remaining
+            .clone_from(&hydrology.sink_capacity_remaining);
+    }
+    if state.sink_storage_sediment.len() == hydrology.sink_storage_sediment.len() {
+        state
+            .sink_storage_sediment
+            .copy_from_slice(&hydrology.sink_storage_sediment);
+    } else {
+        state
+            .sink_storage_sediment
+            .clone_from(&hydrology.sink_storage_sediment);
+    }
+    if state.sink_spill_level.len() == hydrology.sink_spill_level.len() {
+        state
+            .sink_spill_level
+            .copy_from_slice(&hydrology.sink_spill_level);
+    } else {
+        state
+            .sink_spill_level
+            .clone_from(&hydrology.sink_spill_level);
+    }
+    if state.sink_overflow_active.len() == hydrology.sink_overflow_active.len() {
+        state
+            .sink_overflow_active
+            .copy_from_slice(&hydrology.sink_overflow_active);
+    } else {
+        state
+            .sink_overflow_active
+            .clone_from(&hydrology.sink_overflow_active);
+    }
     if state.sink_dirty.len() != hydrology.sink_id.len() {
         state.sink_dirty = vec![1; hydrology.sink_id.len()];
     } else {

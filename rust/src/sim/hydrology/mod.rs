@@ -187,7 +187,11 @@ fn run_river_step_with_erosion_state(
     if !erosion_state_matches_world(state, expected_height, expected_flux, expected_next) {
         return false;
     }
-    state.height.clone_from(&geology.height);
+    if state.height.len() == geology.height.len() {
+        state.height.copy_from_slice(&geology.height);
+    } else {
+        state.height.clone_from(&geology.height);
+    }
 
     sync_fill_spill_to_erosion(state, hydrology);
 

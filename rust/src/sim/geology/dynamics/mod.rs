@@ -66,10 +66,14 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     }
 
     let cell_count = world.state.geology.height.len();
-    let params = world.control.geology_params.clone();
     ensure_geology_dynamics(world, geology_state);
     if should_run_debug_validation() {
-        debug_validate_geology_state_with_state(world, geology_state.as_ref(), &params, "pre-step");
+        debug_validate_geology_state_with_state(
+            world,
+            geology_state.as_ref(),
+            &world.control.geology_params,
+            "pre-step",
+        );
     }
 
     let Some(dynamics) = geology_state.as_mut() else {
@@ -103,51 +107,55 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
     }
-    let heights = world.state.geology.height.clone();
-    let plate_id = world.state.geology.plate_id.clone();
     let positions = world.mesh().positions.clone();
     let nbr_offsets = world.mesh().nbr_offsets.clone();
     let nbrs = world.mesh().nbrs.clone();
+    let heights = &world.state.geology.height;
+    let plate_id = &world.state.geology.plate_id;
 
     let plume_force = update_mantle_heat_and_plumes(
         &mut dynamics.mantle_heat,
         &dynamics.vertex_states,
         &nbr_offsets,
         &nbrs,
-        &params,
+        &world.control.geology_params,
     );
 
     update_plate_kinematics(
-        &plate_id,
+        plate_id,
         &mut dynamics.plate_states,
         &dynamics.boundary_state,
-        &params,
+        &world.control.geology_params,
     );
 
     let mut next_vertex_states = advect_continuous_attributes(
         &positions,
         &nbr_offsets,
         &nbrs,
-        &plate_id,
+        plate_id,
         &dynamics.plate_states,
         &dynamics.vertex_states,
-        &params,
+        &world.control.geology_params,
     );
-    let mut next_plate_id = plate_id.clone();
+    let mut next_plate_id = plate_id.to_vec();
     apply_boundary_crossing_discrete_attrs(
         BoundaryCrossingInput {
             positions: &positions,
             nbr_offsets: &nbr_offsets,
             nbrs: &nbrs,
             plate_states: &dynamics.plate_states,
-            plate_id_prev: &plate_id,
+            plate_id_prev: plate_id,
             boundary_state: &dynamics.boundary_state,
         },
         &mut next_plate_id,
         &mut next_vertex_states,
     );
 
-    let reclassify_interval = params.boundary_reclassify_interval.max(1);
+    let reclassify_interval = world
+        .control
+        .geology_params
+        .boundary_reclassify_interval
+        .max(1);
     dynamics.boundary_state.reclassify_interval_ticks = reclassify_interval;
     if dynamics.boundary_state.steps_since_reclassify >= reclassify_interval
         || dynamics.boundary_state.steps_since_reclassify == 0
@@ -160,7 +168,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
                 plate_id: &next_plate_id,
                 plate_states: &dynamics.plate_states,
                 vertex_states: &next_vertex_states,
-                params: &params,
+                params: &world.control.geology_params,
             },
             &mut dynamics.boundary_state,
         );
@@ -175,7 +183,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
             .saturating_add(1);
     }
 
-    let mut next_height = heights.clone();
+    let mut next_height = heights.to_vec();
     let mut next_volcanism = world.state.geology.volcanism.clone();
     let mut next_vertex_buoyancy = world.state.geology.vertex_buoyancy.clone();
     let mut surface_output = SurfaceUpdateOutput {
@@ -188,12 +196,12 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         SurfaceUpdateInput {
             nbr_offsets: &nbr_offsets,
             nbrs: &nbrs,
-            heights: &heights,
+            heights,
             plate_id: &next_plate_id,
             boundary_state: &dynamics.boundary_state,
             mantle_heat: &dynamics.mantle_heat,
             plume_force: &plume_force,
-            params: &params,
+            params: &world.control.geology_params,
         },
         &mut surface_output,
     );
@@ -216,7 +224,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         debug_validate_geology_state_with_state(
             world,
             geology_state.as_ref(),
-            &params,
+            &world.control.geology_params,
             "post-step",
         );
     }

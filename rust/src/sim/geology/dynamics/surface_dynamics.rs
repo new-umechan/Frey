@@ -49,14 +49,15 @@ pub(super) fn apply_stress_and_surface_update(
     let mut subsidence_sum = 0.0_f32;
 
     for i in 0..cell_count {
-        let mut tensor = boundary_tensor(
-            boundary_state
-                .dominant_type
-                .get(i)
-                .copied()
-                .unwrap_or(BoundaryType::PassiveMargin),
-            boundary_state.activity.get(i).copied().unwrap_or(0.0),
-        );
+        let boundary_type = boundary_state
+            .dominant_type
+            .get(i)
+            .copied()
+            .unwrap_or(BoundaryType::PassiveMargin);
+        let boundary_activity =
+            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0);
+
+        let mut tensor = boundary_tensor(boundary_type, boundary_activity);
 
         let plume = finite_or(plume_force.get(i).copied().unwrap_or(0.0), 0.0).max(0.0);
         tensor.xx += plume * 0.7;
@@ -147,13 +148,6 @@ pub(super) fn apply_stress_and_surface_update(
 
         let compressive = (-stress).max(0.0);
         let tensile = stress.max(0.0);
-        let boundary_type = boundary_state
-            .dominant_type
-            .get(i)
-            .copied()
-            .unwrap_or(BoundaryType::PassiveMargin);
-        let boundary_activity =
-            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0);
         let rollback_fraction = finite_or(
             boundary_state
                 .rollback_fraction
