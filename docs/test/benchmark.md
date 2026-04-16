@@ -1,6 +1,6 @@
 # Benchmark
 
-本書は、Climate・Hydrology・Ecologyの各モジュールが現実の地球をどこまで近似できているかを評価するためのベンチマーク設計である。
+本書は、Climate・Hydrology・Ecology・Domesticates の各モジュールが現実の地球をどこまで近似できているかを評価するためのベンチマーク設計である。
 
 設計の正本は `docs/architecture/overview.md`・`docs/architecture/data_model.md`・`docs/architecture/module_boundaries.md` を参照する。
 
@@ -47,6 +47,7 @@ Plateは実データとの定量比較になじまないため、ベンチマー
 | Climate単体 | 実地形 + 固定植生（0.5） | 1 tick | Climateモデル自体の評価 |
 | Hydrology単体 | 実地形 + 実気候データ | 1 tick | Hydrologyモデル自体の評価 |
 | Ecology単体 | 実気候データ + 実水文データ | 収束まで | Ecologyモデル自体の評価 |
+| Domesticates単体 | 実地形 + 実気候 + 実水文 + 実植生 + 現代分布proxy | 1 tick | Domesticatesの適地モデル評価 |
 | Glaciology単体 | 実地形 + Climate出力 | 1 tick | Glaciologyモデル自体の評価 |
 | Glaciology海面時系列 | 実地形 + 実気候データ | short/mid/long | 海面寄与時系列の診断評価 |
 | Climate+Ecology | 実地形のみ | 収束まで | 植生フィードバックの効果確認 |
@@ -112,6 +113,15 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 | `ground_cover` | 中 | MODIS VCF 由来の non-tree vegetation との相関（開放系植生に限定） |
 | `soil_fertility` | 低 | SoilGrids 由来 proxy との相関。参考値扱い |
 
+### Domesticates
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `intensity` | 中 | EarthStat / FAO GLW の現代分布 proxy と Spearman で比較する |
+| `available` | 中 | proxy intensity を閾値化した二値ラベルとの F1 で評価する |
+| `origin_seed` | 低 | v1 の quality gate では扱わず、将来の別 bench へ分離する |
+| `adoption` | 低 | 文化・交易・人口圧の影響が大きく、単体ベンチでは主評価にしない |
+
 ### Glaciology
 
 | 変数 | 信頼度 | 備考 |
@@ -150,6 +160,12 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 - `tree_cover`：代表地域の樹木被覆の大小関係が現実と一致しているか
 - `ground_cover`：代表地域の草本・低木被覆の大小関係が現実と一致しているか
 
+### Domesticatesの評価軸（Phase 1）
+
+- `intensity`：代表地域での種別ごとの成立順序が現実と整合するか
+- `available`：成立帯 / 非成立帯の分類が現実と整合するか
+- `origin_seed`：v1 では診断対象外
+
 ### Glaciologyの評価軸（Phase 1）
 
 - `ice_thickness`：グリーンランド・南極・パタゴニア・ヒマラヤ・アルプス等の氷厚の大小関係が現実と一致しているか
@@ -174,6 +190,7 @@ Climate単体ベンチで確立したリサンプリング基盤・出力フォ�
 - `docs/test/bench/climate_solo_benchmark.md`
 - `docs/test/bench/hydrology_solo_benchmark.md`
 - `docs/test/bench/ecology_solo_benchmark.md`
+- `docs/test/bench/domesticates_solo_benchmark.md`
 - `docs/test/bench/glaciology_solo_benchmark.md`
 - `docs/test/bench/glaciology_sea_level_series_benchmark.md`
 

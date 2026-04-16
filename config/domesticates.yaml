@@ -1,0 +1,42 @@
+origin_count_limit:
+  type: u32
+  value: 3
+origin_min_region_cells:
+  type: u32
+  value: 2
+origin_seed_strength_crop:
+  type: f32
+  value: 0.26
+origin_seed_strength_livestock:
+  type: f32
+  value: 0.22
+max_dt:
+  type: f32
+  value: 4.0
+moisture_precip_scale_mm:
+  type: f32
+  value: 1500.0
+moisture_aridity_scale:
+  type: f32
+  value: 1.2
+origin_candidate_cutoff_ratio:
+  type: f32
+  value: 0.72
+origin_top_candidate_ratio:
+  type: f32
+  value: 0.9
+diffusion_memory_decay:
+  type: f32
+  value: 0.85
+diffusion_memory_gain:
+  type: f32
+  value: 0.15
+diffusion_memory_river_w:
+  type: f32
+  value: 0.35
+diffusion_memory_height_w:
+  type: f32
+  value: 0.35
+diffusion_memory_biome_w:
+  type: f32
+  value: 0.30

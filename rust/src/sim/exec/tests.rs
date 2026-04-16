@@ -304,6 +304,34 @@ fn settlement_stage_enqueues_domesticates_spread_feedback() {
 }
 
 #[test]
+fn settlement_stage_limits_domesticates_spread_to_neighboring_settlements() {
+    let mut world = build_test_world();
+    world.mesh_mut().nbr_offsets = vec![0, 1, 3, 5, 6];
+    world.mesh_mut().nbrs = vec![1, 0, 2, 1, 3, 2];
+    world.clock.tick = 9;
+    world.clock.budgets.civilization = 4;
+    world.state.geology.height = vec![0.3, 0.2, 0.1, 0.2];
+    world.state.population.population = vec![120.0, 40.0, 35.0, 0.0];
+    world.state.domesticates.crop_adoption[0][0] = 0.7;
+    world.state.domesticates.livestock_adoption[0][0] = 0.6;
+    let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
+
+    super::pipeline::run_settlement_stage(&mut world, &mut feedback);
+
+    let targets = feedback
+        .entries
+        .iter()
+        .filter_map(|entry| match entry.payload {
+            FeedbackPayload::DomesticatesSpread { cell, .. } => Some(cell.as_usize()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    assert!(targets.contains(&1));
+    assert!(!targets.contains(&2));
+}
+
+#[test]
 fn module_manifest_includes_generated_dependencies() {
     let manifests = module_manifests();
     let ecology = manifests

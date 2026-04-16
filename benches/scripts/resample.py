@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,7 @@ HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
 ECOLOGY_REF_MAGIC = b"ECOREF01"
 GLACIOLOGY_REF_MAGIC = b"GLACREF1"
+DOMESTICATES_REF_MAGIC = b"DOMEREF2"
 VERSION = 1
 CLIMATE_VARIABLES = [
     "temperature",
@@ -25,6 +27,16 @@ CLIMATE_VARIABLES = [
     "aridity",
 ]
 HYDRO_INPUT_VARIABLES = ["runoff"]
+DOMESTICATES_CROP_NAMES = [
+    "Wheat",
+    "Rice",
+    "Maize",
+    "Millet",
+    "Potato",
+    "Cassava",
+    "Sorghum",
+]
+DOMESTICATES_LIVESTOCK_NAMES = ["Cattle", "Horse", "Sheep", "Pig"]
 
 
 @dataclass
@@ -51,6 +63,7 @@ def parse_args() -> argparse.Namespace:
             "hydro-input",
             "hydro-ref",
             "ecology-ref",
+            "domesticates-ref",
             "glaciology-ref",
         ],
     )
@@ -200,6 +213,10 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.5,
         help="Maximum internal terrain height after conversion.",
+    )
+    parser.add_argument(
+        "--manifest",
+        help="Manifest JSON for domesticates-ref generation.",
     )
     return parser.parse_args()
 
@@ -783,6 +800,55 @@ def write_glaciology_ref_bin(path: Path, ice_thickness: np.ndarray) -> None:
         handle.write(values.tobytes(order="C"))
 
 
+def write_domesticates_ref_bin(
+    path: Path,
+    crop_observed_intensity: np.ndarray,
+    livestock_observed_intensity: np.ndarray,
+    crop_observed_presence: np.ndarray,
+    livestock_observed_presence: np.ndarray,
+    crop_eval_mask: np.ndarray,
+    livestock_eval_mask: np.ndarray,
+) -> None:
+    crop_intensity = np.asarray(crop_observed_intensity, dtype="<f4")
+    livestock_intensity = np.asarray(livestock_observed_intensity, dtype="<f4")
+    crop_presence = np.asarray(crop_observed_presence, dtype=np.uint8)
+    livestock_presence = np.asarray(livestock_observed_presence, dtype=np.uint8)
+    crop_mask = np.asarray(crop_eval_mask, dtype=np.uint8)
+    livestock_mask = np.asarray(livestock_eval_mask, dtype=np.uint8)
+
+    if crop_intensity.ndim != 2 or crop_intensity.shape[1] != len(DOMESTICATES_CROP_NAMES):
+        raise ValueError("crop observed intensity must be [cell_count, 7]")
+    if (
+        livestock_intensity.ndim != 2
+        or livestock_intensity.shape[1] != len(DOMESTICATES_LIVESTOCK_NAMES)
+    ):
+        raise ValueError("livestock observed intensity must be [cell_count, 4]")
+
+    cell_count = int(crop_intensity.shape[0])
+    if int(livestock_intensity.shape[0]) != cell_count:
+        raise ValueError("crop/livestock intensity cell counts must match")
+    if crop_presence.shape != (cell_count,):
+        raise ValueError("crop observed presence must be [cell_count]")
+    if livestock_presence.shape != (cell_count,):
+        raise ValueError("livestock observed presence must be [cell_count]")
+    if crop_mask.shape != crop_intensity.shape:
+        raise ValueError("crop eval mask shape must match crop intensity")
+    if livestock_mask.shape != livestock_intensity.shape:
+        raise ValueError("livestock eval mask shape must match livestock intensity")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(DOMESTICATES_REF_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", cell_count))
+        handle.write(crop_intensity.tobytes(order="C"))
+        handle.write(livestock_intensity.tobytes(order="C"))
+        handle.write(crop_presence.tobytes(order="C"))
+        handle.write(livestock_presence.tobytes(order="C"))
+        handle.write(crop_mask.tobytes(order="C"))
+        handle.write(livestock_mask.tobytes(order="C"))
+
+
 def to_fraction_cover(values: np.ndarray) -> np.ndarray:
     out = np.asarray(values, dtype=np.float64).copy()
     invalid = ~np.isfinite(out) | (out >= 200.0) | (out < 0.0)
@@ -817,6 +883,88 @@ def percentile_rank(values: np.ndarray) -> np.ndarray:
         ranks.fill(0.5)
     out[valid] = ranks
     return out
+
+
+def normalize_observed_intensity(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    arr = np.asarray(values, dtype=np.float64)
+    out = np.full(arr.shape, np.nan, dtype=np.float64)
+    eval_mask = np.zeros(arr.shape, dtype=np.uint8)
+    valid = np.isfinite(arr) & (arr >= 0.0)
+    if not np.any(valid):
+        return out, eval_mask
+    transformed = np.log1p(arr[valid])
+    lo = np.nanquantile(transformed, 0.01)
+    hi = np.nanquantile(transformed, 0.99)
+    if not np.isfinite(lo) or not np.isfinite(hi):
+        return out, eval_mask
+    if hi <= lo:
+        out[valid] = 0.0
+        return out, eval_mask
+    clipped = np.clip(transformed, lo, hi)
+    out[valid] = (clipped - lo) / (hi - lo)
+    eval_mask[valid] = 1
+    return np.clip(out, 0.0, 1.0), eval_mask
+
+
+def load_domesticates_manifest(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError("domesticates manifest must be a JSON object")
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("domesticates manifest must include entries[]")
+    return payload
+
+
+def resolve_manifest_entry(
+    entries: list[dict], kind: str, name: str
+) -> dict:
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("kind") == kind and entry.get("name") == name:
+            return entry
+    raise ValueError(f"manifest entry missing for {kind}:{name}")
+
+
+def sample_domesticates_entry(
+    entry: dict,
+    centroid_lat: np.ndarray,
+    centroid_lon: np.ndarray,
+    method: str,
+    cell_count: int,
+    base_dir: Path,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    mode = str(entry.get("mode", "raster")).strip()
+    if mode != "raster":
+        raise ValueError(
+            f"domesticates-ref only supports mode=raster in resample, got {mode}"
+        )
+
+    local_path = entry.get("local_path")
+    if not isinstance(local_path, str) or not local_path.strip():
+        raise ValueError("manifest entry requires local_path")
+    source_path = Path(local_path)
+    if not source_path.is_absolute():
+        source_path = (base_dir / source_path).resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"missing domesticates raster: {source_path}")
+
+    preferred_var = entry.get("var_name")
+    sampled = sample_input_at_centroids(
+        source_path,
+        str(preferred_var) if isinstance(preferred_var, str) else None,
+        centroid_lat,
+        centroid_lon,
+        method,
+    )
+    normalized, eval_mask = normalize_observed_intensity(sampled)
+    threshold = float(entry.get("presence_threshold", 0.2))
+    presence = np.zeros((cell_count,), dtype=np.uint8)
+    valid_presence = (eval_mask == 1) & (normalized >= threshold)
+    presence[valid_presence] = 1
+    return normalized.astype(np.float32), presence, eval_mask
 
 
 def ph_suitability(values: np.ndarray) -> np.ndarray:
@@ -1008,6 +1156,8 @@ def main() -> None:
             output_path = Path("benches/data/hydro_ref.bin")
         elif args.module == "ecology-ref":
             output_path = Path("benches/data/ecology_ref.bin")
+        elif args.module == "domesticates-ref":
+            output_path = Path("benches/data/domesticates_ref.bin")
         else:
             output_path = Path("benches/data/glaciology_ref.bin")
     else:
@@ -1301,6 +1451,82 @@ def main() -> None:
         )
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(tree_cover)}")
+        return
+
+    if args.module == "domesticates-ref":
+        if not args.manifest:
+            raise ValueError(
+                "missing required arg for domesticates-ref module: --manifest"
+            )
+        manifest_path = Path(args.manifest)
+        manifest = load_domesticates_manifest(manifest_path)
+        entries = manifest["entries"]
+        cell_count = int(centroid_lat.size)
+        base_dir = manifest_path.parent
+
+        crop_intensity = np.full(
+            (cell_count, len(DOMESTICATES_CROP_NAMES)), np.nan, dtype=np.float32
+        )
+        livestock_intensity = np.full(
+            (cell_count, len(DOMESTICATES_LIVESTOCK_NAMES)), np.nan, dtype=np.float32
+        )
+        crop_presence = np.zeros((cell_count,), dtype=np.uint8)
+        livestock_presence = np.zeros((cell_count,), dtype=np.uint8)
+        crop_eval_mask = np.zeros_like(crop_intensity, dtype=np.uint8)
+        livestock_eval_mask = np.zeros_like(livestock_intensity, dtype=np.uint8)
+
+        for species_idx, species_name in enumerate(DOMESTICATES_CROP_NAMES):
+            entry = resolve_manifest_entry(entries, "crop", species_name)
+            normalized, presence, eval_mask = sample_domesticates_entry(
+                entry,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+                cell_count,
+                base_dir,
+            )
+            crop_intensity[:, species_idx] = normalized
+            crop_eval_mask[:, species_idx] = eval_mask
+            crop_presence |= presence << species_idx
+            print(summarize(f"crop.{species_name}.intensity", normalized))
+            print(
+                f"crop.{species_name}.presence: "
+                f"true={int(np.count_nonzero(presence))}/{cell_count} "
+                f"threshold={float(entry.get('presence_threshold', 0.2)):.3f}"
+            )
+
+        for species_idx, species_name in enumerate(DOMESTICATES_LIVESTOCK_NAMES):
+            entry = resolve_manifest_entry(entries, "livestock", species_name)
+            normalized, presence, eval_mask = sample_domesticates_entry(
+                entry,
+                centroid_lat,
+                centroid_lon,
+                args.method,
+                cell_count,
+                base_dir,
+            )
+            livestock_intensity[:, species_idx] = normalized
+            livestock_eval_mask[:, species_idx] = eval_mask
+            livestock_presence |= presence << species_idx
+            print(summarize(f"livestock.{species_name}.intensity", normalized))
+            print(
+                f"livestock.{species_name}.presence: "
+                f"true={int(np.count_nonzero(presence))}/{cell_count} "
+                f"threshold={float(entry.get('presence_threshold', 0.2)):.3f}"
+            )
+
+        write_domesticates_ref_bin(
+            output_path,
+            crop_intensity,
+            livestock_intensity,
+            crop_presence,
+            livestock_presence,
+            crop_eval_mask,
+            livestock_eval_mask,
+        )
+        print(f"manifest: {manifest_path}")
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {cell_count}")
         return
 
     if args.module == "glaciology-ref":

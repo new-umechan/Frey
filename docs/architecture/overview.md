@@ -14,6 +14,52 @@
 
 実装基盤として、セル向けSoAと疎なEntity向け専用ストアの分離を採用する。
 
+### システム全体像
+
+```mermaid
+flowchart LR
+  subgraph P["presentation (Web)"]
+    UI["Three.js scene / DOM / HUD / playback"]
+  end
+
+  subgraph T["transport"]
+    WASM["WASM binding"]
+    WORKER["Worker message protocol"]
+  end
+
+  subgraph A["application"]
+    SERVICE["WorldService"]
+    USECASE["WorldUseCases"]
+    RUNTIME["WorldRuntime"]
+  end
+
+  subgraph C["core (Simulation)"]
+    EXEC["ExecSystem"]
+    MODULES["Tier 1 Modules<br/>Geology ... Conflict"]
+    WORLD["World state<br/>CellStore(SoA) / EntityState / Clock"]
+    FEEDBACK["FeedbackQueue"]
+    ARCHIVE["Archive / snapshot"]
+  end
+
+  UI --> WASM
+  UI --> WORKER
+  WASM --> USECASE
+  WORKER --> USECASE
+  USECASE --> RUNTIME
+  USECASE --> SERVICE
+  USECASE --> EXEC
+
+  EXEC --> MODULES
+  MODULES --> WORLD
+  MODULES --> FEEDBACK
+  FEEDBACK --> EXEC
+  EXEC --> ARCHIVE
+```
+
+依存方向の正本は `presentation -> transport -> application -> core` とし、詳細は `docs/architecture/runtime_layers.md` を参照する。
+
+### Simulation内部構成
+
 ```text
 Simulation
 ├── CellStore         （全セルのComponent群、SoA配列）
@@ -101,6 +147,8 @@ ExecSystem（切り替えと実行制御）
 
 ## 関連文書
 
+- 実行時レイヤ（presentation / transport / application / core）
+  - `docs/architecture/runtime_layers.md`
 - 時代・tick・予算・遷移
   - `docs/architecture/phase_control.md`
 - CellStore・EntityState・Clock・FeedbackQueue・Archiveの構造と型定義

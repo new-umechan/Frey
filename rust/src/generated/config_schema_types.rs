@@ -101,6 +101,41 @@ pub const CLIMATESCHEMAPARAMS_KEYS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DomesticatesSchemaParams {
+    pub origin_count_limit: u32,
+    pub origin_min_region_cells: u32,
+    pub origin_seed_strength_crop: f32,
+    pub origin_seed_strength_livestock: f32,
+    pub max_dt: f32,
+    pub moisture_precip_scale_mm: f32,
+    pub moisture_aridity_scale: f32,
+    pub origin_candidate_cutoff_ratio: f32,
+    pub origin_top_candidate_ratio: f32,
+    pub diffusion_memory_decay: f32,
+    pub diffusion_memory_gain: f32,
+    pub diffusion_memory_river_w: f32,
+    pub diffusion_memory_height_w: f32,
+    pub diffusion_memory_biome_w: f32,
+}
+
+pub const DOMESTICATESSCHEMAPARAMS_KEYS: &[&str] = &[
+    "origin_count_limit",
+    "origin_min_region_cells",
+    "origin_seed_strength_crop",
+    "origin_seed_strength_livestock",
+    "max_dt",
+    "moisture_precip_scale_mm",
+    "moisture_aridity_scale",
+    "origin_candidate_cutoff_ratio",
+    "origin_top_candidate_ratio",
+    "diffusion_memory_decay",
+    "diffusion_memory_gain",
+    "diffusion_memory_river_w",
+    "diffusion_memory_height_w",
+    "diffusion_memory_biome_w",
+];
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlaciologySchemaParams {
     pub accum_temp_threshold_c: f32,
     pub ablation_temp_threshold_c: f32,

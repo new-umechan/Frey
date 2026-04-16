@@ -97,6 +97,40 @@ export const ClimateSchemaParamsKeys = [
     "core_humidity_cc_rate_per_c",
 ] as const satisfies readonly (keyof ClimateSchemaParams)[];
 
+export interface DomesticatesSchemaParams {
+    origin_count_limit: number;
+    origin_min_region_cells: number;
+    origin_seed_strength_crop: number;
+    origin_seed_strength_livestock: number;
+    max_dt: number;
+    moisture_precip_scale_mm: number;
+    moisture_aridity_scale: number;
+    origin_candidate_cutoff_ratio: number;
+    origin_top_candidate_ratio: number;
+    diffusion_memory_decay: number;
+    diffusion_memory_gain: number;
+    diffusion_memory_river_w: number;
+    diffusion_memory_height_w: number;
+    diffusion_memory_biome_w: number;
+}
+
+export const DomesticatesSchemaParamsKeys = [
+    "origin_count_limit",
+    "origin_min_region_cells",
+    "origin_seed_strength_crop",
+    "origin_seed_strength_livestock",
+    "max_dt",
+    "moisture_precip_scale_mm",
+    "moisture_aridity_scale",
+    "origin_candidate_cutoff_ratio",
+    "origin_top_candidate_ratio",
+    "diffusion_memory_decay",
+    "diffusion_memory_gain",
+    "diffusion_memory_river_w",
+    "diffusion_memory_height_w",
+    "diffusion_memory_biome_w",
+] as const satisfies readonly (keyof DomesticatesSchemaParams)[];
+
 export interface GlaciologySchemaParams {
     accum_temp_threshold_c: number;
     ablation_temp_threshold_c: number;

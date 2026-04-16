@@ -1,4 +1,36 @@
+use serde::{Deserialize, Serialize};
+
 use crate::sim::world::{CropBitmap, LivestockBitmap, N_CROPS, N_LIVESTOCK};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DomesticatesParams {
+    pub origin_count_limit: u32,
+    pub origin_min_region_cells: u32,
+    pub origin_seed_strength_crop: f32,
+    pub origin_seed_strength_livestock: f32,
+    pub max_dt: f32,
+    pub moisture_precip_scale_mm: f32,
+    pub moisture_aridity_scale: f32,
+    pub origin_candidate_cutoff_ratio: f32,
+    pub origin_top_candidate_ratio: f32,
+    pub diffusion_memory_decay: f32,
+    pub diffusion_memory_gain: f32,
+    pub diffusion_memory_river_w: f32,
+    pub diffusion_memory_height_w: f32,
+    pub diffusion_memory_biome_w: f32,
+}
+
+impl Default for DomesticatesParams {
+    fn default() -> Self {
+        crate::domesticates_params_defaults::build_default_domesticates_params()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DomesticatesBenchDiagnostics {
+    pub crop_niche: Vec<[f32; N_CROPS]>,
+    pub livestock_niche: Vec<[f32; N_LIVESTOCK]>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

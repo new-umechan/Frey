@@ -161,6 +161,17 @@ pub fn run_ecology_step_for_bench(world: &mut world::World, ecology_budget: u32)
     ecology::run_ecology_step(world, ecology_budget);
 }
 
+pub fn run_domesticates_step_for_bench(world: &mut world::World, domesticates_budget: u32) {
+    domesticates::update_domesticates(world, domesticates_budget);
+}
+
+pub fn run_domesticates_step_with_diagnostics_for_bench(
+    world: &mut world::World,
+    domesticates_budget: u32,
+) -> domesticates::DomesticatesBenchDiagnostics {
+    domesticates::update_domesticates_with_diagnostics(world, domesticates_budget)
+}
+
 pub(crate) fn step_erosion_automaton(
     state: &mut erosion::ErosionAutomatonState,
     budget_cells: u32,

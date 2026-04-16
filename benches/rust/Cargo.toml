@@ -19,6 +19,10 @@ name = "ecology_solo"
 harness = false
 
 [[bench]]
+name = "domesticates_solo"
+harness = false
+
+[[bench]]
 name = "glaciology_solo"
 harness = false
 

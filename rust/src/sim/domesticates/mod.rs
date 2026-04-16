@@ -5,13 +5,6 @@ pub use crate::sim::domesticates::types::*;
 
 use crate::sim::world::{Biome, EraKind, World, N_CROPS, N_LIVESTOCK};
 
-const ORIGIN_COUNT_LIMIT: usize = 3;
-const ORIGIN_MIN_REGION_CELLS: usize = 2;
-const ORIGIN_SEED_STRENGTH_CROP: f32 = 0.26;
-const ORIGIN_SEED_STRENGTH_LIVESTOCK: f32 = 0.22;
-const FEEDBACK_RETENTION: f32 = 0.35;
-const POP_PRESSURE_RETENTION: f32 = 0.65;
-
 #[derive(Clone, Copy)]
 struct SpeciesParams {
     temp_optimum: f32,
@@ -245,8 +238,18 @@ const LIVESTOCK_PARAMS: [SpeciesParams; N_LIVESTOCK] = [
 ];
 
 pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
+    let _ = update_domesticates_with_diagnostics(world, budget);
+}
+
+pub(crate) fn update_domesticates_with_diagnostics(
+    world: &mut World,
+    budget: u32,
+) -> DomesticatesBenchDiagnostics {
     if budget == 0 {
-        return;
+        return DomesticatesBenchDiagnostics {
+            crop_niche: Vec::new(),
+            livestock_niche: Vec::new(),
+        };
     }
 
     let n = world.state.geology.height.len();
@@ -254,9 +257,13 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
 
     if !domesticates_enabled(world.clock.epoch) {
         disable_domesticates(world);
-        return;
+        return DomesticatesBenchDiagnostics {
+            crop_niche: vec![[0.0; N_CROPS]; n],
+            livestock_niche: vec![[0.0; N_LIVESTOCK]; n],
+        };
     }
 
+    let params = DomesticatesParams::default();
     let prev_crop_adoption = world.state.domesticates.crop_adoption.clone();
     let prev_livestock_adoption = world.state.domesticates.livestock_adoption.clone();
     let river_max = world
@@ -267,37 +274,11 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
         .copied()
         .fold(0.0_f32, f32::max)
         .max(1e-6);
-    let dt = (budget.max(1) as f32).min(4.0);
+    let dt = (budget.max(1) as f32).min(params.max_dt.max(1.0));
 
-    let mut crop_niche = vec![[0.0; N_CROPS]; n];
-    let mut livestock_niche = vec![[0.0; N_LIVESTOCK]; n];
-
-    for i in 0..n {
-        if world.state.geology.height[i] <= world.control.sea_level_offset {
-            world.state.domesticates.crop_available[i] = 0;
-            world.state.domesticates.livestock_available[i] = 0;
-            continue;
-        }
-        let context = CellContext::from_world(world, i, river_max);
-        let mut crop_bits = 0u8;
-        for (kind_idx, params) in CROP_PARAMS.iter().enumerate() {
-            let niche = crop_niche_score(kind_idx, &context, *params);
-            crop_niche[i][kind_idx] = niche;
-            if niche >= params.threshold && !crop_hard_exclusion(kind_idx, &context) {
-                crop_bits |= 1u8 << kind_idx;
-            }
-        }
-        let mut livestock_bits = 0u8;
-        for (kind_idx, params) in LIVESTOCK_PARAMS.iter().enumerate() {
-            let niche = livestock_niche_score(kind_idx, &context, *params);
-            livestock_niche[i][kind_idx] = niche;
-            if niche >= params.threshold && !livestock_hard_exclusion(kind_idx, &context) {
-                livestock_bits |= 1u8 << kind_idx;
-            }
-        }
-        world.state.domesticates.crop_available[i] = crop_bits;
-        world.state.domesticates.livestock_available[i] = livestock_bits;
-    }
+    let diagnostics = compute_bench_diagnostics(world, river_max, &params);
+    let crop_niche = &diagnostics.crop_niche;
+    let livestock_niche = &diagnostics.livestock_niche;
 
     if !world
         .state
@@ -306,7 +287,7 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
         .iter()
         .any(|internal| internal.origin_initialized)
     {
-        seed_origins(world, &crop_niche, &livestock_niche, river_max);
+        seed_origins(world, &crop_niche, &livestock_niche, river_max, &params);
     }
 
     for i in 0..n {
@@ -323,7 +304,7 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
             continue;
         }
 
-        let context = CellContext::from_world(world, i, river_max);
+        let context = CellContext::from_world(world, i, river_max, &params);
         let population_bonus = world.state.domesticates.domesticates_internal[i]
             .population_pressure_bonus
             .clamp(0.0, 0.9);
@@ -397,17 +378,61 @@ pub(crate) fn update_domesticates(world: &mut World, budget: u32) {
         world.state.domesticates.livestock_adoption[i] = next_livestock;
 
         let internal = &mut world.state.domesticates.domesticates_internal[i];
-        for value in internal.routed_feedback_crop.iter_mut() {
-            *value = (*value * FEEDBACK_RETENTION).max(0.0);
-        }
-        for value in internal.routed_feedback_livestock.iter_mut() {
-            *value = (*value * FEEDBACK_RETENTION).max(0.0);
-        }
-        internal.population_pressure_bonus =
-            (internal.population_pressure_bonus * POP_PRESSURE_RETENTION).max(0.0);
-        internal.diffusion_memory = (internal.diffusion_memory * 0.85
-            + terrain_conductance_generic(&context, 0.35, 0.35, 0.30) * 0.15)
+        internal.routed_feedback_crop = [0.0; N_CROPS];
+        internal.routed_feedback_livestock = [0.0; N_LIVESTOCK];
+        internal.population_pressure_bonus = 0.0;
+        internal.diffusion_memory = (internal.diffusion_memory * params.diffusion_memory_decay
+            + terrain_conductance_generic(
+                &context,
+                params.diffusion_memory_river_w,
+                params.diffusion_memory_height_w,
+                params.diffusion_memory_biome_w,
+            ) * params.diffusion_memory_gain)
             .clamp(0.0, 1.0);
+    }
+
+    diagnostics
+}
+
+fn compute_bench_diagnostics(
+    world: &mut World,
+    river_max: f32,
+    params: &DomesticatesParams,
+) -> DomesticatesBenchDiagnostics {
+    let n = world.state.geology.height.len();
+    let mut crop_niche = vec![[0.0; N_CROPS]; n];
+    let mut livestock_niche = vec![[0.0; N_LIVESTOCK]; n];
+
+    for i in 0..n {
+        if world.state.geology.height[i] <= world.control.sea_level_offset {
+            world.state.domesticates.crop_available[i] = 0;
+            world.state.domesticates.livestock_available[i] = 0;
+            continue;
+        }
+        let context = CellContext::from_world(world, i, river_max, params);
+        let mut crop_bits = 0u8;
+        for (kind_idx, species_params) in CROP_PARAMS.iter().enumerate() {
+            let niche = crop_niche_score(kind_idx, &context, *species_params);
+            crop_niche[i][kind_idx] = niche;
+            if niche >= species_params.threshold && !crop_hard_exclusion(kind_idx, &context) {
+                crop_bits |= 1u8 << kind_idx;
+            }
+        }
+        let mut livestock_bits = 0u8;
+        for (kind_idx, species_params) in LIVESTOCK_PARAMS.iter().enumerate() {
+            let niche = livestock_niche_score(kind_idx, &context, *species_params);
+            livestock_niche[i][kind_idx] = niche;
+            if niche >= species_params.threshold && !livestock_hard_exclusion(kind_idx, &context) {
+                livestock_bits |= 1u8 << kind_idx;
+            }
+        }
+        world.state.domesticates.crop_available[i] = crop_bits;
+        world.state.domesticates.livestock_available[i] = livestock_bits;
+    }
+
+    DomesticatesBenchDiagnostics {
+        crop_niche,
+        livestock_niche,
     }
 }
 
@@ -416,20 +441,22 @@ fn seed_origins(
     crop_niche: &[[f32; N_CROPS]],
     livestock_niche: &[[f32; N_LIVESTOCK]],
     river_max: f32,
+    params: &DomesticatesParams,
 ) {
     let n = world.cell_count();
     for kind_idx in 0..N_CROPS {
-        let chosen = choose_origin_cells_for_crop(world, crop_niche, river_max, kind_idx);
+        let chosen = choose_origin_cells_for_crop(world, crop_niche, river_max, kind_idx, params);
         for index in chosen {
             world.state.domesticates.domesticates_internal[index].origin_seed_crop[kind_idx] =
-                ORIGIN_SEED_STRENGTH_CROP;
+                params.origin_seed_strength_crop;
         }
     }
     for kind_idx in 0..N_LIVESTOCK {
-        let chosen = choose_origin_cells_for_livestock(world, livestock_niche, river_max, kind_idx);
+        let chosen =
+            choose_origin_cells_for_livestock(world, livestock_niche, river_max, kind_idx, params);
         for index in chosen {
             world.state.domesticates.domesticates_internal[index].origin_seed_livestock[kind_idx] =
-                ORIGIN_SEED_STRENGTH_LIVESTOCK;
+                params.origin_seed_strength_livestock;
         }
     }
     for i in 0..n {
@@ -442,12 +469,14 @@ fn choose_origin_cells_for_crop(
     crop_niche: &[[f32; N_CROPS]],
     river_max: f32,
     kind_idx: usize,
+    params: &DomesticatesParams,
 ) -> Vec<usize> {
     choose_origin_cells(
         world,
         river_max,
         |index| crop_niche[index][kind_idx],
         |index| (world.state.domesticates.crop_available[index] & (1u8 << kind_idx)) != 0,
+        params,
     )
 }
 
@@ -456,12 +485,14 @@ fn choose_origin_cells_for_livestock(
     livestock_niche: &[[f32; N_LIVESTOCK]],
     river_max: f32,
     kind_idx: usize,
+    params: &DomesticatesParams,
 ) -> Vec<usize> {
     choose_origin_cells(
         world,
         river_max,
         |index| livestock_niche[index][kind_idx],
         |index| (world.state.domesticates.livestock_available[index] & (1u8 << kind_idx)) != 0,
+        params,
     )
 }
 
@@ -470,6 +501,7 @@ fn choose_origin_cells(
     river_max: f32,
     niche_at: impl Fn(usize) -> f32,
     is_available: impl Copy + Fn(usize) -> bool,
+    params: &DomesticatesParams,
 ) -> Vec<usize> {
     let mut potential = vec![0.0_f32; world.cell_count()];
     let mut top = 0.0_f32;
@@ -478,7 +510,7 @@ fn choose_origin_cells(
         if world.state.geology.height[i] <= world.control.sea_level_offset || !is_available(i) {
             continue;
         }
-        let context = CellContext::from_world(world, i, river_max);
+        let context = CellContext::from_world(world, i, river_max, params);
         let corridor = corridor_score(&context);
         let human = human_management_score(&context);
         let value = niche_at(i) * corridor * human;
@@ -490,7 +522,7 @@ fn choose_origin_cells(
         return vec![candidates_fallback(world, is_available)];
     }
 
-    let cutoff = top * 0.72;
+    let cutoff = top * params.origin_candidate_cutoff_ratio.clamp(0.0, 1.0);
     let mut candidate = vec![false; world.cell_count()];
     for (i, flag) in candidate.iter_mut().enumerate().take(world.cell_count()) {
         if potential[i] >= cutoff {
@@ -506,8 +538,10 @@ fn choose_origin_cells(
     let mut ranked = components
         .into_iter()
         .filter(|component| {
-            component.len() >= ORIGIN_MIN_REGION_CELLS
-                || component.iter().any(|&index| potential[index] >= top * 0.9)
+            component.len() >= params.origin_min_region_cells.max(1) as usize
+                || component
+                    .iter()
+                    .any(|&index| potential[index] >= top * params.origin_top_candidate_ratio)
         })
         .map(|component| {
             let best = component
@@ -534,7 +568,7 @@ fn choose_origin_cells(
 
     let mut chosen = ranked
         .into_iter()
-        .take(ORIGIN_COUNT_LIMIT)
+        .take(params.origin_count_limit.max(1) as usize)
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
 
@@ -671,10 +705,18 @@ struct CellContext {
 }
 
 impl CellContext {
-    fn from_world(world: &World, index: usize, river_max: f32) -> Self {
+    fn from_world(
+        world: &World,
+        index: usize,
+        river_max: f32,
+        params: &DomesticatesParams,
+    ) -> Self {
         let precipitation = world.state.climate.precipitation[index].max(0.0);
         let aridity = world.state.climate.aridity[index].max(0.01);
-        let moisture_index = clamp01((precipitation / 1500.0) * (1.2 / (1.0 + aridity)));
+        let moisture_index = clamp01(
+            (precipitation / params.moisture_precip_scale_mm.max(1.0))
+                * (params.moisture_aridity_scale / (1.0 + aridity)),
+        );
         Self {
             temperature: world.state.climate.temperature[index],
             moisture_index,
@@ -726,21 +768,44 @@ fn crop_niche_score(kind_idx: usize, context: &CellContext, params: SpeciesParam
         * river_bonus;
 
     match kind_idx {
+        x if x == CropKind::Wheat as usize => {
+            let temperate_balance = gaussian_score(context.temperature, 15.0, 10.5)
+                * gaussian_score(context.moisture_index, 0.54, 0.24);
+            niche *= 0.72 + 0.28 * temperate_balance;
+        }
         x if x == CropKind::Rice as usize => {
+            let lowland = clamp01(1.0 - context.height.max(0.0) / 1.0);
             niche *= 1.0 + 0.28 * context.river_norm;
             niche *= clamp01(1.0 - context.aridity * 0.12);
+            niche *= 0.72 + 0.28 * lowland;
+        }
+        x if x == CropKind::Maize as usize => {
+            let warm_gain = gaussian_score(context.temperature, 24.0, 7.5);
+            niche *= 0.72 + 0.28 * warm_gain;
+        }
+        x if x == CropKind::Millet as usize => {
+            let semi_arid = gaussian_score(context.moisture_index, 0.32, 0.17);
+            niche *= 0.72 + 0.28 * semi_arid;
+        }
+        x if x == CropKind::Potato as usize => {
+            let cool_highland = gaussian_score(context.temperature, 11.5, 6.8)
+                * clamp01(context.height.max(0.0) / 1.2);
+            niche *= 0.68 + 0.32 * cool_highland;
+        }
+        x if x == CropKind::Cassava as usize => {
+            let warm_dry = gaussian_score(context.temperature, 27.0, 7.5)
+                * gaussian_score(context.moisture_index, 0.40, 0.20);
+            niche *= 0.72 + 0.28 * warm_dry;
+        }
+        x if x == CropKind::Sorghum as usize => {
+            let hot_dry = gaussian_score(context.temperature, 29.0, 7.0)
+                * gaussian_score(context.moisture_index, 0.22, 0.12);
+            niche *= 0.68 + 0.32 * hot_dry;
         }
         x if x == CropKind::Yam as usize => {
             let forest_edge = clamp01(1.0 - (context.tree_cover - 0.62).abs() / 0.52);
-            niche *= 0.7 + 0.3 * forest_edge;
-        }
-        x if x == CropKind::Sorghum as usize => {
-            let dry_gain = gaussian_score(context.moisture_index, 0.22, 0.13);
-            niche *= 0.72 + 0.28 * dry_gain;
-        }
-        x if x == CropKind::Cassava as usize => {
-            let warm = gaussian_score(context.temperature, 27.0, 8.0);
-            niche *= 0.72 + 0.28 * warm;
+            let humid = gaussian_score(context.moisture_index, 0.74, 0.17);
+            niche *= 0.7 + 0.3 * (forest_edge * humid);
         }
         _ => {}
     }
@@ -761,10 +826,11 @@ fn livestock_niche_score(kind_idx: usize, context: &CellContext, params: Species
         + 0.45 * gaussian_score(context.ground_cover, params.ground_pref, 0.24))
     .clamp(0.0, 1.0);
     let pasture_score = if kind_idx == LivestockKind::Pig as usize {
+        let forest_edge = clamp01(1.0 - (context.tree_cover - 0.56).abs() / 0.44);
         clamp01(
             (context.river_norm * 0.35)
                 + context.soil_fertility * 0.25
-                + context.tree_cover * 0.25
+                + forest_edge * 0.25
                 + context.ground_cover * 0.15,
         )
     } else if kind_idx == LivestockKind::Camel as usize {
@@ -785,27 +851,52 @@ fn livestock_niche_score(kind_idx: usize, context: &CellContext, params: Species
     if kind_idx == LivestockKind::Camel as usize {
         niche *= 1.0 - 0.12 * context.river_norm;
     }
+    if kind_idx == LivestockKind::Horse as usize {
+        let corridor_open = clamp01(
+            0.65 * (1.0 - context.tree_cover) + 0.35 * biome_common_passability(context.biome),
+        );
+        niche *= 0.65 + 0.35 * corridor_open;
+    }
+    if kind_idx == LivestockKind::Sheep as usize {
+        let dry_gain = gaussian_score(context.moisture_index, 0.24, 0.14);
+        niche *= 0.7 + 0.3 * dry_gain;
+    }
+    if kind_idx == LivestockKind::Camel as usize {
+        let arid_gain = gaussian_score(context.moisture_index, 0.16, 0.10);
+        niche *= 0.72 + 0.28 * arid_gain;
+    }
+    if kind_idx == LivestockKind::Pig as usize {
+        let forest_open_balance = clamp01(1.0 - (context.tree_cover - 0.56).abs() / 0.40)
+            * clamp01(context.moisture_index);
+        niche *= 0.7 + 0.3 * forest_open_balance;
+    }
     clamp01(niche)
 }
 
 fn crop_hard_exclusion(kind_idx: usize, context: &CellContext) -> bool {
+    if kind_idx == CropKind::Wheat as usize {
+        return context.temperature < -8.0 || context.temperature > 38.0 || context.aridity > 5.4;
+    }
     if kind_idx == CropKind::Rice as usize {
         return context.moisture_index < 0.24 || context.aridity > 4.8;
     }
     if kind_idx == CropKind::Maize as usize {
-        return context.temperature < 6.0;
-    }
-    if kind_idx == CropKind::Potato as usize {
-        return context.temperature > 28.0 && context.height < 0.8;
-    }
-    if kind_idx == CropKind::Cassava as usize
-        || kind_idx == CropKind::Sorghum as usize
-        || kind_idx == CropKind::Yam as usize
-    {
         return context.temperature < 8.0;
     }
+    if kind_idx == CropKind::Millet as usize {
+        return context.moisture_index > 0.88 && context.river_norm > 0.72;
+    }
+    if kind_idx == CropKind::Potato as usize {
+        return context.temperature > 24.0 && context.height < 0.95;
+    }
+    if kind_idx == CropKind::Cassava as usize {
+        return context.temperature < 12.0;
+    }
+    if kind_idx == CropKind::Sorghum as usize {
+        return context.temperature < 10.0 || context.moisture_index > 0.82;
+    }
     if kind_idx == CropKind::Yam as usize {
-        return context.moisture_index < 0.30;
+        return context.temperature < 12.0 || context.moisture_index < 0.32;
     }
     false
 }
@@ -818,7 +909,7 @@ fn livestock_hard_exclusion(kind_idx: usize, context: &CellContext) -> bool {
         return context.tree_cover > 0.72 || context.height > 1.8;
     }
     if kind_idx == LivestockKind::Pig as usize {
-        return context.moisture_index < 0.20 && context.ground_cover > 0.8;
+        return context.moisture_index < 0.20 && context.tree_cover < 0.20;
     }
     false
 }
@@ -1359,5 +1450,80 @@ mod tests {
         let horse_steppe = terrain_conductance_livestock(LivestockKind::Horse as usize, &steppe);
         let horse_forest = terrain_conductance_livestock(LivestockKind::Horse as usize, &forest);
         assert!(horse_steppe > horse_forest);
+    }
+
+    #[test]
+    fn low_suitability_cell_is_not_selected_as_rice_origin() {
+        let mut world = build_test_world();
+        world.clock.epoch = EraKind::Life;
+        world.state.climate.temperature = vec![27.0, 9.0, 24.0, 18.0];
+        world.state.climate.precipitation = vec![1_500.0, 180.0, 1_050.0, 600.0];
+        world.state.climate.aridity = vec![0.8, 5.0, 1.1, 1.8];
+        world.state.geology.height = vec![0.12, 1.8, 0.35, -0.2];
+        world.state.hydrology.river_flow = vec![220.0, 3.0, 80.0, 0.0];
+        world.state.ecology.tree_cover = vec![0.20, 0.04, 0.40, 0.1];
+        world.state.ecology.ground_cover = vec![0.74, 0.85, 0.55, 0.2];
+        world.state.ecology.soil_fertility = vec![0.82, 0.10, 0.65, 0.2];
+        world.state.ecology.biome = vec![
+            Biome::Wetland,
+            Biome::Desert,
+            Biome::Savanna,
+            Biome::TemperateForest,
+        ];
+
+        update_domesticates(&mut world, 2);
+
+        let rice = CropKind::Rice as usize;
+        let seeded_cells = world
+            .state
+            .domesticates
+            .domesticates_internal
+            .iter()
+            .enumerate()
+            .filter(|(_, internal)| internal.origin_seed_crop[rice] > 0.0)
+            .map(|(idx, _)| idx)
+            .collect::<Vec<_>>();
+
+        assert!(!seeded_cells.is_empty());
+        assert!(!seeded_cells.contains(&1));
+    }
+
+    #[test]
+    fn routed_feedback_and_population_pressure_are_tick_scoped() {
+        let mut world = build_test_world();
+        world.clock.epoch = EraKind::Civilization;
+        world.state.climate.temperature = vec![17.0; 4];
+        world.state.climate.precipitation = vec![850.0; 4];
+        world.state.climate.aridity = vec![1.1; 4];
+        world.state.hydrology.river_flow = vec![90.0, 50.0, 30.0, 0.0];
+        world.state.ecology.tree_cover = vec![0.26; 4];
+        world.state.ecology.ground_cover = vec![0.68; 4];
+        world.state.ecology.soil_fertility = vec![0.62; 4];
+
+        for internal in &mut world.state.domesticates.domesticates_internal {
+            internal.origin_initialized = true;
+            internal.origin_seed_crop = [0.0; N_CROPS];
+            internal.origin_seed_livestock = [0.0; N_LIVESTOCK];
+        }
+
+        let crop_idx = CropKind::Wheat as usize;
+        world.state.domesticates.domesticates_internal[0].routed_feedback_crop[crop_idx] = 0.55;
+        world.state.domesticates.domesticates_internal[0].population_pressure_bonus = 0.35;
+
+        update_domesticates(&mut world, 1);
+        let first = world.state.domesticates.crop_adoption[0][crop_idx];
+        assert!(first > 0.0);
+        assert_eq!(
+            world.state.domesticates.domesticates_internal[0].routed_feedback_crop[crop_idx],
+            0.0
+        );
+        assert_eq!(
+            world.state.domesticates.domesticates_internal[0].population_pressure_bonus,
+            0.0
+        );
+
+        update_domesticates(&mut world, 1);
+        let second = world.state.domesticates.crop_adoption[0][crop_idx];
+        assert!(second < first);
     }
 }

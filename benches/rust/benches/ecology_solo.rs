@@ -513,15 +513,19 @@ fn run_until_converged(world: &mut world::World) -> RunState {
 fn find_cache(name: &str) -> Option<PathBuf> {
     let candidates = [
         PathBuf::from(format!("benches/data/{name}")),
+        PathBuf::from(format!("../data/{name}")),
         PathBuf::from(format!("../benches/data/{name}")),
+        PathBuf::from(format!("../../benches/data/{name}")),
     ];
     candidates.into_iter().find(|path| path.exists())
 }
 
 fn score_output_path() -> PathBuf {
     let candidates = [
+        Path::new("../../benches/results/ecology_main_scores.jsonl"),
         Path::new("benches/results/ecology_main_scores.jsonl"),
         Path::new("../benches/results/ecology_main_scores.jsonl"),
+        Path::new("../results/ecology_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {
