@@ -22,18 +22,6 @@
 - Typescript（レンダリングとUI）
 - Three.js（描画）
 
-## Quality Gate
-
-- Outer boundary gate: `pnpm run outer:gate`
-  - API contract: `pnpm run outer:contract`
-  - seed regression: `pnpm run outer:regression`
-  - benchmark gate: `pnpm run outer:benchmark`
-- Full gate (including benchmark): `pnpm run outer:gate:full`
-- Manual CI workflow: `.github/workflows/outer-gate.yaml`
-  - mode=`gate` (default): contract + seed regression
-  - mode=`full`: gate + benchmark
-  - mode=`validation`: reference-data validation
-
 ## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.

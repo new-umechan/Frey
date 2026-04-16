@@ -34,11 +34,11 @@ jobs:
               run: pnpm install --frozen-lockfile
 
             - name: Record performance history
-              run: pnpm perf:record
+              run: pnpm bench:perf:record
               continue-on-error: true
 
             - name: Show latest history snapshot
-              run: pnpm perf:history -- --limit 5
+              run: pnpm bench:perf:history -- --limit 5
               if: always()
               continue-on-error: true
 

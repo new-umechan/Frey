@@ -44,12 +44,12 @@ jobs:
               run: |
                   case "${{ github.event.inputs.mode }}" in
                     full)
-                      pnpm run outer:gate:full
+                      pnpm run test:gate:full
                       ;;
                     validation)
-                      pnpm run outer:validation
+                      pnpm run test:gate:validation
                       ;;
                     *)
-                      pnpm run outer:gate
+                      pnpm run test:gate
                       ;;
                   esac

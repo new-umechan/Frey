@@ -44,7 +44,7 @@ jobs:
               run: pnpm install --frozen-lockfile
 
             - name: Refresh core perf baseline
-              run: pnpm run perf:baseline
+              run: pnpm run bench:perf:baseline
 
             - name: Check hydrology benchmark assets
               id: hydrology-assets
@@ -65,7 +65,7 @@ jobs:
 
             - name: Refresh hydrology perf baseline
               if: ${{ steps.hydrology-assets.outputs.ready == 'true' }}
-              run: pnpm run perf:baseline:hydrology
+              run: pnpm run bench:perf:baseline:hydrology
 
             - name: Skip hydrology perf baseline (assets missing)
               if: ${{ steps.hydrology-assets.outputs.ready != 'true' }}

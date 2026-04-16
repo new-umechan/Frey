@@ -360,9 +360,9 @@ pnpm bench:dump-centroids
 
 - `pnpm run bench:compare:climate -- --baseline <path>`
   - 最新レコードと baseline JSON の差分を表示する
-- `pnpm run perf:baseline:climate`
+- `pnpm run bench:perf:baseline:climate`
   - `climate_solo` を5回連続実行し、`runtime_stats`（median/p95）付きで `tests/perf/climate-bench-baseline.json` に保存する
-- `pnpm run perf:gate:climate`
+- `pnpm run bench:perf:gate:climate`
   - `climate_solo` を5回連続実行し、`runtime p95` と品質指標（temperature/precipitation/aridity）が baseline から許容範囲内かを確認する
 
 ### チューニング記録フロー（現行）
