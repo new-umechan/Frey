@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn default_output_path() -> PathBuf {
-    PathBuf::from("docs/architecture/module_boundaries.md")
+    PathBuf::from("docs/reference/architecture/module_boundaries.md")
 }
 
 fn generate_dag_content(

@@ -1,0 +1,211 @@
+# Benchmark
+
+本書は運用文書である。Climate・Hydrology・Ecology・Domesticates の各モジュールが現実の地球をどこまで近似できているかを評価するためのベンチマーク設計をまとめる。
+
+設計の正本は `docs/concepts/overview.md`・`docs/reference/architecture/data_model.md`・`docs/reference/architecture/module_boundaries.md` を参照する。
+
+## 位置づけと目的
+
+このベンチマークは「実装が壊れていないか」を確認するテストではない。
+「便宜的なモデルでどこまで現実に近づけたか、どこは表現しきれていないか」を評価し、**モデルとパラメータの設計判断を支援する道具**として使う。
+かなり重たいため、手動実行のみとする。
+
+- ズレが大きい → バグなのか、モデルの限界なのか、を区別するための根拠を提供する
+- 信頼度が低い変数の結果も保持する（「これは参考値」と知った上で見る）
+- モデルを変えるべき判断材料として使う
+
+回帰テストや日常的な壊れ確認は `docs/operations/test.md` を参照する。
+
+---
+
+## Plateの検証方針（ベンチマーク対象外）
+
+Plateは実データとの定量比較になじまないため、ベンチマークの対象外とする。
+代わりに以下の2種類の検証を別枠で設ける。
+
+詳細は `docs/operations/bench/geology/validation.md` を参照する。
+
+### サニティチェック（定性・形状確認）
+
+- プレート境界が破綻した形状になっていないか
+- 流路・地形が不自然に曲がっていないか
+- 陸地・海洋の割合が極端に偏っていないか
+
+### ウィルソンサイクルの定性再現
+
+長期実行したときに、超大陸の集合と分裂のサイクルが観察できるかを目視で確認する。
+実データとの比較ではなく、「それらしい挙動が起きているか」の定性評価とする。
+
+---
+
+## ベンチマーク構成
+
+5種類のベンチを用意する。単体ベンチはモジュール自体の評価、統合ベンチはフィードバックと組み合わせの評価に使う。
+
+| ベンチ | 入力 | tick数 | 目的 |
+|---|---|---|---|
+| Climate単体 | 実地形 + 固定植生（0.5） | 1 tick | Climateモデル自体の評価 |
+| Hydrology単体 | 実地形 + 実気候データ | 1 tick | Hydrologyモデル自体の評価 |
+| Ecology単体 | 実気候データ + 実水文データ | 収束まで | Ecologyモデル自体の評価 |
+| Domesticates単体 | 実地形 + 実気候 + 実水文 + 実植生 + 現代分布proxy | 1 tick | Domesticatesの適地モデル評価 |
+| Glaciology単体 | 実地形 + Climate出力 | 1 tick | Glaciologyモデル自体の評価 |
+| Glaciology海面時系列 | 実地形 + 実気候データ | short/mid/long | 海面寄与時系列の診断評価 |
+| Climate+Ecology | 実地形のみ | 収束まで | 植生フィードバックの効果確認 |
+| フルパイプライン | 実地形のみ | 収束まで | 統合評価 |
+
+### 読み方
+
+- Climate単体でズレる → Climateモデル自体の問題
+- Climate+Ecologyで改善する → 植生フィードバックが現実方向に効いている
+- Climate+Ecologyで悪化する → Ecologyフィードバックが現実と逆方向に働いている可能性
+- フルパイプラインで単体より悪化する → モジュール間の相互作用に問題がある可能性
+
+---
+
+## 評価フェーズ
+
+### Phase 1：順序・ランキング
+
+代表地域セットを用意し、乾湿・気温などの大小関係が現実と一致しているかを確認する。
+絶対値の一致は問わない。
+
+### Phase 2：分布形状・相関係数
+
+全球スケールで実データとの相関係数・分布形状の一致を確認する。
+
+### フェーズの使い分け方針
+
+Phase 2（Spearman相関）を主指標とする。「改善前後でスコアが何点変わったか」をモデル変更の判断基準として使う。
+Phase 1（代表地域ランキング）は、Phase 2のスコアが変動したときに「なぜ変わったか」を掘り下げる診断ツールとして使う。
+
+---
+
+## 比較変数と信頼度ラベル
+
+各変数に信頼度ラベルを付ける。信頼度はベンチ結果の読み方のガイドであり、「低」でもベンチから除外しない。
+
+### Climate
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `temperature` | 高 | 緯度・標高モデルが比較的素直に効く |
+| `precipitation` | 中 | 経験的近似の限界あり（モンスーン・偏西風の非対称性など） |
+| `aridity` | 中 | precipitationの精度に依存 |
+| `evapotranspiration` | 中 | Fu式の近似精度に依存 |
+| `runoff` | 中 | precipitation・evapotranspirationに依存 |
+| `ocean_temperature` | 低 | モデルが簡易。参考値として見るのみ |
+
+### Hydrology
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `river_flow` | 中 | 主要河川の流量分布。対数スケールで評価 |
+| `is_lake` | 中 | 主要湖の位置再現（バイカル・カスピ・五大湖など） |
+| `erosion_rate` | 低 | 実データが粗い |
+| `deposition_rate` | 低 | 実データが粗い |
+
+### Ecology
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `biome` | 中 | 衛星 land cover + 気候 + 水文 + 地形から合成した参照バイオームとの macro F1 |
+| `tree_cover` | 中 | MODIS VCF 由来の樹木被覆との相関 |
+| `ground_cover` | 中 | MODIS VCF 由来の non-tree vegetation との相関（開放系植生に限定） |
+| `soil_fertility` | 低 | SoilGrids 由来 proxy との相関。参考値扱い |
+
+### Domesticates
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `intensity` | 中 | EarthStat / FAO GLW の現代分布 proxy と Spearman で比較する |
+| `available` | 中 | proxy intensity を閾値化した二値ラベルとの F1 で評価する |
+| `origin_seed` | 低 | v1 の quality gate では扱わず、将来の別 bench へ分離する |
+| `adoption` | 低 | 文化・交易・人口圧の影響が大きく、単体ベンチでは主評価にしない |
+
+### Glaciology
+
+| 変数 | 信頼度 | 備考 |
+|---|---|---|
+| `ice_thickness` | 中 | Millan et al. 2022 全球氷厚推定データとのSpearman相関 |
+| `accumulation` | 低 | 直接実測が困難。proxy評価 |
+| `ablation` | 低 | 直接実測が困難。proxy評価 |
+| `glacial_melt_runoff` | 低 | 水文データとの間接比較 |
+
+---
+
+## Phase 1：代表地域セットと評価軸（全モジュール共通）
+
+以下の代表地域を使って順序確認を行う。
+
+| 地域 | 気候特性 | 評価上の注意 |
+|---|---|---|
+| サハラ・アラビア半島 | 極乾燥 | モデルの得意領域 |
+| アマゾン・コンゴ盆地 | 極湿潤 | モデルの得意領域 |
+| 地中海沿岸 | 夏乾燥 | 季節性は表現できないため年平均で評価 |
+| インド・東南アジア | モンスーン | モデルの苦手領域。ズレを最初からマーク |
+| 西岸海洋性気候（西欧・太平洋岸） | 中緯度湿潤 | 偏西風由来の降水は近似精度が低い可能性 |
+
+### Climateの評価軸（Phase 1）
+
+- `precipitation`：代表地域のランキングが現実と一致しているか
+- `temperature`：代表地域のランキングが現実と一致しているか
+
+### Hydrologyの評価軸（Phase 1）
+
+- `river_flow`：アマゾン・コンゴ・ミシシッピ・ナイル・長江などの主要河川流量の大小関係が現実と一致しているか
+
+### Ecologyの評価軸（Phase 1）
+
+- `biome`：代表地域のバイオームラベルが現実と一致しているか
+- `tree_cover`：代表地域の樹木被覆の大小関係が現実と一致しているか
+- `ground_cover`：代表地域の草本・低木被覆の大小関係が現実と一致しているか
+
+### Domesticatesの評価軸（Phase 1）
+
+- `intensity`：代表地域での種別ごとの成立順序が現実と整合するか
+- `available`：成立帯 / 非成立帯の分類が現実と整合するか
+- `origin_seed`：v1 では診断対象外
+
+### Glaciologyの評価軸（Phase 1）
+
+- `ice_thickness`：グリーンランド・南極・パタゴニア・ヒマラヤ・アルプス等の氷厚の大小関係が現実と一致しているか
+- `glacial_melt_runoff`：融解流出の地域間比較（参考値・known-hard扱い）
+
+---
+
+## Phase 2：評価指標
+
+- 基本指標：Spearman相関係数（ランキング相関の延長として使いやすい）
+- 補助指標：分布形状の目視確認（ヒストグラム・散布図）
+
+実データとの格子点ごとの対応は、リサンプリング基盤を通じて行う（上述）。
+
+---
+
+## ベンチマーク基盤（Hydrology・Ecology・統合ベンチ用）
+
+Climate単体ベンチで確立したリサンプリング基盤・出力フォーマット・診断集計（matched/coverage）の設計を他ベンチでも踏襲する。
+詳細仕様は次を参照する。
+
+- `docs/operations/bench/climate/solo.md`
+- `docs/operations/bench/hydrology/solo.md`
+- `docs/operations/bench/ecology/solo.md`
+- `docs/operations/bench/domesticates/solo.md`
+- `docs/operations/bench/glaciology/solo.md`
+- `docs/operations/bench/glaciology/sea_level_series.md`
+
+### 収束判定
+
+Climate+Ecology・フルパイプラインのベンチでは、収束条件を定義して実行を止める。
+具体的な収束閾値は実装時に調整する。
+
+---
+
+## 既知の限界（モデルの表現範囲外）
+
+以下は現行モデルの設計上の限界であり、ベンチでズレが出ても修正対象ではなく「モデルの限界」として記録する。
+
+- モンスーン降水の季節性（年平均しか持たない）
+- 偏西風・貿易風由来の降水非対称性（大気大循環を計算しないため）
+- 海洋循環の詳細（`ocean_temperature` が簡易モデル）
+- 季節的な湖面変動・湿地の動態
