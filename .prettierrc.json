@@ -1,0 +1,12 @@
+{
+    "overrides": [
+        {
+            "files": "*.md",
+            "options": {
+                "embeddedLanguageFormatting": "off",
+                "proseWrap": "preserve",
+                "tabWidth": 4
+            }
+        }
+    ]
+}

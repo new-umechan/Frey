@@ -34,8 +34,8 @@ mantle_heat[cell] -= heat_loss * discharge_rate(crust_type[cell])
 ```
 
 crust_typeによる放熱率
-	大陸地殻: discharge_rate = 0.1  # 熱が逃げにくい
-	海洋地殻: discharge_rate = 1.0  # 熱が逃げやすい
+大陸地殻: discharge_rate = 0.1 # 熱が逃げにくい
+海洋地殻: discharge_rate = 1.0 # 熱が逃げやすい
 
 プルーム発生
 
@@ -55,23 +55,23 @@ heat_release_rate: プルーム発生時の放熱率
 ### 2.3 処理の流れ
 
 1. マントル熱場の更新
+    - 熱蓄積・放熱
+    - 熱拡散
+    - プルーム判定 → uplift_force生成
 
-   - 熱蓄積・放熱
-   - 熱拡散
-   - プルーム判定 → uplift_force生成
 2. プレート運動方程式でωを更新
 3. 地殻属性の移流と境界通過処理
 4. 境界タイプ判定・再分類
 5. 応力伝播（弾性薄板モデル）
+    - 境界タイプ別に圧縮・引張・せん断応力を生成
+    - uplift_forceも応力として追加
 
-   - 境界タイプ別に圧縮・引張・せん断応力を生成
-   - uplift_forceも応力として追加
 6. 火山モデル
 7. 各セルの標高・地殻厚を更新
+    - 構造隆起
+    - 構造沈降
+    - 海洋熱沈降
 
-   - 構造隆起
-   - 構造沈降
-   - 海洋熱沈降
 8. 侵食・堆積の算出と地形反映（算出はHydrologyステージ、反映はHydrologyステージ直後）
 9. アイソスタシー調整
 10. 活動量メトリクス更新
@@ -86,10 +86,10 @@ heat_release_rate: プルーム発生時の放熱率
 I * dω/dt = τ_slab + τ_ridge + τ_mantle + τ_collision
 ```
 
-τ_slab     = Σ(Subduction境界の辺) slab_pull_per_edge
-τ_ridge    = Σ(Ridge/Rift境界の辺) ridge_push_per_edge
+τ*slab = Σ(Subduction境界の辺) slab_pull_per_edge
+τ_ridge = Σ(Ridge/Rift境界の辺) ridge_push_per_edge
 τ_collision = Σ(Collision境界の辺) collision_resistance_per_edge
-τ_mantle   = -ω * plate_area * mantle_drag  # 全プレート共通
+τ_mantle = -ω * plate*area * mantle_drag # 全プレート共通
 
 PassiveMarginは力を生成しないので、そのプレートはτ_mantleによる減衰だけで動く。つまり慣性で動き続けて、徐々に減速する。
 
@@ -201,19 +201,22 @@ backarc_tension
 #### 3.1.1 フェーズ
 
 フェーズ1: 大地溝帯
-  - uplift_forceが発生（大陸にホットスポットが形成される）
-  - 標高が下がり、地溝帯地形が形成される
-  - boundary_typeは「pre-rift」
+
+- uplift_forceが発生（大陸にホットスポットが形成される）
+- 標高が下がり、地溝帯地形が形成される
+- boundary_typeは「pre-rift」
 
 フェーズ2: 海洋誕生
-  - riftingセルが「oceanic_young」に変わる
-  - 海嶺として登録される
-  - 両側のplate_idが分離される
-  - リッジプッシュ開始
+
+- riftingセルが「oceanic_young」に変わる
+- 海嶺として登録される
+- 両側のplate_idが分離される
+- リッジプッシュ開始
 
 フェーズ3: 海洋拡大
-  - 海嶺から両側に対称的にoceanic地殻が付加される
-  - 海洋地殻の年齢・密度が時間とともに増加
+
+- 海嶺から両側に対称的にoceanic地殻が付加される
+- 海洋地殻の年齢・密度が時間とともに増加
 
 #### 3.1.2 フェーズ遷移条件
 
@@ -242,6 +245,7 @@ ridge_cellsの両側plate_idが確定している
 
 これを地殻成形期には毎回計算する。
 期の比に応じて、計算回数は疎にする
+
 1. 熱蓄積・放熱
 2. 熱拡散
 3. プルームの処理
@@ -264,17 +268,20 @@ mantle_heat[cell] += heat_diff
 ```rust
 stress[cell] += boundary_stress * attenuation(distance) * (1 / rigidity[cell])
 ```
+
 boundary_stress: 境界タイプ（収束・発散・横ずれ）から生成
 attenuation(distance): 距離に応じた減衰
 rigidity: 地殻の硬さ。硬いほど応力が伝わりにくい
 
 境界タイプ別の境界応力:
+
 - Subduction / Collision: 圧縮応力を与える
 - Ridge / Rift: 引張応力を与える
 - Transform: せん断応力を与える
 - PassiveMargin: 境界応力はほぼゼロ（必要なら微小ノイズのみ）
 
 PassiveMargin補足:
+
 - 大陸棚での堆積は地形側の長期更新で扱う
 - 応力源としては中立に扱う
 
@@ -283,11 +290,12 @@ Subduction境界で `rollback_fraction > rollback_threshold` のedgeでは、背
 #### 応力の形式
 
 2x2行列として保持
+
 ```rust
 struct StressTensor {
-	xx: f32,  // 東西方向の応力
-	yy: f32,  // 南北方向の応力
-	xy: f32,  // せん断応力
+    xx: f32,  // 東西方向の応力
+    yy: f32,  // 南北方向の応力
+    xy: f32,  // せん断応力
 }
 ```
 
@@ -378,16 +386,16 @@ thickness[cell] += volcanism * volcanic_thickening_gain
 時間発展時の標高更新は、単一の「沈降」係数でまとめず、次の独立した項として扱う。
 
 - 構造起伏変化
-  - 圧縮応力による隆起
-  - 張力場による構造沈降
-  - 火山活動による隆起と厚化
+    - 圧縮応力による隆起
+    - 張力場による構造沈降
+    - 火山活動による隆起と厚化
 - 海洋熱沈降
-  - 海洋地殻のみ対象
-  - 地殻年齢の増加に応じた長期的沈降
+    - 海洋地殻のみ対象
+    - 地殻年齢の増加に応じた長期的沈降
 - アイソスタシー調整
-  - 地殻厚と密度差に基づく平衡高度への緩和
+    - 地殻厚と密度差に基づく平衡高度への緩和
 - 侵食・堆積反映
-  - `Hydrology` が算出した侵食量・堆積量を `Geology` が標高と地殻厚へ反映する
+    - `Hydrology` が算出した侵食量・堆積量を `Geology` が標高と地殻厚へ反映する
 
 擬似式:
 
@@ -458,6 +466,7 @@ height_next
 - `deposition_thickness_coupling`
 
 注意:
+
 - 既存の境界係数や侵食係数はそのまま使い、時間発展では「1回適用の強さ」ではなく「単位時間あたりの増分率」として解釈する。
 
 ### 4.2 地形スナップショット出力（公開）
@@ -541,11 +550,13 @@ pub struct BoundaryDynamicsState {
 - `build_geology(seed, params) -> GeologyOutput` (Rust内部用)
 
 役割:
+
 - プレート分割から初期標高生成までの一連の静的生成プロセスを実行する。
 
 - `ensure_geology_dynamics(world)` (内部用)
 
 役割:
+
 - `World` インスタンスから `GeologyDynamicsState` を初期化する。
 
 ### 5.2 更新API
@@ -553,6 +564,7 @@ pub struct BoundaryDynamicsState {
 - `update_geology(world, budget)`
 
 役割:
+
 - `World` の状態を更新する。内部で `run_geology_dynamics_step` を呼び出し、プレート運動、移流、応力伝播、標高更新を実行する。
 
 ### 5.3 スナップショット取得
@@ -560,10 +572,12 @@ pub struct BoundaryDynamicsState {
 - `world.state.geology` (および `GeologyOutput`)
 
 役割:
+
 - `World` インスタンスの `state` メンバから最新の地形スナップショットを参照できる。
 - `GeologyOutput` は外部システム向けの共通データ構造である。
 
 注意:
+
 - `GeologyOutput` は公開スナップショットであり、単独では `GeologyDynamicsState` を完全復元できない。
 
 ### 5.4 チェックポイントAPI（巻き戻し用）
@@ -572,11 +586,13 @@ pub struct BoundaryDynamicsState {
 `GeologyDynamicsState` は `world.runtime` 内に含まれるため、`World` 全体の保存・復旧と連動する。
 
 要件:
+
 - 地形内部状態の完全復元ができること
 - 同一チェックポイントから同一更新列を再生したとき決定的に一致すること
 - `GeologyOutput` だけで復元しようとしないこと
 
 最低限チェックポイントへ含める項目:
+
 - プレート運動状態（角速度、活動度、種別）
 - 頂点地殻状態（年齢、厚さ、応力など）
 - 動的境界状態
@@ -584,11 +600,13 @@ pub struct BoundaryDynamicsState {
 - 地形サブシステム内部の乱数状態（使用している場合）
 
 推奨チェックポイント間隔（`World.tick` 基準）:
+
 - 地殻形成期: 10〜50 tick に1回
 - 環境形成期: 5〜10 tick に1回
 - 先史期以降: 1〜5 tick に1回
 
 運用メモ:
+
 - 上限側はストレージ節約寄り、下限側は巻き戻し応答性寄り
 - 分岐操作の直前/直後は、上記間隔に関係なく追加チェックポイントを作ってよい
 - 地形モジュールは自動で定期チェックポイントを作成しない
@@ -608,6 +626,7 @@ pub struct BoundaryDynamicsState {
 従来と同様に球面調和ベースで `phi` を生成し、z-score正規化する。
 
 役割:
+
 - プレートseed抽出
 - 初期プレート形状の歪み
 - 初期標高の大局的骨格
@@ -623,6 +642,7 @@ pub struct BoundaryDynamicsState {
 - 連結性の後処理
 
 注意:
+
 - 初期分割は時間発展の初期条件であり、将来の境界再配置を妨げないよう、内部状態へ境界履歴を持てる構造にする。
 
 ### 6.4 プレート属性と初期運動状態
@@ -663,6 +683,7 @@ pub struct BoundaryDynamicsState {
 10. 活動量メトリクス更新
 
 注:
+
 - 8は実装上、`Hydrology` ステージで算出された `erosion_rate` / `deposition_rate` を
   `Hydrology` ステージ直後に地形へ反映する処理に対応する。
 - 海陸比を固定目標へ寄せる補正は、この更新順序には含めない。
@@ -680,11 +701,10 @@ pub struct BoundaryDynamicsState {
 地殻属性は以下の2系統に分けて扱う。
 
 - 離散属性: `plate_id`, `crust_type`
+    - 境界通過で切り替える
 
-  - 境界通過で切り替える
 - 連続属性: `age`, `thickness`, `density`
-
-  * MUSCL系の移流で更新する
+    - MUSCL系の移流で更新する
 
 この分離により、境界ぼけを抑えつつ連続量の移動を表現する。
 
@@ -766,6 +786,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 時代遷移判定や予算配分のため、毎 `update_geology` 呼び出しで活動量を記録する。
 
 例:
+
 - 標高総変化量
 - 境界再分類数
 - 平均隆起量 / 平均沈降量
@@ -773,6 +794,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 - 河川網変更率
 
 定義メモ（初版）:
+
 - `terrain_activity` は `sum(abs(delta_height)) / V` を基準に正規化する
 - `boundary_activity` は境界辺ごとの相対速度指標の平均または総和を正規化する
 - 正規化後の値域目標は `[0, 1]`
@@ -789,6 +811,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 `World` は地形内部状態を直接保持するか、地形サブシステムオブジェクトを保持する。
 
 巻き戻し/分岐との整合:
+
 - `World` のキーフレームには `core` の公開状態だけでなく、地形内部状態のチェックポイントも含める
 - 差分保存を行う場合も、地形内部状態の差分または再生可能なイベント列を保存する
 - `GeologyOutput` のみを保存して地形内部状態を再構築する運用は不可とする

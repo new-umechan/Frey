@@ -76,14 +76,14 @@ Simulation
 ### 用語定義
 
 - `Model`
-  - 1つの計算式・関数。最小の計算単位。
+    - 1つの計算式・関数。最小の計算単位。
 - `System`
-  - 更新を司る実行単位。1つ以上の `Model` を適用し、必要に応じて構成を切り替える。
+    - 更新を司る実行単位。1つ以上の `Model` を適用し、必要に応じて構成を切り替える。
 - `Module`
-  - 同一、または非常に近い内容を読み書きする `System` を束ねた便宜的な単位。
-  - `Module` はECSの都合とは独立した設計上の区分である。
+    - 同一、または非常に近い内容を読み書きする `System` を束ねた便宜的な単位。
+    - `Module` はECSの都合とは独立した設計上の区分である。
 - `ExecSystem`
-  - tick進行、予算配分、時代遷移、履歴、`FeedbackQueue` の一括適用、および実行対象 `System` の切り替えを担当する。
+    - tick進行、予算配分、時代遷移、履歴、`FeedbackQueue` の一括適用、および実行対象 `System` の切り替えを担当する。
 
 ### Tier 1 Module一覧（更新順）
 
@@ -121,11 +121,11 @@ ExecSystem（切り替えと実行制御）
 セルと非セルEntityでは性質が異なるため、管理方法を分ける。
 
 - `CellStore`（自前SoA）
-  - 全セルの現在値Componentを保持する
+    - 全セルの現在値Componentを保持する
 - `EntityState`（疎なEntity）
-  - `slotmap` ベースで Polity・Settlement・Region などを保持する
+    - `slotmap` ベースで Polity・Settlement・Region などを保持する
 - `polity_relations`（国家間関係）
-  - 国家間の重み付き関係を保持する
+    - 国家間の重み付き関係を保持する
 
 データ配置と型定義の詳細は `docs/reference/architecture/data_model.md` を参照。
 
@@ -150,10 +150,10 @@ ExecSystem（切り替えと実行制御）
 ## 関連文書
 
 - 実行時レイヤ（presentation / transport / application / core）
-  - `docs/concepts/runtime_layers.md`
+    - `docs/concepts/runtime_layers.md`
 - 時代・tick・予算・遷移
-  - `docs/concepts/phase_control.md`
+    - `docs/concepts/phase_control.md`
 - CellStore・EntityState・Clock・FeedbackQueue・Archiveの構造と型定義
-  - `docs/reference/architecture/data_model.md`
+    - `docs/reference/architecture/data_model.md`
 - 各Systemが何を読み、何を書くか
-  - `docs/reference/architecture/module_boundaries.md`
+    - `docs/reference/architecture/module_boundaries.md`

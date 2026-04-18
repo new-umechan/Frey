@@ -45,15 +45,15 @@ cargo bench --manifest-path benches/rust/Cargo.toml --bench climate_solo
 `aridity` は `benches/raw/climate/ai_et0.tif` を参照する。
 `terrain` は海抜mのDEM（ETOPO 2022 **Ice Surface** 推奨）を指定し、内部標高単位（`height * 6000m`）へ変換して保存する。
 
-| フィールド | 型 | 値 |
-|---|---|---|
-| `geology.height` | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
-| `geo.latitude` | `Vec<f32>` | セル重心緯度（単位: 度、-90〜90） |
-| `geo.distance_from_ocean` | `Vec<f32>` | 実データからリサンプリング済みの値（単位: km） |
-| `geo.coast_side` | `Vec<CoastSide>` | 実データから導出済み |
-| `geo.is_coastal` | `Vec<bool>` | 実データから導出済み |
-| `ecology.tree_cover` | `Vec<f32>` | 全セル `0.5` で固定 |
-| `ecology.ground_cover` | `Vec<f32>` | 全セル `0.5` で固定 |
+| フィールド                | 型               | 値                                                            |
+| ------------------------- | ---------------- | ------------------------------------------------------------- |
+| `geology.height`          | `Vec<f32>`       | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
+| `geo.latitude`            | `Vec<f32>`       | セル重心緯度（単位: 度、-90〜90）                             |
+| `geo.distance_from_ocean` | `Vec<f32>`       | 実データからリサンプリング済みの値（単位: km）                |
+| `geo.coast_side`          | `Vec<CoastSide>` | 実データから導出済み                                          |
+| `geo.is_coastal`          | `Vec<bool>`      | 実データから導出済み                                          |
+| `ecology.tree_cover`      | `Vec<f32>`       | 全セル `0.5` で固定                                           |
+| `ecology.ground_cover`    | `Vec<f32>`       | 全セル `0.5` で固定                                           |
 
 ---
 
@@ -65,35 +65,35 @@ CellStoreは正二十面体分割由来のため格子が非均一であり、�
 
 ```rust
 fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
-	// haversine距離で全セルを走査し最近傍を返す
-	cells.latitude.iter().zip(cells.longitude.iter())
-		.enumerate()
-		.min_by(|(_, (la, lo)), (_, (lb, lob))| {
-			haversine(*la, *lo, lat, lon)
-				.partial_cmp(&haversine(*lb, *lob, lat, lon))
-				.unwrap()
-		})
-		.map(|(i, _)| CellId(i as u32))
-		.unwrap()
+    // haversine距離で全セルを走査し最近傍を返す
+    cells.latitude.iter().zip(cells.longitude.iter())
+        .enumerate()
+        .min_by(|(_, (la, lo)), (_, (lb, lob))| {
+            haversine(*la, *lo, lat, lon)
+                .partial_cmp(&haversine(*lb, *lob, lat, lon))
+                .unwrap()
+        })
+        .map(|(i, _)| CellId(i as u32))
+        .unwrap()
 }
 ```
 
 代表地域の指定緯度経度は以下の通り。
 
-| 地域ID | 地域名 | 緯度 | 経度 | 気候特性 |
-|---|---|---|---|---|
-| `sahara` | サハラ中部 | 23.0 | 13.0 | 極乾燥・高温 |
-| `arabia` | アラビア半島内陸 | 23.0 | 45.0 | 極乾燥・高温 |
-| `amazon` | アマゾン盆地中央 | -3.0 | -60.0 | 極湿潤・高温 |
-| `congo` | コンゴ盆地中央 | -1.0 | 24.0 | 極湿潤・高温 |
-| `mediterranean` | 地中海沿岸（スペイン） | 40.0 | 0.0 | 夏乾燥・温暖 |
-| `monsoon_india` | インド・デカン高原 | 20.0 | 77.0 | モンスーン（苦手領域） |
-| `maritime_europe` | 西ヨーロッパ（フランス） | 47.0 | 2.0 | 西岸海洋性（苦手領域） |
-| `siberia` | シベリア内陸 | 62.0 | 105.0 | 亜寒帯・極乾燥 |
-| `tropics_maritime` | 熱帯海洋（太平洋） | 5.0 | 160.0 | 熱帯湿潤 |
-| `andes_high` | アンデス高地 | -15.0 | -70.0 | 高標高・低温 |
-| `arctic` | 北極圏 | 80.0 | 0.0 | 極寒 |
-| `equator_africa` | 東アフリカ高原 | 0.0 | 37.0 | 高標高赤道 |
+| 地域ID             | 地域名                   | 緯度  | 経度  | 気候特性               |
+| ------------------ | ------------------------ | ----- | ----- | ---------------------- |
+| `sahara`           | サハラ中部               | 23.0  | 13.0  | 極乾燥・高温           |
+| `arabia`           | アラビア半島内陸         | 23.0  | 45.0  | 極乾燥・高温           |
+| `amazon`           | アマゾン盆地中央         | -3.0  | -60.0 | 極湿潤・高温           |
+| `congo`            | コンゴ盆地中央           | -1.0  | 24.0  | 極湿潤・高温           |
+| `mediterranean`    | 地中海沿岸（スペイン）   | 40.0  | 0.0   | 夏乾燥・温暖           |
+| `monsoon_india`    | インド・デカン高原       | 20.0  | 77.0  | モンスーン（苦手領域） |
+| `maritime_europe`  | 西ヨーロッパ（フランス） | 47.0  | 2.0   | 西岸海洋性（苦手領域） |
+| `siberia`          | シベリア内陸             | 62.0  | 105.0 | 亜寒帯・極乾燥         |
+| `tropics_maritime` | 熱帯海洋（太平洋）       | 5.0   | 160.0 | 熱帯湿潤               |
+| `andes_high`       | アンデス高地             | -15.0 | -70.0 | 高標高・低温           |
+| `arctic`           | 北極圏                   | 80.0  | 0.0   | 極寒                   |
+| `equator_africa`   | 東アフリカ高原           | 0.0   | 37.0  | 高標高赤道             |
 
 ---
 
@@ -101,13 +101,13 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 
 #### 実データソース
 
-| 変数 | データソース | 解像度 | 取得先 |
-|---|---|---|---|
-| `temperature` | WorldClim v2.1（年平均気温 `tavg`） | 2.5分（約5km） | https://worldclim.org/data/worldclim21.html |
-| `precipitation` | WorldClim v2.1（年間降水量 `prec`） | 2.5分 | https://worldclim.org/data/worldclim21.html |
-| `evapotranspiration` | ERA5-Land（年平均蒸発散） | 0.1度（約11km） | https://cds.climate.copernicus.eu |
-| `runoff` | ERA5-Land（年平均流出） | 0.1度 | https://cds.climate.copernicus.eu |
-| `aridity` | CGIAR Global Aridity Index v3 | 30秒（約1km） | https://cgiarcsi.community/data/global-aridity-and-pet-database/ |
+| 変数                 | データソース                        | 解像度          | 取得先                                                             |
+| -------------------- | ----------------------------------- | --------------- | ------------------------------------------------------------------ |
+| `temperature`        | WorldClim v2.1（年平均気温 `tavg`） | 2.5分（約5km）  | <https://worldclim.org/data/worldclim21.html>                      |
+| `precipitation`      | WorldClim v2.1（年間降水量 `prec`） | 2.5分           | <https://worldclim.org/data/worldclim21.html>                      |
+| `evapotranspiration` | ERA5-Land（年平均蒸発散）           | 0.1度（約11km） | <https://cds.climate.copernicus.eu>                                |
+| `runoff`             | ERA5-Land（年平均流出）             | 0.1度           | <https://cds.climate.copernicus.eu>                                |
+| `aridity`            | CGIAR Global Aridity Index v3       | 30秒（約1km）   | <https://cgiarcsi.community/data/global-aridity-and-pet-database/> |
 
 WorldClimは月別ファイルが12枚あるため、年平均または年合計に集約してから使う（`temperature` は平均、`precipitation`・`runoff`・`evapotranspiration` は合計）。
 
@@ -138,11 +138,11 @@ benches/data/
 
 ```rust
 struct ClimateRef {
-	temperature:        Vec<f32>,   // セル数と同じ長さ。単位: ℃
-	precipitation:      Vec<f32>,   // 単位: mm/年
-	evapotranspiration: Vec<f32>,   // 単位: mm/年
-	runoff:             Vec<f32>,   // 単位: mm/年
-	aridity:            Vec<f32>,   // 無次元（高いほど乾燥）
+    temperature:        Vec<f32>,   // セル数と同じ長さ。単位: ℃
+    precipitation:      Vec<f32>,   // 単位: mm/年
+    evapotranspiration: Vec<f32>,   // 単位: mm/年
+    runoff:             Vec<f32>,   // 単位: mm/年
+    aridity:            Vec<f32>,   // 無次元（高いほど乾燥）
 }
 ```
 
@@ -163,9 +163,9 @@ struct ClimateRef {
 
 ```rust
 fn spearman(a: &[f32], b: &[f32]) -> f32 {
-	// 1. NANペアを除外
-	// 2. 両者を独立にランク変換（同率は平均ランク）
-	// 3. ランク差の二乗和からρを計算: 1 - 6Σd²/(n(n²-1))
+    // 1. NANペアを除外
+    // 2. 両者を独立にランク変換（同率は平均ランク）
+    // 3. ランク差の二乗和からρを計算: 1 - 6Σd²/(n(n²-1))
 }
 ```
 
@@ -196,39 +196,39 @@ fn spearman(a: &[f32], b: &[f32]) -> f32 {
 
 各行は `left > right`（左が右より高温）であるべき関係を示す。
 
-| # | left | right | 根拠 |
-|---|---|---|---|
-| T-01 | `amazon` | `arctic` | 赤道 vs 北極圏 |
-| T-02 | `sahara` | `siberia` | 亜熱帯砂漠 vs 亜寒帯 |
-| T-03 | `congo` | `mediterranean` | 赤道 vs 中緯度 |
-| T-04 | `mediterranean` | `siberia` | 中緯度温暖 vs 亜寒帯 |
-| T-05 | `amazon` | `andes_high` | 低地熱帯 vs 高地（同緯度で標高差） |
-| T-06 | `amazon` | `equator_africa` | 低地赤道 vs 高標高赤道（東アフリカ高原） |
-| T-07 | `sahara` | `arctic` | 亜熱帯 vs 極地 |
+| #    | left            | right            | 根拠                                     |
+| ---- | --------------- | ---------------- | ---------------------------------------- |
+| T-01 | `amazon`        | `arctic`         | 赤道 vs 北極圏                           |
+| T-02 | `sahara`        | `siberia`        | 亜熱帯砂漠 vs 亜寒帯                     |
+| T-03 | `congo`         | `mediterranean`  | 赤道 vs 中緯度                           |
+| T-04 | `mediterranean` | `siberia`        | 中緯度温暖 vs 亜寒帯                     |
+| T-05 | `amazon`        | `andes_high`     | 低地熱帯 vs 高地（同緯度で標高差）       |
+| T-06 | `amazon`        | `equator_africa` | 低地赤道 vs 高標高赤道（東アフリカ高原） |
+| T-07 | `sahara`        | `arctic`         | 亜熱帯 vs 極地                           |
 
 #### `precipitation` アサーション
 
-| # | left（高降水） | right（低降水） | 根拠 |
-|---|---|---|---|
-| P-01 | `amazon` | `sahara` | 熱帯雨林 vs 砂漠 |
-| P-02 | `congo` | `arabia` | 熱帯雨林 vs 砂漠 |
-| P-03 | `tropics_maritime` | `sahara` | 熱帯海洋 vs 砂漠 |
-| P-04 | `amazon` | `siberia` | 熱帯 vs 亜寒帯内陸 |
-| P-05 | `congo` | `mediterranean` | 熱帯湿潤 vs 地中海性 |
-| P-06 ⚠️ | `maritime_europe` | `siberia` | 西岸海洋性 vs 大陸性内陸（苦手領域・参考） |
-| P-07 ⚠️ | `monsoon_india` | `arabia` | モンスーン vs 砂漠（苦手領域・参考） |
+| #       | left（高降水）     | right（低降水） | 根拠                                       |
+| ------- | ------------------ | --------------- | ------------------------------------------ |
+| P-01    | `amazon`           | `sahara`        | 熱帯雨林 vs 砂漠                           |
+| P-02    | `congo`            | `arabia`        | 熱帯雨林 vs 砂漠                           |
+| P-03    | `tropics_maritime` | `sahara`        | 熱帯海洋 vs 砂漠                           |
+| P-04    | `amazon`           | `siberia`       | 熱帯 vs 亜寒帯内陸                         |
+| P-05    | `congo`            | `mediterranean` | 熱帯湿潤 vs 地中海性                       |
+| P-06 ⚠️ | `maritime_europe`  | `siberia`       | 西岸海洋性 vs 大陸性内陸（苦手領域・参考） |
+| P-07 ⚠️ | `monsoon_india`    | `arabia`        | モンスーン vs 砂漠（苦手領域・参考）       |
 
 ⚠️ は苦手領域フラグ。通過率の分母から除外する。
 
 #### `aridity` アサーション
 
-| # | left（高aridity・乾燥） | right（低aridity・湿潤） | 根拠 |
-|---|---|---|---|
-| A-01 | `sahara` | `amazon` | 砂漠 vs 熱帯雨林 |
-| A-02 | `arabia` | `congo` | 砂漠 vs 熱帯雨林 |
-| A-03 | `siberia` | `amazon` | 亜寒帯内陸（乾燥） vs 熱帯湿潤 |
-| A-04 | `sahara` | `mediterranean` | 極乾燥 vs 地中海性 |
-| A-05 | `arabia` | `tropics_maritime` | 砂漠 vs 熱帯海洋 |
+| #    | left（高aridity・乾燥） | right（低aridity・湿潤） | 根拠                           |
+| ---- | ----------------------- | ------------------------ | ------------------------------ |
+| A-01 | `sahara`                | `amazon`                 | 砂漠 vs 熱帯雨林               |
+| A-02 | `arabia`                | `congo`                  | 砂漠 vs 熱帯雨林               |
+| A-03 | `siberia`               | `amazon`                 | 亜寒帯内陸（乾燥） vs 熱帯湿潤 |
+| A-04 | `sahara`                | `mediterranean`          | 極乾燥 vs 地中海性             |
+| A-05 | `arabia`                | `tropics_maritime`       | 砂漠 vs 熱帯海洋               |
 
 ---
 
@@ -343,8 +343,8 @@ pnpm bench:dump-centroids
 
 1. 変数ごとのGeoTIFF/NetCDFを読む
 2. CellStoreのセル重心座標一覧（`benches/data/cell_centroids.csv`）を読む
-   - 形式：`cell_id,latitude,longitude`
-   - このCSVはシミュレーション初期化時に一度だけ書き出す（`--dump-centroids` オプション等で）
+    - 形式：`cell_id,latitude,longitude`
+    - このCSVはシミュレーション初期化時に一度だけ書き出す（`--dump-centroids` オプション等で）
 3. 各セルの重心座標でバイリニア補間
 4. 結果を `ClimateRef` と同等の固定バイナリ形式（上記）で保存する
 
@@ -359,11 +359,11 @@ pnpm bench:dump-centroids
 比較補助:
 
 - `pnpm run bench:compare:climate -- --baseline <path>`
-  - 最新レコードと baseline JSON の差分を表示する
+    - 最新レコードと baseline JSON の差分を表示する
 - `pnpm run bench:perf:baseline:climate`
-  - `climate_solo` を5回連続実行し、`runtime_stats`（median/p95）付きで `tests/perf/climate-bench-baseline.json` に保存する
+    - `climate_solo` を5回連続実行し、`runtime_stats`（median/p95）付きで `tests/perf/climate-bench-baseline.json` に保存する
 - `pnpm run bench:perf:gate:climate`
-  - `climate_solo` を5回連続実行し、`runtime p95` と品質指標（temperature/precipitation/aridity）が baseline から許容範囲内かを確認する
+    - `climate_solo` を5回連続実行し、`runtime p95` と品質指標（temperature/precipitation/aridity）が baseline から許容範囲内かを確認する
 
 ### チューニング記録フロー（現行）
 
@@ -380,9 +380,9 @@ benches/results/climate_tuning/
 現行スクリプトのデフォルト出力先:
 
 - `benches/scripts/tune-climate-params.py`
-  - `benches/results/climate_tuning/runs/climate_tuning_runs.jsonl`
+    - `benches/results/climate_tuning/runs/climate_tuning_runs.jsonl`
 - `benches/scripts/tune-climate-structure.py`
-  - `benches/results/climate_tuning/runs/climate_structure_tuning_runs.jsonl`
+    - `benches/results/climate_tuning/runs/climate_structure_tuning_runs.jsonl`
 
 推奨手順:
 

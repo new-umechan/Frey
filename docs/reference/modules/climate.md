@@ -50,20 +50,20 @@ vegetation_density_proxy = clamp(
 ### 水蒸気・風束の前計算
 
 1. 風場の構築
-- 温度勾配から局地力学的強制（`baroclinic_grad`、`thermal_contrast`）を計算
-- Hadley 循環・中緯度低圧・極東風帯から `wind_u` / `wind_v` を計算
-- 垂直運動 proxy（`vertical_motion`）を循環・収束・地形リフトから導出
+    - 温度勾配から局地力学的強制（`baroclinic_grad`、`thermal_contrast`）を計算
+    - Hadley 循環・中緯度低圧・極東風帯から `wind_u` / `wind_v` を計算
+    - 垂直運動 proxy（`vertical_motion`）を循環・収束・地形リフトから導出
 
 2. 水蒸気供給
-- 飽和水蒸気量 `qsat` を気温から計算（Clausius-Clapeyron 式）
-- 海洋セル：`evap = k_ocean * (qsat - humidity)^+`
-- 陸セル：`evap = k_land * (0.35 * ET_prev + 0.65 * ocean_reach * (qsat - humidity)^+)`
-- 初期湿度：`humidity = lerp(prior, 0.90 * qsat, spinup_relax)`
+    - 飽和水蒸気量 `qsat` を気温から計算（Clausius-Clapeyron 式）
+    - 海洋セル：`evap = k_ocean * (qsat - humidity)^+`
+    - 陸セル：`evap = k_land * (0.35 * ET_prev + 0.65 * ocean_reach * (qsat - humidity)^+)`
+    - 初期湿度：`humidity = lerp(prior, 0.90 * qsat, spinup_relax)`
 
 3. 湿潤収束・地形信号
-- 風束収束 proxy：`convergence = -div(wind * humidity)`
-- 地形性上昇信号：`rise_m`（風上トレースで標高差を積算）、`ocean_fetch`（風上側の海洋通過率）
-- 昇降ゲート：`ascent_gate`（上昇運動）、`subsidence_gate`（沈降運動）
+    - 風束収束 proxy：`convergence = -div(wind * humidity)`
+    - 地形性上昇信号：`rise_m`（風上トレースで標高差を積算）、`ocean_fetch`（風上側の海洋通過率）
+    - 昇降ゲート：`ascent_gate`（上昇運動）、`subsidence_gate`（沈降運動）
 
 ### 水蒸気収支の反復計算（substep）
 
@@ -72,11 +72,11 @@ vegetation_density_proxy = clamp(
 1. **蒸発供給**：海洋・陸からの蒸発散を `humidity` に加算
 2. **平流輸送**：風向に沿って隣接セルへ水蒸気を再分配（`moisture_advection`）
 3. **凝結・降水**：
-   - 超過凝結：`excess_cond = k_excess * (humidity - qsat)^+ * (0.35 + 0.65 * ascent_gate)`
-   - 上昇凝結：`lift_cond = k_lift * humidity * near_saturation * ascent_gate`
-   - 地形性凝結：`orog_cond = k_orog * rise_m * (0.40 + 0.60 * ocean_fetch) * humidity * ascent_gate`
-   - 全凝結量：`condensation = (excess_cond + lift_cond + orog_cond) * (1.0 - 0.55 * subsidence_gate)`
-   - `humidity -= condensation`、`precip_column += condensation`
+    - 超過凝結：`excess_cond = k_excess * (humidity - qsat)^+ * (0.35 + 0.65 * ascent_gate)`
+    - 上昇凝結：`lift_cond = k_lift * humidity * near_saturation * ascent_gate`
+    - 地形性凝結：`orog_cond = k_orog * rise_m * (0.40 + 0.60 * ocean_fetch) * humidity * ascent_gate`
+    - 全凝結量：`condensation = (excess_cond + lift_cond + orog_cond) * (1.0 - 0.55 * subsidence_gate)`
+    - `humidity -= condensation`、`precip_column += condensation`
 
 substep 数は `core_substeps + log10(real_years_per_tick)` で動的に増加（最大 24）。
 
@@ -98,6 +98,7 @@ P1 = min(P0, P_cap)
 ```
 
 ここで：
+
 - `F_shadow`：雨陰係数（風下側の地形下降で減衰）
 - `F_continental`：大陸性係数（海からの距離で減衰）
 - `P_cap`：可用水蒸気上限（`humidity * precip_cap_from_moisture`）
@@ -105,6 +106,7 @@ P1 = min(P0, P_cap)
 ### 大気水収支のスケール調整
 
 全セルの降水目標値合計が凝結供給量を超えないよう、グローバルスケールファクタを適用：
+
 ```text
 scale = (condense_supply / precip_target_sum).clamp(0.55, 1.15)
 precipitation = (P_final * scale).clamp(precip_min, precip_max)
@@ -123,6 +125,7 @@ T_land = 30 * cos(lat_rad) - 5 - lapse_rate * elev_km
 海水温は別式 `28 * cos(lat_rad) - 2` を基準に、海岸セルでは風向・湧昇流ベースの補正を加える。
 
 湧昇流補正は沿岸風向とコリオリ力からエクマン輸送を計算:
+
 ```text
 coriolis = |sin(lat_rad)|.max(0.05)
 alongshore_wind = wind_v

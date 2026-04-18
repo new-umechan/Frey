@@ -28,44 +28,50 @@ Ecology benchmark の入力は、できる限り既存の benchmark 用データ
 - 用途: `terrain_ref.bin` の生成、Ecology benchmark の `height` 入力
 
 取得元:
+
 - NOAA ETOPO 2022 User Guide: https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/docs/1.2%20ETOPO%202022%20User%20Guide.pdf
 
 運用:
+
 - すでにファイルがあるなら再取得不要
 - `pnpm bench:resample:terrain -- --height ...` で使う
 
 ### 2. 気候
 
 - 保存先:
-  - `benches/raw/climate/worldclim_tavg_annual_c.tif`
-  - `benches/raw/climate/worldclim_prec_annual_mm.tif`
-  - `benches/raw/climate/era5_land_annual_1970_2000.nc`
+    - `benches/raw/climate/worldclim_tavg_annual_c.tif`
+    - `benches/raw/climate/worldclim_prec_annual_mm.tif`
+    - `benches/raw/climate/era5_land_annual_1970_2000.nc`
 - 用途:
-  - `climate_ref.bin` の生成
-  - Ecology benchmark の `temperature` / `precipitation` 入力
+    - `climate_ref.bin` の生成
+    - Ecology benchmark の `temperature` / `precipitation` 入力
 
 取得元:
+
 - WorldClim 2.1 historical climate: https://www.worldclim.org/data/worldclim21.html
 - ERA5-Land monthly means: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-monthly-means?tab=download
 
 運用:
+
 - WorldClim の月次 tif 群が `benches/raw/climate/` にあれば、`pnpm bench:prepare:worldclim` で年平均・年積算を再生成できる
 - ERA5-Land は既存の `pnpm bench:fetch:era5` / `pnpm bench:prepare:era5` を使う
 
 ### 3. 水文
 
 - 保存先:
-  - `benches/raw/hydrology/glofas_era5_annual_mean.nc`
-  - `benches/raw/hydrology/HydroLAKES_polys_v10.shp`
+    - `benches/raw/hydrology/glofas_era5_annual_mean.nc`
+    - `benches/raw/hydrology/HydroLAKES_polys_v10.shp`
 - 用途:
-  - `hydro_ref.bin` の生成
-  - Ecology benchmark の `river_flow` 入力
+    - `hydro_ref.bin` の生成
+    - Ecology benchmark の `river_flow` 入力
 
 取得元:
+
 - GloFAS historical discharge: https://ewds.climate.copernicus.eu/datasets/cems-glofas-historical?tab=download
 - HydroLAKES: https://www.hydrosheds.org/page/hydrolakes
 
 運用:
+
 - GloFAS は既存の `pnpm bench:fetch:glofas` / `pnpm bench:prepare:glofas` を使う
 - HydroLAKES shapefile があるなら再取得不要
 
@@ -76,33 +82,39 @@ Ecology benchmark の参照正解生成に必要だが、現在の `benches/raw`
 ### 4. MOD44B Vegetation Continuous Fields
 
 用途:
+
 - `tree_cover` 参照
 - `ground_cover` 参照
 - `biome` 合成参照
 
 取得元:
+
 - MOD44B User Guide: https://lpdaac.usgs.gov/documents/1494/MOD44B_User_Guide_V61.pdf
 - Earthdata Search: https://search.earthdata.nasa.gov/search?q=MOD44B
 
 前提:
+
 - NASA Earthdata Login が必要
 
 取得対象:
+
 - Collection 6.1
 - 年: 2019
 - 必要 SDS:
-  - Percent Tree Cover
-  - Percent NonTree Vegetation
-  - Percent NonVegetated
+    - Percent Tree Cover
+    - Percent NonTree Vegetation
+    - Percent NonVegetated
 
 保存方針:
+
 - 生データ置き場: `benches/raw/ecology/MOD44B/`
 - canonical 変換後:
-  - `benches/raw/ecology/mod44b_tree_cover.tif`
-  - `benches/raw/ecology/mod44b_non_tree_cover.tif`
-  - `benches/raw/ecology/mod44b_non_vegetated.tif`
+    - `benches/raw/ecology/mod44b_tree_cover.tif`
+    - `benches/raw/ecology/mod44b_non_tree_cover.tif`
+    - `benches/raw/ecology/mod44b_non_vegetated.tif`
 
 実務手順:
+
 1. Earthdata Search で `MOD44B` を検索する
 2. 2019 年の全球 tile を取得する
 3. 各 tile から必要 SDS を抽出する
@@ -110,36 +122,43 @@ Ecology benchmark の参照正解生成に必要だが、現在の `benches/raw`
 5. GeoTIFF に書き出して上記 canonical ファイル名に揃える
 
 補足:
+
 - raw の取得形式は HDF tile のままでよい
 - benchmark 側では canonical GeoTIFF 名だけを前提にする
 
 ### 5. MCD12Q1 Land Cover Type
 
 用途:
+
 - `natural_mask` 生成
 - `biome` 合成参照
 
 取得元:
+
 - MCD12Q1 User Guide: https://lpdaac.usgs.gov/documents/1409/MCD12_User_Guide_V61.pdf
 - Earthdata Search: https://search.earthdata.nasa.gov/search?q=MCD12Q1
 
 前提:
+
 - NASA Earthdata Login が必要
 
 取得対象:
+
 - Collection 6.1
 - 年: 2019
 - 必要 SDS:
-  - `LC_Type1`
-  - `LC_Prop2`
+    - `LC_Type1`
+    - `LC_Prop2`
 
 保存方針:
+
 - 生データ置き場: `benches/raw/ecology/MCD12Q1/`
 - canonical 変換後:
-  - `benches/raw/ecology/mcd12q1_lc_type1.tif`
-  - `benches/raw/ecology/mcd12q1_lc_prop2.tif`
+    - `benches/raw/ecology/mcd12q1_lc_type1.tif`
+    - `benches/raw/ecology/mcd12q1_lc_prop2.tif`
 
 実務手順:
+
 1. Earthdata Search で `MCD12Q1` を検索する
 2. 2019 年の全球 tile を取得する
 3. 各 tile から `LC_Type1` と `LC_Prop2` を抽出する
@@ -166,55 +185,62 @@ pnpm bench:prepare:ecology-modis
 ### 6. SoilGrids
 
 用途:
+
 - `soil_fertility` proxy の生成
 
 取得元:
+
 - SoilGrids documentation: https://docs.isric.org/globaldata/soilgrids/index.html
 - SoilGrids data access（公式ドキュメント）: https://docs.isric.org/globaldata/soilgrids/
 - SoilGrids WebDAV access（ISRIC公式）: https://www.isric.org/explore/soilgrids/soilgrids-access
 
 前提:
+
 - 初回はブラウザの手動ダウンロードを推奨する
 - API/WCSは環境差分で失敗しやすいため、運用の基準手順からは外す
 
 取得対象:
+
 - バージョン: SoilGrids 2.0
 - 統計量: mean
 - 物性と深さ:
-  - SOC（`soc`）: 0-5cm, 5-15cm, 15-30cm
-  - CEC（`cec`）: 0-5cm, 5-15cm, 15-30cm
-  - pH(H2O)（`phh2o`）: 0-5cm, 5-15cm, 15-30cm
-  - Bulk density（`bdod`）: 0-5cm, 5-15cm, 15-30cm
+    - SOC（`soc`）: 0-5cm, 5-15cm, 15-30cm
+    - CEC（`cec`）: 0-5cm, 5-15cm, 15-30cm
+    - pH(H2O)（`phh2o`）: 0-5cm, 5-15cm, 15-30cm
+    - Bulk density（`bdod`）: 0-5cm, 5-15cm, 15-30cm
 
 保存方針:
+
 - `benches/raw/ecology/soilgrids/`
 
 推奨ファイル構成:
+
 - canonical（0.1度で再投影済み、12ファイル）
-  - `bdod_0_5cm_mean_0p1deg.tif`
-  - `bdod_5_15cm_mean_0p1deg.tif`
-  - `bdod_15_30cm_mean_0p1deg.tif`
-  - `cec_0_5cm_mean_0p1deg.tif`
-  - `cec_5_15cm_mean_0p1deg.tif`
-  - `cec_15_30cm_mean_0p1deg.tif`
-  - `phh2o_0_5cm_mean_0p1deg.tif`
-  - `phh2o_5_15cm_mean_0p1deg.tif`
-  - `phh2o_15_30cm_mean_0p1deg.tif`
-  - `soc_0_5cm_mean_0p1deg.tif`
-  - `soc_5_15cm_mean_0p1deg.tif`
-  - `soc_15_30cm_mean_0p1deg.tif`
+    - `bdod_0_5cm_mean_0p1deg.tif`
+    - `bdod_5_15cm_mean_0p1deg.tif`
+    - `bdod_15_30cm_mean_0p1deg.tif`
+    - `cec_0_5cm_mean_0p1deg.tif`
+    - `cec_5_15cm_mean_0p1deg.tif`
+    - `cec_15_30cm_mean_0p1deg.tif`
+    - `phh2o_0_5cm_mean_0p1deg.tif`
+    - `phh2o_5_15cm_mean_0p1deg.tif`
+    - `phh2o_15_30cm_mean_0p1deg.tif`
+    - `soc_0_5cm_mean_0p1deg.tif`
+    - `soc_5_15cm_mean_0p1deg.tif`
+    - `soc_15_30cm_mean_0p1deg.tif`
 
 実務手順:
+
 1. 次のコマンドで、0.1度へ再投影した12ファイルを直接作成する
 
 ```sh
 pnpm bench:prepare:soilgrids:0p1deg
 ```
 
-2. 出力先は`benches/raw/ecology/soilgrids/`で固定
-3. `pnpm bench:resample:ecology-ref:with-soil`で、12ファイルを入力に重み付き0-30cmを内部合成して`ecology_ref.bin`を再生成する
-固定運用の深さ重みは `0-5 : 5-15 : 15-30 = 5 : 3.5 : 1.5` とする。
-これは厳密な層厚比ではなく、生物利用しやすさを優先した benchmark 運用値である。
+1. 出力先は`benches/raw/ecology/soilgrids/`で固定
+2. `pnpm bench:resample:ecology-ref:with-soil`で、12ファイルを入力に重み付き0-30cmを内部合成して`ecology_ref.bin`を再生成する
+   固定運用の深さ重みは `0-5 : 5-15 : 15-30 = 5 : 3.5 : 1.5` とする。
+   これは厳密な層厚比ではなく、生物利用しやすさを優先した benchmark 運用値である。
 
 最小検証コマンド:
 
@@ -225,6 +251,7 @@ gdalinfo benches/raw/ecology/soilgrids/soc_15_30cm_mean_0p1deg.tif
 ```
 
 補足:
+
 - `benches/scripts/prepare-soilgrids.py`はSoilGridsのremote VRTを`/vsicurl/`経由で読み、ローカル保存する
 - `benches/scripts/resample.py`は`--soil-dir`入力時に、3深さを重み付きで内部合成して`soil_fertility`を計算する
 - どれか欠けると`soil_fertility`はNaNで保存される

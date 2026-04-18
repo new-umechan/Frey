@@ -35,10 +35,10 @@ Hydrology単体ベンチ専用の入力キャッシュ `benches/data/hydro_input
 評価用キャッシュ `benches/data/hydro_ref.bin` を使う。
 
 - `hydro_input.bin`
-  - `runoff`
+    - `runoff`
 - `hydro_ref.bin`
-  - `river_flow`
-  - `is_lake`
+    - `river_flow`
+    - `is_lake`
 
 現在の実運用では、リポジトリルートで次の順に準備する。
 
@@ -60,11 +60,11 @@ GloFAS-ERA5 は `benches/raw/hydrology/glofas_era5_annual_mean.nc` を参照す�
 HydroLAKES は `benches/raw/hydrology/HydroLAKES_polys_v10.shp` を参照する
 （https://www.hydrosheds.org/products/hydrolakes）。
 
-| フィールド | 型 | 値 |
-|---|---|---|
+| フィールド       | 型         | 値                                                            |
+| ---------------- | ---------- | ------------------------------------------------------------- |
 | `geology.height` | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
-| `geo.latitude` | `Vec<f32>` | セル重心緯度（単位: 度、-90〜90） |
-| `climate.runoff` | `Vec<f32>` | `hydro_input.bin` から読むERA5-Landのrunoff（単位: mm/年） |
+| `geo.latitude`   | `Vec<f32>` | セル重心緯度（単位: 度、-90〜90）                             |
+| `climate.runoff` | `Vec<f32>` | `hydro_input.bin` から読むERA5-Landのrunoff（単位: mm/年）    |
 
 ---
 
@@ -90,16 +90,16 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 代表地域の指定緯度経度は以下の通り。
 各地域は「流路の振る舞いのバリエーション」を網羅するよう選定した。
 
-| 地域ID | 地域名 | 緯度 | 経度 | 水文特性 |
-|---|---|---|---|---|
-| `amazon_mouth` | アマゾン河口 | -1.5 | -51.5 | 世界最大流量・MFD集中の基準点 |
-| `congo_mouth` | コンゴ河口 | -6.0 | 12.5 | 第2位流量・熱帯湿潤 |
-| `mississippi_mouth` | ミシシッピ河口 | 29.0 | -89.5 | 北米最大・デルタ地帯 |
-| `yangtze_mouth` | 長江河口 | 31.5 | 121.5 | アジア最大・モンスーン |
-| `nile_mouth` | ナイル河口 | 31.5 | 31.0 | 長大・乾燥域を流れる外来河川 |
-| `sahara_interior` | サハラ内部 | 23.0 | 13.0 | 流量ゼロ相当・乾燥域の対照 |
-| `himalaya_foothills` | ヒマラヤ山麓 | 27.0 | 85.0 | 急勾配・高流量・MFD集中 |
-| `ganges_delta` | ガンジスデルタ | 22.5 | 89.5 | 緩勾配・MFD分散・デルタ |
+| 地域ID               | 地域名         | 緯度 | 経度  | 水文特性                      |
+| -------------------- | -------------- | ---- | ----- | ----------------------------- |
+| `amazon_mouth`       | アマゾン河口   | -1.5 | -51.5 | 世界最大流量・MFD集中の基準点 |
+| `congo_mouth`        | コンゴ河口     | -6.0 | 12.5  | 第2位流量・熱帯湿潤           |
+| `mississippi_mouth`  | ミシシッピ河口 | 29.0 | -89.5 | 北米最大・デルタ地帯          |
+| `yangtze_mouth`      | 長江河口       | 31.5 | 121.5 | アジア最大・モンスーン        |
+| `nile_mouth`         | ナイル河口     | 31.5 | 31.0  | 長大・乾燥域を流れる外来河川  |
+| `sahara_interior`    | サハラ内部     | 23.0 | 13.0  | 流量ゼロ相当・乾燥域の対照    |
+| `himalaya_foothills` | ヒマラヤ山麓   | 27.0 | 85.0  | 急勾配・高流量・MFD集中       |
+| `ganges_delta`       | ガンジスデルタ | 22.5 | 89.5  | 緩勾配・MFD分散・デルタ       |
 
 ---
 
@@ -109,8 +109,8 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 
 #### 実データソース
 
-| 変数 | データソース | 解像度 | 取得先 |
-|---|---|---|---|
+| 変数         | データソース                      | 解像度                | 取得先                             |
+| ------------ | --------------------------------- | --------------------- | ---------------------------------- |
 | `river_flow` | GloFAS-ERA5（近似複数年平均流量） | 0.05度（version_4_0） | https://ewds.climate.copernicus.eu |
 
 #### 対数変換
@@ -149,8 +149,8 @@ GloFAS-ERA5グリッド（緯度経度ラスタ）
 
 #### 実データソース
 
-| 変数 | データソース | 解像度 | 取得先 |
-|---|---|---|---|
+| 変数      | データソース                  | 解像度 | 取得先                                         |
+| --------- | ----------------------------- | ------ | ---------------------------------------------- |
 | `is_lake` | HydroLAKES v1.0（湖ポリゴン） | ベクタ | https://www.hydrosheds.org/products/hydrolakes |
 
 #### セルへの変換
@@ -207,25 +207,25 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 各行は `left > right`（左が右より大流量）であるべき関係を示す。
 比較は代表セルの `river_flow` 値を使う。
 
-| # | left（大流量） | right（小流量） | 根拠 |
-|---|---|---|---|
-| R-01 | `amazon_mouth` | `congo_mouth` | アマゾン > コンゴ（世界1位 vs 2位） |
-| R-02 | `congo_mouth` | `mississippi_mouth` | コンゴ > ミシシッピ |
-| R-03 | `amazon_mouth` | `nile_mouth` | 熱帯湿潤大河 vs 乾燥域外来河川 |
-| R-04 | `himalaya_foothills` | `sahara_interior` | 急勾配・高降水 vs 乾燥無流域 |
-| R-05 | `ganges_delta` | `sahara_interior` | 季節河川・モンスーン vs 乾燥無流域 |
+| #    | left（大流量）       | right（小流量）     | 根拠                                |
+| ---- | -------------------- | ------------------- | ----------------------------------- |
+| R-01 | `amazon_mouth`       | `congo_mouth`       | アマゾン > コンゴ（世界1位 vs 2位） |
+| R-02 | `congo_mouth`        | `mississippi_mouth` | コンゴ > ミシシッピ                 |
+| R-03 | `amazon_mouth`       | `nile_mouth`        | 熱帯湿潤大河 vs 乾燥域外来河川      |
+| R-04 | `himalaya_foothills` | `sahara_interior`   | 急勾配・高降水 vs 乾燥無流域        |
+| R-05 | `ganges_delta`       | `sahara_interior`   | 季節河川・モンスーン vs 乾燥無流域  |
 
 ### 2-B：代表セルの流量特性確認
 
 代表セルの `river_flow` 絶対値を出力し、目視で異常値を確認する。
 数値アサーションは設けず、出力フォーマットに値を並べることで診断材料とする。
 
-| 地域ID | 期待する特性 |
-|---|---|
-| `amazon_mouth` | 極大（世界最大クラス） |
-| `ganges_delta` | 大（MFD分散が効いているため単セルは中程度になる可能性あり） |
-| `himalaya_foothills` | 中〜大（MFD集中） |
-| `sahara_interior` | 極小〜ゼロ |
+| 地域ID               | 期待する特性                                                |
+| -------------------- | ----------------------------------------------------------- |
+| `amazon_mouth`       | 極大（世界最大クラス）                                      |
+| `ganges_delta`       | 大（MFD分散が効いているため単セルは中程度になる可能性あり） |
+| `himalaya_foothills` | 中〜大（MFD集中）                                           |
+| `sahara_interior`    | 極小〜ゼロ                                                  |
 
 ---
 

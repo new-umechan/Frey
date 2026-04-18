@@ -12,9 +12,9 @@ Glaciology 単体ベンチ（`glaciology_solo`）に必要な生データと、
 - 実行場所: リポジトリルート
 - セル重心CSV: `benches/data/cell_centroids.csv`
 - ベンチ入力キャッシュ:
-  - `benches/data/terrain_ref.bin`
-  - `benches/data/climate_ref.bin`
-  - `benches/data/glaciology_ref.bin`
+    - `benches/data/terrain_ref.bin`
+    - `benches/data/climate_ref.bin`
+    - `benches/data/glaciology_ref.bin`
 
 `glaciology_solo` ベンチ本体は上記3つのキャッシュを読む。
 
@@ -35,14 +35,15 @@ climateのものを流用
 ### C. 氷厚参照（主評価に必須）
 
 - 生データ（手動取得）
-  - 取得元データ一式は `benches/raw/glaciology/` 配下へ配置
-  - ベンチ入力には GeoTIFF/NetCDF 1ファイルを使う（配置先は任意）
+    - 取得元データ一式は `benches/raw/glaciology/` 配下へ配置
+    - ベンチ入力には GeoTIFF/NetCDF 1ファイルを使う（配置先は任意）
 - 出力キャッシュ
-  - `benches/data/glaciology_ref.bin`
+    - `benches/data/glaciology_ref.bin`
 
 取得元:
+
 - Millan et al. 2022（DOI）
-  - https://doi.org/10.1038/s41561-021-00885-z
+    - https://doi.org/10.1038/s41561-021-00885-z
 
 ## 手順（最短）
 
@@ -71,6 +72,7 @@ pnpm bench:fetch:era5
 ```
 
 補足:
+
 - 年別キャッシュ: `benches/raw/climate/era5_land_monthly_yearly/era5_land_monthly_<YEAR>.nc`
 - 統合出力: `benches/raw/climate/era5_land_monthly_1970_2000.nc`
 - 再実行時は、既に存在して読める年ファイルを自動スキップする（続きから再開）。

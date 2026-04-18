@@ -19,14 +19,14 @@ python3 benches/scripts/tune-hydrology-params.py --min-flow-rho 0.70 --min-lake-
 
 ## オプション
 
-| オプション | 説明 | デフォルト値 |
-|---|---|---|
-| `--config-path` | パラメータ設定ファイルのパス | `config/terrain.yaml` |
-| `--output` | 結果出力先 JSONL ファイル | `benches/results/hydrology_tuning/runs/hydrology_tuning_runs.jsonl` |
-| `--min-flow-rho` | 河川流量相関の最小制約値 | `0.10` |
-| `--min-lake-f1` | 湖検出 F1 スコアの最小制約値 | `0.0` |
-| `--max-runs` | 最大試行回数（0 で全組み合わせ） | `0` |
-| `--grid-json` | カスタムグリッド定義 JSON ファイル | - |
+| オプション       | 説明                               | デフォルト値                                                        |
+| ---------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `--config-path`  | パラメータ設定ファイルのパス       | `config/terrain.yaml`                                               |
+| `--output`       | 結果出力先 JSONL ファイル          | `benches/results/hydrology_tuning/runs/hydrology_tuning_runs.jsonl` |
+| `--min-flow-rho` | 河川流量相関の最小制約値           | `0.10`                                                              |
+| `--min-lake-f1`  | 湖検出 F1 スコアの最小制約値       | `0.0`                                                               |
+| `--max-runs`     | 最大試行回数（0 で全組み合わせ）   | `0`                                                                 |
+| `--grid-json`    | カスタムグリッド定義 JSON ファイル | -                                                                   |
 
 **注意**: 1 tick ベンチマークでは、`river_flow rho` は 0.1-0.3 程度、`lake_f1` は 0.0-0.1 程度が現状の値です。制約は「ベースラインからどれだけ改善するか」を見るために緩めに設定しています。
 
@@ -61,21 +61,24 @@ python3 benches/scripts/tune-hydrology-params.py --min-flow-rho 0.70 --min-lake-
 ## 事前準備
 
 1. **地形データの準備**
-   ```bash
-   pnpm bench:dump-centroids
-   pnpm bench:resample:terrain
-   ```
+
+    ```bash
+    pnpm bench:dump-centroids
+    pnpm bench:resample:terrain
+    ```
 
 2. **Hydrology 入力データの準備**
-   ```bash
-   pnpm bench:resample:hydro-input
-   pnpm bench:resample:hydro-ref
-   ```
+
+    ```bash
+    pnpm bench:resample:hydro-input
+    pnpm bench:resample:hydro-ref
+    ```
 
 3. **ベースライン実行**
-   ```bash
-   pnpm run bench --suite hydrology_solo
-   ```
+
+    ```bash
+    pnpm run bench --suite hydrology_solo
+    ```
 
 ## 結果の見方
 
@@ -126,9 +129,9 @@ python3 benches/scripts/tune-hydrology-params.py --min-flow-rho 0.70 --min-lake-
 
 ```json
 {
-  "river_accumulation_threshold": [0.008, 0.010, 0.012, 0.014, 0.016],
-  "river_inertia_gain": [0.20, 0.25, 0.30],
-  "baseflow_storage_cap": [200.0, 240.0, 280.0]
+    "river_accumulation_threshold": [0.008, 0.01, 0.012, 0.014, 0.016],
+    "river_inertia_gain": [0.2, 0.25, 0.3],
+    "baseflow_storage_cap": [200.0, 240.0, 280.0]
 }
 ```
 

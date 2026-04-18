@@ -25,15 +25,15 @@ pnpm hooks:install
 
 ## 日常コマンド
 
-| 目的 | コマンド |
-| --- | --- |
-| 開発サーバー起動 | `pnpm dev` |
-| 本番ビルド | `pnpm build` |
-| プレビュー | `pnpm preview` |
-| Web テスト実行 | `pnpm test:run` |
-| Rust 整形 | `pnpm format:rust` |
-| Rust lint | `pnpm lint:rust` |
-| 事前チェック | `pnpm lint:prepush` |
+| 目的             | コマンド            |
+| ---------------- | ------------------- |
+| 開発サーバー起動 | `pnpm dev`          |
+| 本番ビルド       | `pnpm build`        |
+| プレビュー       | `pnpm preview`      |
+| Web テスト実行   | `pnpm test:run`     |
+| Rust 整形        | `pnpm format:rust`  |
+| Rust lint        | `pnpm lint:rust`    |
+| 事前チェック     | `pnpm lint:prepush` |
 
 ## 変更後の確認
 

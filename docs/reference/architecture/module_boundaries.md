@@ -33,6 +33,7 @@
 `Common` は数学・乱数・メッシュなどの汎用処理であり、`Terrain` は明確なドメイン意味を持つ共有状態層である。
 
 ## 現状
+
 Tier1までのモジュールについて、詳細を決定している。
 
 ---
@@ -41,34 +42,34 @@ Tier1までのモジュールについて、詳細を決定している。
 
 ### Tier 1（必須）
 
-| モジュール | 概要 |
-| --- | --- |
-| `Geology` | 地形変化（標高・プレート更新） |
-| `Climate` | 降水・気温・水循環 |
-| `Glaciology` | 氷河質量収支・氷厚・融解水・氷河侵食率 |
-| `Hydrology` | 流路・流量・集積、侵食・堆積率計算 |
-| `Ecology` | 植生 |
-| `Domesticates` | 作物・家畜の分布 |
-| `Subsistence` | 居住適性・地域ごとの生業構成 |
-| `Population` | 人口変動 |
-| `Settlement` | 集落・都市形成 |
-| `Polity` | 国家・領域変化 |
-| `Conflict` | 戦争・境界変化 |
+| モジュール     | 概要                                   |
+| -------------- | -------------------------------------- |
+| `Geology`      | 地形変化（標高・プレート更新）         |
+| `Climate`      | 降水・気温・水循環                     |
+| `Glaciology`   | 氷河質量収支・氷厚・融解水・氷河侵食率 |
+| `Hydrology`    | 流路・流量・集積、侵食・堆積率計算     |
+| `Ecology`      | 植生                                   |
+| `Domesticates` | 作物・家畜の分布                       |
+| `Subsistence`  | 居住適性・地域ごとの生業構成           |
+| `Population`   | 人口変動                               |
+| `Settlement`   | 集落・都市形成                         |
+| `Polity`       | 国家・領域変化                         |
+| `Conflict`     | 戦争・境界変化                         |
 
 ### Tier 2（粗いモデルで可）
 
-| モジュール | 概要 |
-| --- | --- |
-| `Disease` | 感染拡大・人口への影響 |
-| `Resources` | 資源埋蔵・採掘・枯渇 |
-| `Trade` | 地域間交換・交易流量 |
-| `Technology` | 技術水準更新 |
-| `Infrastructure` | 地形書き換え能力 |
+| モジュール       | 概要                   |
+| ---------------- | ---------------------- |
+| `Disease`        | 感染拡大・人口への影響 |
+| `Resources`      | 資源埋蔵・採掘・枯渇   |
+| `Trade`          | 地域間交換・交易流量   |
+| `Technology`     | 技術水準更新           |
+| `Infrastructure` | 地形書き換え能力       |
 
 ### Tier 3（スコープ外）
 
-| モジュール | 概要 |
-| --- | --- |
+| モジュール     | 概要                       |
+| -------------- | -------------------------- |
 | `Institutions` | 制度（属性として保持のみ） |
 
 ---
@@ -234,10 +235,10 @@ Tier1までのモジュールについて、詳細を決定している。
 
 Systemは2つに分かれる。
 
-| System | 実行条件 |
-| --- | --- |
-| `HydrologyMFDSystem` | 地殻形成期・環境形成期は毎tick実行。先史期以降は実行文脈の地形活動量（geology exec state）に応じて実行 |
-| `HydrologyFlowSystem` | 先史期以降、毎tick実行 |
+| System                | 実行条件                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `HydrologyMFDSystem`  | 地殻形成期・環境形成期は毎tick実行。先史期以降は実行文脈の地形活動量（geology exec state）に応じて実行 |
+| `HydrologyFlowSystem` | 先史期以降、毎tick実行                                                                                 |
 
 地形活動判定は実行パイプラインが担う。Geology は CellStore に標高を書くだけであり、判定フラグ自体は持たない。
 
@@ -514,6 +515,7 @@ FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）�
 ---
 
 <!-- auto_generated_start -->
+
 ## tick内依存（Declaration DAG）
 
 実行順は `ModuleDeclaration` の `reads` / `writes` / `feedback` から自動生成される。
@@ -526,21 +528,21 @@ prepare → exec_feedback → geology → climate → glaciology → hydrology �
 
 ### 依存エッジ一覧
 
-| from | to |
-| --- | --- |
-| climate (climate) | conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| domesticates (domesticates) | conflict (conflict), polity (polity), population (population), settlement (settlement), subsistence (subsistence) |
-| ecology (ecology) | conflict (conflict), domesticates (domesticates), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| exec_feedback (exec) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| geology (geology) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| glaciology (glaciology) | conflict (conflict), domesticates (domesticates), ecology (ecology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| hydrology (hydrology) | conflict (conflict), domesticates (domesticates), ecology (ecology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| polity (polity) | conflict (conflict) |
-| population (population) | conflict (conflict), polity (polity), settlement (settlement) |
-| prepare (exec) | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), exec_feedback (exec), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
-| settlement (settlement) | conflict (conflict), polity (polity) |
-| subsistence (subsistence) | conflict (conflict), polity (polity), population (population), settlement (settlement) |
-| transition (exec) | finalize (exec) |
+| from                        | to                                                                                                                                                                                                                                                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| climate (climate)           | conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                                                                              |
+| domesticates (domesticates) | conflict (conflict), polity (polity), population (population), settlement (settlement), subsistence (subsistence)                                                                                                                                                                                                 |
+| ecology (ecology)           | conflict (conflict), domesticates (domesticates), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                                                                                                                                                 |
+| exec_feedback (exec)        | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                       |
+| geology (geology)           | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                                                           |
+| glaciology (glaciology)     | conflict (conflict), domesticates (domesticates), ecology (ecology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                                                                                                       |
+| hydrology (hydrology)       | conflict (conflict), domesticates (domesticates), ecology (ecology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec)                                                                                                                              |
+| polity (polity)             | conflict (conflict)                                                                                                                                                                                                                                                                                               |
+| population (population)     | conflict (conflict), polity (polity), settlement (settlement)                                                                                                                                                                                                                                                     |
+| prepare (exec)              | climate (climate), conflict (conflict), domesticates (domesticates), ecology (ecology), exec_feedback (exec), finalize (exec), geology (geology), glaciology (glaciology), hydrology (hydrology), polity (polity), population (population), settlement (settlement), subsistence (subsistence), transition (exec) |
+| settlement (settlement)     | conflict (conflict), polity (polity)                                                                                                                                                                                                                                                                              |
+| subsistence (subsistence)   | conflict (conflict), polity (polity), population (population), settlement (settlement)                                                                                                                                                                                                                            |
+| transition (exec)           | finalize (exec)                                                                                                                                                                                                                                                                                                   |
 
 module_count: 15
 edge_count: 88

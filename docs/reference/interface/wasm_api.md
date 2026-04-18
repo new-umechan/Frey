@@ -9,6 +9,7 @@ JSから利用する現行WASM公開APIを定義する。
 - `build_render_positions(input) -> number[]`
 
 補足:
+
 - `generate_geology`の`params`未指定時は`GeologyParams::default()`を使用する。
 - `GeologyParams`には従来項目に加えて、プレート運動・境界再分類・沈み込み開始閾値・マントル熱場・プルーム関連の項目が含まれる。
 
@@ -26,11 +27,13 @@ JSから利用する現行WASM公開APIを定義する。
 - `set_simulation_rate(world_id: string, rate: number) -> void`
 
 `InitWorldConfig`:
+
 - `geology_params?: GeologyParams`
 - `target_sea_ratio?: number`（内部で`0.02..=0.98`にclamp）
 - `simulation_rate?: number`（内部で`0.1..=32.0`にclamp）
 
 実行仕様:
+
 - `exec_world`は`tick_count`に`simulation_rate`を掛けた回数だけ内部更新する。
 - 地形更新はWorldの1Tickごとに1回実行される。
 - `exec_world_slice` は通常再生向けの再開可能APIで、1回の呼び出しで `work_budget` 個の内部phaseだけ進める。
@@ -40,13 +43,14 @@ JSから利用する現行WASM公開APIを定義する。
 ### 2.2 観測
 
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
-  - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature` / `wind_u` / `wind_v` / `moisture_flux_u` / `moisture_flux_v`
+    - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature` / `wind_u` / `wind_v` / `moisture_flux_u` / `moisture_flux_v`
 - `get_world_delta(world_id: string, options?: { include_fields?: string[] }) -> WorldDeltaResponse`
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
 - `list_history_ticks(world_id: string) -> { world_id, interval, ticks }`
 
 補足:
+
 - 内部河川表現はMFD（複数流下先+重み）を使用する。
 - `WorldState.hydrology.river_downstream` は `[(cell, weight)]` の配列として保持し、`get_field` の
   `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` は互換のためCSR形式へ変換して返す。
@@ -55,6 +59,7 @@ JSから利用する現行WASM公開APIを定義する。
 - `get_world_delta` は差分のみを返す。`include_fields` 未指定時は全対象フィールドを返す。
 
 `get_world_delta` の内部同期（`WorldSyncState`）:
+
 - `WorldSimController` は各 `world_id` ごとに `World` 本体とは別に `WorldSyncState` を保持し、差分返却専用のシャドウ状態として利用する。
 - 追跡対象フィールドは `height` / `river_flux` / `river_next` / `mantle_heat` / `temperature` / `precipitation`。
 - 差分は `exec_world*` 実行後の観測で更新される。`restore_world_to_tick` では対象Worldの現在値から再初期化される。
@@ -64,6 +69,7 @@ JSから利用する現行WASM公開APIを定義する。
 - 疎な更新では `mode: "bitmap"` を返す。`dirty_bitmap` の立っているセル順に値配列が並ぶ。
 
 `MetricsResponse`:
+
 - `world_id: string`
 - `tick: number`
 - `era: string`

@@ -32,12 +32,12 @@ cargo bench --manifest-path benches/rust/Cargo.toml --bench glaciology_solo
 氷厚参照キャッシュ `benches/data/glaciology_ref.bin` を使って比較する。
 
 - `terrain_ref.bin`
-  - `height`
+    - `height`
 - `climate_ref.bin`
-  - `temperature`
-  - `precipitation`
+    - `temperature`
+    - `precipitation`
 - `glaciology_ref.bin`
-  - `ice_thickness`
+    - `ice_thickness`
 
 現在の実運用では、リポジトリルートで次の順に準備する。
 
@@ -52,13 +52,13 @@ cargo bench --manifest-path benches/rust/Cargo.toml --bench glaciology_solo
 生データ配置が `benches/raw/glaciology/` 配下でネストされている場合は、
 `--ice-thickness` に実ファイルパスを直接指定する。
 
-| フィールド | 型 | 値 |
-|---|---|---|
-| `geology.height` | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
-| `climate.temperature` | `Vec<f32>` | `climate_ref.bin` から読む年平均気温（単位: ℃） |
-| `climate.precipitation` | `Vec<f32>` | `climate_ref.bin` から読む年間降水量（単位: mm/年） |
-| `ecology.tree_cover` | `Vec<f32>` | 全セル `0.5` で固定 |
-| `ecology.ground_cover` | `Vec<f32>` | 全セル `0.5` で固定 |
+| フィールド              | 型         | 値                                                            |
+| ----------------------- | ---------- | ------------------------------------------------------------- |
+| `geology.height`        | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
+| `climate.temperature`   | `Vec<f32>` | `climate_ref.bin` から読む年平均気温（単位: ℃）               |
+| `climate.precipitation` | `Vec<f32>` | `climate_ref.bin` から読む年間降水量（単位: mm/年）           |
+| `ecology.tree_cover`    | `Vec<f32>` | 全セル `0.5` で固定                                           |
+| `ecology.ground_cover`  | `Vec<f32>` | 全セル `0.5` で固定                                           |
 
 ---
 
@@ -89,18 +89,18 @@ fn nearest_cell(positions: &[[f32; 3]], lat: f32, lon: f32) -> usize {
 代表地域の指定緯度経度は以下の通り。
 各地域は氷河・氷床の分布バリエーションを網羅するよう選定した。
 
-| 地域ID | 地域名 | 緯度 | 経度 | 氷河特性 |
-|---|---|---|---|---|
-| `greenland_center` | グリーンランド中央部 | 75.0 | -40.0 | 大陸氷床・最大級氷厚 |
-| `antarctica_inland` | 南極内陸 | -80.0 | 0.0 | 大陸氷床・最大級氷厚 |
-| `patagonia` | パタゴニア氷原 | -50.0 | -73.0 | 中緯度氷原 |
-| `alaska_range` | アラスカ山脈 | 63.0 | -150.0 | 山岳氷河 |
-| `himalaya_core` | ヒマラヤ中央部 | 28.0 | 86.0 | 山岳氷河・氷厚大 |
-| `karakoram` | カラコルム | 36.0 | 76.0 | 山岳氷河・氷厚大 |
-| `alps` | アルプス | 46.5 | 8.0 | 山岳氷河・氷厚中 |
-| `rockies` | ロッキー山脈 | 51.0 | -116.0 | 山岳氷河・氷厚小〜中 |
-| `andes_tropical` | 熱帯アンデス | -8.0 | -77.0 | 熱帯山岳氷河 |
-| `sahara` | サハラ中部 | 23.0 | 13.0 | 氷河なし（対照） |
+| 地域ID              | 地域名               | 緯度  | 経度   | 氷河特性             |
+| ------------------- | -------------------- | ----- | ------ | -------------------- |
+| `greenland_center`  | グリーンランド中央部 | 75.0  | -40.0  | 大陸氷床・最大級氷厚 |
+| `antarctica_inland` | 南極内陸             | -80.0 | 0.0    | 大陸氷床・最大級氷厚 |
+| `patagonia`         | パタゴニア氷原       | -50.0 | -73.0  | 中緯度氷原           |
+| `alaska_range`      | アラスカ山脈         | 63.0  | -150.0 | 山岳氷河             |
+| `himalaya_core`     | ヒマラヤ中央部       | 28.0  | 86.0   | 山岳氷河・氷厚大     |
+| `karakoram`         | カラコルム           | 36.0  | 76.0   | 山岳氷河・氷厚大     |
+| `alps`              | アルプス             | 46.5  | 8.0    | 山岳氷河・氷厚中     |
+| `rockies`           | ロッキー山脈         | 51.0  | -116.0 | 山岳氷河・氷厚小〜中 |
+| `andes_tropical`    | 熱帯アンデス         | -8.0  | -77.0  | 熱帯山岳氷河         |
+| `sahara`            | サハラ中部           | 23.0  | 13.0   | 氷河なし（対照）     |
 
 ---
 
@@ -110,8 +110,8 @@ fn nearest_cell(positions: &[[f32; 3]], lat: f32, lon: f32) -> usize {
 
 #### 実データソース
 
-| 変数 | データソース | 解像度 | 取得先 |
-|---|---|---|---|
+| 変数            | データソース                       | 解像度   | 取得先                                     |
+| --------------- | ---------------------------------- | -------- | ------------------------------------------ |
 | `ice_thickness` | Millan et al. 2022（全球氷厚推定） | 変解像度 | https://doi.org/10.1038/s41561-021-00885-z |
 
 #### リサンプリング手順
@@ -144,18 +144,18 @@ Climate単体ベンチのリサンプリング基盤と同一の手順を踏襲�
 
 各行は `left > right`（左が右より氷厚が厚い）であるべき関係を示す。
 
-| # | left（氷厚大） | right（氷厚小） | 根拠 |
-|---|---|---|---|
-| ICE-01 | `greenland_center` | `himalaya_core` | 大陸氷床 > 山岳氷河 |
-| ICE-02 | `antarctica_inland` | `patagonia` | 南極氷床 > パタゴニア氷原 |
-| ICE-03 | `alps` | `andes_tropical` | アルプス > 熱帯アンデス（氷河規模） |
-| ICE-04 | `himalaya_core` | `alps` | ヒマラヤ > アルプス |
-| ICE-05 | `alaska_range` | `rockies` | アラスカ > ロッキー |
-| ICE-06 | `patagonia` | `alaska_range` | パタゴニア氷原 > アラスカ山岳氷河 |
-| ICE-07 | `karakoram` | `andes_tropical` | カラコルム > 熱帯アンデス |
-| ICE-08 | `greenland_center` | `alps` | グリーンランド > アルプス |
-| ICE-09 | `antarctica_inland` | `himalaya_core` | 南極 > ヒマラヤ |
-| ICE-10 | `greenland_center` | `sahara` | 氷床 > 氷河なし |
+| #      | left（氷厚大）      | right（氷厚小）  | 根拠                                |
+| ------ | ------------------- | ---------------- | ----------------------------------- |
+| ICE-01 | `greenland_center`  | `himalaya_core`  | 大陸氷床 > 山岳氷河                 |
+| ICE-02 | `antarctica_inland` | `patagonia`      | 南極氷床 > パタゴニア氷原           |
+| ICE-03 | `alps`              | `andes_tropical` | アルプス > 熱帯アンデス（氷河規模） |
+| ICE-04 | `himalaya_core`     | `alps`           | ヒマラヤ > アルプス                 |
+| ICE-05 | `alaska_range`      | `rockies`        | アラスカ > ロッキー                 |
+| ICE-06 | `patagonia`         | `alaska_range`   | パタゴニア氷原 > アラスカ山岳氷河   |
+| ICE-07 | `karakoram`         | `andes_tropical` | カラコルム > 熱帯アンデス           |
+| ICE-08 | `greenland_center`  | `alps`           | グリーンランド > アルプス           |
+| ICE-09 | `antarctica_inland` | `himalaya_core`  | 南極 > ヒマラヤ                     |
+| ICE-10 | `greenland_center`  | `sahara`         | 氷床 > 氷河なし                     |
 
 ### 2-B：`glacial_melt_runoff` の大小関係（known-hard）
 
@@ -163,11 +163,11 @@ Climate単体ベンチのリサンプリング基盤と同一の手順を踏襲�
 実測データとの直接比較が困難なため、すべて known-hard 扱いとし、
 通過率の分母から除外する。
 
-| # | left | right | 根拠 |
-|---|---|---|---|
-| MELT-01 ⚠️ | `alps` | `greenland_center` | 温帯山岳氷河 > 極地氷床（融解量） |
-| MELT-02 ⚠️ | `andes_tropical` | `antarctica_inland` | 熱帯山岳 > 南極内陸 |
-| MELT-03 ⚠️ | `patagonia` | `himalaya_core` | 海洋性氷原 > 大陸性山岳氷河 |
+| #          | left             | right               | 根拠                              |
+| ---------- | ---------------- | ------------------- | --------------------------------- |
+| MELT-01 ⚠️ | `alps`           | `greenland_center`  | 温帯山岳氷河 > 極地氷床（融解量） |
+| MELT-02 ⚠️ | `andes_tropical` | `antarctica_inland` | 熱帯山岳 > 南極内陸               |
+| MELT-03 ⚠️ | `patagonia`      | `himalaya_core`     | 海洋性氷原 > 大陸性山岳氷河       |
 
 ⚠️ は known-hard フラグ。通過率の分母から除外する。
 

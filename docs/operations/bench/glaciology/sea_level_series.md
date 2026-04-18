@@ -56,21 +56,21 @@ JSONL:
 1行1runで次を保存する。
 
 - runtime
-  - `glaciology_step_ms_median`
-  - `glaciology_step_ms_p95`
+    - `glaciology_step_ms_median`
+    - `glaciology_step_ms_p95`
 - metrics
-  - `sle_mm`
-  - `sle_start_mm`
-  - `sle_mean_mm`
-  - `sle_min_mm`
-  - `sle_max_mm`
-  - `land_ice_volume_km3`
-  - `grid_spearman`
-  - `grid_rmse`
-  - `region_metrics[]`
+    - `sle_mm`
+    - `sle_start_mm`
+    - `sle_mean_mm`
+    - `sle_min_mm`
+    - `sle_max_mm`
+    - `land_ice_volume_km3`
+    - `grid_spearman`
+    - `grid_rmse`
+    - `region_metrics[]`
 - references
-  - `modern`
-  - `paleo`
+    - `modern`
+    - `paleo`
 
 ## 比較
 

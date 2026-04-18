@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { collectMarkdownTargets, DEFAULT_REPO_ROOT } from "./markdown-targets.ts";
 
 export interface Violation {
     path: string;
@@ -19,47 +19,6 @@ const VALID_PROPOSAL_STATUSES = new Set([
 const DOCS_REFERENCE_PATTERN = /docs\/[A-Za-z0-9_./-]+\.md/g;
 const STATUS_HEADING_PATTERN = /^## Status\s*$/m;
 const ADR_FILENAME_PATTERN = /^ADR-\d{4}-[a-z0-9-]+\.md$/;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..", "..");
-
-function toPosixPath(filePath: string): string {
-    return filePath.split(path.sep).join("/");
-}
-
-function listMarkdownFiles(dirPath: string): string[] {
-    if (!fs.existsSync(dirPath)) {
-        return [];
-    }
-
-    const results: string[] = [];
-    for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-        const entryPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) {
-            results.push(...listMarkdownFiles(entryPath));
-            continue;
-        }
-
-        if (entry.isFile() && entry.name.endsWith(".md")) {
-            results.push(entryPath);
-        }
-    }
-
-    return results;
-}
-
-function collectTargetMarkdownFiles(repoRoot: string): string[] {
-    const docsDir = path.join(repoRoot, "docs");
-    const files = listMarkdownFiles(docsDir);
-    const rootReadme = path.join(repoRoot, "README.md");
-
-    if (fs.existsSync(rootReadme)) {
-        files.push(rootReadme);
-    }
-
-    return files.sort((left, right) => left.localeCompare(right));
-}
 
 function getLineNumber(text: string, index: number): number {
     return text.slice(0, index).split("\n").length;
@@ -181,13 +140,13 @@ function lintDecisionFilename(repoRoot: string): Violation[] {
 export function lintRepo(repoRoot: string = DEFAULT_REPO_ROOT): Violation[] {
     const violations: Violation[] = [];
 
-    for (const filePath of collectTargetMarkdownFiles(repoRoot)) {
-        const relativePath = toPosixPath(path.relative(repoRoot, filePath));
+    for (const repoRelativePath of collectMarkdownTargets(repoRoot)) {
+        const filePath = path.join(repoRoot, repoRelativePath);
         const text = fs.readFileSync(filePath, "utf8");
 
-        violations.push(...lintDocsPathExists(repoRoot, relativePath, text));
-        violations.push(...lintProposalStatus(relativePath, text));
-        violations.push(...lintReferenceStatus(relativePath, text));
+        violations.push(...lintDocsPathExists(repoRoot, repoRelativePath, text));
+        violations.push(...lintProposalStatus(repoRelativePath, text));
+        violations.push(...lintReferenceStatus(repoRelativePath, text));
     }
 
     violations.push(...lintDecisionFilename(repoRoot));

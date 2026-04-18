@@ -769,14 +769,14 @@ Tier1スコープでは技術変化（二次産物革命）や制度的ロック
 ### 参照文献・データソース
 
 - 作物の起源地からの拡散と新環境適応のレビュー
-  https://www.annualreviews.org/content/journals/10.1146/annurev-arplant-060223-030954?TRACK=RSS
+  <https://www.annualreviews.org/content/journals/10.1146/annurev-arplant-060223-030954?TRACK=RSS>
 - 作物ごとの生態要求値参照には FAO Ecocrop を使う
   例: `Hordeum vulgare`
-  https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1232
+  <https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=1232>
 - 家畜の起源地・拡散の代表例として horse のレビュー
-  https://pmc.ncbi.nlm.nih.gov/articles/PMC8550961/
+  <https://pmc.ncbi.nlm.nih.gov/articles/PMC8550961/>
 - 放牧家畜のエコゾーン分布の大枠確認として FAO の grazing systems
-  https://www.fao.org/4/x5303e/x5303e0m.htm
+  <https://www.fao.org/4/x5303e/x5303e0m.htm>
 - demic×cultural 混合拡散の定量モデル
   Fort et al. (2015) Demic and cultural diffusion propagated the Neolithic transition across different regions of Europe
 

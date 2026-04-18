@@ -26,19 +26,19 @@ Ecology単体ベンチ専用の評価キャッシュ `benches/data/ecology_ref.b
 実データの取得元と保存先の運用は `docs/operations/bench/ecology/data_acquisition.md` を参照する。
 
 - `terrain_ref.bin`
-  - `height`
+    - `height`
 - `climate_ref.bin`
-  - `temperature`
-  - `precipitation`
+    - `temperature`
+    - `precipitation`
 - `hydro_ref.bin`
-  - `river_flow`
+    - `river_flow`
 - `ecology_ref.bin`
-  - `tree_cover`
-  - `ground_cover`
-  - `biome`
-  - `soil_fertility`
-  - `natural_mask`
-  - `open_canopy_mask`
+    - `tree_cover`
+    - `ground_cover`
+    - `biome`
+    - `soil_fertility`
+    - `natural_mask`
+    - `open_canopy_mask`
 
 現時点では実装前提の仕様として、リポジトリルートで次の順に準備する。
 既存の benchmark 用データを極力使い回し、Ecology 固有の参照データだけを追加する方針とする。
@@ -56,14 +56,14 @@ Ecology単体ベンチ専用の評価キャッシュ `benches/data/ecology_ref.b
 
 Ecology 単体ベンチの入力のうち、次は既存データをそのまま使い回す。
 
-| 用途 | 既存ファイル | 備考 |
-|---|---|---|
-| 実地形 | `benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif` | Climate/Hydrology benchmark と共用 |
-| 実気温 | `benches/raw/climate/worldclim_tavg_annual_c.tif` | Climate benchmark と共用 |
-| 実降水 | `benches/raw/climate/worldclim_prec_annual_mm.tif` | Climate benchmark と共用 |
-| 実河川流量参照 | `benches/raw/hydrology/glofas_era5_annual_mean.nc` | Hydrology benchmark と共用 |
-| 湖参照 | `benches/raw/hydrology/HydroLAKES_polys_v10.shp` | 必要なら湿地補助判定にも流用可 |
-| 中間キャッシュ | `benches/data/terrain_ref.bin` / `benches/data/climate_ref.bin` / `benches/data/hydro_ref.bin` | そのまま入力に使う |
+| 用途           | 既存ファイル                                                                                   | 備考                               |
+| -------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 実地形         | `benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`                                    | Climate/Hydrology benchmark と共用 |
+| 実気温         | `benches/raw/climate/worldclim_tavg_annual_c.tif`                                              | Climate benchmark と共用           |
+| 実降水         | `benches/raw/climate/worldclim_prec_annual_mm.tif`                                             | Climate benchmark と共用           |
+| 実河川流量参照 | `benches/raw/hydrology/glofas_era5_annual_mean.nc`                                             | Hydrology benchmark と共用         |
+| 湖参照         | `benches/raw/hydrology/HydroLAKES_polys_v10.shp`                                               | 必要なら湿地補助判定にも流用可     |
+| 中間キャッシュ | `benches/data/terrain_ref.bin` / `benches/data/climate_ref.bin` / `benches/data/hydro_ref.bin` | そのまま入力に使う                 |
 
 つまり、Ecology benchmark のために新規取得が必要なのは、Ecology 固有の参照正解データだけである。
 
@@ -71,26 +71,26 @@ Ecology 単体ベンチの入力のうち、次は既存データをそのまま
 
 次のファイルは現状の `benches/raw` には入っていないため、新規に追加する。
 
-| 用途 | 配置先 | 備考 |
-|---|---|---|
-| MODIS VCF tree cover | `benches/raw/ecology/mod44b_tree_cover.tif` | `tree_cover` 参照 |
-| MODIS VCF non-tree vegetation | `benches/raw/ecology/mod44b_non_tree_cover.tif` | `ground_cover` 参照 |
-| MODIS VCF non-vegetated | `benches/raw/ecology/mod44b_non_vegetated.tif` | `biome` 合成参照 |
-| MODIS Land Cover Type 1 | `benches/raw/ecology/mcd12q1_lc_type1.tif` | `natural_mask` と `biome` 合成に使う |
-| MODIS Land Use / LCCS layer | `benches/raw/ecology/mcd12q1_lc_prop2.tif` | 農地・都市の除外に使う |
-| SoilGrids 0-30cm 入力群 | `benches/raw/ecology/soilgrids/` | `soil_fertility` proxy 用 |
+| 用途                          | 配置先                                          | 備考                                 |
+| ----------------------------- | ----------------------------------------------- | ------------------------------------ |
+| MODIS VCF tree cover          | `benches/raw/ecology/mod44b_tree_cover.tif`     | `tree_cover` 参照                    |
+| MODIS VCF non-tree vegetation | `benches/raw/ecology/mod44b_non_tree_cover.tif` | `ground_cover` 参照                  |
+| MODIS VCF non-vegetated       | `benches/raw/ecology/mod44b_non_vegetated.tif`  | `biome` 合成参照                     |
+| MODIS Land Cover Type 1       | `benches/raw/ecology/mcd12q1_lc_type1.tif`      | `natural_mask` と `biome` 合成に使う |
+| MODIS Land Use / LCCS layer   | `benches/raw/ecology/mcd12q1_lc_prop2.tif`      | 農地・都市の除外に使う               |
+| SoilGrids 0-30cm 入力群       | `benches/raw/ecology/soilgrids/`                | `soil_fertility` proxy 用            |
 
 初版では、Ecology benchmark 用の raw データ配置規約だけを固定し、取得コマンドの自動化は後段に回す。
 先にファイル名と入力契約を固定しておかないと、resample 実装の引数仕様も固まらないためである。
 
 ### 実データソース
 
-| 参照値 | データソース | 役割 |
-|---|---|---|
-| `tree_cover` | MODIS Vegetation Continuous Fields `MOD44B` | 樹木被覆の主参照 |
-| `ground_cover` | `MOD44B` の non-tree vegetation fraction | 草本・低木被覆の主参照 |
-| `biome` | `MOD44B` + `MCD12Q1` + 実気候 + 実水文 + 実地形から合成 | 離散バイオーム参照 |
-| `soil_fertility` | SoilGrids | 参考用の土壌肥沃度 proxy |
+| 参照値           | データソース                                            | 役割                     |
+| ---------------- | ------------------------------------------------------- | ------------------------ |
+| `tree_cover`     | MODIS Vegetation Continuous Fields `MOD44B`             | 樹木被覆の主参照         |
+| `ground_cover`   | `MOD44B` の non-tree vegetation fraction                | 草本・低木被覆の主参照   |
+| `biome`          | `MOD44B` + `MCD12Q1` + 実気候 + 実水文 + 実地形から合成 | 離散バイオーム参照       |
+| `soil_fertility` | SoilGrids                                               | 参考用の土壌肥沃度 proxy |
 
 `MOD44B` / `MCD12Q1` / SoilGrids は benchmark の参照正解生成にのみ使う。
 Ecology モジュールへの入力としては使わず、入力は従来どおり既存の climate / hydrology / terrain 参照を流用する。
@@ -105,16 +105,16 @@ Ecology モジュールへの入力としては使わず、入力は従来どお
 
 ### 入力フィールド
 
-| フィールド | 型 | 値 |
-|---|---|---|
-| `geology.height` | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
-| `climate.temperature` | `Vec<f32>` | `climate_ref.bin` から読む年平均気温（単位: ℃） |
-| `climate.precipitation` | `Vec<f32>` | `climate_ref.bin` から読む年間降水量（単位: mm/年） |
-| `hydrology.river_flow` | `Vec<f32>` | `hydro_ref.bin` から読む年平均流量（単位: m³/s） |
-| `ecology.tree_cover` | `Vec<f32>` | 初期値 `0.0` |
-| `ecology.ground_cover` | `Vec<f32>` | 初期値 `0.0` |
-| `ecology.disturbance` | `Vec<f32>` | 初期値 `0.0`、外生フィードバックなし |
-| `ecology.soil_fertility` | `Vec<f32>` | 初期値 `0.35` |
+| フィールド               | 型         | 値                                                            |
+| ------------------------ | ---------- | ------------------------------------------------------------- |
+| `geology.height`         | `Vec<f32>` | 実地形データを内部標高単位へ変換した値（`height * 6000 = m`） |
+| `climate.temperature`    | `Vec<f32>` | `climate_ref.bin` から読む年平均気温（単位: ℃）               |
+| `climate.precipitation`  | `Vec<f32>` | `climate_ref.bin` から読む年間降水量（単位: mm/年）           |
+| `hydrology.river_flow`   | `Vec<f32>` | `hydro_ref.bin` から読む年平均流量（単位: m³/s）              |
+| `ecology.tree_cover`     | `Vec<f32>` | 初期値 `0.0`                                                  |
+| `ecology.ground_cover`   | `Vec<f32>` | 初期値 `0.0`                                                  |
+| `ecology.disturbance`    | `Vec<f32>` | 初期値 `0.0`、外生フィードバックなし                          |
+| `ecology.soil_fertility` | `Vec<f32>` | 初期値 `0.35`                                                 |
 
 `feedback_value()` はすべてゼロとして扱い、伐採・放牧・焼畑・汚染などの外乱は投入しない。
 
@@ -159,18 +159,18 @@ fn nearest_cell(cells: &CellStore, lat: f32, lon: f32) -> CellId {
 代表地域の指定緯度経度は以下の通り。
 各地域は Ecology の主要な判別境界を網羅するよう選定した。
 
-| 地域ID | 地域名 | 緯度 | 経度 | 期待バイオーム |
-|---|---|---|---|---|
-| `amazon_core` | アマゾン盆地中央 | -3.0 | -60.0 | TropicalForest |
-| `congo_core` | コンゴ盆地中央 | -1.0 | 24.0 | TropicalForest |
-| `serengeti` | セレンゲティ | -2.5 | 34.8 | Savanna |
-| `great_plains` | 北米グレートプレーンズ | 44.0 | -101.0 | Grassland |
-| `sahara_core` | サハラ中部 | 23.0 | 13.0 | Desert |
-| `europe_temperate` | 中央ヨーロッパ | 49.0 | 14.0 | TemperateForest |
-| `siberia_taiga` | シベリアタイガ | 61.0 | 105.0 | BorealForest |
-| `yamal_tundra` | ヤマル半島 | 70.0 | 70.0 | Tundra |
-| `pantanal` | パンタナール | -17.0 | -57.0 | Wetland |
-| `tibet_alpine` | チベット高原 | 32.0 | 86.0 | Alpine |
+| 地域ID             | 地域名                 | 緯度  | 経度   | 期待バイオーム  |
+| ------------------ | ---------------------- | ----- | ------ | --------------- |
+| `amazon_core`      | アマゾン盆地中央       | -3.0  | -60.0  | TropicalForest  |
+| `congo_core`       | コンゴ盆地中央         | -1.0  | 24.0   | TropicalForest  |
+| `serengeti`        | セレンゲティ           | -2.5  | 34.8   | Savanna         |
+| `great_plains`     | 北米グレートプレーンズ | 44.0  | -101.0 | Grassland       |
+| `sahara_core`      | サハラ中部             | 23.0  | 13.0   | Desert          |
+| `europe_temperate` | 中央ヨーロッパ         | 49.0  | 14.0   | TemperateForest |
+| `siberia_taiga`    | シベリアタイガ         | 61.0  | 105.0  | BorealForest    |
+| `yamal_tundra`     | ヤマル半島             | 70.0  | 70.0   | Tundra          |
+| `pantanal`         | パンタナール           | -17.0 | -57.0  | Wetland         |
+| `tibet_alpine`     | チベット高原           | 32.0  | 86.0   | Alpine          |
 
 ---
 
@@ -316,39 +316,39 @@ soil_fertility_ref =
 
 ### 2-A：`biome` ラベル診断
 
-| # | 地域ID | 期待 |
-|---|---|---|
-| B-01 | `amazon_core` | TropicalForest |
-| B-02 | `congo_core` | TropicalForest |
-| B-03 | `serengeti` | Savanna |
-| B-04 | `great_plains` | Grassland |
-| B-05 | `sahara_core` | Desert |
+| #    | 地域ID             | 期待            |
+| ---- | ------------------ | --------------- |
+| B-01 | `amazon_core`      | TropicalForest  |
+| B-02 | `congo_core`       | TropicalForest  |
+| B-03 | `serengeti`        | Savanna         |
+| B-04 | `great_plains`     | Grassland       |
+| B-05 | `sahara_core`      | Desert          |
 | B-06 | `europe_temperate` | TemperateForest |
-| B-07 | `siberia_taiga` | BorealForest |
-| B-08 | `yamal_tundra` | Tundra |
-| B-09 | `pantanal` | Wetland |
-| B-10 | `tibet_alpine` | Alpine |
+| B-07 | `siberia_taiga`    | BorealForest    |
+| B-08 | `yamal_tundra`     | Tundra          |
+| B-09 | `pantanal`         | Wetland         |
+| B-10 | `tibet_alpine`     | Alpine          |
 
 ### 2-B：`tree_cover` の大小関係
 
 各行は `left > right` であるべき関係を示す。
 
-| # | left | right | 根拠 |
-|---|---|---|---|
-| T-01 | `amazon_core` | `serengeti` | 熱帯雨林 > サバンナ |
-| T-02 | `congo_core` | `great_plains` | 熱帯雨林 > 草原 |
-| T-03 | `europe_temperate` | `sahara_core` | 温帯林 > 砂漠 |
-| T-04 | `siberia_taiga` | `yamal_tundra` | タイガ > ツンドラ |
+| #    | left               | right          | 根拠                |
+| ---- | ------------------ | -------------- | ------------------- |
+| T-01 | `amazon_core`      | `serengeti`    | 熱帯雨林 > サバンナ |
+| T-02 | `congo_core`       | `great_plains` | 熱帯雨林 > 草原     |
+| T-03 | `europe_temperate` | `sahara_core`  | 温帯林 > 砂漠       |
+| T-04 | `siberia_taiga`    | `yamal_tundra` | タイガ > ツンドラ   |
 
 ### 2-C：`ground_cover` の大小関係
 
 各行は `left > right` であるべき関係を示す。
 
-| # | left | right | 根拠 |
-|---|---|---|---|
-| G-01 | `serengeti` | `sahara_core` | サバンナ > 砂漠 |
-| G-02 | `great_plains` | `sahara_core` | 草原 > 砂漠 |
-| G-03 | `pantanal` | `tibet_alpine` | 湿地低地 > 高山帯 |
+| #    | left           | right          | 根拠              |
+| ---- | -------------- | -------------- | ----------------- |
+| G-01 | `serengeti`    | `sahara_core`  | サバンナ > 砂漠   |
+| G-02 | `great_plains` | `sahara_core`  | 草原 > 砂漠       |
+| G-03 | `pantanal`     | `tibet_alpine` | 湿地低地 > 高山帯 |
 
 ---
 

@@ -105,9 +105,9 @@ baseline誤用防止:
 自動化:
 
 - 重ゲートは `.github/workflows/seed-regression-heavy-gate.yaml` で次の契機で自動実行する
-  - `pull_request`
-  - `push` to `main`
-  - `workflow_dispatch`（手動実行）
+    - `pull_request`
+    - `push` to `main`
+    - `workflow_dispatch`（手動実行）
 
 #### perfベースラインゲート（2026-03-17）
 
@@ -122,9 +122,9 @@ pnpm bench:perf:gate
 自動化:
 
 - `.github/workflows/perf-gate.yaml` で次の契機で自動実行する
-  - `pull_request`
-  - `push` to `main`
-  - `workflow_dispatch`（手動実行）
+    - `pull_request`
+    - `push` to `main`
+    - `workflow_dispatch`（手動実行）
 
 #### wasm APIテスト（2026-03-17）
 
@@ -138,9 +138,9 @@ cd rust && wasm-pack test --node
 自動化:
 
 - `.github/workflows/wasm-api-tests.yaml` で次の契機で自動実行する
-  - `pull_request`
-  - `push` to `main`
-  - `workflow_dispatch`（手動実行）
+    - `pull_request`
+    - `push` to `main`
+    - `workflow_dispatch`（手動実行）
 
 ### 3. 手動確認（UI/統合）
 

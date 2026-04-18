@@ -28,11 +28,11 @@
 - 実行場所: リポジトリルート
 - セル重心 CSV: `benches/data/cell_centroids.csv`
 - ベンチ入力キャッシュ:
-  - `benches/data/terrain_ref.bin`
-  - `benches/data/climate_ref.bin`
-  - `benches/data/hydro_ref.bin`
-  - `benches/data/ecology_ref.bin`
-  - `benches/data/domesticates_ref.bin`
+    - `benches/data/terrain_ref.bin`
+    - `benches/data/climate_ref.bin`
+    - `benches/data/hydro_ref.bin`
+    - `benches/data/ecology_ref.bin`
+    - `benches/data/domesticates_ref.bin`
 
 `domesticates_solo` ベンチ本体は上記 5 つを読む。
 
@@ -51,15 +51,17 @@ geology, climate, hydrology, ecology のものを流用
 ### E. 栽培植物参照（主評価に必須）
 
 - 生データ配置先
-  - `benches/raw/domesticates/crops/`
+    - `benches/raw/domesticates/crops/`
 - 出力キャッシュ
-  - `benches/data/domesticates_ref.bin`
+    - `benches/data/domesticates_ref.bin`
 
 取得元:
+
 - EarthStat harvested area and yield: https://www.earthstat.org/harvested-area-yield-175-crops/
 - 再配布ミラー（zip 一括取得）: https://geodata.ucdavis.edu/geodata/crops/monfreda/
 
 対象種:
+
 - `Wheat`
 - `Rice`
 - `Maize`
@@ -71,11 +73,12 @@ geology, climate, hydrology, ecology のものを流用
 ### F. 家畜参照（主評価に必須）
 
 - 生データ配置先
-  - `benches/raw/domesticates/livestock/`
+    - `benches/raw/domesticates/livestock/`
 - 出力キャッシュ
-  - `benches/data/domesticates_ref.bin`
+    - `benches/data/domesticates_ref.bin`
 
 取得元:
+
 - FAO Global Livestock Production and Health Atlas / Gridded Livestock of the World:
   https://www.fao.org/livestock-systems/global-distributions/en/
 - Cattle 2015 DOI: https://doi.org/10.7910/DVN/LHBICE
@@ -84,6 +87,7 @@ geology, climate, hydrology, ecology のものを流用
 - Sheep 2015 DOI: https://doi.org/10.7910/DVN/VZOYHM
 
 対象種:
+
 - `Cattle`
 - `Horse`
 - `Sheep`
@@ -92,7 +96,7 @@ geology, climate, hydrology, ecology のものを流用
 ### G. manifest（必須）
 
 - 正本:
-  - `benches/raw/domesticates/manifest.json`
+    - `benches/raw/domesticates/manifest.json`
 
 `bench:resample:domesticates-ref` は manifest を読み、
 `mode=raster` の entry だけを `domesticates_ref.bin` に取り込む。
@@ -180,14 +184,17 @@ pnpm bench:resample:ecology-ref:with-soil
 ### 3. EarthStat から crop raster を手動取得
 
 用途:
+
 - crop observed intensity
 - crop observed presence
 
 取得対象:
+
 - EarthStat harvested area raster
 - 対象種: `Wheat`, `Rice`, `Maize`, `Millet`, `Potato`, `Cassava`, `Sorghum`
 
 実務手順:
+
 1. EarthStat の説明ページを開く
 2. 実取得は `geodata.ucdavis.edu/geodata/crops/monfreda/` の zip 配布を使う
 3. `Monfreda_HarvestedAreaHectares.zip` を取得する
@@ -196,6 +203,7 @@ pnpm bench:resample:ecology-ref:with-soil
 6. `benches/raw/domesticates/crops/` に canonical 名で配置する
 
 canonical 名:
+
 - `wheat_harvested_area.tif`
 - `rice_harvested_area.tif`
 - `maize_harvested_area.tif`
@@ -205,6 +213,7 @@ canonical 名:
 - `sorghum_harvested_area.tif`
 
 運用上の注意:
+
 - 配布元 zip 名や内部ファイル名は変わってよい
 - benchmark 側は `manifest.json` の `local_path` を見るため、
   最終配置名だけ canonical に揃えばよい
@@ -221,14 +230,17 @@ canonical 名:
 ### 4. FAO GLW から livestock raster を手動取得
 
 用途:
+
 - livestock observed intensity
 - livestock observed presence
 
 取得対象:
+
 - FAO GLW 2015 の species dataset
 - 対象種: `Cattle`, `Horse`, `Sheep`, `Pig`
 
 実務手順:
+
 1. FAO の `Global distributions` ページを開く
 2. 対象 species ページへ移動する
 3. `2015` の DOI リンクを開き、Harvard Dataverse の dataset ページへ移動する
@@ -236,19 +248,21 @@ canonical 名:
 5. 取得した GeoTIFF を `benches/raw/domesticates/livestock/` に canonical 名で配置する
 
 canonical 名:
+
 - `cattle_density.tif`
 - `horse_density.tif`
 - `sheep_density.tif`
 - `pig_density.tif`
 
 運用上の注意:
+
 - 配布元の元ファイル名は固定しない
 - benchmark 側は `manifest.json` の `local_path` を正本にする
 - `domesticates` v1 では次の Dataverse ファイルを使う
-  - Cattle: `5_Ct_2015_Da.tif`
-  - Horse: `5_Ho_2015_Da.tif`
-  - Pig: `5_Pg_2015_Da.tif`
-  - Sheep: `5_Sh_2015_Da.tif`
+    - Cattle: `5_Ct_2015_Da.tif`
+    - Horse: `5_Ho_2015_Da.tif`
+    - Pig: `5_Pg_2015_Da.tif`
+    - Sheep: `5_Sh_2015_Da.tif`
 - これらは「5 arc-min pixel あたりの頭数」であり、
   厳密な km² density raster ではない
 - ただし本 benchmark は species ごとに `log1p -> clip -> min-max` 正規化して
