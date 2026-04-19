@@ -104,33 +104,6 @@ ExecSystem（切り替えと実行制御）
 
 各 `Module` の内部で、時代や状態に応じて1つ以上の `System` を選択して実行する。
 
----
-
-## SoA + EntityState の採用
-
-### 採用理由
-
-このシミュレータの処理の本質は「全セル（約4万）に対して、同じ計算を一斉に適用する」ことである。
-セル状態にはSoAが適合し、CPUキャッシュ効率を最大化できる。
-
-また、Tier2モジュール追加時に `Module` と必要な `System`・Componentを登録するだけで拡張できるため、
-複雑性の増加に対してアーキテクチャが崩れにくい。
-
-### セルと非セルEntityの分離
-
-セルと非セルEntityでは性質が異なるため、管理方法を分ける。
-
-- `CellStore`（自前SoA）
-    - 全セルの現在値Componentを保持する
-- `EntityState`（疎なEntity）
-    - `slotmap` ベースで Polity・Settlement・Region などを保持する
-- `polity_relations`（国家間関係）
-    - 国家間の重み付き関係を保持する
-
-データ配置と型定義の詳細は `docs/reference/architecture/data_model.md` を参照。
-
----
-
 ## Systemの原則
 
 `System` は「更新を行う実行単位」として実装する。

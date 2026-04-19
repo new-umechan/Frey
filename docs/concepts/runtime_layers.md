@@ -84,29 +84,10 @@ presentation は world 正本を持たず、transport 経由の view model を�
 逆方向依存は置かない。
 特に `core -> wasm_bindgen`、`core -> browser API`、`core -> worker protocol` は禁止する。
 
-## 実装方針
-
-全面移行は一度に行わない。まず次の順で進める。
-
-1. Rust の純粋計算 API を `core_api` として分離する
-2. WASM 公開関数を `transport::wasm` に寄せる
-3. Web の generated wasm 直参照を `web/src/transport/wasm/` に集約する
-4. `WorldSimController` のユースケースを application 層へ切り出す
-5. `interface/` を段階的に削除し、presentation は transport facade のみを見る
-
-## 実装規約
-
-Web 側の WASM 入口は `web/src/transport/wasm/` を正本とし、
-`interface/wasm.ts` 互換 shim は置かない。
-
-Rust 側でも `lib.rs` は既存の公開関数を維持するが、実体は `core_api` と `transport::wasm` へ委譲する。
-
 ## 補足
 
 `application` 層を明示すると、今後追加される以下の機能を整理しやすい。
 
-- 介入ログ保存
-- 分岐世界の fork
 - replay / restore
 - 検証用の deterministic run
 - headless benchmark 実行
