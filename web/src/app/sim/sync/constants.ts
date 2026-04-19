@@ -18,6 +18,7 @@ export type FieldKind =
     | "wind_v"
     | "moisture_flux_u"
     | "moisture_flux_v"
+    | "biome"
     | "river_transport_cost"
     | "crop_adoption_wheat"
     | "crop_adoption_rice"
@@ -157,6 +158,7 @@ export const CORE_KEY_BY_FIELD_KIND: Record<FieldKind, string> = Object.freeze({
     wind_v: "windV",
     moisture_flux_u: "moistureFluxU",
     moisture_flux_v: "moistureFluxV",
+    biome: "biome",
     river_transport_cost: "riverTransportCost",
     crop_adoption_wheat: "cropAdoptionWheat",
     crop_adoption_rice: "cropAdoptionRice",
@@ -206,6 +208,7 @@ const CHANGE_KIND_BY_FIELD_KIND: Record<FieldKind, keyof WorldChangeset> = Objec
     wind_v: "metric",
     moisture_flux_u: "metric",
     moisture_flux_v: "metric",
+    biome: "metric",
     river_transport_cost: "metric",
     crop_adoption_wheat: "metric",
     crop_adoption_rice: "metric",

@@ -37,6 +37,7 @@ export interface CoreBuffers {
     windV: TypedArray;
     moistureFluxU: TypedArray;
     moistureFluxV: TypedArray;
+    biome: TypedArray;
     riverTransportCost: TypedArray;
     cropAdoptionWheat: TypedArray;
     cropAdoptionRice: TypedArray;

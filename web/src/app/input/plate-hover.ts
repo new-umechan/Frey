@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { PLATE_HOVER_POPUP_DELAY_MS } from "../../shared/constants";
-import { getCellMetricMeta } from "../visualizers/cell-metric";
+import { formatBiomeLabel, getCellMetricMeta } from "../visualizers/cell-metric";
 import { type CoreBuffers } from "../sim/sync/types";
 
 export interface PlateHoverController {
@@ -34,6 +34,18 @@ interface MetricHoverValue {
     vertexIndex: number;
     value: number;
     formattedValue: string;
+}
+
+function formatWindDirection(u: number, v: number): string {
+    const speed = Math.hypot(u, v);
+    if (!Number.isFinite(speed) || speed < 1e-6) {
+        return "無風";
+    }
+    const angle = Math.atan2(v, u);
+    const degree = ((angle * 180) / Math.PI + 360) % 360;
+    const points = ["→", "↗", "↑", "↖", "←", "↙", "↓", "↘"];
+    const index = Math.round(degree / 45) % points.length;
+    return `${points[index]} ${speed.toFixed(2)} m/s`;
 }
 
 export function createPlateHover({
@@ -430,9 +442,37 @@ export function createPlateHover({
     function readMetricHoverValue(currentTerrainData: CoreBuffers, currentCellMetric: string, vertexIndexValue: number): MetricHoverValue | null {
         const meta = getCellMetricMeta(currentCellMetric);
         const vertexIndex = Number(vertexIndexValue);
+        if (!Number.isInteger(vertexIndex)) {
+            return null;
+        }
+        if (currentCellMetric === "wind_direction") {
+            const u = currentTerrainData.windU?.[vertexIndex];
+            const v = currentTerrainData.windV?.[vertexIndex];
+            if (!Number.isFinite(u) || !Number.isFinite(v)) {
+                return null;
+            }
+            return {
+                meta,
+                vertexIndex,
+                value: Math.hypot(u, v),
+                formattedValue: formatWindDirection(u, v),
+            };
+        }
+        if (currentCellMetric === "biome") {
+            const raw = currentTerrainData.biome?.[vertexIndex];
+            if (!Number.isFinite(raw)) {
+                return null;
+            }
+            return {
+                meta,
+                vertexIndex,
+                value: raw,
+                formattedValue: formatBiomeLabel(raw),
+            };
+        }
         const values = currentTerrainData[meta.dataKey] as Float32Array | Int32Array | Uint32Array | undefined;
         const value = values?.[vertexIndex];
-        if (!Number.isInteger(vertexIndex) || value === undefined || !Number.isFinite(value)) {
+        if (value === undefined || !Number.isFinite(value)) {
             return null;
         }
         return {

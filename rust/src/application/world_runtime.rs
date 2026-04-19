@@ -120,6 +120,7 @@ pub(crate) struct WorldTransportCache {
     pub wind_v: F32FieldTracker,
     pub moisture_flux_u: F32FieldTracker,
     pub moisture_flux_v: F32FieldTracker,
+    pub biome: I32FieldTracker,
     pub river_transport_cost: F32FieldTracker,
     pub crop_adoption_wheat: F32FieldTracker,
     pub crop_adoption_rice: F32FieldTracker,
@@ -682,6 +683,27 @@ fn collect_livestock_available_for_kind(world: &world::World, kind_index: usize)
         .collect()
 }
 
+fn collect_biome_codes(world: &world::World) -> Vec<i32> {
+    world
+        .state
+        .ecology
+        .biome
+        .iter()
+        .copied()
+        .map(|biome| match biome {
+            world::Biome::TropicalForest => 0,
+            world::Biome::Savanna => 1,
+            world::Biome::Desert => 2,
+            world::Biome::Grassland => 3,
+            world::Biome::TemperateForest => 4,
+            world::Biome::BorealForest => 5,
+            world::Biome::Tundra => 6,
+            world::Biome::Wetland => 7,
+            world::Biome::Alpine => 8,
+        })
+        .collect()
+}
+
 impl WorldTransportCache {
     pub fn from_world(
         world: &world::World,
@@ -719,6 +741,7 @@ impl WorldTransportCache {
             wind_v: F32FieldTracker::new(&world.state.climate.wind_v),
             moisture_flux_u: F32FieldTracker::new(&world.state.climate.moisture_flux_u),
             moisture_flux_v: F32FieldTracker::new(&world.state.climate.moisture_flux_v),
+            biome: I32FieldTracker::new(&collect_biome_codes(world)),
             river_transport_cost: F32FieldTracker::new(&world.state.hydrology.river_transport_cost),
             crop_adoption_wheat: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 0)),
             crop_adoption_rice: F32FieldTracker::new(&collect_crop_adoption_for_kind(world, 1)),
@@ -821,6 +844,7 @@ impl WorldTransportCache {
             .observe(&world.state.climate.moisture_flux_u);
         self.moisture_flux_v
             .observe(&world.state.climate.moisture_flux_v);
+        self.biome.observe(&collect_biome_codes(world));
         self.river_transport_cost
             .observe(&world.state.hydrology.river_transport_cost);
         self.crop_adoption_wheat
@@ -1028,6 +1052,13 @@ impl WorldTransportCache {
             }
         } else {
             self.moisture_flux_v.discard_pending();
+        }
+        if include_field("biome") {
+            if let Some(delta) = self.biome.take_delta("biome") {
+                deltas.push(delta);
+            }
+        } else {
+            self.biome.discard_pending();
         }
         if include_field("river_transport_cost") {
             if let Some(delta) = self.river_transport_cost.take_delta("river_transport_cost") {
@@ -1475,6 +1506,7 @@ mod tests {
             wind_v: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
+            biome: I32FieldTracker::new(&[0, 0]),
             river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
             crop_adoption_wheat: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),
@@ -1540,6 +1572,7 @@ mod tests {
             wind_v: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_u: F32FieldTracker::new(&[0.0, 0.0]),
             moisture_flux_v: F32FieldTracker::new(&[0.0, 0.0]),
+            biome: I32FieldTracker::new(&[0, 0]),
             river_transport_cost: F32FieldTracker::new(&[0.2, 0.2]),
             crop_adoption_wheat: F32FieldTracker::new(&[0.0, 0.0]),
             crop_adoption_rice: F32FieldTracker::new(&[0.0, 0.0]),

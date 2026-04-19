@@ -12,6 +12,7 @@ import {
     createMetricCellOverlayLayer,
     type MetricCellOverlayMesh,
 } from "../../gfx/views/metric-cell-overlay";
+import { createWindVectorOverlayLayer } from "../../gfx/views/wind-vector-overlay";
 import { DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
@@ -112,6 +113,9 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     const metricCellOverlay = createMetricCellOverlayLayer(metricCellOverlayMesh);
     metricCellOverlay.mesh.position.setX(sphere.position.x);
     scene.add(metricCellOverlay.mesh);
+    const windVectorOverlay = createWindVectorOverlayLayer(basePositions);
+    windVectorOverlay.mesh.position.setX(sphere.position.x);
+    scene.add(windVectorOverlay.mesh);
 
     const terrainRenderer = createTerrainRenderer({
         geometry,
@@ -120,6 +124,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         buildRenderPositions,
         buildRiverMaskTexture,
         metricPillars: metricCellOverlay,
+        windVectors: windVectorOverlay,
         setTerrainGhosted: (enabled: boolean) => {
             terrainMaterial.material.transparent = enabled;
             terrainMaterial.material.opacity = enabled ? 0 : 1;

@@ -49,6 +49,20 @@ fn sample_bitmap_available(values: &[u8], mask: u8, stride: u32) -> Vec<f32> {
         .collect()
 }
 
+fn biome_to_i32(biome: crate::sim::world::Biome) -> i32 {
+    match biome {
+        crate::sim::world::Biome::TropicalForest => 0,
+        crate::sim::world::Biome::Savanna => 1,
+        crate::sim::world::Biome::Desert => 2,
+        crate::sim::world::Biome::Grassland => 3,
+        crate::sim::world::Biome::TemperateForest => 4,
+        crate::sim::world::Biome::BorealForest => 5,
+        crate::sim::world::Biome::Tundra => 6,
+        crate::sim::world::Biome::Wetland => 7,
+        crate::sim::world::Biome::Alpine => 8,
+    }
+}
+
 pub(crate) fn get_field(
     service: &WorldService,
     world_id: &str,
@@ -239,6 +253,25 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
+        "biome" => {
+            let biome_values = world_ref
+                .state
+                .ecology
+                .biome
+                .iter()
+                .copied()
+                .map(biome_to_i32)
+                .collect::<Vec<_>>();
+            FieldResponse {
+                field_kind,
+                stride,
+                cell_count: biome_values.len() as u32,
+                sampled_count: sampled_len(biome_values.len(), stride),
+                f32_data: None,
+                u32_data: None,
+                i32_data: Some(sample_i32(biome_values.as_slice(), stride)),
+            }
+        }
         "plate_id" => FieldResponse {
             field_kind,
             stride,

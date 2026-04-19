@@ -96,6 +96,38 @@
     gap: 4px;
 }
 
+.climate-legend-panel {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    z-index: 11;
+    min-width: 260px;
+    max-width: 360px;
+    padding: 10px 12px;
+    border: 1px solid #d3d8dd;
+    border-radius: 6px;
+    background: rgba(244, 247, 250, 0.96);
+    color: var(--text);
+    pointer-events: none;
+    display: grid;
+    gap: 4px;
+}
+
+.climate-legend-title {
+    margin: 0;
+    font-family: "JetBrains Mono", "Noto Sans JP", sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.climate-legend-line {
+    margin: 0;
+    font-family: "JetBrains Mono", "Noto Sans JP", sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
 .domesticates-legend-title {
     margin: 0;
     font-family: "JetBrains Mono", "Noto Sans JP", sans-serif;

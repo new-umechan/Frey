@@ -1,4 +1,10 @@
-import { getCellMetricMeta, isDomesticatesMetric } from "../visualizers/cell-metric";
+import {
+    biomeLabels,
+    formatBiomeLabel,
+    getCellMetricMeta,
+    isBiomeMetric,
+    isDomesticatesMetric,
+} from "../visualizers/cell-metric";
 import { type ClimateLegendElements, type DomesticatesLegendElements } from "../../components/dom";
 import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
 
@@ -26,6 +32,23 @@ function computeLegendStats(values: ArrayLike<number> | null) {
         mid: quantile(0.50),
         max: quantile(0.95),
     };
+}
+
+function computeWindSpeedStats(windU: ArrayLike<number> | null, windV: ArrayLike<number> | null) {
+    if (!windU || !windV || windU.length === 0 || windV.length === 0) {
+        return null;
+    }
+    const speeds: number[] = [];
+    const len = Math.min(windU.length, windV.length);
+    for (let i = 0; i < len; i += 1) {
+        const u = windU[i];
+        const v = windV[i];
+        if (!Number.isFinite(u) || !Number.isFinite(v)) {
+            continue;
+        }
+        speeds.push(Math.hypot(u, v));
+    }
+    return computeLegendStats(speeds);
 }
 
 interface ClimateUiControllerOptions {
@@ -60,6 +83,8 @@ export function createClimateUiController(options: ClimateUiControllerOptions) {
         const currentTerrainData = getCurrentTerrainData();
         const isMetricMode = currentViewMode === "metric";
         const domesticatesMetric = isMetricMode && isDomesticatesMetric(currentCellMetric);
+        const biomeMetric = isMetricMode && isBiomeMetric(currentCellMetric);
+        const windMetric = isMetricMode && currentCellMetric === "wind_direction";
 
         if (climateLegend) {
             climateLegend.panel.hidden = !isMetricMode || domesticatesMetric;
@@ -84,6 +109,23 @@ export function createClimateUiController(options: ClimateUiControllerOptions) {
             return;
         }
         if (!climateLegend) {
+            return;
+        }
+        if (biomeMetric) {
+            climateLegend.panel.dataset.metric = currentCellMetric;
+            climateLegend.title.textContent = `${meta.label} (${meta.unit})`;
+            climateLegend.min.textContent = `分類数: ${biomeLabels().length}`;
+            climateLegend.mid.textContent = `代表: ${biomeLabels().slice(0, 3).join(" / ")}`;
+            climateLegend.max.textContent = `例: ${formatBiomeLabel(8)}`;
+            return;
+        }
+        if (windMetric) {
+            const stats = computeWindSpeedStats(currentTerrainData?.windU ?? null, currentTerrainData?.windV ?? null);
+            climateLegend.panel.dataset.metric = currentCellMetric;
+            climateLegend.title.textContent = "風向 (m/s)";
+            climateLegend.min.textContent = stats ? `${stats.min.toFixed(2)} m/s` : "-";
+            climateLegend.mid.textContent = stats ? `${stats.mid.toFixed(2)} m/s` : "-";
+            climateLegend.max.textContent = stats ? `${stats.max.toFixed(2)} m/s` : "-";
             return;
         }
         const metricValues = currentTerrainData?.[meta.dataKey] as TypedArray | undefined;

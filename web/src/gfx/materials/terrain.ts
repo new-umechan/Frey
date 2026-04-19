@@ -31,6 +31,8 @@ function metricKeyToNumber(metricKey: string): number {
         river_transport_cost: 11,
         ice_pressure: 12,
         plate_id: 13,
+        wind_direction: 16,
+        biome: 17,
     };
     return kindByKey[metricKey] ?? 0;
 }
@@ -243,6 +245,32 @@ vec3 paletteAdoption(float value) {
     return mix(c2, c3, (t - 0.66) / 0.34);
 }
 
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 paletteWindDirection(float u, float v) {
+    float angle = atan(v, u);
+    float hue = (angle + 3.141592653589793) / 6.283185307179586;
+    float speed = clamp(length(vec2(u, v)) / 12.0, 0.0, 1.0);
+    return hsv2rgb(vec3(hue, 0.65, 0.55 + 0.35 * speed));
+}
+
+vec3 paletteBiome(float value) {
+    float biome = floor(max(value, 0.0) + 0.5);
+    if (biome < 0.5) return vec3(0.13, 0.45, 0.24); // TropicalForest
+    if (biome < 1.5) return vec3(0.49, 0.62, 0.23); // Savanna
+    if (biome < 2.5) return vec3(0.83, 0.73, 0.47); // Desert
+    if (biome < 3.5) return vec3(0.58, 0.69, 0.37); // Grassland
+    if (biome < 4.5) return vec3(0.24, 0.52, 0.26); // TemperateForest
+    if (biome < 5.5) return vec3(0.17, 0.32, 0.22); // BorealForest
+    if (biome < 6.5) return vec3(0.72, 0.76, 0.80); // Tundra
+    if (biome < 7.5) return vec3(0.22, 0.45, 0.58); // Wetland
+    return vec3(0.55, 0.57, 0.61); // Alpine
+}
+
 vec3 freyMetricModeColor(float kind) {
     if (kind < 0.5) return paletteRiver(clamp((vTerrainMetric + 1.0) * 0.5, 0.0, 1.0));
     if (kind < 1.5) return paletteMagma(vTerrainMetric);
@@ -259,7 +287,9 @@ vec3 freyMetricModeColor(float kind) {
     if (kind < 12.5) return paletteIcePressure(vTerrainMetric);
     if (kind < 13.5) return palettePlateId(vTerrainMetric);
     if (kind < 14.5) return paletteAdoption(vTerrainMetric);
-    return mix(vec3(0.88, 0.93, 0.98), vec3(0.16, 0.44, 0.78), clamp(vTerrainMetric, 0.0, 1.0));
+    if (kind < 16.5) return mix(vec3(0.88, 0.93, 0.98), vec3(0.16, 0.44, 0.78), clamp(vTerrainMetric, 0.0, 1.0));
+    if (kind < 17.5) return paletteWindDirection(vTerrainMetric, vTerrainMetricOverlay);
+    return paletteBiome(vTerrainMetric);
 }
 
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverMask) {

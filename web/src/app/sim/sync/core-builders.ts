@@ -66,6 +66,7 @@ export async function buildCoreBuffers(controller: EngineClient, worldId: string
         windV: await getFieldData(controller, worldId, "wind_v", cellCount),
         moistureFluxU: await getFieldData(controller, worldId, "moisture_flux_u", cellCount),
         moistureFluxV: await getFieldData(controller, worldId, "moisture_flux_v", cellCount),
+        biome: await getFieldData(controller, worldId, "biome", cellCount),
         riverTransportCost: await getFieldData(controller, worldId, "river_transport_cost", cellCount),
         cropAdoptionWheat: await getFieldData(controller, worldId, "crop_adoption_wheat", cellCount),
         cropAdoptionRice: await getFieldData(controller, worldId, "crop_adoption_rice", cellCount),

@@ -22,6 +22,25 @@ const CROPS = Object.freeze([
     "yam",
 ] as const);
 const LIVESTOCK = Object.freeze(["cattle", "horse", "sheep", "pig", "camel"] as const);
+const BIOME_LABELS = Object.freeze([
+    "熱帯林",
+    "サバンナ",
+    "砂漠",
+    "草原",
+    "温帯林",
+    "針葉樹林",
+    "ツンドラ",
+    "湿地",
+    "高山帯",
+]);
+
+function biomeLabelFromId(value: number): string {
+    const index = Math.trunc(value);
+    if (index < 0 || index >= BIOME_LABELS.length) {
+        return `未知(${index})`;
+    }
+    return BIOME_LABELS[index];
+}
 
 function cropLabel(name: string): string {
     return `作物 ${name[0].toUpperCase()}${name.slice(1)}`;
@@ -158,6 +177,18 @@ const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
         formatter: (value) => value.toFixed(2),
     },
     {
+        key: "wind_direction",
+        fieldKind: "wind_u",
+        dataKey: "windU",
+        label: "風向",
+        unit: "vector",
+        category: "climate",
+        palette: "wind",
+        formatter: (value) => `${value.toFixed(2)} m/s`,
+        overlayFieldKind: "wind_v",
+        overlayDataKey: "windV",
+    },
+    {
         key: "ocean_temperature",
         fieldKind: "ocean_temperature",
         dataKey: "oceanTemperature",
@@ -196,6 +227,16 @@ const CELL_METRIC_DEFS: readonly CellMetricDef[] = Object.freeze([
         category: "glaciology",
         palette: "icePressure",
         formatter: (value) => value.toFixed(3),
+    },
+    {
+        key: "biome",
+        fieldKind: "biome",
+        dataKey: "biome",
+        label: "気候種",
+        unit: "biome",
+        category: "climate",
+        palette: "biome",
+        formatter: (value) => biomeLabelFromId(value),
     },
     {
         key: "river_transport_cost",
@@ -261,6 +302,18 @@ export function getOverlayFieldKindForMetric(metricKey: string): string | null {
 
 export function isDomesticatesMetric(metricKey: string): boolean {
     return getCellMetricMeta(metricKey).category === "domesticates";
+}
+
+export function isBiomeMetric(metricKey: string): boolean {
+    return normalizeCellMetric(metricKey) === "biome";
+}
+
+export function biomeLabels(): readonly string[] {
+    return BIOME_LABELS;
+}
+
+export function formatBiomeLabel(value: number): string {
+    return biomeLabelFromId(value);
 }
 
 export interface MetricCategory extends CategoryMeta {

@@ -23,6 +23,11 @@ interface MetricPillarsLayerController {
     ) => void;
 }
 
+interface WindVectorsLayerController {
+    setVisible: (visible: boolean) => void;
+    update: (heightData: Float32Array, windU: Float32Array, windV: Float32Array) => void;
+}
+
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;
     terrainMaterial: TerrainMaterialController;
@@ -39,6 +44,7 @@ export interface TerrainRendererOptions {
     ) => Float32Array;
     buildRiverMaskTexture: (base: Float32Array, next: Int32Array, flux: Float32Array) => THREE.Texture;
     metricPillars?: MetricPillarsLayerController | null;
+    windVectors?: WindVectorsLayerController | null;
     setTerrainGhosted?: ((enabled: boolean) => void) | null;
 }
 
@@ -78,6 +84,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         buildRenderPositions,
         buildRiverMaskTexture,
         metricPillars = null,
+        windVectors = null,
         setTerrainGhosted = null,
     } = options;
 
@@ -92,6 +99,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     let currentMetricKey = "height";
     let currentViewModeForGeometry = "normal";
     let pillarsVisible = false;
+    let windVectorsVisible = false;
     let lastSurfaceMode: string | null = null;
     let lastNormalRefreshTick = -1;
 
@@ -259,6 +267,22 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
                 }
             }
         }
+        const nextWindVectorsVisible = Boolean(windVectors)
+            && currentViewModeForGeometry === "metric"
+            && currentMetricKey === "wind_direction"
+            && currentSurfaceMode === "globe";
+        const windVectorsVisibilityChanged = windVectorsVisible !== nextWindVectorsVisible;
+        if (windVectors) {
+            windVectors.setVisible(nextWindVectorsVisible);
+        }
+        if (nextWindVectorsVisible && (options.force || options.heightChanged || options.metricChanged || windVectorsVisibilityChanged || surfaceModeChanged)) {
+            windVectors?.update(
+                currentTerrainData.heightData as Float32Array,
+                toFloat32Array(currentTerrainData.windU),
+                toFloat32Array(currentTerrainData.windV),
+            );
+        }
+        windVectorsVisible = nextWindVectorsVisible;
         const shouldUpdate = options.force
             || options.heightChanged
             || surfaceModeChanged
