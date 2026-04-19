@@ -47,7 +47,6 @@
         "bench:check:climate-runtime": "tsx benches/scripts/check-climate-runtime.ts",
         "bench:check:climate-quality": "tsx benches/scripts/check-climate-quality.ts",
         "bench:tune:climate": "python3 benches/scripts/tune-climate-params.py",
-        "bench:tui": "tsx benches/scripts/tui-dashboard.ts",
         "bench:run:hydrology-series": "tsx benches/scripts/bench-hydrology-series.ts",
         "bench:compare:hydrology": "tsx benches/scripts/compare-hydrology-scores.ts",
         "bench:check:hydrology-runtime": "tsx benches/scripts/check-hydrology-runtime.ts",
@@ -103,12 +102,9 @@
         "test:gate:full": "pnpm run test:gate && pnpm run test:gate:benchmark"
     },
     "dependencies": {
-        "blessed": "^0.1.81",
-        "blessed-contrib": "^4.11.0",
         "three": "^0.180.0"
     },
     "devDependencies": {
-        "@types/blessed": "^0.1.27",
         "@types/node": "^25.5.0",
         "@types/three": "^0.183.1",
         "@vitest/coverage-v8": "^4.1.2",
