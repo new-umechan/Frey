@@ -37,9 +37,10 @@ reference は実装と一致している必要がある。
 - 採用前のモジュール設計
 - 大きな再設計案
 
+形式の詳細は`docs/proposal/template.md`を参考にする。
 ここにある文書は正本ではない。採用後に `reference/` へ反映する。
 
-各 proposal の先頭には少なくとも次を明記する。
+各 proposal の先頭には次を明記する。
 
 - `Status`
 - 必要なら `Reason`
