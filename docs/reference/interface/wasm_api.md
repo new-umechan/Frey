@@ -13,8 +13,8 @@ JSから利用する現行WASM公開APIを定義する。
 - `cell_overlay_positions` はセル上面 overlay 用の非 index 三角形頂点列。
 - `cell_overlay_cell_ids` は `cell_overlay_positions` の各頂点が属するセル ID。
 - `cell_overlay_lift` は `cell_overlay_positions` の各頂点に対する押し出し係数（0.0 または 1.0）。
-  - 1.0: 指標による上方向オフセットを適用（上面/側面上端）
-  - 0.0: 指標オフセットを適用しない（側面下端）
+    - 1.0: 指標による上方向オフセットを適用（上面/側面上端）
+    - 0.0: 指標オフセットを適用しない（側面下端）
 - `generate_geology`の`params`未指定時は`GeologyParams::default()`を使用する。
 - `GeologyParams`には従来項目に加えて、プレート運動・境界再分類・沈み込み開始閾値・マントル熱場・プルーム関連の項目が含まれる。
 

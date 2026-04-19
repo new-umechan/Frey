@@ -4,6 +4,8 @@
 
 ## Status
 
+Draft
+
 ## 背景
 
 ## 目的

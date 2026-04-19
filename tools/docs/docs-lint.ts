@@ -18,7 +18,7 @@ const VALID_PROPOSAL_STATUSES = new Set([
 
 const DOCS_REFERENCE_PATTERN = /docs\/[A-Za-z0-9_./-]+\.md/g;
 const STATUS_HEADING_PATTERN = /^## Status\s*$/m;
-const ADR_FILENAME_PATTERN = /^ADR-\d{4}-[a-z0-9-]+\.md$/;
+const ADR_FILENAME_PATTERN = /^\d{6}-[a-z0-9-]+\.md$/;
 
 function getLineNumber(text: string, index: number): number {
     return text.slice(0, index).split("\n").length;
@@ -130,7 +130,7 @@ function lintDecisionFilename(repoRoot: string): Violation[] {
             path: `docs/decisions/${entry.name}`,
             line: 1,
             ruleId: "decision-filename-format",
-            message: "decision filename must match `ADR-XXXX-slug.md`",
+            message: "decision filename must match `YYMMDD-slug.md`",
         });
     }
 

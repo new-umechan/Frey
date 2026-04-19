@@ -21,11 +21,11 @@ Accepted
 セルと非セル Entity で管理方法を分ける。
 
 - `CellStore`（自前 SoA）
-  - 全セルの現在値 Component を保持する
+    - 全セルの現在値 Component を保持する
 - `EntityState`（疎な Entity）
-  - `slotmap` ベースで Polity・Settlement・Region などを保持する
+    - `slotmap` ベースで Polity・Settlement・Region などを保持する
 - `polity_relations`（国家間関係）
-  - 国家間の重み付き関係を保持する
+    - 国家間の重み付き関係を保持する
 
 データ配置と型定義の詳細は `docs/reference/architecture/data_model.md` を参照する。
 

@@ -31,7 +31,7 @@ describe("docs-lint", () => {
         writeFile(repoRoot, "docs/README.md", "# docs\n");
         writeFile(repoRoot, "docs/proposal/idea.md", "# Proposal\n\n## Status\n\nDraft\n");
         writeFile(repoRoot, "docs/reference/spec.md", "# Reference\n");
-        writeFile(repoRoot, "docs/decisions/ADR-0001-docs-structure.md", "# ADR\n");
+        writeFile(repoRoot, "docs/decisions/260417-docs-structure.md", "# ADR\n");
 
         expect(lintRepo(repoRoot)).toEqual([]);
     });
