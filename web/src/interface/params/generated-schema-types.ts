@@ -231,6 +231,9 @@ export interface TerrainSchemaParams {
     river_rain_base: number;
     river_accumulation_threshold: number;
     sink_local_rebuild_radius: number;
+    sink_full_rebuild_interval_ticks: number;
+    sink_full_rebuild_changed_ratio: number;
+    sink_incremental_neighbor_hops: number;
     sink_overflow_hysteresis: number;
     sink_min_capacity: number;
     erosion_iterations: number;
@@ -326,6 +329,9 @@ export const TerrainSchemaParamsKeys = [
     "river_rain_base",
     "river_accumulation_threshold",
     "sink_local_rebuild_radius",
+    "sink_full_rebuild_interval_ticks",
+    "sink_full_rebuild_changed_ratio",
+    "sink_incremental_neighbor_hops",
     "sink_overflow_hysteresis",
     "sink_min_capacity",
     "erosion_iterations",

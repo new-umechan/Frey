@@ -62,6 +62,7 @@ pub(crate) fn step_async_erosion_automaton(
 
     let budget = budget_cells.max(1) as usize;
     state.tick = state.tick.saturating_add(1);
+    state.recent_changed.clear();
 
     let mut changed_mark = std::mem::take(&mut state.scratch_changed_mark);
     if changed_mark.len() != v_count {
@@ -81,7 +82,7 @@ pub(crate) fn step_async_erosion_automaton(
         processed += 1;
 
         let result = process_async_erosion_cell(state, v);
-        if result.changed {
+        if result.topography_changed {
             mark_changed_vertex(v, &mut changed_mark, &mut state.recent_changed);
         }
         if result.deposited_here {
@@ -96,9 +97,6 @@ pub(crate) fn step_async_erosion_automaton(
         }
         if let Some(n) = result.downstream {
             enqueue_active_vertex(state, n);
-            if result.changed {
-                mark_changed_vertex(n, &mut changed_mark, &mut state.recent_changed);
-            }
         }
         if result.changed {
             enqueue_active_vertex(state, v);
@@ -113,9 +111,12 @@ pub(crate) fn step_async_erosion_automaton(
     breakdown
 }
 
+const SINK_TOPOGRAPHY_CHANGE_EPS: f32 = 5e-4;
+
 #[derive(Default)]
 struct AsyncCellUpdateResult {
     changed: bool,
+    topography_changed: bool,
     deposited_here: bool,
     downstream: Option<usize>,
 }
@@ -210,6 +211,9 @@ fn process_async_erosion_cell(
             state.height[i] = clamp(state.height[i] - erode_amount, -1.2, 1.2);
             sediment += erode_amount;
             result.changed = true;
+            if erode_amount >= SINK_TOPOGRAPHY_CHANGE_EPS {
+                result.topography_changed = true;
+            }
         }
     }
 
@@ -259,7 +263,10 @@ fn process_async_erosion_cell(
             );
             sediment -= deposit_amount;
             result.changed = true;
-            result.deposited_here = true;
+            if deposit_amount >= SINK_TOPOGRAPHY_CHANGE_EPS {
+                result.topography_changed = true;
+                result.deposited_here = true;
+            }
         }
     }
 
@@ -325,7 +332,7 @@ fn process_async_erosion_cell(
 pub(super) fn inject_async_rain(
     state: &mut crate::ErosionAutomatonState,
     count: usize,
-    changed_mark: &mut [u8],
+    _changed_mark: &mut [u8],
 ) {
     let v_count = state.height.len();
     if v_count == 0 || count == 0 {
@@ -349,7 +356,6 @@ pub(super) fn inject_async_rain(
         let add = 0.02 * rain_unit / base.max(1e-4);
         state.water[v] = (state.water[v] + add).min(2.0);
         enqueue_active_vertex(state, v);
-        mark_changed_vertex(v, changed_mark, &mut state.recent_changed);
     }
 }
 

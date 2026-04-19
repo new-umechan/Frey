@@ -21,7 +21,7 @@ mod sync;
 use fallback::run_river_fallback;
 use fill_spill::{
     rebuild_fill_spill_state, refresh_fill_spill_storage_and_lakes, should_rebuild_fill_spill,
-    sync_fill_spill_from_erosion, update_public_lake_flags,
+    sync_fill_spill_from_erosion, update_public_lake_flags, FillSpillRebuildMode,
 };
 use network::{
     align_flow_heading, apply_river_network_constraints, build_river_network,
@@ -55,6 +55,10 @@ pub(crate) struct HydrologyStepDetailBreakdown {
     pub sink_rebuild_partial_count: u32,
     pub sink_rebuild_skipped_count: u32,
     pub sink_rebuild_fallback_full_count: u32,
+    pub sink_incremental_rebuild_ms: f64,
+    pub sink_full_rebuild_ms: f64,
+    pub sink_affected_ratio: f64,
+    pub sink_validation_fail_count: u32,
 }
 
 pub(crate) fn run_hydrology_step(
@@ -229,29 +233,64 @@ fn run_river_step_with_erosion_state(
         .sink_rebuild_fallback_full_count
         .saturating_add(automaton_breakdown.sink_rebuild_fallback_full_count);
     sync_fill_spill_from_erosion(hydrology, &state.height, &state.params, state);
-    if should_rebuild_fill_spill(hydrology, state) {
-        let phase_start = profile_now();
-        rebuild_fill_spill_state(
-            hydrology,
-            &state.height,
-            &mesh_nbr_offsets,
-            &mesh_nbrs,
-            &state.params,
-            Some(&state.water),
-            Some(&state.sediment),
-        );
-        state.last_sink_full_rebuild_tick = state.tick;
-        detail.river_automaton_sink_ms += profile_elapsed_ms(phase_start);
-        detail.sink_rebuild_full_count = detail.sink_rebuild_full_count.saturating_add(1);
-    } else {
-        refresh_fill_spill_storage_and_lakes(
-            hydrology,
-            &state.height,
-            Some(&state.water),
-            Some(&state.sediment),
-            &state.params,
-        );
-        detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
+    match should_rebuild_fill_spill(hydrology, state) {
+        FillSpillRebuildMode::Full { validation_failed } => {
+            let phase_start = profile_now();
+            rebuild_fill_spill_state(
+                hydrology,
+                &state.height,
+                &mesh_nbr_offsets,
+                &mesh_nbrs,
+                &state.params,
+                Some(&state.water),
+                Some(&state.sediment),
+            );
+            state.last_sink_full_rebuild_tick = state.tick;
+            let elapsed = profile_elapsed_ms(phase_start);
+            detail.river_automaton_sink_ms += elapsed;
+            detail.sink_full_rebuild_ms += elapsed;
+            detail.sink_rebuild_full_count = detail.sink_rebuild_full_count.saturating_add(1);
+            if validation_failed {
+                detail.sink_validation_fail_count =
+                    detail.sink_validation_fail_count.saturating_add(1);
+            }
+        }
+        FillSpillRebuildMode::Incremental => {
+            let phase_start = profile_now();
+            let affected = fill_spill::rebuild_fill_spill_state_incremental(
+                hydrology,
+                &state.height,
+                &mesh_nbr_offsets,
+                &mesh_nbrs,
+                &state.params,
+                &state.recent_changed,
+                state.params.sink_incremental_neighbor_hops,
+            );
+            let elapsed = profile_elapsed_ms(phase_start);
+            detail.river_automaton_sink_ms += elapsed;
+            detail.sink_incremental_rebuild_ms += elapsed;
+            detail.sink_rebuild_partial_count = detail.sink_rebuild_partial_count.saturating_add(1);
+            if !state.height.is_empty() {
+                detail.sink_affected_ratio += (affected as f64) / (state.height.len() as f64);
+            }
+            refresh_fill_spill_storage_and_lakes(
+                hydrology,
+                &state.height,
+                Some(&state.water),
+                Some(&state.sediment),
+                &state.params,
+            );
+        }
+        FillSpillRebuildMode::Skip => {
+            refresh_fill_spill_storage_and_lakes(
+                hydrology,
+                &state.height,
+                Some(&state.water),
+                Some(&state.sediment),
+                &state.params,
+            );
+            detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
+        }
     }
 
     state.last_river_driver = river_driver;
@@ -350,17 +389,46 @@ fn run_river_flow_only_with_state(
     }
     state.height.clone_from(&geology.height);
 
-    if should_rebuild_fill_spill(hydrology, state) {
-        rebuild_fill_spill_state(
-            hydrology,
-            &state.height,
-            &mesh_nbr_offsets,
-            &mesh_nbrs,
-            &state.params,
-            Some(&state.water),
-            Some(&state.sediment),
-        );
-        state.last_sink_full_rebuild_tick = state.tick;
+    match should_rebuild_fill_spill(hydrology, state) {
+        FillSpillRebuildMode::Full { validation_failed } => {
+            let phase_start = profile_now();
+            rebuild_fill_spill_state(
+                hydrology,
+                &state.height,
+                &mesh_nbr_offsets,
+                &mesh_nbrs,
+                &state.params,
+                Some(&state.water),
+                Some(&state.sediment),
+            );
+            state.last_sink_full_rebuild_tick = state.tick;
+            detail.sink_full_rebuild_ms += profile_elapsed_ms(phase_start);
+            detail.sink_rebuild_full_count = detail.sink_rebuild_full_count.saturating_add(1);
+            if validation_failed {
+                detail.sink_validation_fail_count =
+                    detail.sink_validation_fail_count.saturating_add(1);
+            }
+        }
+        FillSpillRebuildMode::Incremental => {
+            let phase_start = profile_now();
+            let affected = fill_spill::rebuild_fill_spill_state_incremental(
+                hydrology,
+                &state.height,
+                &mesh_nbr_offsets,
+                &mesh_nbrs,
+                &state.params,
+                &state.recent_changed,
+                state.params.sink_incremental_neighbor_hops,
+            );
+            detail.sink_incremental_rebuild_ms += profile_elapsed_ms(phase_start);
+            detail.sink_rebuild_partial_count = detail.sink_rebuild_partial_count.saturating_add(1);
+            if !state.height.is_empty() {
+                detail.sink_affected_ratio += (affected as f64) / (state.height.len() as f64);
+            }
+        }
+        FillSpillRebuildMode::Skip => {
+            detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
+        }
     }
     sync_fill_spill_to_erosion(state, hydrology);
 

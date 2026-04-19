@@ -111,7 +111,10 @@ pub fn build_hydrology_state_for_bench(
         rain_cursor: 0,
         tick: world.clock.tick,
         last_rebuild_tick: world.clock.tick.saturating_sub(1),
-        last_sink_full_rebuild_tick: world.clock.tick.saturating_sub(8),
+        last_sink_full_rebuild_tick: world
+            .clock
+            .tick
+            .saturating_sub(params.sink_full_rebuild_interval_ticks.max(1) as u64),
         flux_scale_ema: 1.0,
         last_river_driver: 1.0,
         prev_river_next: world.state.hydrology.river_next.clone(),

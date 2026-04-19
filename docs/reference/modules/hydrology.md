@@ -21,13 +21,29 @@ HydrologyはCellStoreとClockだけを読む。
 
 ## System構成と実行条件
 
-| System                | 実行条件                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `HydrologyMFDSystem`  | 地殻形成期・環境形成期は毎tick実行。先史期以降はExecSystemが地形変化フラグを検知したtickのみ実行 |
-| `HydrologyFlowSystem` | 先史期以降、毎tick実行                                                                           |
+| System                | 実行条件                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `HydrologyMFDSystem`  | 地殻形成期・環境形成期は毎tick実行。先史期以降は ExecSystem が地形変化フラグを検知した tick のみ実行 |
+| `HydrologyFlowSystem` | 先史期以降、毎tick実行                                                                               |
 
 地形変化フラグの判定はExecSystemが担う。
 GeologyはCellStoreに標高を書くだけであり、フラグ管理はしない。
+
+`HydrologyMFDSystem` の sink 再構築は次の3モードで運用する。
+
+- `Full`
+- `Incremental`
+- `Skip`
+
+`Full` はバッファ不整合、トポロジ検証失敗、または再構築間隔・変化率の閾値超過時に使う。
+`Incremental` は `recent_changed` に記録された地形変化の近傍と関連 sink のみを再計算する。
+`Skip` は sink 正本が安定しており、追加再計算が不要な tick で使う。
+
+制御パラメータは `GeologyParams` に置く。
+
+- `sink_full_rebuild_interval_ticks`
+- `sink_full_rebuild_changed_ratio`
+- `sink_incremental_neighbor_hops`
 
 ## 入力
 
@@ -74,6 +90,7 @@ sink_spill_level: Vec<f32>,
 
 一方で sink / lake / spill の正本は HydrologyState に持つ。
 Erosion はその fill-spill 状態を参照して堆積・溢流を進める。
+`sink_id`、`sink_route_next`、`sink_spill_cell`、`sink_spill_to`、`sink_capacity_total`、`sink_capacity_remaining`、`sink_storage_sediment`、`sink_spill_level`、`sink_overflow_active` が sink 正本であり、`is_lake` はそこから導出される公開ビューである。
 
 ## 現行実装の制約
 
@@ -81,6 +98,7 @@ Erosion はその fill-spill 状態を参照して堆積・溢流を進める。
 - cycle を見つけた場合は、その場で1本切って `-1` に落とし、終端 sink として扱う
 - この sanitize は数値安定性と再現性のための安全策であり、湖・内陸盆地・spill を物理的に十分表現するものではない
 - `is_lake` は fill-spill 正本から導出される公開ビューであり、「まだ overflow していない貯留セル」を表す
+- `recent_changed` は Exec 側の地形変化記録であり、Hydrology の正本ではない
 
 理由は、現行の流量伝播と多くの集計処理が「主流路は DAG」という前提で上流から下流へ累積しているためである。
 この前提を崩して cycle を許容すると、流量の二重加算、tick ごとの非再現、デバッグ検証の破綻が起きる。

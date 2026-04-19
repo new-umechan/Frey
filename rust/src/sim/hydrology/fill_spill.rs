@@ -5,8 +5,12 @@ use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::world::HydrologyState;
 use crate::GeologyParams;
 
-const FULL_REBUILD_INTERVAL_TICKS: u64 = 8;
-const FULL_REBUILD_CHANGED_RATIO: f32 = 0.02;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FillSpillRebuildMode {
+    Full { validation_failed: bool },
+    Incremental,
+    Skip,
+}
 
 #[derive(Clone, Copy)]
 struct RouteState {
@@ -108,19 +112,104 @@ pub(crate) fn fill_spill_buffers_ready(hydrology: &HydrologyState, cell_count: u
 pub(crate) fn should_rebuild_fill_spill(
     hydrology: &HydrologyState,
     state: &ErosionAutomatonState,
-) -> bool {
+) -> FillSpillRebuildMode {
     let cell_count = state.height.len();
     if state.tick <= 1 || !fill_spill_buffers_ready(hydrology, cell_count) {
-        return true;
+        return FillSpillRebuildMode::Full {
+            validation_failed: true,
+        };
+    }
+    if !validate_fill_spill_topology(hydrology, cell_count) {
+        return FillSpillRebuildMode::Full {
+            validation_failed: true,
+        };
     }
     let changed_ratio = if cell_count > 0 {
         state.recent_changed.len() as f32 / cell_count as f32
     } else {
         0.0
     };
-    changed_ratio >= FULL_REBUILD_CHANGED_RATIO
-        || state.tick.saturating_sub(state.last_sink_full_rebuild_tick)
-            >= FULL_REBUILD_INTERVAL_TICKS
+    if changed_ratio >= state.params.sink_full_rebuild_changed_ratio.max(0.0) {
+        return FillSpillRebuildMode::Full {
+            validation_failed: false,
+        };
+    }
+    if state.tick.saturating_sub(state.last_sink_full_rebuild_tick)
+        >= state.params.sink_full_rebuild_interval_ticks.max(1) as u64
+    {
+        return FillSpillRebuildMode::Full {
+            validation_failed: false,
+        };
+    }
+    if state.recent_changed.is_empty() {
+        FillSpillRebuildMode::Skip
+    } else {
+        FillSpillRebuildMode::Incremental
+    }
+}
+
+pub(crate) fn rebuild_fill_spill_state_incremental(
+    hydrology: &mut HydrologyState,
+    height: &[f32],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    params: &GeologyParams,
+    changed_cells: &[u32],
+    neighbor_hops: u32,
+) -> usize {
+    let cell_count = height.len();
+    if cell_count == 0 {
+        return 0;
+    }
+    let mut affected_mask = vec![0u8; cell_count];
+    for &cell_u32 in changed_cells {
+        let start = cell_u32 as usize;
+        if start >= cell_count {
+            continue;
+        }
+        mark_neighbors_within_hops(start, neighbor_hops, nbr_offsets, nbrs, &mut affected_mask);
+    }
+    let mut affected_sinks = Vec::<usize>::new();
+    let mut seen_sink = vec![0u8; hydrology.sink_spill_cell.len()];
+    for (cell, &is_affected) in affected_mask.iter().enumerate() {
+        if is_affected == 0 {
+            continue;
+        }
+        let sid_raw = hydrology.sink_id.get(cell).copied().unwrap_or(-1);
+        if sid_raw < 0 {
+            continue;
+        }
+        let sid = sid_raw as usize;
+        if sid >= seen_sink.len() {
+            continue;
+        }
+        if seen_sink[sid] == 0 {
+            seen_sink[sid] = 1;
+            affected_sinks.push(sid);
+        }
+    }
+    if affected_sinks.is_empty() {
+        return 0;
+    }
+
+    let old_state = snapshot_sink_state(hydrology);
+    for sid in affected_sinks.iter().copied() {
+        let members = sink_members_for_sid(hydrology, sid);
+        if members.is_empty() {
+            continue;
+        }
+        update_sink_for_sid(
+            hydrology,
+            sid,
+            &members,
+            height,
+            nbr_offsets,
+            nbrs,
+            params,
+            &old_state,
+        );
+    }
+    affected_sinks.len()
 }
 
 pub(crate) fn refresh_fill_spill_storage_and_lakes(
@@ -768,6 +857,80 @@ fn recompute_sink_storage_sediment(
             hydrology.sink_storage_sediment[sid] += sediment[cell].max(0.0);
         }
     }
+}
+
+fn validate_fill_spill_topology(hydrology: &HydrologyState, cell_count: usize) -> bool {
+    if !fill_spill_buffers_ready(hydrology, cell_count) {
+        return false;
+    }
+    for &sid_raw in &hydrology.sink_id {
+        if sid_raw < -1 {
+            return false;
+        }
+        if sid_raw >= 0 && (sid_raw as usize) >= hydrology.sink_spill_cell.len() {
+            return false;
+        }
+    }
+    for &next in &hydrology.sink_route_next {
+        if next < -1 {
+            return false;
+        }
+        if next >= 0 && (next as usize) >= cell_count {
+            return false;
+        }
+    }
+    true
+}
+
+fn mark_neighbors_within_hops(
+    start: usize,
+    hops: u32,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    mark: &mut [u8],
+) {
+    if start >= mark.len() {
+        return;
+    }
+    if mark[start] == 0 {
+        mark[start] = 1;
+    }
+    let mut frontier = vec![start];
+    for _ in 0..hops {
+        let mut next_frontier = Vec::<usize>::new();
+        for &cell in &frontier {
+            let begin = nbr_offsets.get(cell).copied().unwrap_or(0) as usize;
+            let end = nbr_offsets.get(cell + 1).copied().unwrap_or(begin as u32) as usize;
+            for &n_u32 in &nbrs[begin.min(nbrs.len())..end.min(nbrs.len())] {
+                let n = n_u32 as usize;
+                if n >= mark.len() || mark[n] != 0 {
+                    continue;
+                }
+                mark[n] = 1;
+                next_frontier.push(n);
+            }
+        }
+        if next_frontier.is_empty() {
+            break;
+        }
+        frontier = next_frontier;
+    }
+}
+
+fn sink_members_for_sid(hydrology: &HydrologyState, sid: usize) -> Vec<usize> {
+    if sid + 1 >= hydrology.sink_member_offsets.len() {
+        return Vec::new();
+    }
+    let begin = hydrology.sink_member_offsets[sid] as usize;
+    let end = hydrology.sink_member_offsets[sid + 1] as usize;
+    if begin >= end || end > hydrology.sink_member_cells.len() {
+        return Vec::new();
+    }
+    let mut members = Vec::with_capacity(end - begin);
+    for &cell in &hydrology.sink_member_cells[begin..end] {
+        members.push(cell as usize);
+    }
+    members
 }
 
 #[cfg(test)]
