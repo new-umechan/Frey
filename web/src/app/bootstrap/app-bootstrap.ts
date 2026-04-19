@@ -8,6 +8,7 @@ import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
 import { type PlaybackController } from "../playback/playback-controller";
 import { type EraMetrics } from "../state/era-presets";
+import { type MetricCellOverlayMesh } from "../../gfx/views/metric-cell-overlay";
 
 function createControllerDeps(options: {
     elements: AppElements;
@@ -109,6 +110,7 @@ interface BootstrapAppRuntimeOptions {
     setStatus: (msg: string) => void;
     basePositions: Float32Array;
     indices: Uint32Array;
+    metricCellOverlayMesh: MetricCellOverlayMesh;
 }
 
 export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
@@ -118,6 +120,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         setStatus,
         basePositions,
         indices,
+        metricCellOverlayMesh,
     } = options;
 
     const runtimeStore = createRuntimeStore({
@@ -131,6 +134,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         elements,
         indices,
         basePositions,
+        metricCellOverlayMesh,
         getState: runtimeStore.getState,
         getCurrentTerrainData: runtimeStore.getCurrentTerrainData,
     });

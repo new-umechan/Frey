@@ -153,6 +153,9 @@ function createViewModeRuntime(context: RuntimeContext, syncVisibleFieldsForCurr
         syncVisibleFieldsForCurrentView,
         getCurrentViewMode: () => context.store.getState().currentViewMode,
         getCurrentCellMetric: () => context.store.getState().currentCellMetric,
+        getCurrentTerrainData: context.store.getCurrentTerrainData,
+        getCurrentSurfaceMode: () => context.store.getState().currentSurfaceMode,
+        getWorldTick: () => context.store.world.tick,
         getDebugEnabled: () => context.store.getState().debugEnabled,
         setCurrentViewMode: (nextMode: string) => {
             context.store.setState({ currentViewMode: nextMode });

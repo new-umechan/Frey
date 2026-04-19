@@ -8,12 +8,33 @@ pub fn generate_mesh(level: u32) -> Result<JsValue, JsValue> {
 
     let positions = Float32Array::from(&output.positions[..]);
     let indices = Uint32Array::from(&output.indices[..]);
+    let cell_overlay_positions = Float32Array::from(&output.cell_overlay_positions[..]);
+    let cell_overlay_cell_ids = Uint32Array::from(&output.cell_overlay_cell_ids[..]);
+    let cell_overlay_lift = Float32Array::from(&output.cell_overlay_lift[..]);
 
     let result = js_sys::Object::new();
     js_sys::Reflect::set(&result, &JsValue::from_str("positions"), &positions.into())
         .map_err(|_| JsValue::from_str("failed to set positions"))?;
     js_sys::Reflect::set(&result, &JsValue::from_str("indices"), &indices.into())
         .map_err(|_| JsValue::from_str("failed to set indices"))?;
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("cell_overlay_positions"),
+        &cell_overlay_positions.into(),
+    )
+    .map_err(|_| JsValue::from_str("failed to set cell_overlay_positions"))?;
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("cell_overlay_cell_ids"),
+        &cell_overlay_cell_ids.into(),
+    )
+    .map_err(|_| JsValue::from_str("failed to set cell_overlay_cell_ids"))?;
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("cell_overlay_lift"),
+        &cell_overlay_lift.into(),
+    )
+    .map_err(|_| JsValue::from_str("failed to set cell_overlay_lift"))?;
 
     Ok(result.into())
 }

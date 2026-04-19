@@ -16,7 +16,7 @@ describe("plate_id sync", () => {
             plateId: new Uint32Array([0, 1, 2, 3, 4]),
         } as unknown as CoreBuffers;
 
-        const changes = applyWorldDeltaToCore(core, {
+        const result = applyWorldDeltaToCore(core, {
             deltas: [{
                 field_kind: "plate_id",
                 mode: "delta",
@@ -26,7 +26,7 @@ describe("plate_id sync", () => {
         });
 
         expect(Array.from(core.plateId as Uint32Array)).toEqual([0, 8, 9, 3, 4]);
-        expect(changes.metric).toBe(true);
+        expect(result.changes.metric).toBe(true);
     });
 
     it("applies bitmap deltas into core plateId buffer", () => {
@@ -34,7 +34,7 @@ describe("plate_id sync", () => {
             plateId: new Uint32Array([0, 1, 2, 3, 4, 5]),
         } as unknown as CoreBuffers;
 
-        const changes = applyWorldDeltaToCore(core, {
+        const result = applyWorldDeltaToCore(core, {
             deltas: [{
                 field_kind: "plate_id",
                 mode: "bitmap",
@@ -45,6 +45,6 @@ describe("plate_id sync", () => {
         });
 
         expect(Array.from(core.plateId as Uint32Array)).toEqual([0, 8, 2, 9, 4, 10]);
-        expect(changes.metric).toBe(true);
+        expect(result.changes.metric).toBe(true);
     });
 });

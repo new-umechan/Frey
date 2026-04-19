@@ -115,6 +115,16 @@ export interface WorldChangeset {
     metric: boolean;
 }
 
+export interface WorldDirtyCells {
+    height: Uint32Array | null;
+    metric: Uint32Array | null;
+}
+
+export interface WorldDeltaApplyResult {
+    changes: WorldChangeset;
+    dirtyCells: WorldDirtyCells;
+}
+
 export const WORLD_CHANGESET: WorldChangeset = Object.freeze({
     height: false,
     river: false,
@@ -234,4 +244,8 @@ export function markFieldChange(changes: WorldChangeset, fieldKind: FieldKind) {
     if (changeKey) {
         changes[changeKey] = true;
     }
+}
+
+export function getChangeKindByFieldKind(fieldKind: FieldKind): keyof WorldChangeset | undefined {
+    return CHANGE_KIND_BY_FIELD_KIND[fieldKind];
 }

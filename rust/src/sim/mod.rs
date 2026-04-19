@@ -31,7 +31,7 @@ pub use exec::{
     HydrologyExecState,
 };
 
-use crate::common::mesh::{flatten_positions, generate_icosphere};
+use crate::common::mesh::{build_dual_cell_overlay, flatten_positions, generate_icosphere};
 
 use self::geology_types::{GeologyOutput, GeologyParams, MeshOutput};
 
@@ -52,10 +52,15 @@ pub fn build_mesh(level: u32) -> Result<MeshOutput, String> {
     }
 
     let (positions, indices) = generate_icosphere(level);
+    let (cell_overlay_positions, cell_overlay_cell_ids, cell_overlay_lift) =
+        build_dual_cell_overlay(&positions, &indices);
     let flattened_positions = flatten_positions(&positions);
     Ok(MeshOutput {
         positions: flattened_positions,
         indices,
+        cell_overlay_positions,
+        cell_overlay_cell_ids,
+        cell_overlay_lift,
     })
 }
 

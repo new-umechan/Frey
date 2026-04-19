@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { type TickPerfRecorder } from "../perf/recorder";
 import { type CoreBuffers, type TypedArray } from "../sim/sync/types";
-import { type WorldChangeset } from "../sim/sync/constants";
+import { type WorldChangeset, type WorldDeltaApplyResult } from "../sim/sync/constants";
 import { getCellMetricMeta } from "./cell-metric";
+import { supportsMetricOverlay } from "./metric-overlay-style";
 
 interface TerrainMaterialController {
     setRiverMaskTexture: (texture: THREE.Texture) => void;
@@ -11,19 +12,41 @@ interface TerrainMaterialController {
     setCellMetric: (metric: string) => void;
 }
 
+interface MetricPillarsLayerController {
+    supportsMetric: (metricKey: string) => boolean;
+    setVisible: (visible: boolean) => void;
+    update: (
+        heightData: Float32Array,
+        metricData: Float32Array,
+        metricKey: string,
+        dirtyCells?: Uint32Array | number[] | null,
+    ) => void;
+}
+
 export interface TerrainRendererOptions {
     geometry: THREE.BufferGeometry;
     terrainMaterial: TerrainMaterialController;
     basePositions: Float32Array;
-    buildRenderPositions: (base: Float32Array, height: Float32Array, mode: string) => Float32Array;
+    buildRenderPositions: (
+        base: Float32Array,
+        height: Float32Array,
+        surfaceMode: string,
+        options?: {
+            viewMode?: string;
+            cellMetric?: string;
+            metricData?: Float32Array;
+        },
+    ) => Float32Array;
     buildRiverMaskTexture: (base: Float32Array, next: Int32Array, flux: Float32Array) => THREE.Texture;
+    metricPillars?: MetricPillarsLayerController | null;
+    setTerrainGhosted?: ((enabled: boolean) => void) | null;
 }
 
 export interface TerrainRenderer {
     initializeTerrain: (currentTerrainData: CoreBuffers, currentSurfaceMode: string) => void;
     applyCoreChanges: (
         currentTerrainData: CoreBuffers,
-        changes: WorldChangeset,
+        deltaResult: WorldDeltaApplyResult,
         currentSurfaceMode: string,
         tick: number,
         perfRecorder?: TickPerfRecorder | null,
@@ -31,7 +54,14 @@ export interface TerrainRenderer {
     updateGeometryPositions: (
         currentTerrainData: CoreBuffers,
         currentSurfaceMode: string,
-        options?: { force?: boolean; heightChanged?: boolean; tick?: number },
+        options?: {
+            force?: boolean;
+            heightChanged?: boolean;
+            metricChanged?: boolean;
+            metricDirtyCells?: Uint32Array | null;
+            tick?: number;
+            perfRecorder?: TickPerfRecorder | null;
+        },
     ) => void;
     applyTerrainMaterialState: (
         currentViewMode: string,
@@ -47,16 +77,21 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         basePositions,
         buildRenderPositions,
         buildRiverMaskTexture,
+        metricPillars = null,
+        setTerrainGhosted = null,
     } = options;
 
     const NORMAL_REFRESH_INTERVAL_TICKS = 4;
     const BOUNDING_SPHERE_REFRESH_INTERVAL_TICKS = 8;
+    const DIRTY_OVERLAY_FULL_FALLBACK_RATIO = 0.2;
 
     let currentRiverMaskTexture: THREE.Texture | null = null;
     let positionBuffer: Float32Array | null = null;
     let metricBuffer: Float32Array | null = null;
     let metricOverlayBuffer: Float32Array | null = null;
     let currentMetricKey = "height";
+    let currentViewModeForGeometry = "normal";
+    let pillarsVisible = false;
     let lastSurfaceMode: string | null = null;
     let lastNormalRefreshTick = -1;
 
@@ -149,19 +184,101 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         }
     }
 
-    function updateGeometryPositions(currentTerrainData: CoreBuffers, currentSurfaceMode: string, options: { force?: boolean; heightChanged?: boolean; tick?: number } = {}) {
+    function updateGeometryPositions(
+        currentTerrainData: CoreBuffers,
+        currentSurfaceMode: string,
+        options: {
+            force?: boolean;
+            heightChanged?: boolean;
+            metricChanged?: boolean;
+            metricDirtyCells?: Uint32Array | null;
+            tick?: number;
+            perfRecorder?: TickPerfRecorder | null;
+        } = {},
+    ) {
         if (!currentTerrainData) {
             return;
         }
         const surfaceModeChanged = lastSurfaceMode !== currentSurfaceMode;
-        const shouldUpdate = options.force || options.heightChanged || surfaceModeChanged;
+        const previousPillarsVisible = pillarsVisible;
+        const metricPillarsEnabled = metricPillars?.supportsMetric(currentMetricKey) ?? false;
+        const nextPillarsVisible = Boolean(metricPillars)
+            && currentViewModeForGeometry === "metric"
+            && currentSurfaceMode === "globe"
+            && metricPillarsEnabled;
+        const pillarsVisibilityChanged = previousPillarsVisible !== nextPillarsVisible;
+        const metricDisplacementActive = currentViewModeForGeometry === "metric"
+            && currentSurfaceMode === "globe"
+            && isMetricDisplacementEnabled(currentMetricKey)
+            && !nextPillarsVisible;
+        if (metricPillars) {
+            metricPillars.setVisible(nextPillarsVisible);
+        }
+        if (nextPillarsVisible) {
+            // Keep terrain ghosting sticky while overlay is active to avoid transient re-appearance.
+            setTerrainGhosted?.(true);
+        }
+        if (pillarsVisibilityChanged) {
+            pillarsVisible = nextPillarsVisible;
+            setTerrainGhosted?.(pillarsVisible);
+        }
+        const shouldRefreshPillars = options.force
+            || surfaceModeChanged
+            || options.heightChanged
+            || options.metricChanged
+            || pillarsVisibilityChanged;
+        if (metricPillars && nextPillarsVisible && shouldRefreshPillars) {
+            const overlayMetricData = toFloat32Array(
+                resolveMetricArrayByDataKey(currentTerrainData, getCellMetricMeta(currentMetricKey).dataKey),
+            );
+            const shouldUseFullOverlayUpdate = options.force
+                || surfaceModeChanged
+                || options.heightChanged
+                || pillarsVisibilityChanged;
+            let overlayDirtyCells = options.metricDirtyCells ?? null;
+            if (!shouldUseFullOverlayUpdate && overlayDirtyCells && overlayMetricData.length > 0) {
+                const dirtyRatio = overlayDirtyCells.length / overlayMetricData.length;
+                if (dirtyRatio > DIRTY_OVERLAY_FULL_FALLBACK_RATIO) {
+                    overlayDirtyCells = null;
+                }
+            } else {
+                overlayDirtyCells = null;
+            }
+            if (shouldRefreshPillars) {
+                const recordOverlayUpdate = () => metricPillars.update(
+                    currentTerrainData.heightData as Float32Array,
+                    overlayMetricData,
+                    currentMetricKey,
+                    overlayDirtyCells,
+                );
+                if (options.perfRecorder) {
+                    const perfKey = overlayDirtyCells === null ? "overlay_update_full" : "overlay_update_dirty";
+                    options.perfRecorder.measure(perfKey, recordOverlayUpdate);
+                } else {
+                    recordOverlayUpdate();
+                }
+            }
+        }
+        const shouldUpdate = options.force
+            || options.heightChanged
+            || surfaceModeChanged
+            || pillarsVisibilityChanged
+            || (metricDisplacementActive && options.metricChanged);
         if (!shouldUpdate) {
             return;
         }
+        const metricData = metricDisplacementActive
+            ? toFloat32Array(resolveMetricArrayByDataKey(currentTerrainData, getCellMetricMeta(currentMetricKey).dataKey))
+            : null;
         const positions = buildRenderPositions(
             basePositions,
             currentTerrainData.heightData as Float32Array,
             currentSurfaceMode,
+            {
+                viewMode: nextPillarsVisible ? "normal" : currentViewModeForGeometry,
+                cellMetric: currentMetricKey,
+                metricData: metricData ?? undefined,
+            },
         );
         if (!positionBuffer || positionBuffer.length !== positions.length) {
             positionBuffer = new Float32Array(positions.length);
@@ -215,11 +332,12 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
 
     function applyCoreChanges(
         currentTerrainData: CoreBuffers,
-        changes: WorldChangeset,
+        deltaResult: WorldDeltaApplyResult,
         currentSurfaceMode: string,
         tick: number,
         perfRecorder: TickPerfRecorder | null = null,
     ) {
+        const { changes, dirtyCells } = deltaResult;
         if (!currentTerrainData) {
             return;
         }
@@ -238,19 +356,25 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
             perfRecorder.measure("geometry_update", () => {
                 updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
                     heightChanged: changes?.height,
+                    metricChanged: changes?.metric,
+                    metricDirtyCells: dirtyCells.metric,
                     tick,
+                    perfRecorder,
                 });
             });
             return;
         }
         updateGeometryPositions(currentTerrainData, currentSurfaceMode, {
             heightChanged: changes?.height,
+            metricChanged: changes?.metric,
+            metricDirtyCells: dirtyCells.metric,
             tick,
         });
     }
 
     function applyTerrainMaterialState(currentViewMode: string, debugEnabled: boolean, currentCellMetric: string) {
         currentMetricKey = currentCellMetric;
+        currentViewModeForGeometry = currentViewMode === "metric" ? "metric" : "normal";
         terrainMaterial.setViewMode(currentViewMode);
         terrainMaterial.setDebugEnabled(debugEnabled);
         terrainMaterial.setCellMetric(currentCellMetric);
@@ -266,4 +390,17 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         updateGeometryPositions,
         applyTerrainMaterialState,
     };
+}
+
+function isMetricDisplacementEnabled(metricKey: string): boolean {
+    return supportsMetricOverlay(metricKey);
+}
+
+function toFloat32Array(source: TypedArray): Float32Array {
+    if (source instanceof Float32Array) {
+        return source;
+    }
+    const buffer = new Float32Array(source.length);
+    buffer.set(source as ArrayLike<number>);
+    return buffer;
 }

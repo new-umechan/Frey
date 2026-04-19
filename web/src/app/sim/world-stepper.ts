@@ -9,8 +9,9 @@ import {
     type SyncVisibleOptions,
     type CoreBuffers,
     type SyncDeltaResult,
+    type CoreDeltaApplyResult,
 } from "../sim/sync/types";
-import { type FieldKind, type WorldChangeset } from "../sim/sync/constants";
+import { type FieldKind } from "../sim/sync/constants";
 
 export interface WorldStepperOptions {
     engineClient: EngineClient;
@@ -21,7 +22,7 @@ export interface WorldStepperOptions {
     buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     syncWorldDeltaFromController: (options: SyncDeltaOptions) => Promise<SyncDeltaResult>;
-    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<WorldChangeset>;
+    syncVisibleCoreFieldsFromController: (options: SyncVisibleOptions) => Promise<CoreDeltaApplyResult>;
     getDeltaFieldKindsForView: (options: { viewMode: string; cellMetric: string }) => FieldKind[];
     refreshWorldStats: () => Promise<boolean>;
     syncClimateUi: () => void;
@@ -83,13 +84,13 @@ export function createWorldStepper(options: WorldStepperOptions) {
         if (!activeWorldId || !currentTerrainData) {
             return;
         }
-        const changes = await syncVisibleCoreFieldsFromController({
+        const deltaResult = await syncVisibleCoreFieldsFromController({
             engineClient,
             worldId: activeWorldId,
             core: currentTerrainData,
             fieldKinds: getCurrentDeltaFieldKinds(),
         });
-        terrainRenderer.applyCoreChanges(currentTerrainData, changes, state.currentSurfaceMode, world.tick);
+        terrainRenderer.applyCoreChanges(currentTerrainData, deltaResult, state.currentSurfaceMode, world.tick);
     };
 
     const syncCompletedWorldStep = async (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {

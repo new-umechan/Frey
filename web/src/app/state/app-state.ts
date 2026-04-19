@@ -17,14 +17,27 @@ import { type CoreBuffers } from "../sim/sync/types";
 export interface Mesh {
     positions: Float32Array;
     indices: Uint32Array;
+    metricCellOverlayPositions: Float32Array;
+    metricCellOverlayCellIds: Uint32Array;
     nbrOffsets: Int32Array | null;
     nbrs: Int32Array | null;
 }
 
-export function createMeshBuffers(mesh: { positions: number[] | Float32Array; indices: number[] | Uint32Array }) {
+export function createMeshBuffers(mesh: {
+    positions: number[] | Float32Array;
+    indices: number[] | Uint32Array;
+    cell_overlay_positions: number[] | Float32Array;
+    cell_overlay_cell_ids: number[] | Uint32Array;
+    cell_overlay_lift: number[] | Float32Array;
+}) {
     return {
         basePositions: new Float32Array(mesh.positions),
         indices: new Uint32Array(mesh.indices),
+        metricCellOverlayMesh: {
+            positions: new Float32Array(mesh.cell_overlay_positions),
+            cellIds: new Uint32Array(mesh.cell_overlay_cell_ids),
+            lift: new Float32Array(mesh.cell_overlay_lift),
+        },
     };
 }
 
@@ -49,6 +62,8 @@ export function createWorldState(options: {
         mesh: {
             positions: basePositions,
             indices,
+            metricCellOverlayPositions: new Float32Array(0),
+            metricCellOverlayCellIds: new Uint32Array(0),
             nbrOffsets: null,
             nbrs: null,
         },

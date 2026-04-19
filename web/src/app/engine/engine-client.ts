@@ -3,6 +3,9 @@ import type { ExecModuleDocRecord, ExecModuleGraphRecord } from "../../transport
 export interface MeshGenerationResult {
     positions: number[] | Float32Array;
     indices: number[] | Uint32Array;
+    cell_overlay_positions: number[] | Float32Array;
+    cell_overlay_cell_ids: number[] | Uint32Array;
+    cell_overlay_lift: number[] | Float32Array;
 }
 
 export interface InitWorldResult {

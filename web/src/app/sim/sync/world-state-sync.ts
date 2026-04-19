@@ -7,8 +7,8 @@ import {
     type SyncVisibleOptions,
     type SyncWorldResult,
     type SyncDeltaResult,
+    type CoreDeltaApplyResult,
 } from "./types";
-import { type WorldChangeset } from "./constants";
 import { type FieldDelta } from "../../perf/world-core";
 
 function sanitizeTick(rawTick: unknown): number {
@@ -116,7 +116,8 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         ecology: sanitizeBudget(deltaView.budgets?.ecology),
         civilization: sanitizeBudget(deltaView.budgets?.civilization),
     };
-    const changes = applyWorldDeltaToCore(core, deltaView as { deltas?: FieldDelta[] });
+    const deltaResult = applyWorldDeltaToCore(core, deltaView as { deltas?: FieldDelta[] });
+    const { changes, dirtyCells } = deltaResult;
     world.engineView.deltaRevision += 1;
 
     let eraMetrics = null;
@@ -131,16 +132,17 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         }
     }
 
-    terrainRenderer.applyCoreChanges(core, changes, currentSurfaceMode, world.tick, perfRecorder);
+    terrainRenderer.applyCoreChanges(core, deltaResult, currentSurfaceMode, world.tick, perfRecorder);
 
     return {
         changes,
+        dirtyCells,
         eraMetrics,
         statsRefreshed,
     };
 }
 
-export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions): Promise<WorldChangeset> {
+export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions): Promise<CoreDeltaApplyResult> {
     const { engineClient, worldId, core, fieldKinds } = options;
     const worldDelta = (await engineClient.get_world_delta(worldId, {
         include_fields: fieldKinds,

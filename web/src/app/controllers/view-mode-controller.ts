@@ -1,5 +1,6 @@
 import { type PlateHoverController } from "../input/plate-hover";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
+import { type CoreBuffers } from "../sim/sync/types";
 
 export interface ViewModeControllerOptions {
     viewModeInputs: HTMLInputElement[];
@@ -10,6 +11,9 @@ export interface ViewModeControllerOptions {
     syncVisibleFieldsForCurrentView: () => void;
     getCurrentViewMode: () => string;
     getCurrentCellMetric: () => string;
+    getCurrentTerrainData: () => CoreBuffers | null;
+    getCurrentSurfaceMode: () => string;
+    getWorldTick: () => number;
     getDebugEnabled: () => boolean;
     setCurrentViewMode: (nextMode: string) => void;
     setCurrentCellMetric: (nextMetric: string) => void;
@@ -30,6 +34,9 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
         syncVisibleFieldsForCurrentView,
         getCurrentViewMode,
         getCurrentCellMetric,
+        getCurrentTerrainData,
+        getCurrentSurfaceMode,
+        getWorldTick,
         getDebugEnabled,
         setCurrentViewMode,
         setCurrentCellMetric,
@@ -47,6 +54,13 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
             getDebugEnabled(),
             getCurrentCellMetric(),
         );
+        const currentTerrainData = getCurrentTerrainData();
+        if (currentTerrainData) {
+            terrainRenderer.updateGeometryPositions(currentTerrainData, getCurrentSurfaceMode(), {
+                force: true,
+                tick: getWorldTick(),
+            });
+        }
         syncClimateUi();
         if (normalizedMode !== "metric") {
             plateHover.hidePopup();
@@ -65,6 +79,13 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
             getDebugEnabled(),
             normalizedMetric,
         );
+        const currentTerrainData = getCurrentTerrainData();
+        if (currentTerrainData) {
+            terrainRenderer.updateGeometryPositions(currentTerrainData, getCurrentSurfaceMode(), {
+                force: true,
+                tick: getWorldTick(),
+            });
+        }
         syncVisibleFieldsForCurrentView();
         syncClimateUi();
         plateHover.hidePopup();

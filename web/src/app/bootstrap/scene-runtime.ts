@@ -8,6 +8,10 @@ import { setupTerrainGeometryAttributes } from "./terrain-geometry-setup";
 import { createClimateUiController } from "../controllers/climate-ui-controller";
 import { createPlateHover, type PlateHoverController } from "../input/plate-hover";
 import { createTerrainRenderer, type TerrainRenderer } from "../visualizers/terrain-renderer";
+import {
+    createMetricCellOverlayLayer,
+    type MetricCellOverlayMesh,
+} from "../../gfx/views/metric-cell-overlay";
 import { DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
@@ -33,6 +37,7 @@ export interface SceneRuntimeOptions {
     elements: AppElements;
     indices: Uint32Array;
     basePositions: Float32Array;
+    metricCellOverlayMesh: MetricCellOverlayMesh;
     getState: () => AppState;
     getCurrentTerrainData: () => CoreBuffers | null;
 }
@@ -54,6 +59,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         elements,
         indices,
         basePositions,
+        metricCellOverlayMesh,
         getState,
         getCurrentTerrainData,
     } = options;
@@ -103,12 +109,26 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         debugEnabled: getState().debugEnabled,
     });
 
+    const metricCellOverlay = createMetricCellOverlayLayer(metricCellOverlayMesh);
+    metricCellOverlay.mesh.position.setX(sphere.position.x);
+    scene.add(metricCellOverlay.mesh);
+
     const terrainRenderer = createTerrainRenderer({
         geometry,
         terrainMaterial,
         basePositions,
         buildRenderPositions,
         buildRiverMaskTexture,
+        metricPillars: metricCellOverlay,
+        setTerrainGhosted: (enabled: boolean) => {
+            terrainMaterial.material.transparent = enabled;
+            terrainMaterial.material.opacity = enabled ? 0 : 1;
+            terrainMaterial.material.depthWrite = !enabled;
+            terrainMaterial.material.colorWrite = !enabled;
+            wireframe.visible = enabled
+                ? false
+                : (getState().debugEnabled && getState().currentSurfaceMode === "globe");
+        },
     });
     const climateUiController = createClimateUiController({
         climateLegend,

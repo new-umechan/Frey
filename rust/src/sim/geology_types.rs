@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct MeshOutput {
     pub(crate) positions: Vec<f32>,
     pub(crate) indices: Vec<u32>,
+    pub(crate) cell_overlay_positions: Vec<f32>,
+    pub(crate) cell_overlay_cell_ids: Vec<u32>,
+    pub(crate) cell_overlay_lift: Vec<f32>,
 }
 
 /// 地殻タイプ。海洋地殻と大陸地殻を区別する

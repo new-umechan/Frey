@@ -5,7 +5,7 @@ import { type WorldState } from "../../state/app-state";
 import { type EraMetrics } from "../../state/era-presets";
 import { type StatFields } from "../../../components/dom";
 import { type TickPerfRecorder } from "../../perf/recorder";
-import { type WorldChangeset } from "./constants";
+import { type WorldChangeset, type WorldDirtyCells, type WorldDeltaApplyResult } from "./constants";
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 
@@ -111,8 +111,11 @@ export interface SyncWorldResult {
 
 export interface SyncDeltaResult {
     changes: WorldChangeset;
+    dirtyCells: WorldDirtyCells;
     eraMetrics: EraMetrics | null;
     statsRefreshed: boolean;
 }
 
 export type ViewDelta = ViewDeltaResult;
+
+export type CoreDeltaApplyResult = WorldDeltaApplyResult;

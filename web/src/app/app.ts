@@ -58,13 +58,14 @@ export async function createApp() {
     const bootstrapEngine = createEngineWorkerClient();
     const mesh = await bootstrapEngine.generate_mesh(LEVEL);
     bootstrapEngine.close();
-    const { basePositions, indices } = createMeshBuffers(mesh);
+    const { basePositions, indices, metricCellOverlayMesh } = createMeshBuffers(mesh);
     const runtime = await bootstrapAppRuntime({
         elements,
         isPerfEnabled,
         setStatus,
         basePositions,
         indices,
+        metricCellOverlayMesh,
     });
     await runtime.runInitialSync();
 
