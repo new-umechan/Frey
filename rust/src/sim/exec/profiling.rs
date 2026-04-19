@@ -29,6 +29,10 @@ pub struct ExecWorldRiverBreakdown {
     pub sink_rebuild_partial_count: u32,
     pub sink_rebuild_skipped_count: u32,
     pub sink_rebuild_fallback_full_count: u32,
+    pub step_geology_river_sink_incremental_rebuild_ms: f64,
+    pub step_geology_river_sink_full_rebuild_ms: f64,
+    pub sink_affected_ratio: f64,
+    pub sink_validation_fail_count: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -123,6 +127,14 @@ impl ExecWorldRiverBreakdown {
         self.sink_rebuild_fallback_full_count = self
             .sink_rebuild_fallback_full_count
             .saturating_add(other.sink_rebuild_fallback_full_count);
+        self.step_geology_river_sink_incremental_rebuild_ms +=
+            other.step_geology_river_sink_incremental_rebuild_ms;
+        self.step_geology_river_sink_full_rebuild_ms +=
+            other.step_geology_river_sink_full_rebuild_ms;
+        self.sink_affected_ratio += other.sink_affected_ratio;
+        self.sink_validation_fail_count = self
+            .sink_validation_fail_count
+            .saturating_add(other.sink_validation_fail_count);
     }
 }
 

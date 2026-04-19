@@ -21,4 +21,9 @@ pub(super) fn apply_hydrology_profile(
     river_breakdown.sink_rebuild_skipped_count = river_profile.sink_rebuild_skipped_count;
     river_breakdown.sink_rebuild_fallback_full_count =
         river_profile.sink_rebuild_fallback_full_count;
+    river_breakdown.step_geology_river_sink_incremental_rebuild_ms =
+        river_profile.sink_incremental_rebuild_ms;
+    river_breakdown.step_geology_river_sink_full_rebuild_ms = river_profile.sink_full_rebuild_ms;
+    river_breakdown.sink_affected_ratio = river_profile.sink_affected_ratio;
+    river_breakdown.sink_validation_fail_count = river_profile.sink_validation_fail_count;
 }

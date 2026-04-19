@@ -186,6 +186,10 @@ pub(crate) struct StepWorldProfiledDetailResponse {
     pub sink_rebuild_partial_count: u32,
     pub sink_rebuild_skipped_count: u32,
     pub sink_rebuild_fallback_full_count: u32,
+    pub step_geology_river_sink_incremental_rebuild_ms: f64,
+    pub step_geology_river_sink_full_rebuild_ms: f64,
+    pub sink_affected_ratio: f64,
+    pub sink_validation_fail_count: u32,
 }
 
 #[derive(Serialize)]

@@ -15,6 +15,8 @@ export const RIVER_BREAKDOWN_METRIC_NAMES = [
     "step_geology_river_prepare",
     "step_geology_river_automaton",
     "step_geology_river_automaton_sink",
+    "step_geology_river_sink_incremental_rebuild",
+    "step_geology_river_sink_full_rebuild",
     "step_geology_river_automaton_cell",
     "step_geology_river_automaton_queue",
     "step_geology_river_network",

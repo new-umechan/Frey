@@ -276,6 +276,10 @@ pub(crate) fn exec_world_profiled_detail(
             sink_rebuild_partial_count: 0,
             sink_rebuild_skipped_count: 0,
             sink_rebuild_fallback_full_count: 0,
+            step_geology_river_sink_incremental_rebuild_ms: 0.0,
+            step_geology_river_sink_full_rebuild_ms: 0.0,
+            sink_affected_ratio: 0.0,
+            sink_validation_fail_count: 0,
         });
     }
     let (managed, archive) = service
@@ -342,6 +346,14 @@ pub(crate) fn exec_world_profiled_detail(
         sink_rebuild_partial_count: sim_breakdown.river.sink_rebuild_partial_count,
         sink_rebuild_skipped_count: sim_breakdown.river.sink_rebuild_skipped_count,
         sink_rebuild_fallback_full_count: sim_breakdown.river.sink_rebuild_fallback_full_count,
+        step_geology_river_sink_incremental_rebuild_ms: sim_breakdown
+            .river
+            .step_geology_river_sink_incremental_rebuild_ms,
+        step_geology_river_sink_full_rebuild_ms: sim_breakdown
+            .river
+            .step_geology_river_sink_full_rebuild_ms,
+        sink_affected_ratio: sim_breakdown.river.sink_affected_ratio,
+        sink_validation_fail_count: sim_breakdown.river.sink_validation_fail_count,
     })
 }
 

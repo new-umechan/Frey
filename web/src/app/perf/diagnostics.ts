@@ -17,6 +17,8 @@ export interface Diagnostics {
     sink_rebuild_partial_count_total: number;
     sink_rebuild_skipped_count_total: number;
     sink_rebuild_fallback_full_count_total: number;
+    sink_validation_fail_count_total: number;
+    sink_affected_ratio_total: number;
 }
 
 type ProfiledResult = Record<string, unknown>;
@@ -39,6 +41,8 @@ export function createDiagnostics(): Diagnostics {
         sink_rebuild_partial_count_total: 0,
         sink_rebuild_skipped_count_total: 0,
         sink_rebuild_fallback_full_count_total: 0,
+        sink_validation_fail_count_total: 0,
+        sink_affected_ratio_total: 0,
     };
 }
 
@@ -68,6 +72,14 @@ function accumulateProfiledDiagnostics(diagnostics: Diagnostics, profiled: Profi
         0,
         Math.floor(Number(profiled?.sink_rebuild_fallback_full_count) || 0),
     );
+    diagnostics.sink_validation_fail_count_total += Math.max(
+        0,
+        Math.floor(Number(profiled?.sink_validation_fail_count) || 0),
+    );
+    diagnostics.sink_affected_ratio_total += Math.max(
+        0,
+        Number(profiled?.sink_affected_ratio) || 0,
+    );
 }
 
 export function recordProfiledStepSuccess(diagnostics: Diagnostics, profiled: ProfiledResult) {
@@ -90,6 +102,9 @@ export function buildDiagnosticsSummary(diagnostics: Diagnostics, totalTicks: nu
         : 0;
     const riverRebuildRate = totalTicks > 0
         ? diagnostics.river_network_rebuild_count_total / totalTicks
+        : 0;
+    const sinkAffectedRatioMean = diagnostics.profile_success_count > 0
+        ? diagnostics.sink_affected_ratio_total / diagnostics.profile_success_count
         : 0;
 
     return {
@@ -114,5 +129,7 @@ export function buildDiagnosticsSummary(diagnostics: Diagnostics, totalTicks: nu
         sink_rebuild_partial_count_total: diagnostics.sink_rebuild_partial_count_total,
         sink_rebuild_skipped_count_total: diagnostics.sink_rebuild_skipped_count_total,
         sink_rebuild_fallback_full_count_total: diagnostics.sink_rebuild_fallback_full_count_total,
+        sink_validation_fail_count_total: diagnostics.sink_validation_fail_count_total,
+        sink_affected_ratio_mean: roundRatio(sinkAffectedRatioMean),
     };
 }
