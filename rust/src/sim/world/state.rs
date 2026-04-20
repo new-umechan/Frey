@@ -1069,6 +1069,8 @@ pub struct BoundaryDynamicsState {
     #[serde(default)]
     pub edge_pairs: Vec<[u32; 2]>,
     #[serde(default)]
+    pub edge_pairs_plate_hash: u64,
+    #[serde(default)]
     pub edge_internal: Vec<BoundaryEdgeInternal>,
     #[serde(default)]
     pub rollback_fraction: Vec<f32>,

@@ -107,17 +107,18 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
     }
-    let positions = world.mesh().positions.clone();
-    let nbr_offsets = world.mesh().nbr_offsets.clone();
-    let nbrs = world.mesh().nbrs.clone();
+    let mesh = world.mesh();
+    let positions = &mesh.positions;
+    let nbr_offsets = &mesh.nbr_offsets;
+    let nbrs = &mesh.nbrs;
     let heights = &world.state.geology.height;
     let plate_id = &world.state.geology.plate_id;
 
     let plume_force = update_mantle_heat_and_plumes(
         &mut dynamics.mantle_heat,
         &dynamics.vertex_states,
-        &nbr_offsets,
-        &nbrs,
+        nbr_offsets,
+        nbrs,
         &world.control.geology_params,
     );
 
@@ -129,9 +130,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     );
 
     let mut next_vertex_states = advect_continuous_attributes(
-        &positions,
-        &nbr_offsets,
-        &nbrs,
+        positions,
+        nbr_offsets,
+        nbrs,
         plate_id,
         &dynamics.plate_states,
         &dynamics.vertex_states,
@@ -140,9 +141,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     let mut next_plate_id = plate_id.to_vec();
     apply_boundary_crossing_discrete_attrs(
         BoundaryCrossingInput {
-            positions: &positions,
-            nbr_offsets: &nbr_offsets,
-            nbrs: &nbrs,
+            positions,
+            nbr_offsets,
+            nbrs,
             plate_states: &dynamics.plate_states,
             plate_id_prev: plate_id,
             boundary_state: &dynamics.boundary_state,
@@ -162,9 +163,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     {
         reclassify_boundaries(
             ReclassifyBoundariesInput {
-                positions: &positions,
-                nbr_offsets: &nbr_offsets,
-                nbrs: &nbrs,
+                positions,
+                nbr_offsets,
+                nbrs,
                 plate_id: &next_plate_id,
                 plate_states: &dynamics.plate_states,
                 vertex_states: &next_vertex_states,
@@ -194,8 +195,8 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     };
     let metrics = apply_stress_and_surface_update(
         SurfaceUpdateInput {
-            nbr_offsets: &nbr_offsets,
-            nbrs: &nbrs,
+            nbr_offsets,
+            nbrs,
             heights,
             plate_id: &next_plate_id,
             boundary_state: &dynamics.boundary_state,
@@ -213,7 +214,15 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     world.state.geology.plate_id = next_plate_id;
     world.state.geology.volcanism = next_volcanism;
     world.state.geology.vertex_buoyancy = next_vertex_buoyancy;
-    world.state.geology.boundary_condition = dynamics.boundary_state.activity.clone();
+    if world.state.geology.boundary_condition.len() == dynamics.boundary_state.activity.len() {
+        world
+            .state
+            .geology
+            .boundary_condition
+            .clone_from_slice(&dynamics.boundary_state.activity);
+    } else {
+        world.state.geology.boundary_condition = dynamics.boundary_state.activity.clone();
+    }
     sync_geology_internal(
         &mut world.state.geology.geology_internal,
         &dynamics.vertex_states,
@@ -319,6 +328,7 @@ fn ensure_geology_dynamics(
             dominant_type: vec![BoundaryType::PassiveMargin; cell_count],
             activity: vec![0.0; cell_count],
             edge_pairs: Vec::new(),
+            edge_pairs_plate_hash: 0,
             edge_internal: Vec::new(),
             rollback_fraction: vec![0.0; cell_count],
             backarc_tension: vec![0.0; cell_count],

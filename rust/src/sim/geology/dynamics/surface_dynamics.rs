@@ -89,11 +89,16 @@ pub(super) fn apply_stress_and_surface_update(
 
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
+        let plate_i = plate_id[i];
+        let height_i = heights[i];
+        let neighbors = &nbrs[start..end];
         let mut nbr_sum = 0.0;
         let mut nbr_count = 0usize;
-        let mut nbr_stress = StressTensor::default();
+        let mut nbr_stress_xx = 0.0;
+        let mut nbr_stress_yy = 0.0;
+        let mut nbr_stress_xy = 0.0;
 
-        for &n_u32 in &nbrs[start..end] {
+        for &n_u32 in neighbors {
             let n = n_u32 as usize;
             if n >= cell_count {
                 continue;
@@ -101,19 +106,15 @@ pub(super) fn apply_stress_and_surface_update(
             nbr_sum += heights[n];
             nbr_count += 1;
             let n_tensor = next_vertex_states[n].stress_tensor;
-            let atten = if plate_id[n] == plate_id[i] {
-                0.12
-            } else {
-                0.18
-            };
-            nbr_stress.xx += finite_or(n_tensor.xx, 0.0) * atten;
-            nbr_stress.yy += finite_or(n_tensor.yy, 0.0) * atten;
-            nbr_stress.xy += finite_or(n_tensor.xy, 0.0) * atten;
+            let atten = 0.18 - 0.06 * f32::from((plate_id[n] == plate_i) as u8);
+            nbr_stress_xx += finite_or(n_tensor.xx, 0.0) * atten;
+            nbr_stress_yy += finite_or(n_tensor.yy, 0.0) * atten;
+            nbr_stress_xy += finite_or(n_tensor.xy, 0.0) * atten;
         }
 
-        tensor.xx += nbr_stress.xx;
-        tensor.yy += nbr_stress.yy;
-        tensor.xy += nbr_stress.xy;
+        tensor.xx += nbr_stress_xx;
+        tensor.yy += nbr_stress_yy;
+        tensor.xy += nbr_stress_xy;
 
         let prev = next_vertex_states[i];
         let mantle_heat_i =
@@ -210,7 +211,7 @@ pub(super) fn apply_stress_and_surface_update(
         let diffusive = if nbr_count == 0 {
             0.0
         } else {
-            (nbr_sum / nbr_count as f32 - heights[i]) * DEFAULT_DIFFUSION_WEIGHT
+            (nbr_sum / nbr_count as f32 - height_i) * DEFAULT_DIFFUSION_WEIGHT
         };
         let raw_delta = finite_or(uplift - total_subsidence + diffusive, 0.0);
         let delta = raw_delta.clamp(-MAX_HEIGHT_DELTA_PER_STEP, MAX_HEIGHT_DELTA_PER_STEP);

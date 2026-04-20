@@ -16,6 +16,18 @@ fn finite_or(value: f32, fallback: f32) -> f32 {
     }
 }
 
+fn plate_id_signature(plate_id: &[PlateId]) -> u64 {
+    // FNV-1a 64bit
+    let mut hash = 0xcbf29ce484222325u64;
+    hash ^= plate_id.len() as u64;
+    hash = hash.wrapping_mul(0x100000001b3);
+    for value in plate_id {
+        hash ^= value.as_u32() as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 pub(super) struct ReclassifyBoundariesInput<'a> {
     pub positions: &'a [[f32; 3]],
     pub nbr_offsets: &'a [u32],
@@ -58,26 +70,30 @@ pub(super) fn reclassify_boundaries(
         boundary_state.slab_rollback_component = vec![0.0; cell_count];
     }
 
-    let mut edge_pairs = Vec::<[u32; 2]>::new();
-    for i in 0..cell_count {
-        let start = nbr_offsets[i] as usize;
-        let end = nbr_offsets[i + 1] as usize;
-        for &n_u32 in &nbrs[start..end] {
-            let n = n_u32 as usize;
-            if n >= cell_count || i >= n || plate_id[i] == plate_id[n] {
-                continue;
+    let current_plate_hash = plate_id_signature(plate_id);
+    let needs_rebuild_edge_pairs = boundary_state.edge_pairs.is_empty()
+        || boundary_state.edge_pairs_plate_hash != current_plate_hash;
+    if needs_rebuild_edge_pairs {
+        let mut edge_pairs = Vec::<[u32; 2]>::new();
+        for i in 0..cell_count {
+            let start = nbr_offsets[i] as usize;
+            let end = nbr_offsets[i + 1] as usize;
+            for &n_u32 in &nbrs[start..end] {
+                let n = n_u32 as usize;
+                if n >= cell_count || i >= n || plate_id[i] == plate_id[n] {
+                    continue;
+                }
+                edge_pairs.push([i as u32, n as u32]);
             }
-            edge_pairs.push([i as u32, n as u32]);
         }
+        boundary_state.edge_pairs = edge_pairs;
+        boundary_state.edge_pairs_plate_hash = current_plate_hash;
+        boundary_state.edge_internal = vec![Default::default(); boundary_state.edge_pairs.len()];
+    } else if boundary_state.edge_internal.len() != boundary_state.edge_pairs.len() {
+        boundary_state.edge_internal = vec![Default::default(); boundary_state.edge_pairs.len()];
     }
 
-    if boundary_state.edge_pairs != edge_pairs {
-        boundary_state.edge_pairs = edge_pairs.clone();
-        boundary_state.edge_internal = vec![Default::default(); edge_pairs.len()];
-    } else if boundary_state.edge_internal.len() != edge_pairs.len() {
-        boundary_state.edge_internal = vec![Default::default(); edge_pairs.len()];
-    }
-
+    let edge_pairs = &boundary_state.edge_pairs;
     let mut convergence_norm_edge = vec![0.0_f32; edge_pairs.len()];
     let mut subduction_age_edge = vec![0.0_f32; edge_pairs.len()];
     let mut subduction_density_edge = vec![0.0_f32; edge_pairs.len()];
@@ -137,38 +153,45 @@ pub(super) fn reclassify_boundaries(
         edge_internal.convergence_memory = next.clamp(0.0, 1.0);
     }
 
-    let mut incident_edges = vec![Vec::<usize>::new(); cell_count];
-    for (eid, pair) in edge_pairs.iter().enumerate() {
-        incident_edges[pair[0] as usize].push(eid);
-        incident_edges[pair[1] as usize].push(eid);
-    }
-
     let smooth_mix = params.convergence_memory_spatial_smooth.clamp(0.0, 1.0);
     let old_memory = boundary_state
         .edge_internal
         .iter()
         .map(|edge| edge.convergence_memory)
         .collect::<Vec<_>>();
+    let mut cell_memory_sum = vec![0.0_f32; cell_count];
+    let mut cell_edge_count = vec![0_u32; cell_count];
     for (eid, pair) in edge_pairs.iter().enumerate() {
+        let mem = finite_or(old_memory[eid], 0.0);
+        let a = pair[0] as usize;
+        let b = pair[1] as usize;
+        cell_memory_sum[a] += mem;
+        cell_memory_sum[b] += mem;
+        cell_edge_count[a] = cell_edge_count[a].saturating_add(1);
+        cell_edge_count[b] = cell_edge_count[b].saturating_add(1);
+    }
+
+    for (eid, pair) in edge_pairs.iter().enumerate() {
+        let mem = finite_or(old_memory[eid], 0.0);
+        let a = pair[0] as usize;
+        let b = pair[1] as usize;
+
         let mut acc = 0.0_f32;
         let mut cnt = 0_u32;
-        for &cid in &[pair[0] as usize, pair[1] as usize] {
-            for &other in &incident_edges[cid] {
-                if other == eid {
-                    continue;
-                }
-                acc += finite_or(old_memory[other], 0.0);
-                cnt = cnt.saturating_add(1);
-            }
+
+        if cell_edge_count[a] > 1 {
+            acc += cell_memory_sum[a] - mem;
+            cnt = cnt.saturating_add(cell_edge_count[a] - 1);
+        }
+        if cell_edge_count[b] > 1 {
+            acc += cell_memory_sum[b] - mem;
+            cnt = cnt.saturating_add(cell_edge_count[b] - 1);
         }
         if cnt == 0 {
             continue;
         }
-        boundary_state.edge_internal[eid].convergence_memory = finite_or(
-            lerp(old_memory[eid], acc / cnt as f32, smooth_mix),
-            old_memory[eid],
-        )
-        .clamp(0.0, 1.0);
+        boundary_state.edge_internal[eid].convergence_memory =
+            finite_or(lerp(mem, acc / cnt as f32, smooth_mix), mem).clamp(0.0, 1.0);
     }
 
     boundary_state.rollback_fraction.fill(0.0);

@@ -842,6 +842,23 @@ pub(crate) fn get_world_delta(
     let managed = service
         .world_mut(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
+    let include_all_fields = include_fields.is_none();
+    if include_all_fields {
+        managed
+            .transport_cache
+            .observe_world(&managed.world, managed.geology_dynamics.as_ref());
+    } else {
+        managed.transport_cache.observe_world_selected(
+            &managed.world,
+            managed.geology_dynamics.as_ref(),
+            |field_kind| {
+                include_fields
+                    .as_ref()
+                    .map(|fields| fields.contains(field_kind))
+                    .unwrap_or(false)
+            },
+        );
+    }
     let w = &managed.world;
     Ok(WorldDeltaResponse {
         world_id,

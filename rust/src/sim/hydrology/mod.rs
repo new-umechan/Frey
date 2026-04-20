@@ -176,9 +176,6 @@ fn run_river_step_with_erosion_state(
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
     let tick = world.clock.tick;
-    let mesh_positions = world.mesh().positions.clone();
-    let mesh_nbr_offsets = world.mesh().nbr_offsets.clone();
-    let mesh_nbrs = world.mesh().nbrs.clone();
     let geology = &mut world.state.geology;
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
@@ -205,8 +202,8 @@ fn run_river_step_with_erosion_state(
         &mut state.groundwater_storage,
         &state.params,
         &geology.height,
-        &mesh_nbr_offsets,
-        &mesh_nbrs,
+        &state.nbr_offsets,
+        &state.nbrs,
         runoff,
         &mut effective_runoff,
     );
@@ -239,8 +236,8 @@ fn run_river_step_with_erosion_state(
             rebuild_fill_spill_state(
                 hydrology,
                 &state.height,
-                &mesh_nbr_offsets,
-                &mesh_nbrs,
+                &state.nbr_offsets,
+                &state.nbrs,
                 &state.params,
                 Some(&state.water),
                 Some(&state.sediment),
@@ -260,8 +257,8 @@ fn run_river_step_with_erosion_state(
             let affected = fill_spill::rebuild_fill_spill_state_incremental(
                 hydrology,
                 &state.height,
-                &mesh_nbr_offsets,
-                &mesh_nbrs,
+                &state.nbr_offsets,
+                &state.nbrs,
                 &state.params,
                 &state.recent_changed,
                 state.params.sink_incremental_neighbor_hops,
@@ -297,9 +294,9 @@ fn run_river_step_with_erosion_state(
     if should_rebuild_network(tick, state, river_driver) {
         let phase_start = profile_now();
         let mut rebuilt = build_river_network(
-            &mesh_positions,
-            &mesh_nbr_offsets,
-            &mesh_nbrs,
+            &state.positions,
+            &state.nbr_offsets,
+            &state.nbrs,
             &state.height,
             effective_runoff.as_slice(),
             &state.params,
@@ -330,7 +327,11 @@ fn run_river_step_with_erosion_state(
             &mut constraint_buffers,
         );
         sanitize_primary_next_no_cycle(&mut rebuilt.primary_next);
-        align_flow_heading(&mesh_positions, &mut rebuilt.heading, &rebuilt.primary_next);
+        align_flow_heading(
+            &state.positions,
+            &mut rebuilt.heading,
+            &rebuilt.primary_next,
+        );
         state.prev_river_next.clone_from(&state.river_next);
         state.river_flux = rebuilt.flux; // 正規化済み（内部処理用）
         state.river_next = rebuilt.primary_next;
@@ -373,8 +374,6 @@ fn run_river_flow_only_with_state(
     runoff: &[f32],
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
-    let mesh_nbr_offsets = world.mesh().nbr_offsets.clone();
-    let mesh_nbrs = world.mesh().nbrs.clone();
     let geology = &mut world.state.geology;
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
@@ -395,8 +394,8 @@ fn run_river_flow_only_with_state(
             rebuild_fill_spill_state(
                 hydrology,
                 &state.height,
-                &mesh_nbr_offsets,
-                &mesh_nbrs,
+                &state.nbr_offsets,
+                &state.nbrs,
                 &state.params,
                 Some(&state.water),
                 Some(&state.sediment),
@@ -414,8 +413,8 @@ fn run_river_flow_only_with_state(
             let affected = fill_spill::rebuild_fill_spill_state_incremental(
                 hydrology,
                 &state.height,
-                &mesh_nbr_offsets,
-                &mesh_nbrs,
+                &state.nbr_offsets,
+                &state.nbrs,
                 &state.params,
                 &state.recent_changed,
                 state.params.sink_incremental_neighbor_hops,
@@ -438,8 +437,8 @@ fn run_river_flow_only_with_state(
         &mut state.groundwater_storage,
         &state.params,
         &geology.height,
-        &mesh_nbr_offsets,
-        &mesh_nbrs,
+        &state.nbr_offsets,
+        &state.nbrs,
         runoff,
         &mut effective_runoff,
     );
