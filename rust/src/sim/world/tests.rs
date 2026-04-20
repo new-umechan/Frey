@@ -1,6 +1,7 @@
 use super::{
-    CellId, EntityState, EraKind, FeedbackQueue, GeologyState, PolityComponent, PolityId,
-    RegionComponent, RegionId, SettlementComponent, SettlementId, World, WorldMesh,
+    BoundaryDynamicsState, CellId, EntityState, EraKind, FeedbackQueue, GeologyDynamicsState,
+    GeologyState, GeologyStepMetrics, PolityComponent, PolityId, RegionComponent, RegionId,
+    SettlementComponent, SettlementId, TerrainState, World, WorldMesh,
 };
 use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::erosion::ErosionAutomatonState;
@@ -667,4 +668,75 @@ fn world_json_roundtrip_preserves_next_step_geology_evolution() {
     exec_world(&mut restored);
 
     assert_geology_runtime_close(&continuous, &restored, EPSILON);
+}
+
+#[test]
+fn geology_params_rejects_legacy_alias_key() {
+    let mut value = serde_json::to_value(GeologyParams::default())
+        .expect("geology params to_value should succeed");
+    let object = value
+        .as_object_mut()
+        .expect("geology params json should be object");
+    let uplift = object
+        .remove("tectonic_uplift_gain")
+        .expect("tectonic_uplift_gain should exist");
+    object.insert("uplift_rate_gain".to_string(), uplift);
+
+    let error = serde_json::from_value::<GeologyParams>(value)
+        .expect_err("legacy key only input should not deserialize");
+    assert!(error.to_string().contains("tectonic_uplift_gain"));
+}
+
+#[test]
+fn world_json_legacy_runtime_key_is_ignored() {
+    let mut world = build_world();
+    world.exec_scratch.geology_dynamics = Some(GeologyDynamicsState {
+        update_index: 42,
+        plate_states: Vec::new(),
+        vertex_states: Vec::new(),
+        boundary_state: BoundaryDynamicsState::default(),
+        mantle_heat: Vec::new(),
+        cached_metrics: GeologyStepMetrics::default(),
+    });
+    let mut value = serde_json::to_value(world).expect("world to_value should succeed");
+    let object = value.as_object_mut().expect("world json should be object");
+    let exec_scratch = object
+        .remove("exec_scratch")
+        .expect("exec_scratch key should exist");
+    object.insert("runtime".to_string(), exec_scratch);
+
+    let restored: World = serde_json::from_value(value)
+        .expect("runtime key should be ignored and world should deserialize");
+    assert!(restored.exec_scratch.geology_dynamics.is_none());
+}
+
+#[test]
+fn world_json_rejects_legacy_geo_projection_key() {
+    let world = build_world();
+    let mut value = serde_json::to_value(world).expect("world to_value should succeed");
+    let object = value.as_object_mut().expect("world json should be object");
+    let projections = object
+        .get_mut("projections")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("projections should be object");
+    let terrain = projections
+        .remove("terrain")
+        .expect("terrain key should exist");
+    projections.insert("geo".to_string(), terrain);
+
+    let error = serde_json::from_value::<World>(value)
+        .expect_err("legacy geo projection key should fail to deserialize");
+    assert!(error.to_string().contains("terrain"));
+}
+
+#[test]
+fn terrain_state_rejects_legacy_latitude_key() {
+    let error = serde_json::from_value::<TerrainState>(serde_json::json!({
+        "latitude_deg": [0.0],
+        "distance_from_ocean": [0.0],
+        "coast_side": ["None"],
+        "is_coastal": [false]
+    }))
+    .expect_err("legacy latitude key should fail to deserialize");
+    assert!(error.to_string().contains("latitude"));
 }

@@ -49,9 +49,6 @@ const WASM_BUNDLE_PATH = path.join(
 );
 const START_MARKER = "<!-- performance-dashboard:start -->";
 const END_MARKER = "<!-- performance-dashboard:end -->";
-const LEGACY_SNAPSHOT_HISTORY_PREFIX =
-  "<!-- performance-dashboard:snapshot-history:";
-const LEGACY_SNAPSHOT_HISTORY_SUFFIX = " -->";
 const MAX_SNAPSHOT_HISTORY = 32;
 
 function toRepoRelativePath(pathname: string): string {
@@ -449,40 +446,6 @@ function parseSnapshotHistoryPayload(
     .slice(0, MAX_SNAPSHOT_HISTORY);
 }
 
-function parseLegacySnapshotHistory(section: string): PerformanceValue[][] {
-  for (const rawLine of section.split("\n")) {
-    const line = rawLine.trim();
-    if (
-      !line.startsWith(LEGACY_SNAPSHOT_HISTORY_PREFIX) ||
-      !line.endsWith(LEGACY_SNAPSHOT_HISTORY_SUFFIX)
-    ) {
-      continue;
-    }
-
-    const payload = line
-      .slice(
-        LEGACY_SNAPSHOT_HISTORY_PREFIX.length,
-        line.length - LEGACY_SNAPSHOT_HISTORY_SUFFIX.length,
-      )
-      .trim();
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(payload);
-    } catch (error) {
-      throw new Error(
-        `Malformed legacy snapshot history JSON in TODO.md: ${String(error)}`,
-      );
-    }
-    return parseSnapshotHistoryPayload(
-      parsed,
-      "legacy TODO.md snapshot history",
-    );
-  }
-
-  return [];
-}
-
 function areSnapshotHistoriesEqual(
   left: PerformanceValue[][],
   right: PerformanceValue[][],
@@ -588,11 +551,8 @@ async function main() {
   const latest = await readLatestHistoryEntry();
   const bundleSizeBytes = await readFileSize(WASM_BUNDLE_PATH);
   const current = await readFile(TODO_PATH, "utf8");
-  const currentSection = extractPerformanceSection(current);
   const persistedSnapshotHistory = await readPersistedSnapshotHistory();
-  const snapshotHistory =
-    persistedSnapshotHistory ??
-    (currentSection === null ? [] : parseLegacySnapshotHistory(currentSection));
+  const snapshotHistory = persistedSnapshotHistory ?? [];
   const currentValues = buildCurrentValues(latest, bundleSizeBytes);
   const previousValues = snapshotHistory[0] ?? [];
   const rows = buildComparisonRowsWithFallback(

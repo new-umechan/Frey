@@ -136,7 +136,6 @@ pub struct GeologyParams {
     pub age_density_gain: f32,
     pub erosion_thickness_coupling: f32,
     pub deposition_thickness_coupling: f32,
-    #[serde(alias = "uplift_rate_gain")]
     pub tectonic_uplift_gain: f32,
     pub plate_motion_gain: f32,
     pub boundary_reclassify_interval: u32,
@@ -144,12 +143,9 @@ pub struct GeologyParams {
     pub river_rebuild_interval_max: u32,
     pub river_activity_high_threshold: f32,
     pub river_activity_low_threshold: f32,
-    #[serde(alias = "subsidence_rate_gain")]
     pub tectonic_subsidence_gain: f32,
-    #[serde(alias = "marine_subsidence_gain")]
     pub thermal_subsidence_gain: f32,
     pub stress_relaxation_rate: f32,
-    #[serde(alias = "isostasy_rate")]
     pub isostatic_adjustment_rate: f32,
     pub subduction_age_coupling: f32,
     pub subduction_initiation_threshold: f32,

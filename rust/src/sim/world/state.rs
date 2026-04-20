@@ -21,11 +21,7 @@ pub struct World {
     pub entities: EntityStore,
     pub clock: ClockState,
     pub control: WorldControlState,
-    #[serde(
-        alias = "runtime",
-        default,
-        skip_serializing_if = "ExecScratchState::is_empty"
-    )]
+    #[serde(default, skip_serializing_if = "ExecScratchState::is_empty")]
     pub exec_scratch: ExecScratchState,
     #[serde(default, flatten)]
     pub relations: WorldRelations,
@@ -339,7 +335,6 @@ pub struct WorldState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct WorldProjectionState {
-    #[serde(alias = "geo")]
     pub terrain: TerrainState,
 }
 
@@ -354,9 +349,7 @@ impl WorldProjectionState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TerrainState {
-    #[serde(alias = "latitude_deg")]
     pub latitude: Vec<f32>,
-    #[serde(alias = "distance_from_ocean_km")]
     pub distance_from_ocean: Vec<f32>,
     pub coast_side: Vec<CoastSide>,
     pub is_coastal: Vec<bool>,
