@@ -37,6 +37,7 @@ import { resetWorldProgress } from "../../sim/world-loop";
 import { createPerfRuntime } from "../perf-runtime";
 import { type RuntimeContext } from "./create-controller-runtime";
 import { type CoreBuffers, type SyncWorldResult } from "../../sim/sync/types";
+import { type MetricsResult } from "../../engine/engine-client";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 
@@ -116,7 +117,12 @@ function createWorldSessionRuntime(context: RuntimeContext, playbackControllerRe
     });
 }
 
-function createWorldStepperRuntime(context: RuntimeContext, playbackControllerRef: PlaybackRef, setEraScale: (era: string) => void, refreshWorldStats: () => Promise<boolean>) {
+function createWorldStepperRuntime(
+    context: RuntimeContext,
+    playbackControllerRef: PlaybackRef,
+    setEraScale: (era: string) => void,
+    refreshWorldStats: () => Promise<MetricsResult | null>,
+) {
     return createWorldStepper({
         engineClient: context.engineClient,
         world: context.store.world,

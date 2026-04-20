@@ -94,7 +94,7 @@ export interface SyncDeltaOptions {
     buildEraMetricsFromRuntime: (era: string, metrics: MetricsResult) => EraMetrics;
     setEraScale: (era: string) => void;
     refreshStats: boolean;
-    refreshWorldStats: () => Promise<boolean>;
+    refreshWorldStats: () => Promise<MetricsResult | null>;
     deltaFieldKinds: FieldKind[];
     preloadedDelta?: unknown;
     perfRecorder?: TickPerfRecorder | null;

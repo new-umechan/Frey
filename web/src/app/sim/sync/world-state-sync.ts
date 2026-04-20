@@ -60,6 +60,7 @@ export async function syncWorldFromController(options: SyncOptions): Promise<Syn
         currentSeed: options.currentSeed,
         statFields,
         level,
+        metrics,
     });
 
     terrainRenderer.initializeTerrain(core, currentSurfaceMode);
@@ -126,8 +127,8 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
     let eraMetrics = null;
     let statsRefreshed = false;
     if (refreshStats) {
-        statsRefreshed = await refreshWorldStats();
-        const metrics = await engineClient.get_metrics(worldId);
+        const metrics = await refreshWorldStats();
+        statsRefreshed = metrics !== null;
         if (metrics) {
             const era = String(metrics.era ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);

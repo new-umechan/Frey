@@ -1,6 +1,6 @@
 import { type StatFields } from "../../../components/dom";
 import { type WorldState } from "../../state/app-state";
-import { type EngineClient } from "../../engine/engine-client";
+import { type EngineClient, type MetricsResult } from "../../engine/engine-client";
 
 function formatPercent(ratio: number): string {
     if (!Number.isFinite(ratio)) {
@@ -16,15 +16,16 @@ export async function refreshWorldStatsFromController(options: {
     currentSeed: string;
     statFields: StatFields;
     level: number;
-}) {
+    metrics?: MetricsResult | null;
+}): Promise<MetricsResult | null> {
     const { engineClient, worldId, world, currentSeed, statFields, level } = options;
     if (!worldId) {
-        return false;
+        return null;
     }
 
-    const metrics = await engineClient.get_metrics(worldId);
+    const metrics = options.metrics ?? await engineClient.get_metrics(worldId);
     if (!metrics) {
-        return false;
+        return null;
     }
 
     world.tick = Math.floor(metrics.tick);
@@ -41,5 +42,5 @@ export async function refreshWorldStatsFromController(options: {
     statFields.plates.textContent = `${metrics.plate_count ?? 0}P`;
     statFields.land.textContent = formatPercent(metrics.land_ratio);
 
-    return true;
+    return metrics;
 }
