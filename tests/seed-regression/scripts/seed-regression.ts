@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import initWasm, { WorldSimController } from "../../../generated/wasm/web/frey_wasm";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
@@ -7,8 +9,10 @@ import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params
 const DEFAULT_TICKS = 32;
 const DEFAULT_THRESHOLD = 0.005;
 const DEFAULT_SEEDS = ["alpha"];
+const DEFAULT_JOBS = 1;
 const TRANSITION_MODE = "fixed_tick";
 const ERA_BOUNDARIES = [0, 800, 1300, 1395, 1445];
+const SEED_REGRESSION_SCRIPT_PATH = fileURLToPath(new URL("./seed-regression.ts", import.meta.url));
 const METRIC_SPECS = [
     { key: "land_cells", sourceKey: "land_cells", flagSuffix: "land-cells" },
     { key: "height_mean", sourceKey: "mean_height", flagSuffix: "height-mean" },
@@ -43,6 +47,7 @@ function parseArgs(argv: string[]) {
     const args = {
         ticks: DEFAULT_TICKS,
         seeds: [...DEFAULT_SEEDS],
+        jobs: DEFAULT_JOBS,
         level: TERRAIN_LEVEL,
         out: null as string | null,
         baseline: null as string | null,
@@ -83,6 +88,10 @@ function parseArgs(argv: string[]) {
             i += 1;
             break;
         }
+        case "--jobs":
+            args.jobs = Math.max(1, Math.floor(parseNumber(next, "--jobs")));
+            i += 1;
+            break;
         case "--level":
             (args as any).level = Math.max(0, Math.floor(parseNumber(next, "--level")));
             i += 1;
@@ -121,6 +130,7 @@ function parseArgs(argv: string[]) {
 function printHelp() {
     console.error("Usage: node tests/seed-regression/scripts/seed-regression.mjs [options]");
     console.error("  --seeds <csv>");
+    console.error("  --jobs <n>");
     console.error("  --ticks <n>");
     console.error("  --level <n>");
     console.error("  --out <path>");
@@ -393,6 +403,83 @@ interface SimulationResult {
     era: string;
 }
 
+interface CommandResult {
+    code: number | null;
+    signal: NodeJS.Signals | null;
+    stdout: string;
+    stderr: string;
+}
+
+function runCommandCapture(command: string, args: string[]): Promise<CommandResult> {
+    return new Promise((resolvePromise, rejectPromise) => {
+        const child = spawn(command, args, {
+            cwd: resolve("."),
+            stdio: ["ignore", "pipe", "pipe"],
+            shell: process.platform === "win32",
+        });
+        let stdout = "";
+        let stderr = "";
+
+        child.stdout?.setEncoding("utf8");
+        child.stderr?.setEncoding("utf8");
+
+        child.stdout?.on("data", (chunk: string) => {
+            stdout += chunk;
+        });
+        child.stderr?.on("data", (chunk: string) => {
+            stderr += chunk;
+        });
+
+        child.on("error", rejectPromise);
+        child.on("close", (code, signal) => {
+            resolvePromise({
+                code,
+                signal,
+                stdout,
+                stderr,
+            });
+        });
+    });
+}
+
+function collectMetricsFromOutputEntry(metrics: unknown): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const spec of METRIC_SPECS) {
+        const value = Number((metrics as Record<string, unknown>)?.[spec.key]);
+        if (!Number.isFinite(value)) {
+            throw new Error(`missing numeric metric from subprocess output: ${spec.key}`);
+        }
+        result[spec.key] = value;
+    }
+    return result;
+}
+
+function parseSingleSeedSubprocessOutput(stdout: string, seed: string): SimulationResult {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(stdout);
+    } catch (error) {
+        throw new Error(
+            `failed to parse subprocess output for seed=${seed}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+
+    const results = (parsed as { results?: Array<{ seed?: string; era?: unknown; metrics?: unknown }> })?.results;
+    if (!Array.isArray(results)) {
+        throw new Error(`invalid subprocess output for seed=${seed}: missing results array`);
+    }
+
+    const entry = results.find((candidate) => String(candidate?.seed ?? "") === seed);
+    if (!entry) {
+        throw new Error(`invalid subprocess output for seed=${seed}: missing seed result`);
+    }
+
+    return {
+        metrics: collectMetricsFromOutputEntry(entry.metrics),
+        era: String(entry.era ?? ""),
+    };
+}
+
 async function runSeedSimulation(seed: string, ticks: number, level: number): Promise<SimulationResult> {
     const controller = new WorldSimController();
     const init = controller.init_world(seed, level, {
@@ -413,6 +500,85 @@ async function runSeedSimulation(seed: string, ticks: number, level: number): Pr
         metrics: collectMetricsFromResponse(metricsResponse),
         era: String(metricsResponse?.era ?? ""),
     };
+}
+
+async function runSeedSimulationInSubprocess(
+    seed: string,
+    args: { ticks: number; level: number },
+): Promise<SimulationResult> {
+    const commandArgs = [
+        "exec",
+        "tsx",
+        SEED_REGRESSION_SCRIPT_PATH,
+        "--seeds",
+        seed,
+        "--ticks",
+        String(args.ticks),
+        "--level",
+        String(args.level),
+        "--jobs",
+        "1",
+    ];
+    const result = await runCommandCapture("pnpm", commandArgs);
+    if (result.signal) {
+        throw new Error(`subprocess terminated by signal (${result.signal}) for seed=${seed}`);
+    }
+    if (result.code !== 0) {
+        const details = result.stderr.trim() || result.stdout.trim() || "no output";
+        throw new Error(`subprocess failed for seed=${seed}: ${details}`);
+    }
+    return parseSingleSeedSubprocessOutput(result.stdout, seed);
+}
+
+async function mapWithConcurrency<T, U>(
+    values: T[],
+    concurrency: number,
+    mapper: (value: T, index: number) => Promise<U>,
+): Promise<U[]> {
+    const workerCount = Math.max(1, Math.min(concurrency, values.length));
+    const results = new Array<U>(values.length);
+    let nextIndex = 0;
+
+    const runWorker = async () => {
+        while (nextIndex < values.length) {
+            const currentIndex = nextIndex;
+            nextIndex += 1;
+            results[currentIndex] = await mapper(values[currentIndex], currentIndex);
+        }
+    };
+
+    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+    return results;
+}
+
+async function runSeedSimulations(args: {
+    seeds: string[];
+    ticks: number;
+    level: number;
+    jobs: number;
+}): Promise<Array<{ seed: string; era: string; metrics: Record<string, number> }>> {
+    if (args.jobs <= 1 || args.seeds.length <= 1) {
+        await initWasmForNode();
+        const results = [];
+        for (const seed of args.seeds) {
+            const simulation = await runSeedSimulation(seed, args.ticks, args.level);
+            results.push({
+                seed,
+                era: simulation.era,
+                metrics: simulation.metrics,
+            });
+        }
+        return results;
+    }
+
+    return mapWithConcurrency(args.seeds, args.jobs, async (seed) => {
+        const simulation = await runSeedSimulationInSubprocess(seed, args);
+        return {
+            seed,
+            era: simulation.era,
+            metrics: simulation.metrics,
+        };
+    });
 }
 
 interface OutputData {
@@ -453,18 +619,7 @@ function buildOutput(args: { ticks: number; level: number; seeds: string[] }, th
 async function main() {
     const args = parseArgs(process.argv.slice(2));
 
-    await initWasmForNode();
-
-    const results = [];
-    for (const seed of args.seeds) {
-        const simulation = await runSeedSimulation(seed, args.ticks, args.level);
-        results.push({
-            seed,
-            tick: args.ticks,
-            era: simulation.era,
-            metrics: simulation.metrics,
-        });
-    }
+    const results = await runSeedSimulations(args);
 
     const thresholds = buildEffectiveThresholds(args);
     const outputData = buildOutput(args, thresholds, results);

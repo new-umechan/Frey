@@ -86,6 +86,8 @@ pnpm test:seed:gate:heavy
 
 - 共通閾値: `--threshold 0.005`
 - 指標別上書き: `--threshold-top10-river-flux-sum 0.01`
+- 並列実行数: `--jobs <n>`（デフォルト `1`）
+- `test:seed:gate:quick` / `test:seed:gate:heavy` は `--jobs 2` を使用する
 
 ゲート条件:
 
