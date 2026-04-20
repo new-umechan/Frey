@@ -20,7 +20,7 @@ export interface WorldSessionControllerOptions {
         currentSeed: string;
         statFields: StatFields;
         level: number;
-    }) => Promise<boolean>;
+    }) => Promise<MetricsResult | null>;
     setCurrentTerrainData: (data: CoreBuffers) => void;
     syncClimateUi: () => void;
     hidePlateHover: () => void;
@@ -78,10 +78,10 @@ export function createWorldSessionController(options: WorldSessionControllerOpti
         return result;
     };
 
-    const refreshActiveWorldStats = async (): Promise<boolean> => {
+    const refreshActiveWorldStats = async (): Promise<MetricsResult | null> => {
         const worldId = getActiveWorldId();
         if (!worldId) {
-            return false;
+            return null;
         }
         return refreshWorldStatsFromController({
             engineClient,
