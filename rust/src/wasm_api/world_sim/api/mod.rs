@@ -42,6 +42,7 @@ mod tests {
         exec_feedback_ms: f64,
         exec_geology_terrain_ms: f64,
         exec_climate_ms: f64,
+        exec_glaciology_ms: f64,
         exec_hydrology_ms: f64,
         exec_ecology_ms: f64,
         exec_society_ms: f64,
@@ -134,6 +135,7 @@ mod tests {
         assert!(profiled_data.exec_feedback_ms >= 0.0);
         assert!(profiled_data.exec_geology_terrain_ms >= 0.0);
         assert!(profiled_data.exec_climate_ms >= 0.0);
+        assert!(profiled_data.exec_glaciology_ms >= 0.0);
         assert!(profiled_data.exec_hydrology_ms >= 0.0);
         assert!(profiled_data.exec_ecology_ms >= 0.0);
         assert!(profiled_data.exec_society_ms >= 0.0);

@@ -253,6 +253,49 @@ impl F32FieldTracker {
         }
     }
 
+    pub fn observe_with<F>(&mut self, len: usize, mut value_at: F)
+    where
+        F: FnMut(usize) -> f32,
+    {
+        if self.shadow.len() != len {
+            self.shadow.clear();
+            self.shadow.reserve(len);
+            for index in 0..len {
+                self.shadow.push(value_at(index));
+            }
+            self.force_full = true;
+            self.dirty_ranges.clear();
+            self.dirty_bitmap = vec![0; bitmap_word_len(len)];
+            return;
+        }
+
+        let mut changed = 0usize;
+        let mut range_start: Option<usize> = None;
+        for index in 0..len {
+            let value = value_at(index);
+            if self.shadow[index] == value {
+                if let Some(start) = range_start.take() {
+                    self.merge_dirty_range(start, index);
+                }
+                continue;
+            }
+            self.shadow[index] = value;
+            bitmap_mark(&mut self.dirty_bitmap, index);
+            changed += 1;
+            if range_start.is_none() {
+                range_start = Some(index);
+            }
+        }
+        if let Some(start) = range_start {
+            self.merge_dirty_range(start, len);
+        }
+        if changed > 0 && (changed as f32) >= (len as f32) * DELTA_FULL_THRESHOLD_RATIO {
+            self.force_full = true;
+            self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
+        }
+    }
+
     pub fn take_delta(&mut self, field_kind: &str) -> Option<FieldDeltaResponse> {
         if self.force_full {
             self.force_full = false;
@@ -394,6 +437,49 @@ impl I32FieldTracker {
         }
     }
 
+    pub fn observe_with<F>(&mut self, len: usize, mut value_at: F)
+    where
+        F: FnMut(usize) -> i32,
+    {
+        if self.shadow.len() != len {
+            self.shadow.clear();
+            self.shadow.reserve(len);
+            for index in 0..len {
+                self.shadow.push(value_at(index));
+            }
+            self.force_full = true;
+            self.dirty_ranges.clear();
+            self.dirty_bitmap = vec![0; bitmap_word_len(len)];
+            return;
+        }
+
+        let mut changed = 0usize;
+        let mut range_start: Option<usize> = None;
+        for index in 0..len {
+            let value = value_at(index);
+            if self.shadow[index] == value {
+                if let Some(start) = range_start.take() {
+                    self.merge_dirty_range(start, index);
+                }
+                continue;
+            }
+            self.shadow[index] = value;
+            bitmap_mark(&mut self.dirty_bitmap, index);
+            changed += 1;
+            if range_start.is_none() {
+                range_start = Some(index);
+            }
+        }
+        if let Some(start) = range_start {
+            self.merge_dirty_range(start, len);
+        }
+        if changed > 0 && (changed as f32) >= (len as f32) * DELTA_FULL_THRESHOLD_RATIO {
+            self.force_full = true;
+            self.dirty_ranges.clear();
+            bitmap_clear(&mut self.dirty_bitmap);
+        }
+    }
+
     pub fn take_delta(&mut self, field_kind: &str) -> Option<FieldDeltaResponse> {
         if self.force_full {
             self.force_full = false;
@@ -500,18 +586,26 @@ impl U32FieldTracker {
         }
     }
 
-    pub fn observe(&mut self, values: &[u32]) {
-        if self.shadow.len() != values.len() {
-            self.shadow = values.to_vec();
+    pub fn observe_with<F>(&mut self, len: usize, mut value_at: F)
+    where
+        F: FnMut(usize) -> u32,
+    {
+        if self.shadow.len() != len {
+            self.shadow.clear();
+            self.shadow.reserve(len);
+            for index in 0..len {
+                self.shadow.push(value_at(index));
+            }
             self.force_full = true;
             self.dirty_ranges.clear();
-            self.dirty_bitmap = vec![0; bitmap_word_len(values.len())];
+            self.dirty_bitmap = vec![0; bitmap_word_len(len)];
             return;
         }
 
         let mut changed = 0usize;
         let mut range_start: Option<usize> = None;
-        for (index, value) in values.iter().copied().enumerate() {
+        for index in 0..len {
+            let value = value_at(index);
             if self.shadow[index] == value {
                 if let Some(start) = range_start.take() {
                     self.merge_dirty_range(start, index);
@@ -526,9 +620,9 @@ impl U32FieldTracker {
             }
         }
         if let Some(start) = range_start {
-            self.merge_dirty_range(start, values.len());
+            self.merge_dirty_range(start, len);
         }
-        if changed > 0 && (changed as f32) >= (values.len() as f32) * DELTA_FULL_THRESHOLD_RATIO {
+        if changed > 0 && (changed as f32) >= (len as f32) * DELTA_FULL_THRESHOLD_RATIO {
             self.force_full = true;
             self.dirty_ranges.clear();
             bitmap_clear(&mut self.dirty_bitmap);
@@ -704,6 +798,20 @@ fn collect_biome_codes(world: &world::World) -> Vec<i32> {
         .collect()
 }
 
+fn biome_to_code(biome: world::Biome) -> i32 {
+    match biome {
+        world::Biome::TropicalForest => 0,
+        world::Biome::Savanna => 1,
+        world::Biome::Desert => 2,
+        world::Biome::Grassland => 3,
+        world::Biome::TemperateForest => 4,
+        world::Biome::BorealForest => 5,
+        world::Biome::Tundra => 6,
+        world::Biome::Wetland => 7,
+        world::Biome::Alpine => 8,
+    }
+}
+
 impl WorldTransportCache {
     pub fn from_world(
         world: &world::World,
@@ -806,7 +914,10 @@ impl WorldTransportCache {
         self.volcanism.observe(&world.state.geology.volcanism);
         self.vertex_buoyancy
             .observe(&world.state.geology.vertex_buoyancy);
-        self.plate_id.observe(&collect_plate_ids(world));
+        self.plate_id
+            .observe_with(world.state.geology.plate_id.len(), |index| {
+                world.state.geology.plate_id[index].as_u32()
+            });
         self.river_flux.observe(&world.state.hydrology.river_flow);
         self.river_next.observe(&world.state.hydrology.river_next);
 
@@ -844,61 +955,515 @@ impl WorldTransportCache {
             .observe(&world.state.climate.moisture_flux_u);
         self.moisture_flux_v
             .observe(&world.state.climate.moisture_flux_v);
-        self.biome.observe(&collect_biome_codes(world));
+        self.biome
+            .observe_with(world.state.ecology.biome.len(), |index| {
+                biome_to_code(world.state.ecology.biome[index])
+            });
         self.river_transport_cost
             .observe(&world.state.hydrology.river_transport_cost);
-        self.crop_adoption_wheat
-            .observe(&collect_crop_adoption_for_kind(world, 0));
-        self.crop_adoption_rice
-            .observe(&collect_crop_adoption_for_kind(world, 1));
-        self.crop_adoption_maize
-            .observe(&collect_crop_adoption_for_kind(world, 2));
-        self.crop_adoption_millet
-            .observe(&collect_crop_adoption_for_kind(world, 3));
-        self.crop_adoption_potato
-            .observe(&collect_crop_adoption_for_kind(world, 4));
-        self.crop_adoption_cassava
-            .observe(&collect_crop_adoption_for_kind(world, 5));
-        self.crop_adoption_sorghum
-            .observe(&collect_crop_adoption_for_kind(world, 6));
-        self.crop_adoption_yam
-            .observe(&collect_crop_adoption_for_kind(world, 7));
+        let crop_len = world.state.domesticates.crop_adoption.len();
+        self.crop_adoption_wheat.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][0]
+        });
+        self.crop_adoption_rice.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][1]
+        });
+        self.crop_adoption_maize.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][2]
+        });
+        self.crop_adoption_millet.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][3]
+        });
+        self.crop_adoption_potato.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][4]
+        });
+        self.crop_adoption_cassava.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][5]
+        });
+        self.crop_adoption_sorghum.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][6]
+        });
+        self.crop_adoption_yam.observe_with(crop_len, |index| {
+            world.state.domesticates.crop_adoption[index][7]
+        });
+
+        let crop_available_len = world.state.domesticates.crop_available.len();
         self.crop_available_wheat
-            .observe(&collect_crop_available_for_kind(world, 0));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 0)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_rice
-            .observe(&collect_crop_available_for_kind(world, 1));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 1)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_maize
-            .observe(&collect_crop_available_for_kind(world, 2));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 2)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_millet
-            .observe(&collect_crop_available_for_kind(world, 3));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 3)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_potato
-            .observe(&collect_crop_available_for_kind(world, 4));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 4)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_cassava
-            .observe(&collect_crop_available_for_kind(world, 5));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 5)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_sorghum
-            .observe(&collect_crop_available_for_kind(world, 6));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 6)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.crop_available_yam
-            .observe(&collect_crop_available_for_kind(world, 7));
+            .observe_with(crop_available_len, |index| {
+                if (world.state.domesticates.crop_available[index] & (1u8 << 7)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
+
+        let livestock_len = world.state.domesticates.livestock_adoption.len();
         self.livestock_adoption_cattle
-            .observe(&collect_livestock_adoption_for_kind(world, 0));
+            .observe_with(livestock_len, |index| {
+                world.state.domesticates.livestock_adoption[index][0]
+            });
         self.livestock_adoption_horse
-            .observe(&collect_livestock_adoption_for_kind(world, 1));
+            .observe_with(livestock_len, |index| {
+                world.state.domesticates.livestock_adoption[index][1]
+            });
         self.livestock_adoption_sheep
-            .observe(&collect_livestock_adoption_for_kind(world, 2));
+            .observe_with(livestock_len, |index| {
+                world.state.domesticates.livestock_adoption[index][2]
+            });
         self.livestock_adoption_pig
-            .observe(&collect_livestock_adoption_for_kind(world, 3));
+            .observe_with(livestock_len, |index| {
+                world.state.domesticates.livestock_adoption[index][3]
+            });
         self.livestock_adoption_camel
-            .observe(&collect_livestock_adoption_for_kind(world, 4));
+            .observe_with(livestock_len, |index| {
+                world.state.domesticates.livestock_adoption[index][4]
+            });
+
+        let livestock_available_len = world.state.domesticates.livestock_available.len();
         self.livestock_available_cattle
-            .observe(&collect_livestock_available_for_kind(world, 0));
+            .observe_with(livestock_available_len, |index| {
+                if (world.state.domesticates.livestock_available[index] & (1u8 << 0)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.livestock_available_horse
-            .observe(&collect_livestock_available_for_kind(world, 1));
+            .observe_with(livestock_available_len, |index| {
+                if (world.state.domesticates.livestock_available[index] & (1u8 << 1)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.livestock_available_sheep
-            .observe(&collect_livestock_available_for_kind(world, 2));
+            .observe_with(livestock_available_len, |index| {
+                if (world.state.domesticates.livestock_available[index] & (1u8 << 2)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.livestock_available_pig
-            .observe(&collect_livestock_available_for_kind(world, 3));
+            .observe_with(livestock_available_len, |index| {
+                if (world.state.domesticates.livestock_available[index] & (1u8 << 3)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         self.livestock_available_camel
-            .observe(&collect_livestock_available_for_kind(world, 4));
+            .observe_with(livestock_available_len, |index| {
+                if (world.state.domesticates.livestock_available[index] & (1u8 << 4)) != 0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
+    }
+
+    pub fn observe_world_selected<F>(
+        &mut self,
+        world: &world::World,
+        geology_dynamics: Option<&world::GeologyDynamicsState>,
+        mut include_field: F,
+    ) where
+        F: FnMut(&str) -> bool,
+    {
+        if include_field("height") {
+            self.height.observe(&world.state.geology.height);
+        }
+        if include_field("lake_depth") {
+            self.lake_depth.observe(&world.state.geology.lake_depth);
+        }
+        if include_field("volcanism") {
+            self.volcanism.observe(&world.state.geology.volcanism);
+        }
+        if include_field("vertex_buoyancy") {
+            self.vertex_buoyancy
+                .observe(&world.state.geology.vertex_buoyancy);
+        }
+        if include_field("plate_id") {
+            self.plate_id
+                .observe_with(world.state.geology.plate_id.len(), |index| {
+                    world.state.geology.plate_id[index].as_u32()
+                });
+        }
+        if include_field("river_flux") {
+            self.river_flux.observe(&world.state.hydrology.river_flow);
+        }
+        if include_field("river_next") {
+            self.river_next.observe(&world.state.hydrology.river_next);
+        }
+        if include_field("mantle_heat") {
+            let mantle_heat = geology_dynamics
+                .map(|dynamics| dynamics.mantle_heat.as_slice())
+                .filter(|values| values.len() == world.state.geology.height.len());
+            if let Some(values) = mantle_heat {
+                self.mantle_heat.observe(values);
+            } else {
+                let fallback = vec![0.5; world.state.geology.height.len()];
+                self.mantle_heat.observe(&fallback);
+            }
+        }
+        if include_field("erosion_rate") {
+            self.erosion_rate.observe(&world.state.geology.erosion_rate);
+        }
+        if include_field("deposition_rate") {
+            self.deposition_rate
+                .observe(&world.state.geology.deposition_rate);
+        }
+        if include_field("temperature") {
+            self.temperature.observe(&world.state.climate.temperature);
+        }
+        if include_field("precipitation") {
+            self.precipitation
+                .observe(&world.state.climate.precipitation);
+        }
+        if include_field("evapotranspiration") {
+            self.evapotranspiration
+                .observe(&world.state.climate.evapotranspiration);
+        }
+        if include_field("aridity") {
+            self.aridity.observe(&world.state.climate.aridity);
+        }
+        if include_field("runoff") {
+            self.runoff.observe(&world.state.climate.runoff);
+        }
+        if include_field("ice_pressure") {
+            if world.state.glaciology.ice_load.len() == world.state.geology.height.len() {
+                self.ice_pressure.observe(&world.state.glaciology.ice_load);
+            } else {
+                let fallback = vec![0.0; world.state.geology.height.len()];
+                self.ice_pressure.observe(&fallback);
+            }
+        }
+        if include_field("ocean_temperature") {
+            self.ocean_temperature
+                .observe(&world.state.climate.ocean_temperature);
+        }
+        if include_field("wind_u") {
+            self.wind_u.observe(&world.state.climate.wind_u);
+        }
+        if include_field("wind_v") {
+            self.wind_v.observe(&world.state.climate.wind_v);
+        }
+        if include_field("moisture_flux_u") {
+            self.moisture_flux_u
+                .observe(&world.state.climate.moisture_flux_u);
+        }
+        if include_field("moisture_flux_v") {
+            self.moisture_flux_v
+                .observe(&world.state.climate.moisture_flux_v);
+        }
+        if include_field("biome") {
+            self.biome
+                .observe_with(world.state.ecology.biome.len(), |index| {
+                    biome_to_code(world.state.ecology.biome[index])
+                });
+        }
+        if include_field("river_transport_cost") {
+            self.river_transport_cost
+                .observe(&world.state.hydrology.river_transport_cost);
+        }
+
+        let include_any_crop_adoption = include_field("crop_adoption_wheat")
+            || include_field("crop_adoption_rice")
+            || include_field("crop_adoption_maize")
+            || include_field("crop_adoption_millet")
+            || include_field("crop_adoption_potato")
+            || include_field("crop_adoption_cassava")
+            || include_field("crop_adoption_sorghum")
+            || include_field("crop_adoption_yam");
+        if include_any_crop_adoption {
+            let crop_len = world.state.domesticates.crop_adoption.len();
+            if include_field("crop_adoption_wheat") {
+                self.crop_adoption_wheat.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][0]
+                });
+            }
+            if include_field("crop_adoption_rice") {
+                self.crop_adoption_rice.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][1]
+                });
+            }
+            if include_field("crop_adoption_maize") {
+                self.crop_adoption_maize.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][2]
+                });
+            }
+            if include_field("crop_adoption_millet") {
+                self.crop_adoption_millet.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][3]
+                });
+            }
+            if include_field("crop_adoption_potato") {
+                self.crop_adoption_potato.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][4]
+                });
+            }
+            if include_field("crop_adoption_cassava") {
+                self.crop_adoption_cassava.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][5]
+                });
+            }
+            if include_field("crop_adoption_sorghum") {
+                self.crop_adoption_sorghum.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][6]
+                });
+            }
+            if include_field("crop_adoption_yam") {
+                self.crop_adoption_yam.observe_with(crop_len, |index| {
+                    world.state.domesticates.crop_adoption[index][7]
+                });
+            }
+        }
+
+        let include_any_crop_available = include_field("crop_available_wheat")
+            || include_field("crop_available_rice")
+            || include_field("crop_available_maize")
+            || include_field("crop_available_millet")
+            || include_field("crop_available_potato")
+            || include_field("crop_available_cassava")
+            || include_field("crop_available_sorghum")
+            || include_field("crop_available_yam");
+        if include_any_crop_available {
+            let crop_available_len = world.state.domesticates.crop_available.len();
+            if include_field("crop_available_wheat") {
+                self.crop_available_wheat
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 0)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_rice") {
+                self.crop_available_rice
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 1)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_maize") {
+                self.crop_available_maize
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 2)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_millet") {
+                self.crop_available_millet
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 3)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_potato") {
+                self.crop_available_potato
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 4)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_cassava") {
+                self.crop_available_cassava
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 5)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_sorghum") {
+                self.crop_available_sorghum
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 6)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("crop_available_yam") {
+                self.crop_available_yam
+                    .observe_with(crop_available_len, |index| {
+                        if (world.state.domesticates.crop_available[index] & (1u8 << 7)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+        }
+
+        let include_any_livestock_adoption = include_field("livestock_adoption_cattle")
+            || include_field("livestock_adoption_horse")
+            || include_field("livestock_adoption_sheep")
+            || include_field("livestock_adoption_pig")
+            || include_field("livestock_adoption_camel");
+        if include_any_livestock_adoption {
+            let livestock_len = world.state.domesticates.livestock_adoption.len();
+            if include_field("livestock_adoption_cattle") {
+                self.livestock_adoption_cattle
+                    .observe_with(livestock_len, |index| {
+                        world.state.domesticates.livestock_adoption[index][0]
+                    });
+            }
+            if include_field("livestock_adoption_horse") {
+                self.livestock_adoption_horse
+                    .observe_with(livestock_len, |index| {
+                        world.state.domesticates.livestock_adoption[index][1]
+                    });
+            }
+            if include_field("livestock_adoption_sheep") {
+                self.livestock_adoption_sheep
+                    .observe_with(livestock_len, |index| {
+                        world.state.domesticates.livestock_adoption[index][2]
+                    });
+            }
+            if include_field("livestock_adoption_pig") {
+                self.livestock_adoption_pig
+                    .observe_with(livestock_len, |index| {
+                        world.state.domesticates.livestock_adoption[index][3]
+                    });
+            }
+            if include_field("livestock_adoption_camel") {
+                self.livestock_adoption_camel
+                    .observe_with(livestock_len, |index| {
+                        world.state.domesticates.livestock_adoption[index][4]
+                    });
+            }
+        }
+
+        let include_any_livestock_available = include_field("livestock_available_cattle")
+            || include_field("livestock_available_horse")
+            || include_field("livestock_available_sheep")
+            || include_field("livestock_available_pig")
+            || include_field("livestock_available_camel");
+        if include_any_livestock_available {
+            let livestock_available_len = world.state.domesticates.livestock_available.len();
+            if include_field("livestock_available_cattle") {
+                self.livestock_available_cattle
+                    .observe_with(livestock_available_len, |index| {
+                        if (world.state.domesticates.livestock_available[index] & (1u8 << 0)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("livestock_available_horse") {
+                self.livestock_available_horse
+                    .observe_with(livestock_available_len, |index| {
+                        if (world.state.domesticates.livestock_available[index] & (1u8 << 1)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("livestock_available_sheep") {
+                self.livestock_available_sheep
+                    .observe_with(livestock_available_len, |index| {
+                        if (world.state.domesticates.livestock_available[index] & (1u8 << 2)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("livestock_available_pig") {
+                self.livestock_available_pig
+                    .observe_with(livestock_available_len, |index| {
+                        if (world.state.domesticates.livestock_available[index] & (1u8 << 3)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+            if include_field("livestock_available_camel") {
+                self.livestock_available_camel
+                    .observe_with(livestock_available_len, |index| {
+                        if (world.state.domesticates.livestock_available[index] & (1u8 << 4)) != 0 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    });
+            }
+        }
     }
 
     pub fn take_world_field_deltas<F>(&mut self, mut include_field: F) -> Vec<FieldDeltaResponse>
@@ -1339,8 +1904,8 @@ impl ManagedWorld {
     }
 
     pub fn observe_after_world_change(&mut self) {
-        self.transport_cache
-            .observe_world(&self.world, self.geology_dynamics.as_ref());
+        // Delta observation is deferred to get_world_delta(include_fields) so that
+        // we can avoid scanning untouched fields each tick.
     }
 
     pub fn exec_is_busy(&self) -> bool {
@@ -1453,7 +2018,8 @@ mod tests {
     #[test]
     fn u32_tracker_collects_plate_id_delta_ranges() {
         let mut tracker = U32FieldTracker::new(&[0, 1, 2, 3, 4, 5]);
-        tracker.observe(&[0, 8, 2, 3, 9, 5]);
+        let observed = [0, 8, 2, 3, 9, 5];
+        tracker.observe_with(observed.len(), |index| observed[index]);
 
         let delta = tracker.take_delta("plate_id").expect("plate_id delta");
         assert_eq!(delta.field_kind, "plate_id");

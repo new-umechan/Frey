@@ -2,6 +2,7 @@ export const STEP_BREAKDOWN_METRIC_NAMES = [
     "step_feedback",
     "step_geology_terrain",
     "step_climate",
+    "step_glaciology",
     "step_geology_river",
     "step_ecology",
     "step_civilization",

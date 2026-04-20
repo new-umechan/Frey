@@ -61,6 +61,7 @@ export function pushStepBreakdownSamples(recorder: PerfSampleRecorder, profiledR
         step_feedback: "exec_feedback_ms",
         step_geology_terrain: "exec_geology_terrain_ms",
         step_climate: "exec_climate_ms",
+        step_glaciology: "exec_glaciology_ms",
         step_geology_river: "exec_hydrology_ms",
         step_ecology: "exec_ecology_ms",
         step_civilization: "exec_society_ms",

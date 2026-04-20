@@ -66,7 +66,6 @@ pub(super) fn run_glaciology_stage_with_hydrology(
 ) {
     crate::sim::glaciology::run_glaciology_step(world, world.clock.budgets.climate);
     apply_glaciology_forcing_to_geology(world, hydrology_state);
-    world.refresh_terrain_state();
 }
 
 pub(super) fn run_hydrology_stage_with_hydrology(
@@ -83,6 +82,7 @@ pub(super) fn run_hydrology_stage_with_hydrology(
         run_mfd,
     );
     apply_hydrology_erosion_to_geology(world, geology_state, hydrology_state);
+    // Glaciology->Hydrologyで地形高が連続更新されるため、terrain projectionはここで1回だけ更新する。
     world.refresh_terrain_state();
 }
 

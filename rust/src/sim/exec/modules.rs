@@ -183,11 +183,8 @@ const GLACIOLOGY_READS: &[WorldResource] = &[
     WorldResource::ClimateCells,
     WorldResource::GlaciologyCells,
 ];
-const GLACIOLOGY_WRITES: &[WorldResource] = &[
-    WorldResource::TerrainProjection,
-    WorldResource::GeologyCells,
-    WorldResource::GlaciologyCells,
-];
+const GLACIOLOGY_WRITES: &[WorldResource] =
+    &[WorldResource::GeologyCells, WorldResource::GlaciologyCells];
 
 const HYDROLOGY_READS: &[WorldResource] = &[
     WorldResource::Clock,
