@@ -21,6 +21,11 @@ export type EngineWorkerRequest =
     }
     | {
         id: number;
+        kind: "exec_world_slice_and_delta";
+        payload: { worldId: string; workBudget: number; options?: unknown };
+    }
+    | {
+        id: number;
         kind: "get_world_delta";
         payload: { worldId: string; options?: unknown };
     }

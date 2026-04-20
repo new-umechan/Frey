@@ -5,6 +5,7 @@ import type {
     ForkWorldResult,
     MeshGenerationResult,
     ExecWorldSliceResult,
+    ExecWorldSliceAndDeltaResult,
     ProfiledExecResult,
     WorldDeltaResult,
     MetricsResult,
@@ -85,6 +86,17 @@ export class EngineWorkerClient implements EngineClient {
 
     async exec_world_slice(worldId: string, workBudget: number): Promise<ExecWorldSliceResult> {
         return await this.request("exec_world_slice", { worldId, workBudget }) as ExecWorldSliceResult;
+    }
+
+    async exec_world_slice_and_delta(
+        worldId: string,
+        workBudget: number,
+        options?: unknown,
+    ): Promise<ExecWorldSliceAndDeltaResult> {
+        return await this.request(
+            "exec_world_slice_and_delta",
+            { worldId, workBudget, options },
+        ) as ExecWorldSliceAndDeltaResult;
     }
 
     async exec_world_profiled(worldId: string, tickCount: number): Promise<ProfiledExecResult> {

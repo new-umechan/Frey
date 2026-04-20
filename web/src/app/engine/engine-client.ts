@@ -24,6 +24,11 @@ export interface ExecWorldSliceResult {
     phase?: string;
 }
 
+export interface ExecWorldSliceAndDeltaResult {
+    slice: ExecWorldSliceResult;
+    delta: WorldDeltaResult | null;
+}
+
 export interface HistoryTicksResult {
     ticks?: unknown[];
     interval?: number;
@@ -99,6 +104,11 @@ export interface EngineClient {
     init_world: (seed: string, meshLevel: number, config: unknown) => Promise<InitWorldResult>;
     exec_world: (worldId: string, tickCount: number) => Promise<void>;
     exec_world_slice: (worldId: string, workBudget: number) => Promise<ExecWorldSliceResult>;
+    exec_world_slice_and_delta: (
+        worldId: string,
+        workBudget: number,
+        options?: unknown,
+    ) => Promise<ExecWorldSliceAndDeltaResult>;
     exec_world_profiled: (worldId: string, tickCount: number) => Promise<ProfiledExecResult>;
     get_world_delta: (worldId: string, options?: unknown) => Promise<WorldDeltaResult>;
     get_metrics: (worldId: string) => Promise<MetricsResult | null>;

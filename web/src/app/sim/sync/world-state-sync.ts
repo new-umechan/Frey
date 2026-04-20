@@ -82,11 +82,14 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         refreshStats,
         refreshWorldStats,
         deltaFieldKinds,
+        preloadedDelta,
         perfRecorder,
     } = options;
 
     let worldDelta: unknown = null;
-    if (perfRecorder) {
+    if (preloadedDelta !== undefined) {
+        worldDelta = preloadedDelta;
+    } else if (perfRecorder) {
         const start = performance.now();
         worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
         perfRecorder.pushSample("get_world_delta", performance.now() - start);

@@ -96,6 +96,7 @@ export interface SyncDeltaOptions {
     refreshStats: boolean;
     refreshWorldStats: () => Promise<boolean>;
     deltaFieldKinds: FieldKind[];
+    preloadedDelta?: unknown;
     perfRecorder?: TickPerfRecorder | null;
 }
 

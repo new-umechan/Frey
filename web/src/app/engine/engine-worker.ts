@@ -104,6 +104,23 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                 post({ id: request.id, ok: true, kind: request.kind, payload: result });
                 return;
             }
+            case "exec_world_slice_and_delta": {
+                const slice = runtime.exec_world_slice(
+                    request.payload.worldId,
+                    request.payload.workBudget,
+                );
+                let delta: unknown = null;
+                if ((slice?.processed_ticks ?? 0) > 0) {
+                    delta = runtime.get_world_delta(
+                        request.payload.worldId,
+                        request.payload.options ?? null,
+                    );
+                }
+                const payload = { slice, delta };
+                const transferables = extractTransferables(payload);
+                post({ id: request.id, ok: true, kind: request.kind, payload }, transferables);
+                return;
+            }
             case "get_world_delta": {
                 const result = runtime.get_world_delta(
                     request.payload.worldId,

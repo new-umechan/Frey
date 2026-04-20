@@ -93,7 +93,16 @@ export function createWorldStepper(options: WorldStepperOptions) {
         terrainRenderer.applyCoreChanges(currentTerrainData, deltaResult, state.currentSurfaceMode, world.tick);
     };
 
-    const syncCompletedWorldStep = async (tickOptions: { benchmarkMode?: boolean; batchCount?: number; previousTick?: number; batched?: boolean } = {}, perfRecorder: TickPerfRecorder | null = null) => {
+    const syncCompletedWorldStep = async (
+        tickOptions: {
+            benchmarkMode?: boolean;
+            batchCount?: number;
+            previousTick?: number;
+            batched?: boolean;
+            preloadedDelta?: unknown;
+        } = {},
+        perfRecorder: TickPerfRecorder | null = null,
+    ) => {
         const liveState = getCurrentState();
         const activeWorldId = getActiveWorldId();
         const currentTerrainData = getCurrentTerrainData();
@@ -118,6 +127,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
             refreshStats: shouldRefreshStats,
             refreshWorldStats,
             deltaFieldKinds: getCurrentDeltaFieldKinds(),
+            preloadedDelta: tickOptions.preloadedDelta,
             perfRecorder,
         });
         if (!benchmarkMode && (changes?.metric || statsRefreshed)) {
@@ -193,20 +203,24 @@ export function createWorldStepper(options: WorldStepperOptions) {
             };
         }
 
-        const response = await engineClient.exec_world_slice(
+        const deltaFieldKinds = getCurrentDeltaFieldKinds();
+        const response = await engineClient.exec_world_slice_and_delta(
             activeWorldId,
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
+            { include_fields: deltaFieldKinds },
         );
-        worldState.sliceBusy = response?.busy === true;
-        worldState.slicePhase = typeof response?.phase === "string"
-            ? response.phase
+        const slice = response?.slice ?? {};
+        worldState.sliceBusy = slice?.busy === true;
+        worldState.slicePhase = typeof slice?.phase === "string"
+            ? slice.phase
             : getDefaultExecDisplayPhase(worldState);
-        const processedTicks = Math.max(0, Math.floor(response?.processed_ticks ?? 0));
+        const processedTicks = Math.max(0, Math.floor(slice?.processed_ticks ?? 0));
         if (processedTicks > 0) {
             await syncCompletedWorldStep({
                 previousTick: Math.max(0, world.tick - processedTicks),
                 batchCount: processedTicks,
                 batched: false,
+                preloadedDelta: response?.delta ?? null,
             });
         }
         return {
