@@ -23,9 +23,9 @@ Accepted
 本決定に伴い、次を採用する。
 
 - `WorldTransportCache.observe_world` の zero-allocation 方針
-  - 毎tickの一時 `Vec` 生成を避け、`observe_with` 経由で shadow を直接比較更新する。
+    - 毎tickの一時 `Vec` 生成を避け、`observe_with` 経由で shadow を直接比較更新する。
 - Worker パイプライン化
-  - `exec_world_slice_and_delta` を導入し、`exec_world_slice` 後の `get_world_delta` を同一 worker 要求に束ねる。
+    - `exec_world_slice_and_delta` を導入し、`exec_world_slice` 後の `get_world_delta` を同一 worker 要求に束ねる。
 
 ## Rationale
 

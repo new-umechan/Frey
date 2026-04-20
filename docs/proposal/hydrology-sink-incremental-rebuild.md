@@ -33,7 +33,7 @@ Accepted
 
 参考:
 
-- Barnes et al., 2014, *Priority-Flood: An Optimal Depression-Filling and Watershed-Labeling Algorithm for Digital Elevation Models*.
+- Barnes et al., 2014, _Priority-Flood: An Optimal Depression-Filling and Watershed-Labeling Algorithm for Digital Elevation Models_.
 - Salles et al., 2018, goSPL 関連論文群（landscape evolution with depression/sediment handling）。
 
 ## 成功条件

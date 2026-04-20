@@ -21,12 +21,12 @@ Accepted
 ## 提案概要
 
 - 優先順は次の 3 段階とする。
-  - 1. Rust 実行コアの最適化・リファクタ
-  - 2. 決定性を崩さない Worker パイプライン化
-  - 3. 最終手段として観測・描画経路のみ間引き
+    1. Rust 実行コアの最適化・リファクタ
+    2. 決定性を崩さない Worker パイプライン化
+    3. 最終手段として観測・描画経路のみ間引き
 - 本変更では段階 1 と段階 2 の初期実装を入れる。
-  - `WorldTransportCache.observe_world` で毎tick発生していた一時 `Vec` 生成を削減する。
-  - `exec_world_slice` と `get_world_delta` を Worker 内で1回の要求にまとめる。
+    - `WorldTransportCache.observe_world` で毎tick発生していた一時 `Vec` 生成を削減する。
+    - `exec_world_slice` と `get_world_delta` を Worker 内で1回の要求にまとめる。
 
 ## 成功条件
 
