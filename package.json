@@ -40,7 +40,7 @@
         "lint:web": "pnpm app:lint:web",
         "format:rust": "pnpm app:format:rust",
         "lint:rust": "pnpm app:lint:rust",
-        "lint:prepush": "pnpm app:lint:prepush && pnpm docs:check",
+        "lint:prepush": "pnpm docs:check && pnpm app:lint:prepush",
         "bench": "tsx benches/scripts/bench.ts",
         "bench:run:climate-series": "tsx benches/scripts/bench-climate-series.ts",
         "bench:compare:climate": "tsx benches/scripts/compare-climate-scores.ts",

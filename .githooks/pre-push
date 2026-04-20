@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 set -eu
 
-echo "[pre-push] Running pre-push lint checks (web + rust + docs)..."
+echo "[pre-push] Running pre-push lint checks (docs + web + rust)..."
 pnpm lint:prepush
