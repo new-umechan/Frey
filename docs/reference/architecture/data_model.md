@@ -36,6 +36,18 @@ struct World {
 履歴用の snapshot と replay 状態は `World` の正本には含めず、
 管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
+## Managed 層（WASM transport）
+
+`ManagedWorld` は `World` 正本の外側で、次を管理する。
+
+- `hydrology_dynamics` / `geology_dynamics` などの実行補助状態
+- 履歴スナップショットと replay 制御
+- transport 用の `WorldTransportCache`（delta 返却用 shadow）
+
+`WorldTransportCache` の観測更新は、毎tickで一時配列を生成しないことを原則とする。
+派生値（例: `plate_id` / `biome` / domesticates 系列）は shadow への直接比較更新で扱い、
+不要な `Vec` 生成を避ける。
+
 ## ID型定義
 
 すべてのIDはnewtypeパターンで定義する。異なるID型の混在はコンパイルエラーとなる。
@@ -181,6 +193,7 @@ struct BoundaryEdgeInternal {
 
 struct BoundaryDynamicsState {
     edge_pairs: Vec<[u32; 2]>,
+    edge_pairs_plate_hash: u64,
     edge_internal: Vec<BoundaryEdgeInternal>,
     rollback_fraction: Vec<f32>,
     backarc_tension: Vec<f32>,
@@ -192,6 +205,8 @@ struct BoundaryDynamicsState {
 `BoundaryEdgeInternal` は境界edgeごとの収束履歴のみを保持する。
 境界edgeの対応関係（`edge_pairs`）とスラブ成分（`slab_*_component`）は
 `BoundaryDynamicsState` で管理する。
+`edge_pairs_plate_hash` は `plate_id` 変化有無を判定するためのキャッシュで、
+未変化tickでは境界edge再構築を省略する。
 境界タイプ自体はedge単位では永続保持せず、必要時に再計算する。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。

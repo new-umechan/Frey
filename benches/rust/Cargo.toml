@@ -29,3 +29,7 @@ harness = false
 [[bench]]
 name = "glaciology_sea_level_series"
 harness = false
+
+[[bench]]
+name = "geology_solo"
+harness = false

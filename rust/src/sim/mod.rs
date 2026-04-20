@@ -165,6 +165,14 @@ pub fn run_hydrology_step_with_state_for_bench(
     );
 }
 
+pub fn run_geology_step_with_state_for_bench(
+    world: &mut world::World,
+    geology_state: &mut GeologyExecState,
+    geology_budget: u32,
+) {
+    geology::update_geology(world, geology_state, geology_budget);
+}
+
 pub fn run_ecology_step_for_bench(world: &mut world::World, ecology_budget: u32) {
     ecology::run_ecology_step(world, ecology_budget);
 }

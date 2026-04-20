@@ -281,7 +281,9 @@ fn main() {
         None => {
             println!("=== Domesticates Solo Bench ===");
             println!();
-            println!("-- Domesticates Ref: SKIPPED (benches/data/domesticates_ref.bin not found) --");
+            println!(
+                "-- Domesticates Ref: SKIPPED (benches/data/domesticates_ref.bin not found) --"
+            );
             println!("To generate:");
             println!(
                 "  pnpm bench:resample:domesticates-ref -- --manifest benches/raw/domesticates/manifest.json"
@@ -313,7 +315,10 @@ fn main() {
     println!("-- Climate Source: {} --", climate_ref_path.display());
     println!("-- Hydro Source: {} --", hydro_ref_path.display());
     println!("-- Ecology Source: {} --", ecology_ref_path.display());
-    println!("-- Domesticates Source: {} --", domesticates_ref_path.display());
+    println!(
+        "-- Domesticates Source: {} --",
+        domesticates_ref_path.display()
+    );
 
     terrain.height = terrain_ref.height;
     let plate_id = terrain.plate_id.clone();
@@ -415,7 +420,10 @@ fn main() {
     println!("crop_presence_f1:          {:.3}", crop_presence_f1);
     println!("livestock_intensity_rho:   {:.3}", livestock_intensity_rho);
     println!("livestock_presence_f1:     {:.3}", livestock_presence_f1);
-    println!("regional_assertion_coverage: {:.3}", regional_assertion.coverage_ratio);
+    println!(
+        "regional_assertion_coverage: {:.3}",
+        regional_assertion.coverage_ratio
+    );
     println!("overall_score:             {:.3}", overall_score);
     println!("runtime_ms:                {:.3}", domesticates_step_ms);
 
@@ -473,7 +481,8 @@ fn find_cache(name: &str) -> Option<PathBuf> {
 }
 
 fn load_terrain_ref(path: &Path) -> Result<TerrainRef, String> {
-    let file = File::open(path).map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     expect_magic(&mut reader, b"TERRREF1")?;
     let version = read_u32_le(&mut reader)?;
@@ -486,7 +495,8 @@ fn load_terrain_ref(path: &Path) -> Result<TerrainRef, String> {
 }
 
 fn load_climate_ref(path: &Path) -> Result<ClimateRef, String> {
-    let file = File::open(path).map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     expect_magic(&mut reader, b"CLIMREF1")?;
     let version = read_u32_le(&mut reader)?;
@@ -507,7 +517,8 @@ fn load_climate_ref(path: &Path) -> Result<ClimateRef, String> {
 }
 
 fn load_hydro_ref(path: &Path) -> Result<HydroRef, String> {
-    let file = File::open(path).map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     expect_magic(&mut reader, b"HYDROREF1")?;
     let version = read_u32_le(&mut reader)?;
@@ -521,7 +532,8 @@ fn load_hydro_ref(path: &Path) -> Result<HydroRef, String> {
 }
 
 fn load_ecology_ref(path: &Path) -> Result<EcologyRef, String> {
-    let file = File::open(path).map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     expect_magic(&mut reader, b"ECOREF01")?;
     let version = read_u32_le(&mut reader)?;
@@ -544,7 +556,8 @@ fn load_ecology_ref(path: &Path) -> Result<EcologyRef, String> {
 }
 
 fn load_domesticates_ref(path: &Path) -> Result<DomesticatesRef, String> {
-    let file = File::open(path).map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     expect_magic(&mut reader, b"DOMEREF2")?;
     let version = read_u32_le(&mut reader)?;
@@ -776,7 +789,12 @@ fn spearman_masked(
 ) -> Option<f32> {
     let mut model_values = Vec::new();
     let mut ref_values = Vec::new();
-    for i in 0..model.len().min(reference.len()).min(geology_height.len()).min(eval_mask.len()) {
+    for i in 0..model
+        .len()
+        .min(reference.len())
+        .min(geology_height.len())
+        .min(eval_mask.len())
+    {
         if geology_height[i] <= 0.0 || eval_mask[i] == 0 {
             continue;
         }

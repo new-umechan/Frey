@@ -315,9 +315,7 @@ fn main() {
     println!("-- Hydro Input Source: {} --", hydro_input_path.display());
     println!(
         "-- Runtime Diagnostics: hydrology_step_ms={:.3} stabilization_ticks={} sample_ticks={} --",
-        hydrology_step_ms,
-        stabilization_ticks,
-        sample_ticks
+        hydrology_step_ms, stabilization_ticks, sample_ticks
     );
     println!();
     println!("-- Main Evaluation 1-A: river_flow Spearman (log scale, land cells only) --");
@@ -944,7 +942,12 @@ fn summarize_fill_spill_diagnostics(world: &world::World) -> FillSpillDiagnostic
     } else {
         0.0
     };
-    let ponded_cell_count = hydrology.is_lake.iter().copied().filter(|value| *value).count();
+    let ponded_cell_count = hydrology
+        .is_lake
+        .iter()
+        .copied()
+        .filter(|value| *value)
+        .count();
 
     FillSpillDiagnosticSummary {
         active_sink_count,
