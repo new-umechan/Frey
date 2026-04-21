@@ -1,0 +1,316 @@
+{
+  "meta": {
+    "generated_at": "2026-04-21T11:26:32.221Z",
+    "user_agent": "node v25.9.0",
+    "timezone": "Asia/Tokyo"
+  },
+  "profile": {
+    "label": "perf-32",
+    "tickCount": 16,
+    "seed": "alpha",
+    "surfaceMode": "globe",
+    "viewMode": "normal",
+    "tickStart": 0,
+    "tickEnd": 16
+  },
+  "totals": {
+    "wall_time_ms": 5881.153,
+    "processed_ticks": 16
+  },
+  "metrics": {
+    "exec_world": {
+      "count": 16,
+      "mean": 360.182886,
+      "min": 217.996084,
+      "max": 1068.120542,
+      "p50": 318.710417,
+      "p95": 1068.120542,
+      "p99": 1068.120542
+    },
+    "delta_sync": {
+      "count": 16,
+      "mean": 6.196776,
+      "min": 4.947917,
+      "max": 18.7155,
+      "p50": 5.048292,
+      "p95": 18.7155,
+      "p99": 18.7155
+    },
+    "river_mask_update": {
+      "count": 2,
+      "mean": 1.060688,
+      "min": 0.972792,
+      "max": 1.148584,
+      "p50": 0.972792,
+      "p95": 1.148584,
+      "p99": 1.148584
+    },
+    "tick_total": {
+      "count": 16,
+      "mean": 366.541578,
+      "min": 223.208458,
+      "max": 1088.170125,
+      "p50": 323.738125,
+      "p95": 1088.170125,
+      "p99": 1088.170125
+    },
+    "step_feedback": {
+      "count": 4,
+      "mean": 0.008156,
+      "min": 0.006416,
+      "max": 0.01275,
+      "p50": 0.006625,
+      "p95": 0.01275,
+      "p99": 0.01275
+    },
+    "step_geology_terrain": {
+      "count": 4,
+      "mean": 119.524083,
+      "min": 118.919291,
+      "max": 120.041,
+      "p50": 119.207458,
+      "p95": 120.041,
+      "p99": 120.041
+    },
+    "step_climate": {
+      "count": 4,
+      "mean": 0.007719,
+      "min": 0.007167,
+      "max": 0.009,
+      "p50": 0.00725,
+      "p95": 0.009,
+      "p99": 0.009
+    },
+    "step_glaciology": {
+      "count": 4,
+      "mean": 1.40725,
+      "min": 1.3355,
+      "max": 1.45825,
+      "p50": 1.416166,
+      "p95": 1.45825,
+      "p99": 1.45825
+    },
+    "step_geology_river": {
+      "count": 4,
+      "mean": 99.836187,
+      "min": 95.001833,
+      "max": 108.099833,
+      "p50": 95.707541,
+      "p95": 108.099833,
+      "p99": 108.099833
+    },
+    "step_ecology": {
+      "count": 4,
+      "mean": 0.007083,
+      "min": 0.00675,
+      "max": 0.007416,
+      "p50": 0.006916,
+      "p95": 0.007416,
+      "p99": 0.007416
+    },
+    "step_civilization": {
+      "count": 4,
+      "mean": 0.047709,
+      "min": 0.040002,
+      "max": 0.068457,
+      "p50": 0.040875,
+      "p95": 0.068457,
+      "p99": 0.068457
+    },
+    "step_transition": {
+      "count": 4,
+      "mean": 0.015969,
+      "min": 0.006791,
+      "max": 0.04275,
+      "p50": 0.006833,
+      "p95": 0.04275,
+      "p99": 0.04275
+    },
+    "step_sync_erosion": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_observe_world_change": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_history_snapshot": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_geology_river_prepare": {
+      "count": 4,
+      "mean": 4.5,
+      "min": 4,
+      "max": 5,
+      "p50": 4,
+      "p95": 5,
+      "p99": 5
+    },
+    "step_geology_river_automaton": {
+      "count": 4,
+      "mean": 27.5,
+      "min": 24,
+      "max": 31,
+      "p50": 27,
+      "p95": 31,
+      "p99": 31
+    },
+    "step_geology_river_automaton_sink": {
+      "count": 4,
+      "mean": 1.75,
+      "min": 0,
+      "max": 4,
+      "p50": 1,
+      "p95": 4,
+      "p99": 4
+    },
+    "step_geology_river_sink_incremental_rebuild": {
+      "count": 4,
+      "mean": 1.75,
+      "min": 0,
+      "max": 4,
+      "p50": 1,
+      "p95": 4,
+      "p99": 4
+    },
+    "step_geology_river_sink_full_rebuild": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_geology_river_automaton_cell": {
+      "count": 4,
+      "mean": 27.25,
+      "min": 24,
+      "max": 31,
+      "p50": 26,
+      "p95": 31,
+      "p99": 31
+    },
+    "step_geology_river_automaton_queue": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_geology_river_network": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_geology_river_sync": {
+      "count": 4,
+      "mean": 13,
+      "min": 13,
+      "max": 13,
+      "p50": 13,
+      "p95": 13,
+      "p99": 13
+    },
+    "step_geology_river_fallback": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    }
+  },
+  "diagnostics": {
+    "profile_attempt_count": 4,
+    "profile_success_count": 4,
+    "profile_fallback_count": 0,
+    "replay_ticks_total": 0,
+    "replay_time_ms_total": 0,
+    "exec_world_time_ms_total": 5762.926,
+    "exec_world_profiled_time_ms_total": 888.825,
+    "step_geology_terrain_time_ms_total": 478.096,
+    "step_climate_time_ms_total": 0.031,
+    "step_hydrology_time_ms_total": 399.345,
+    "step_geology_river_time_ms_total": 399.345,
+    "tick_total_time_ms_total": 5864.665,
+    "replay_time_share_of_wall": 0,
+    "replay_time_share_of_exec_world": 0,
+    "exec_world_share_of_tick": 0.982652,
+    "river_share_of_exec_world": 0.449295,
+    "river_network_rebuild_count_total": 0,
+    "river_rebuild_rate": 0,
+    "river_fallback_count_total": 0,
+    "geometry_update_skipped_count": 16,
+    "sink_rebuild_full_count_total": 0,
+    "sink_rebuild_partial_count_total": 3,
+    "sink_rebuild_skipped_count_total": 1,
+    "sink_rebuild_fallback_full_count_total": 0,
+    "sink_validation_fail_count_total": 0,
+    "sink_affected_ratio_mean": 0.000037,
+    "modules": {
+      "geology": {
+        "exec_time_ms_total": 478.096,
+        "exec_time_share_of_exec_world": 0.537897
+      },
+      "climate": {
+        "exec_time_ms_total": 0.031,
+        "exec_time_share_of_exec_world": 0.000035
+      },
+      "hydrology": {
+        "exec_time_ms_total": 399.345,
+        "exec_time_share_of_exec_world": 0.449295,
+        "river_network_rebuild_count_total": 0,
+        "river_rebuild_rate": 0,
+        "river_fallback_count_total": 0,
+        "sink_rebuild_full_count_total": 0,
+        "sink_rebuild_partial_count_total": 3,
+        "sink_rebuild_skipped_count_total": 1,
+        "sink_rebuild_fallback_full_count_total": 0,
+        "sink_validation_fail_count_total": 0,
+        "sink_affected_ratio_mean": 0.000037
+      }
+    },
+    "normalized": {
+      "module_scope_stage": "geology_climate_hydrology",
+      "module_geology_exec_time_ms_total": 478.096,
+      "module_geology_exec_time_share_of_exec_world": 0.537897,
+      "module_climate_exec_time_ms_total": 0.031,
+      "module_climate_exec_time_share_of_exec_world": 0.000035,
+      "module_hydrology_exec_time_ms_total": 399.345,
+      "module_hydrology_exec_time_share_of_exec_world": 0.449295,
+      "module_hydrology_river_network_rebuild_count_total": 0,
+      "module_hydrology_river_rebuild_rate": 0,
+      "module_hydrology_river_fallback_count_total": 0,
+      "module_hydrology_sink_rebuild_full_count_total": 0,
+      "module_hydrology_sink_rebuild_partial_count_total": 3,
+      "module_hydrology_sink_rebuild_skipped_count_total": 1,
+      "module_hydrology_sink_rebuild_fallback_full_count_total": 0,
+      "module_hydrology_sink_validation_fail_count_total": 0,
+      "module_hydrology_sink_affected_ratio_mean": 0.000037
+    }
+  }
+}

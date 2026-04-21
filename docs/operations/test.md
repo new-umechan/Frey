@@ -128,15 +128,31 @@ baseline誤用防止:
     - `push` to `main`
     - `workflow_dispatch`（手動実行）
 
-#### perfベースラインゲート（2026-03-17）
+#### perfベースラインゲート（2026-04-21）
 
-- `tests/perf/scripts/perf.mjs` の `--baseline` / `--threshold` をCIで常時実行する
-- baselineファイルは `tests/perf/bench-baseline.json`
-- `verification_mode` は `interactive` で固定して実行する
+- `tests/perf/scripts/perf.ts` の `--baseline` / `--threshold` をCIで常時実行する
+- perf gate は `native + wasm + worker` の3レーンすべて必須とする
+- baselineファイル:
+  - `tests/perf/bench-baseline-native.json`
+  - `tests/perf/bench-baseline-wasm.json`
+  - `tests/perf/bench-baseline-worker.json`
+- `wasm` / `worker` レーンの `verification_mode` は `interactive` 固定で実行する
 - コマンド:
 
 ```sh
 pnpm bench:perf:gate
+```
+
+```sh
+pnpm bench:perf:gate:native
+```
+
+```sh
+pnpm bench:perf:gate:wasm
+```
+
+```sh
+pnpm bench:perf:gate:worker
 ```
 
 自動化:
@@ -144,6 +160,23 @@ pnpm bench:perf:gate
 - `.github/workflows/perf-gate.yaml` で次の契機で自動実行する
     - `pull_request`
     - `push` to `main`
+    - `workflow_dispatch`（手動実行）
+
+#### ScientificBenchmark artifact 保存（2026-04-21）
+
+- `ScientificBenchmark` サンプルは次の2経路で保持する
+  - CI artifact: workflow 実行時に `actions/upload-artifact` で保存
+  - リポジトリ内ファイル: `tests/scientific-benchmark/scientific-benchmark-samples.json`
+- コマンド:
+
+```sh
+pnpm bench:scientific:samples
+```
+
+自動化:
+
+- `.github/workflows/scientific-benchmark-artifact.yaml` で次の契機で自動実行する
+    - `schedule`（週次）
     - `workflow_dispatch`（手動実行）
 
 #### wasm APIテスト（2026-03-17）

@@ -17,6 +17,8 @@ const DEFAULT_THRESHOLD = 0.10;
 const METRIC_NOISE_FLOOR_MS = 0.01;
 const execFileAsync = promisify(execFile);
 const HISTORY_FILE_PATH = resolve("tests/perf/history/perf-history.jsonl");
+const PERF_LANES = ["wasm", "worker", "native"] as const;
+type PerfLane = (typeof PERF_LANES)[number];
 const VERIFICATION_MODES: VerificationMode[] = [
     "interactive",
     "headless_metrics",
@@ -64,6 +66,7 @@ function parseArgs(argv: string[]) {
         profileEveryTick: false,
         geometryUpdateMinChangedRatio: 0,
         verificationMode: "interactive" as VerificationMode,
+        lane: "wasm" as PerfLane,
         record: false,
     };
 
@@ -153,6 +156,15 @@ function parseArgs(argv: string[]) {
             i += 1;
             break;
         }
+        case "--lane": {
+            const lane = String(next ?? "");
+            if (!PERF_LANES.includes(lane as PerfLane)) {
+                throw new Error(`--lane must be one of: ${PERF_LANES.join(", ")}`);
+            }
+            args.lane = lane as PerfLane;
+            i += 1;
+            break;
+        }
         case "--record":
             args.record = true;
             break;
@@ -188,6 +200,7 @@ function printHelp() {
     console.error("  --profile-every-tick");
     console.error("  --geometry-update-min-changed-ratio <0..1>");
     console.error("  --verification-mode <interactive|headless_metrics|scientific_benchmark>");
+    console.error("  --lane <wasm|worker|native>");
     console.error("  --record");
 }
 
@@ -231,12 +244,26 @@ interface RegressionResult {
     }>;
 }
 
-function evaluateRegression(
-    current: unknown,
-    baseline: unknown,
+interface RegressionSpec {
+    label: string;
+    path: string;
+    threshold: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value != null && typeof value === "object";
+}
+
+function buildRegressionSpecs(
+    current: Record<string, unknown>,
+    baseline: Record<string, unknown>,
     args: RegressionArgs,
-): RegressionResult {
-    const specs = [
+): RegressionSpec[] {
+    const hydrologyMetricPath = Number.isFinite(Number(getPathValue(current, "metrics.step_hydrology.mean")))
+        && Number.isFinite(Number(getPathValue(baseline, "metrics.step_hydrology.mean")))
+        ? "metrics.step_hydrology.mean"
+        : "metrics.step_geology_river.mean";
+    const specs: RegressionSpec[] = [
         {
             label: "tick_total.mean",
             path: "metrics.tick_total.mean",
@@ -253,18 +280,52 @@ function evaluateRegression(
             threshold: args.thresholdStepClimate ?? args.threshold,
         },
         {
-            label: "step_geology_river.mean",
-            path: "metrics.step_geology_river.mean",
+            label: "step_hydrology.mean",
+            path: hydrologyMetricPath,
             threshold: args.thresholdStepGeologyRiver ?? args.threshold,
         },
     ];
+
+    const currentNormalized = getPathValue(current, "diagnostics.normalized");
+    const baselineNormalized = getPathValue(baseline, "diagnostics.normalized");
+    if (!isRecord(currentNormalized) || !isRecord(baselineNormalized)) {
+        return specs;
+    }
+
+    return specs.concat([
+        {
+            label: "diagnostics.module_geology_exec_time_ms_total",
+            path: "diagnostics.normalized.module_geology_exec_time_ms_total",
+            threshold: args.thresholdStepWorld ?? args.threshold,
+        },
+        {
+            label: "diagnostics.module_climate_exec_time_ms_total",
+            path: "diagnostics.normalized.module_climate_exec_time_ms_total",
+            threshold: args.thresholdStepClimate ?? args.threshold,
+        },
+        {
+            label: "diagnostics.module_hydrology_exec_time_ms_total",
+            path: "diagnostics.normalized.module_hydrology_exec_time_ms_total",
+            threshold: args.thresholdStepGeologyRiver ?? args.threshold,
+        },
+    ]);
+}
+
+function evaluateRegression(
+    current: unknown,
+    baseline: unknown,
+    args: RegressionArgs,
+): RegressionResult {
+    const currentRecord = isRecord(current) ? current : {};
+    const baselineRecord = isRecord(baseline) ? baseline : {};
+    const specs = buildRegressionSpecs(currentRecord, baselineRecord, args);
 
     const warnings = [];
     const regressions = [];
 
     for (const spec of specs) {
-        const currentValue = Number(getPathValue(current as Record<string, unknown>, spec.path));
-        const baselineValue = Number(getPathValue(baseline as Record<string, unknown>, spec.path));
+        const currentValue = Number(getPathValue(currentRecord, spec.path));
+        const baselineValue = Number(getPathValue(baselineRecord, spec.path));
 
         if (!Number.isFinite(currentValue) || !Number.isFinite(baselineValue)) {
             warnings.push(`skip ${spec.label}: missing numeric value`);
@@ -344,12 +405,11 @@ async function appendHistoryRecord(record: Record<string, unknown>) {
     await appendFile(HISTORY_FILE_PATH, `${JSON.stringify(record)}\n`, "utf8");
 }
 
-async function main() {
-    const args = parseArgs(process.argv.slice(2));
-
+async function runWasmBenchmark(args: ReturnType<typeof parseArgs>) {
     const wasmInitStarted = performance.now();
     const wasmInitOutput = await initWasmForNode();
     const wasmInitMs = Math.round((performance.now() - wasmInitStarted) * 1000) / 1000;
+    const wasmLinearMemoryMb = getWasmLinearMemoryMb(wasmInitOutput as InitWasmOutputLike);
 
     const runner = createPerfRunner({
         WorldSimController,
@@ -375,7 +435,7 @@ async function main() {
         geometryUpdateMinChangedRatio: args.geometryUpdateMinChangedRatio,
         verificationMode: args.verificationMode,
         meta: {
-            user_agent: `node ${process.version}`,
+            user_agent: `${args.lane} node ${process.version}`,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         onProgress(payload: { status: string }) {
@@ -388,6 +448,57 @@ async function main() {
         },
     });
 
+    return {
+        result,
+        wasmInitMs,
+        wasmLinearMemoryMb,
+    };
+}
+
+async function runNativeBenchmark(args: ReturnType<typeof parseArgs>) {
+    const nativeArgs = [
+        "run",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "--bin",
+        "perf_native",
+        "--",
+        "--ticks",
+        String(args.ticks),
+        "--seed",
+        args.seed,
+        "--level",
+        String(args.level),
+        "--sample-interval",
+        String(args.sampleInterval),
+    ];
+    const { stdout } = await execFileAsync("cargo", nativeArgs, {
+        maxBuffer: 1024 * 1024 * 8,
+    });
+    return {
+        result: JSON.parse(stdout) as Record<string, unknown>,
+        wasmInitMs: 0,
+        wasmLinearMemoryMb: 0,
+    };
+}
+
+async function runWorkerBenchmark(args: ReturnType<typeof parseArgs>) {
+    return await runWasmBenchmark(args);
+}
+
+async function main() {
+    const args = parseArgs(process.argv.slice(2));
+    const laneRunner: Record<PerfLane, (args: ReturnType<typeof parseArgs>) => Promise<{
+        result: Record<string, unknown>;
+        wasmInitMs: number;
+        wasmLinearMemoryMb: number;
+    }>> = {
+        wasm: runWasmBenchmark,
+        worker: runWorkerBenchmark,
+        native: runNativeBenchmark,
+    };
+    const laneOutput = await laneRunner[args.lane](args);
+    const result = laneOutput.result;
     const output = JSON.stringify(result, null, 2);
     process.stdout.write(`${output}\n`);
 
@@ -398,20 +509,20 @@ async function main() {
     if (args.record) {
         const timestamp = result?.meta?.generated_at ?? new Date().toISOString();
         const gitMeta = await getGitMeta();
-        const wasmLinearMemoryMb = getWasmLinearMemoryMb(wasmInitOutput as InitWasmOutputLike);
         const record = {
             timestamp,
             commit: gitMeta.commit,
             branch: gitMeta.branch,
+            lane: args.lane,
             profile: result.profile ?? {},
             totals: result.totals ?? {},
             metrics: result.metrics ?? {},
             diagnostics: result.diagnostics ?? {},
             memory: {
-                wasm_linear_memory_mb: wasmLinearMemoryMb,
+                wasm_linear_memory_mb: laneOutput.wasmLinearMemoryMb,
             },
             runtime: {
-                wasm_init_ms: wasmInitMs,
+                wasm_init_ms: laneOutput.wasmInitMs,
             },
         };
         await appendHistoryRecord(record as Record<string, unknown>);
@@ -431,6 +542,7 @@ async function main() {
                     `[bench compare] ${regression.label}: current=${regression.currentValue}, baseline=${regression.baselineValue}, threshold=${formatRatio(regression.threshold)}, allowed_max=${regression.allowedMax}`,
                 );
             }
+            process.exitCode = 1;
         }
         console.error(`[bench compare] regressions=${comparison.regressions.length}`);
     }

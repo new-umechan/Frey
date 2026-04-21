@@ -43,7 +43,7 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
-            - name: Refresh core perf baseline
+            - name: Refresh perf baselines (native/wasm/worker)
               run: pnpm run bench:perf:baseline
 
             - name: Check hydrology benchmark assets
@@ -80,7 +80,9 @@ jobs:
               with:
                   name: perf-baseline-refresh
                   path: |
-                      tests/perf/bench-baseline.json
+                      tests/perf/bench-baseline-native.json
+                      tests/perf/bench-baseline-wasm.json
+                      tests/perf/bench-baseline-worker.json
                       tests/perf/hydrology-bench-baseline.json
                   if-no-files-found: error
                   retention-days: 14
@@ -89,7 +91,7 @@ jobs:
               id: detect-changes
               shell: bash
               run: |
-                  if git diff --quiet -- tests/perf/bench-baseline.json tests/perf/hydrology-bench-baseline.json; then
+                  if git diff --quiet -- tests/perf/bench-baseline-native.json tests/perf/bench-baseline-wasm.json tests/perf/bench-baseline-worker.json tests/perf/hydrology-bench-baseline.json; then
                       echo "has_changes=false" >> "$GITHUB_OUTPUT"
                   else
                       echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -106,10 +108,14 @@ jobs:
                   body: |
                       Automated baseline refresh on GitHub Actions (ubuntu-latest, Node 20).
                       Updated files may include:
-                      - tests/perf/bench-baseline.json
+                      - tests/perf/bench-baseline-native.json
+                      - tests/perf/bench-baseline-wasm.json
+                      - tests/perf/bench-baseline-worker.json
                       - tests/perf/hydrology-bench-baseline.json (only when hydrology assets are present)
                   add-paths: |
-                      tests/perf/bench-baseline.json
+                      tests/perf/bench-baseline-native.json
+                      tests/perf/bench-baseline-wasm.json
+                      tests/perf/bench-baseline-worker.json
                       tests/perf/hydrology-bench-baseline.json
 
             - name: PR fallback note

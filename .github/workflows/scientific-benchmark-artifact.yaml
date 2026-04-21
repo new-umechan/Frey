@@ -1,20 +1,12 @@
-name: Perf Gate
+name: Scientific Benchmark Artifact
 
 on:
-    push:
-        branches:
-            - main
-        paths-ignore:
-            - docs/**
-            - README.md
-    pull_request:
-        paths-ignore:
-            - docs/**
-            - README.md
     workflow_dispatch:
+    schedule:
+        - cron: "30 18 * * 0"
 
 jobs:
-    perf-gate:
+    scientific-benchmark-artifact:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -40,11 +32,13 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
-            - name: Run perf gate (native lane)
-              run: pnpm run bench:perf:gate:native
+            - name: Export scientific benchmark samples
+              run: pnpm run bench:scientific:samples
 
-            - name: Run perf gate (wasm lane)
-              run: pnpm run bench:perf:gate:wasm
-
-            - name: Run perf gate (worker lane)
-              run: pnpm run bench:perf:gate:worker
+            - name: Upload scientific benchmark artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: scientific-benchmark-samples
+                  path: tests/scientific-benchmark/scientific-benchmark-samples.json
+                  if-no-files-found: error
+                  retention-days: 30

@@ -2,19 +2,31 @@
 
 ## Status
 
-Accepted（Phase 2 一部採用）
+Accepted
 
-phase 1 として `Native Seed Regression Runner` は採用済み。
-実装判断は `docs/decisions/260421-native-seed-regression-runner.md` を参照する。
-phase 2 として `VerificationMode` 導入、`HeadlessMetrics` での post-step 停止、
-`pending_post_step` の実行系整理（Finalize完了時の即時 post-step）を採用した。
-`ScientificBenchmark` は初版として専用サンプル蓄積フックを実装し、
-詳細artifact収集は後続段階とする。
+実装済み:
+
+- phase 1 の `Native Seed Regression Runner` 導入（`docs/decisions/260421-native-seed-regression-runner.md`）
+- phase 2 初版の `VerificationMode` 導入と `Finalize` 完了時 post-step 統合
+  （`docs/decisions/260421-verification-mode-and-finalize-post-step.md`）
+
+この実装フェーズで方針確定:
+
+- `verification runtime` は別 crate に分離して実装する
+- perf gate は `native + wasm + worker` の3レーンすべて必須にする
+- `ScientificBenchmark` artifact は CI artifact とリポジトリ内ファイルの両方で保存する
+- module diagnostics 統一は Geology / Climate / Hydrology から段階導入する
+
+判断の正本:
+
+- `docs/decisions/260421-verification-mode-and-finalize-post-step.md`
+- `docs/decisions/260421-verification-runtime-crate-split-and-diagnostics-rollout.md`
 
 ## 背景
 
 - 現行の検証は大きく `Rust unit test`、`WASM API contract test`、`seed regression`、`perf gate`、実データ比較ベンチに分かれている。
-- ただし実行経路としては、`seed regression` と `perf gate` がともに `WASM build -> Node/TS -> WASM controller` に強く寄っており、シミュレーション本体の回帰確認と transport/UI 都合が十分に分離されていない。
+- 従来は `seed regression` と `perf gate` がともに `WASM build -> Node/TS -> WASM controller` に強く寄っていた。
+- 現在は `seed regression` の native 化は完了したが、perf gate と diagnostics/benchmark artifact 運用は再編途中である。
 - 直近の perf baseline では `tick_total.mean` は約 `558ms`、内訳は `exec_world.mean` 約 `539ms`、`delta_sync.mean` 約 `19ms` である。
 - `exec_world` 内では特に `step_geology_terrain`、`step_geology_river`、`step_observe_world_change` の比率が高く、モデル計算と観測同期がどちらも主要コストになっている。
 - 現在のレイヤ構造 (`core -> application -> transport -> presentation`) 自体は整理されているが、検証実行面では `simulation verification`、`API verification`、`UI/perf verification` の責務境界がまだ薄い。
@@ -148,10 +160,9 @@ adapters
 この proposal でまだ決めないこと:
 
 - Rust native CLI の最終コマンド体系
-- crate 分割をどこまで行うか
 - `pending_post_step` を完全吸収する最終 API 形状
 - 各 module reducer の詳細実装
-- CI workflow の最終トリガとジョブ分割
+- CI でのレーン別失敗表示と再実行単位の設計
 
 ## 成功条件
 
@@ -176,22 +187,31 @@ adapters
 - transport/UI 都合を simulation core から外しやすい
 - perf 改善の対象を「モデル計算」と「観測同期」に分けて追える
 
-## 実施計画
+## 実施計画（進捗更新）
 
-1. 本 proposal を追加する。
-2. `docs/operations/test.md` に検証ジョブの層を追記する。
-3. Rust native の `seed regression` runner を最小構成で導入する。
-4. 既存 `seed regression` スクリプトと同じ baseline / threshold ルールで比較できるようにする。
-5. `VerificationMode` の初版を導入し、`HeadlessMetrics` では UI 向け観測を無効化する。
-6. module diagnostics を `perf` と `regression` の両方で使える形に整理する。
-7. `pending_post_step` の扱いを文書化し、phase model への統合可否を別 proposal または decision で詰める。
-8. 実装後、`reference` 文書と `operations` 文書を更新する。
+完了:
+
+1. [x] 本 proposal を追加
+2. [x] `docs/operations/test.md` に検証ジョブ層を追記
+3. [x] Rust native `seed regression` runner の導入
+4. [x] baseline / threshold 互換運用の維持
+5. [x] `VerificationMode` 初版導入と `HeadlessMetrics` での post-step 抑制
+6. [x] `pending_post_step` 廃止と `Finalize` 完了時即時 post-step 実行
+
+残作業（本フェーズ）:
+
+1. [x] `verification runtime` を別 crate に分離する
+2. [x] perf gate を `native + wasm + worker` の3レーン必須で運用する
+3. [x] `ScientificBenchmark` artifact を CI artifact とリポジトリファイルの双方に保存する
+4. [x] module diagnostics 統一を Geology / Climate / Hydrology から段階導入する
+5. [x] 実装反映後に `reference` / `operations` 文書を更新する
 
 ## 未解決事項
 
-- `verification runtime` を別 crate とするか、`application` 配下の module として持つか。
 - baseline フォーマットを既存 JSON と共通化するか、Rust native 専用形式を許容するか。
-- `perf gate` を native / wasm / worker のどこまで分けるか。
 - `history snapshot` を `Interactive` 専用にするか、回帰モードでも限定的に持つか。
 - `HeadlessMetrics` でどの metrics を正本とするか。
-- scientific benchmark 実行系を同じ runner に載せるか、完全に別系統にするか。
+- `verification runtime` crate の公開 API 境界をどこまで固定するか。
+- perf gate の3レーンでしきい値を共通化するか、レーン別に持つか。
+- リポジトリ保存する `ScientificBenchmark` artifact の保持期間・ローテーションをどう設計するか。
+- module diagnostics の第2段階（Geology / Climate / Hydrology 以外）への展開条件をどう定義するか。

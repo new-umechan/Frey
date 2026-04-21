@@ -1,0 +1,142 @@
+{
+  "meta": {
+    "generated_at": "2026-04-21T11:22:10Z",
+    "timezone": "UTC",
+    "user_agent": "native rust"
+  },
+  "profile": {
+    "label": "perf-native",
+    "seed": "alpha",
+    "tickCount": 16,
+    "tickEnd": 16,
+    "tickStart": 0
+  },
+  "totals": {
+    "processed_ticks": 16,
+    "wall_time_ms": 4773.834
+  },
+  "metrics": {
+    "exec_world": {
+      "count": 16,
+      "mean": 298.343,
+      "min": 190.82,
+      "max": 627.856,
+      "p50": 288.302,
+      "p95": 627.856,
+      "p99": 627.856
+    },
+    "step_climate": {
+      "count": 4,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "step_geology_river": {
+      "count": 4,
+      "mean": 87.243,
+      "min": 84.731,
+      "max": 89.831,
+      "p50": 85.979,
+      "p95": 89.831,
+      "p99": 89.831
+    },
+    "step_geology_terrain": {
+      "count": 4,
+      "mean": 104.675,
+      "min": 104.56,
+      "max": 104.872,
+      "p50": 104.569,
+      "p95": 104.872,
+      "p99": 104.872
+    },
+    "step_hydrology": {
+      "count": 4,
+      "mean": 87.243,
+      "min": 84.731,
+      "max": 89.831,
+      "p50": 85.979,
+      "p95": 89.831,
+      "p99": 89.831
+    },
+    "tick_total": {
+      "count": 16,
+      "mean": 298.364,
+      "min": 190.847,
+      "max": 627.876,
+      "p50": 288.32,
+      "p95": 627.876,
+      "p99": 627.876
+    }
+  },
+  "diagnostics": {
+    "profile_attempt_count": 4,
+    "profile_success_count": 4,
+    "profile_fallback_count": 0,
+    "replay_ticks_total": 0,
+    "replay_time_ms_total": 0,
+    "exec_world_time_ms_total": 4773.486,
+    "exec_world_profiled_time_ms_total": 767.675,
+    "step_geology_terrain_time_ms_total": 418.701,
+    "step_climate_time_ms_total": 0.001,
+    "step_hydrology_time_ms_total": 348.973,
+    "step_geology_river_time_ms_total": 348.973,
+    "tick_total_time_ms_total": 4773.829,
+    "replay_time_share_of_wall": 0,
+    "replay_time_share_of_exec_world": 0,
+    "exec_world_share_of_tick": 0.999928,
+    "river_share_of_exec_world": 0.454584,
+    "river_network_rebuild_count_total": 0,
+    "river_rebuild_rate": 0,
+    "river_fallback_count_total": 0,
+    "geometry_update_skipped_count": 0,
+    "sink_rebuild_full_count_total": 0,
+    "sink_rebuild_partial_count_total": 3,
+    "sink_rebuild_skipped_count_total": 1,
+    "sink_rebuild_fallback_full_count_total": 0,
+    "sink_validation_fail_count_total": 0,
+    "sink_affected_ratio_mean": 0.000037,
+    "modules": {
+      "geology": {
+        "exec_time_ms_total": 418.701,
+        "exec_time_share_of_exec_world": 0.545414
+      },
+      "climate": {
+        "exec_time_ms_total": 0.001,
+        "exec_time_share_of_exec_world": 0.000002
+      },
+      "hydrology": {
+        "exec_time_ms_total": 348.973,
+        "exec_time_share_of_exec_world": 0.454584,
+        "river_network_rebuild_count_total": 0,
+        "river_rebuild_rate": 0,
+        "river_fallback_count_total": 0,
+        "sink_rebuild_full_count_total": 0,
+        "sink_rebuild_partial_count_total": 3,
+        "sink_rebuild_skipped_count_total": 1,
+        "sink_rebuild_fallback_full_count_total": 0,
+        "sink_validation_fail_count_total": 0,
+        "sink_affected_ratio_mean": 0.000037
+      }
+    },
+    "normalized": {
+      "module_geology_exec_time_ms_total": 418.701,
+      "module_geology_exec_time_share_of_exec_world": 0.545414,
+      "module_climate_exec_time_ms_total": 0.001,
+      "module_climate_exec_time_share_of_exec_world": 0.000002,
+      "module_hydrology_exec_time_ms_total": 348.973,
+      "module_hydrology_exec_time_share_of_exec_world": 0.454584,
+      "module_hydrology_river_network_rebuild_count_total": 0,
+      "module_hydrology_river_rebuild_rate": 0,
+      "module_hydrology_river_fallback_count_total": 0,
+      "module_hydrology_sink_rebuild_full_count_total": 0,
+      "module_hydrology_sink_rebuild_partial_count_total": 3,
+      "module_hydrology_sink_rebuild_skipped_count_total": 1,
+      "module_hydrology_sink_rebuild_fallback_full_count_total": 0,
+      "module_hydrology_sink_validation_fail_count_total": 0,
+      "module_hydrology_sink_affected_ratio_mean": 0.000037
+    }
+  }
+}
