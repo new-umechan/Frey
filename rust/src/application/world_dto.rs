@@ -79,6 +79,41 @@ pub(crate) struct MetricsResponse {
 }
 
 #[derive(Serialize)]
+pub(crate) struct ScientificBenchmarkMetricsResponse {
+    pub cell_count: u32,
+    pub land_cells: u32,
+    pub land_ratio: f32,
+    pub mean_height: f32,
+    pub height_std_dev: f32,
+    pub min_height: f32,
+    pub max_height: f32,
+    pub mean_river_flux: f32,
+    pub max_river_flux: f32,
+    pub top10_river_flux_sum: f32,
+    pub river_active_cells: u32,
+    pub river_fragmentation_ratio: f32,
+    pub river_ocean_reach_ratio: f32,
+    pub river_mainstem_persistence: f32,
+    pub river_flux_concentration: f32,
+    pub continent_count: u32,
+    pub largest_continent_cells: u32,
+}
+
+#[derive(Serialize)]
+pub(crate) struct ScientificBenchmarkSampleResponse {
+    pub tick: f64,
+    pub era: String,
+    pub metrics: ScientificBenchmarkMetricsResponse,
+}
+
+#[derive(Serialize)]
+pub(crate) struct ScientificBenchmarkSamplesResponse {
+    pub world_id: String,
+    pub sample_count: u32,
+    pub samples: Vec<ScientificBenchmarkSampleResponse>,
+}
+
+#[derive(Serialize)]
 pub(crate) struct PlateStat {
     pub plate_id: u32,
     pub cell_count: u32,

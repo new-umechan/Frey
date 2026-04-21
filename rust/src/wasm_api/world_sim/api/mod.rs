@@ -72,6 +72,18 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct ScientificBenchmarkSamplesResponse {
+        sample_count: u32,
+        samples: Vec<ScientificBenchmarkSample>,
+    }
+
+    #[derive(Deserialize)]
+    struct ScientificBenchmarkSample {
+        tick: f64,
+        era: String,
+    }
+
+    #[derive(Deserialize)]
     struct ForkWorldResponse {
         world_id: String,
         tick: f64,
@@ -305,5 +317,32 @@ mod tests {
             serde_wasm_bindgen::from_value(forked).expect("parse fork world");
         assert_eq!(forked_data.tick, 0.0);
         assert!(!forked_data.world_id.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn scientific_benchmark_samples_are_queryable() {
+        let mut controller = WorldSimController::new();
+        let config = serde_wasm_bindgen::to_value(&serde_json::json!({
+            "verification_mode": "scientific_benchmark"
+        }))
+        .expect("serialize init config");
+        let init = controller
+            .init_world_js("seed-science-query".to_string(), 1, config)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+        let world_id = init_data.world_id;
+
+        controller
+            .exec_world_js(world_id.clone(), 4)
+            .expect("exec world");
+        let samples = controller
+            .get_scientific_benchmark_samples_js(world_id)
+            .expect("get scientific benchmark samples");
+        let data: ScientificBenchmarkSamplesResponse =
+            serde_wasm_bindgen::from_value(samples).expect("parse samples");
+        assert!(data.sample_count >= 1);
+        assert!(!data.samples.is_empty());
+        assert!(data.samples[0].tick >= 1.0);
+        assert!(!data.samples[0].era.is_empty());
     }
 }

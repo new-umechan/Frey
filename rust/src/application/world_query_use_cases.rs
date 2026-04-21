@@ -4,7 +4,8 @@ use std::collections::HashSet;
 
 use crate::application::world_dto::{
     BudgetSummary, FieldResponse, HistoryTicksResponse, MetricsResponse, PlateStat,
-    PlateStatsResponse, WorldDeltaResponse,
+    PlateStatsResponse, ScientificBenchmarkMetricsResponse, ScientificBenchmarkSampleResponse,
+    ScientificBenchmarkSamplesResponse, WorldDeltaResponse,
 };
 use crate::application::world_runtime::{ManagedWorld, HISTORY_SNAPSHOT_INTERVAL};
 use crate::application::world_service::WorldService;
@@ -15,6 +16,30 @@ use crate::sim::world::{N_CROPS, N_LIVESTOCK};
 
 fn world_not_found_error(world_id: &str) -> String {
     format!("world not found: {world_id}")
+}
+
+fn scientific_metrics_from_world_metrics(
+    metrics: &crate::sim::world::WorldMetrics,
+) -> ScientificBenchmarkMetricsResponse {
+    ScientificBenchmarkMetricsResponse {
+        cell_count: metrics.cell_count,
+        land_cells: metrics.land_cells,
+        land_ratio: metrics.land_ratio,
+        mean_height: metrics.mean_height,
+        height_std_dev: metrics.height_std_dev,
+        min_height: metrics.min_height,
+        max_height: metrics.max_height,
+        mean_river_flux: metrics.mean_river_flux,
+        max_river_flux: metrics.max_river_flux,
+        top10_river_flux_sum: metrics.top10_river_flux_sum,
+        river_active_cells: metrics.river_active_cells,
+        river_fragmentation_ratio: metrics.river_fragmentation_ratio,
+        river_ocean_reach_ratio: metrics.river_ocean_reach_ratio,
+        river_mainstem_persistence: metrics.river_mainstem_persistence,
+        river_flux_concentration: metrics.river_flux_concentration,
+        continent_count: metrics.continent_count,
+        largest_continent_cells: metrics.largest_continent_cells,
+    }
 }
 
 fn sample_crop_adoption_by_kind(
@@ -799,7 +824,7 @@ pub(crate) fn get_metrics(
         .world(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
     let w = &managed.world;
-    let metrics = w.metrics();
+    let metrics = managed.current_metrics();
 
     Ok(MetricsResponse {
         world_id,
@@ -831,6 +856,29 @@ pub(crate) fn get_metrics(
         river_flux_concentration: metrics.river_flux_concentration,
         continent_count: metrics.continent_count,
         largest_continent_cells: metrics.largest_continent_cells,
+    })
+}
+
+pub(crate) fn get_scientific_benchmark_samples(
+    service: &WorldService,
+    world_id: String,
+) -> Result<ScientificBenchmarkSamplesResponse, String> {
+    let managed = service
+        .world(&world_id)
+        .ok_or_else(|| world_not_found_error(&world_id))?;
+    let samples = managed
+        .scientific_benchmark_samples
+        .iter()
+        .map(|sample| ScientificBenchmarkSampleResponse {
+            tick: sample.tick as f64,
+            era: sample.era.clone(),
+            metrics: scientific_metrics_from_world_metrics(&sample.metrics),
+        })
+        .collect::<Vec<_>>();
+    Ok(ScientificBenchmarkSamplesResponse {
+        world_id,
+        sample_count: samples.len() as u32,
+        samples,
     })
 }
 

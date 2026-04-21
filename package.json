@@ -74,6 +74,7 @@
         "bench:resample:domesticates-ref": "python3 benches/scripts/resample.py --module domesticates-ref --centroids benches/data/cell_centroids.csv --output benches/data/domesticates_ref.bin --manifest benches/raw/domesticates/manifest.json --method bilinear",
         "bench:resample:terrain": "python3 benches/scripts/resample.py --module terrain --centroids benches/data/cell_centroids.csv --output benches/data/terrain_ref.bin",
         "bench:resample:glaciology-ref": "python3 benches/scripts/resample.py --module glaciology-ref --centroids benches/data/cell_centroids.csv --output benches/data/glaciology_ref.bin",
+        "bench:scientific:samples": "pnpm wasm:build:dev:no-sync && pnpm exec tsx benches/scripts/export-scientific-benchmark-samples.ts",
         "bench:raw:prune:recoverable:dry-run": "bash benches/scripts/prune-recoverable-raw.sh",
         "bench:raw:prune:recoverable": "bash benches/scripts/prune-recoverable-raw.sh --apply",
         "bench:perf:run": "tsx tests/perf/scripts/perf.ts",

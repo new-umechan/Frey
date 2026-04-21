@@ -182,6 +182,21 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize metrics: {err}")))
     }
 
+    #[wasm_bindgen(js_name = get_scientific_benchmark_samples)]
+    pub fn get_scientific_benchmark_samples_js(
+        &self,
+        world_id: String,
+    ) -> Result<JsValue, JsValue> {
+        let response =
+            world_query_use_cases::get_scientific_benchmark_samples(&self.service, world_id)
+                .map_err(|err| JsValue::from_str(&err))?;
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!(
+                "failed to serialize scientific benchmark samples: {err}"
+            ))
+        })
+    }
+
     #[wasm_bindgen(js_name = get_world_delta)]
     pub fn get_world_delta_js(
         &mut self,

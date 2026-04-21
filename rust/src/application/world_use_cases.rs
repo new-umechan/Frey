@@ -55,7 +55,9 @@ fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
             managed.observe_after_world_change();
             archive.save_snapshot_if_needed(managed);
         }
-        VerificationMode::HeadlessMetrics => {}
+        VerificationMode::HeadlessMetrics => {
+            managed.refresh_reduced_metrics();
+        }
         VerificationMode::ScientificBenchmark => {
             post_step_sync_light(managed);
             managed.observe_after_world_change();
@@ -93,7 +95,12 @@ fn run_post_step_profiled(
                 step_history_snapshot_ms,
             )
         }
-        VerificationMode::HeadlessMetrics => (0.0, 0.0, 0.0),
+        VerificationMode::HeadlessMetrics => {
+            let phase_start = profile_now_ms();
+            managed.refresh_reduced_metrics();
+            let step_reduce_metrics_ms = profile_elapsed_ms(phase_start);
+            (0.0, step_reduce_metrics_ms, 0.0)
+        }
     }
 }
 
@@ -175,12 +182,15 @@ pub(crate) fn init_world(
         verification_mode: config
             .verification_mode
             .unwrap_or(VerificationMode::Interactive),
+        reduced_metrics: None,
         scientific_benchmark_samples: Vec::new(),
         geology_params,
         transport_cache,
         exec_state: ManagedWorldExecState::default(),
         applied_intervention_seq: 0,
     };
+    let mut managed = managed;
+    managed.refresh_reduced_metrics();
 
     let mut archive = WorldArchive::new();
     archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());
@@ -512,6 +522,7 @@ pub(crate) fn replay_world_to_tick(
 
     managed.transport_cache =
         WorldTransportCache::from_world(&managed.world, managed.geology_dynamics.as_ref());
+    managed.refresh_reduced_metrics();
     managed.reset_exec_state();
     managed.observe_after_world_change();
     archive.insert_snapshot(managed.world.clock.tick, managed.snapshot_world());

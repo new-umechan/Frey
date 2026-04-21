@@ -124,6 +124,63 @@ pub fn apply_hydrology_state_view(
     Ok(())
 }
 
+pub fn sync_hydrology_state_for_headless_runner(
+    world: &mut World,
+    state: &mut ErosionAutomatonState,
+    params: &GeologyParams,
+) {
+    let expected = world.cell_store().len();
+    if !erosion_state_matches_world(state, expected, expected, expected) {
+        *state = crate::sim::build_hydrology_state_for_bench(world, params.clone());
+        return;
+    }
+    state.tick = world.clock.tick;
+    state.last_river_driver = 1.0;
+    state.params = params.clone();
+    state.recent_changed.clear();
+    ensure_hydrology_mfd_for_headless_runner(&mut world.state.hydrology);
+    ensure_sink_buffers_for_headless_runner(state, expected);
+    sync_fill_spill_to_erosion(state, &world.state.hydrology);
+}
+
+fn ensure_hydrology_mfd_for_headless_runner(hydrology: &mut crate::sim::world::HydrologyState) {
+    let expected = hydrology.river_next.len();
+    if hydrology.river_downstream.len() != expected {
+        rebuild_mfd_from_primary(hydrology);
+    }
+}
+
+fn ensure_sink_buffers_for_headless_runner(state: &mut ErosionAutomatonState, expected: usize) {
+    if state.sink_id.len() != expected {
+        state.sink_id = vec![-1; expected];
+    }
+    if state.sink_route_next.len() != expected {
+        state.sink_route_next = vec![-1; expected];
+    }
+    if state.sink_dirty.len() != expected {
+        state.sink_dirty = vec![1; expected];
+    } else {
+        state.sink_dirty.fill(1);
+    }
+    if state.flow_heading.len() != expected {
+        state.flow_heading = vec![[0.0, 0.0, 0.0]; expected];
+    }
+    if state.groundwater_storage.len() != expected {
+        state.groundwater_storage = vec![0.0; expected];
+    }
+    if state.scratch_effective_runoff.len() != expected {
+        state.scratch_effective_runoff = vec![0.0; expected];
+    }
+    if state.scratch_changed_mark.len() != expected {
+        state.scratch_changed_mark = vec![0; expected];
+    }
+    if state.scratch_flux_samples.capacity() < expected / 2 {
+        state
+            .scratch_flux_samples
+            .reserve((expected / 2).saturating_sub(state.scratch_flux_samples.capacity()));
+    }
+}
+
 pub(crate) fn run_hydrology_flow_step(
     world: &mut World,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,

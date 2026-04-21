@@ -13,6 +13,94 @@ pub(crate) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
 pub(crate) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
 pub(crate) const SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT: usize = 512;
 
+fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {
+    if !value.is_finite() || value <= 0.0 {
+        return;
+    }
+    if *len < top_fluxes.len() {
+        top_fluxes[*len] = value;
+        *len += 1;
+        return;
+    }
+    let mut min_index = 0usize;
+    for i in 1..top_fluxes.len() {
+        if top_fluxes[i] < top_fluxes[min_index] {
+            min_index = i;
+        }
+    }
+    if value > top_fluxes[min_index] {
+        top_fluxes[min_index] = value;
+    }
+}
+
+fn reduce_metrics_for_headless(world: &world::World) -> world::WorldMetrics {
+    let cells = world.cell_store();
+    let cell_count = cells.height.len().min(cells.river_flow.len());
+    if cell_count == 0 {
+        return world::WorldMetrics::default();
+    }
+
+    let sea_level = world.sea_level_offset();
+    let mut land_cells = 0usize;
+    let mut min_height = f32::INFINITY;
+    let mut max_height = f32::NEG_INFINITY;
+    let mut sum_height = 0.0f32;
+    let mut sum_height_sq = 0.0f32;
+    let mut sum_flux = 0.0f32;
+    let mut max_flux = 0.0f32;
+    let mut top_fluxes = [0.0f32; 10];
+    let mut top_fluxes_len = 0usize;
+
+    for index in 0..cell_count {
+        let height = cells.height[index];
+        let flux = cells.river_flow[index].max(0.0);
+        if height > sea_level {
+            land_cells += 1;
+        }
+        min_height = min_height.min(height);
+        max_height = max_height.max(height);
+        sum_height += height;
+        sum_height_sq += height * height;
+        sum_flux += flux;
+        max_flux = max_flux.max(flux);
+        push_top_flux(&mut top_fluxes, &mut top_fluxes_len, flux);
+    }
+
+    let cell_count_f32 = cell_count as f32;
+    let mean_height = sum_height / cell_count_f32;
+    let variance = (sum_height_sq / cell_count_f32) - (mean_height * mean_height);
+
+    world::WorldMetrics {
+        cell_count: cell_count as u32,
+        land_cells: land_cells as u32,
+        land_ratio: land_cells as f32 / cell_count_f32,
+        mean_height,
+        height_std_dev: variance.max(0.0).sqrt(),
+        min_height: if min_height.is_finite() {
+            min_height
+        } else {
+            0.0
+        },
+        max_height: if max_height.is_finite() {
+            max_height
+        } else {
+            0.0
+        },
+        mean_river_flux: sum_flux / cell_count_f32,
+        max_river_flux: max_flux,
+        top10_river_flux_sum: top_fluxes.iter().take(top_fluxes_len).sum::<f32>(),
+        // Trade-off: skip graph-heavy river/continent diagnostics in HeadlessMetrics
+        // to reduce verification cost; these fields are not used by seed regression.
+        river_active_cells: 0,
+        river_fragmentation_ratio: 0.0,
+        river_ocean_reach_ratio: 0.0,
+        river_mainstem_persistence: 0.0,
+        river_flux_concentration: 0.0,
+        continent_count: 0,
+        largest_continent_cells: 0,
+    }
+}
+
 fn bitmap_word_len(values_len: usize) -> usize {
     values_len.div_ceil(32)
 }
@@ -159,6 +247,7 @@ pub(crate) struct ManagedWorld {
     pub feedback: world::FeedbackQueue,
     pub simulation_rate: f32,
     pub verification_mode: VerificationMode,
+    pub reduced_metrics: Option<world::WorldMetrics>,
     pub scientific_benchmark_samples: Vec<ScientificBenchmarkSample>,
     pub geology_params: GeologyParams,
     pub transport_cache: WorldTransportCache,
@@ -1884,6 +1973,21 @@ impl WorldTransportCache {
 }
 
 impl ManagedWorld {
+    pub fn refresh_reduced_metrics(&mut self) {
+        if self.verification_mode != VerificationMode::HeadlessMetrics {
+            self.reduced_metrics = None;
+            return;
+        }
+        self.reduced_metrics = Some(reduce_metrics_for_headless(&self.world));
+    }
+
+    pub fn current_metrics(&self) -> world::WorldMetrics {
+        if let Some(metrics) = self.reduced_metrics {
+            return metrics;
+        }
+        self.world.metrics()
+    }
+
     pub fn matched_geology_dynamics(&self) -> Option<&world::GeologyDynamicsState> {
         self.geology_dynamics
             .as_ref()
@@ -1929,7 +2033,7 @@ impl ManagedWorld {
         let sample = ScientificBenchmarkSample {
             tick: self.world.clock.tick,
             era: self.world.clock.epoch.as_key().to_string(),
-            metrics: self.world.metrics(),
+            metrics: self.current_metrics(),
         };
         self.scientific_benchmark_samples.push(sample);
         if self.scientific_benchmark_samples.len() > SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT {
@@ -2237,6 +2341,7 @@ mod tests {
             feedback: world::FeedbackQueue::new(sim_world.cell_count()),
             simulation_rate: 1.0,
             verification_mode: VerificationMode::Interactive,
+            reduced_metrics: None,
             scientific_benchmark_samples: Vec::new(),
             geology_params: crate::GeologyParams::default(),
             transport_cache: WorldTransportCache::from_world(&sim_world, None),
@@ -2279,6 +2384,7 @@ mod tests {
             feedback: world::FeedbackQueue::new(1),
             simulation_rate: 1.0,
             verification_mode: VerificationMode::ScientificBenchmark,
+            reduced_metrics: None,
             scientific_benchmark_samples: Vec::new(),
             geology_params: crate::GeologyParams::default(),
             transport_cache: WorldTransportCache::from_world(

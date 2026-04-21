@@ -18,6 +18,7 @@ const REQUIRED_CLASS_SNIPPETS = [
     "exec_world_profiled_detail(world_id: string, tick_count: number): any;",
     "get_world_delta(world_id: string, options_js: any): any;",
     "get_metrics(world_id: string): any;",
+    "get_scientific_benchmark_samples(world_id: string): any;",
     "get_plate_stats(world_id: string): any;",
     "get_field(world_id: string, field_kind: string, lod: number): any;",
     "list_history_ticks(world_id: string): any;",
