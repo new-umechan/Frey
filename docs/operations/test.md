@@ -33,13 +33,15 @@
 
 #### seed固定回帰CLIの運用ルール（2026-03-17）
 
-- 実行は `pnpm test:seed:regression:dev -- ...` を基本とする
-- `pnpm test:seed:regression -- ...` はWASMを自動ビルドしないため、古い生成物を参照する可能性がある
+- 実行は `pnpm test:seed:regression -- ...` を基本とする
+- 常用経路は Rust native runner であり、WASM build を必須としない
+- WASM 経路で互換確認したい場合は `pnpm test:seed:regression:wasm:dev -- ...` を使う
 
 ゲート運用:
 
 1. 常時ゲート（毎回）
 2. 重ゲート（PR前）
+3. WASM補助ゲート（必要時のみ手動）
 
 採用している比較指標:
 
@@ -99,6 +101,21 @@ baselineファイル:
 - `tests/seed-regression/seed-regression-quick-baseline.json`
 - `tests/seed-regression/seed-regression-heavy-baseline.json`
 
+実行経路:
+
+- `pnpm test:seed:regression`
+    - Rust native runner。日常の回帰確認はこれを正本とする
+- `pnpm test:seed:regression:wasm:dev`
+    - WASM build を伴う互換確認用
+- `pnpm test:seed:gate:quick` / `pnpm test:seed:gate:heavy`
+    - native runner で deviation が出た場合は非0終了する
+- `pnpm test:seed:gate:quick:wasm` / `pnpm test:seed:gate:heavy:wasm`
+    - 旧来の WASM 経路を確認したいときに使う
+- `pnpm test:gate:regression:wasm`
+    - WASM quick gate を補助実行するエイリアス
+    - 通常の `test:gate` / CI 常時ゲートには含めない
+    - 手動実行用workflowは `.github/workflows/regression-wasm-support-gate.yaml`
+
 baseline誤用防止:
 
 - `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は差分レポートへ記録する
@@ -115,6 +132,7 @@ baseline誤用防止:
 
 - `tests/perf/scripts/perf.mjs` の `--baseline` / `--threshold` をCIで常時実行する
 - baselineファイルは `tests/perf/bench-baseline.json`
+- `verification_mode` は `interactive` で固定して実行する
 - コマンド:
 
 ```sh
