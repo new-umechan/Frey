@@ -8,15 +8,19 @@ export interface ControllerState {
     core: CoreBuffers;
 }
 
+export type VerificationMode = "interactive" | "headless_metrics" | "scientific_benchmark";
+
 export function createControllerState(
     WorldSimControllerConstructor: new () => WorldSimController,
     profile: PerfProfile,
     level: number,
-    terrainParams: Record<string, unknown>
+    terrainParams: Record<string, unknown>,
+    verificationMode: VerificationMode,
 ): ControllerState {
     const controller = new WorldSimControllerConstructor();
     const initResult = controller.init_world(profile.seed ?? "alpha", level, {
         geology_params: terrainParams,
+        verification_mode: verificationMode,
     });
     const worldId = initResult?.world_id;
     if (!worldId) {
@@ -34,10 +38,17 @@ export function rebuildControllerState(
     profile: PerfProfile,
     level: number,
     terrainParams: Record<string, unknown>,
+    verificationMode: VerificationMode,
     completedTicks: number,
     deltaFieldKinds: string[]
 ): ControllerState {
-    const state = createControllerState(WorldSimControllerConstructor, profile, level, terrainParams);
+    const state = createControllerState(
+        WorldSimControllerConstructor,
+        profile,
+        level,
+        terrainParams,
+        verificationMode,
+    );
     if (completedTicks > 0) {
         state.controller.exec_world(state.worldId, completedTicks);
     }

@@ -1,5 +1,9 @@
 import { createTickPerfRecorder } from "./recorder";
-import { createControllerState, rebuildControllerState } from "./controller-state";
+import {
+    createControllerState,
+    rebuildControllerState,
+    type VerificationMode,
+} from "./controller-state";
 import { buildDiagnosticsSummary, createDiagnostics, recordProfiledStepSuccess } from "./diagnostics";
 import {
     defaultNowMs,
@@ -33,6 +37,7 @@ interface PerfRunnerOptions {
     profileEveryTick?: boolean;
     skipGeometry?: boolean;
     geometryUpdateMinChangedRatio?: number;
+    verificationMode?: VerificationMode;
     meta?: {
         user_agent?: string;
         timezone?: string;
@@ -80,6 +85,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
             profileEveryTick = false,
             skipGeometry = false,
             geometryUpdateMinChangedRatio = 0.0,
+            verificationMode = "interactive",
             meta = {},
             onProgress,
             onWarning,
@@ -115,7 +121,13 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
         const normalizedSampleInterval = Math.max(1, Math.floor(sampleInterval));
         const totalTicks = Math.max(1, Math.floor(profile?.tickCount ?? 32));
         const deltaFieldKinds = getDeltaFieldKindsForProfile(profile);
-        let controllerState = createControllerState(WorldSimControllerConstructor, profile, level, terrainParams);
+        let controllerState = createControllerState(
+            WorldSimControllerConstructor,
+            profile,
+            level,
+            terrainParams,
+            verificationMode,
+        );
         let controller = controllerState.controller;
         let worldId = controllerState.worldId;
 
@@ -169,6 +181,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
                             profile,
                             level,
                             terrainParams,
+                            verificationMode,
                             i,
                             deltaFieldKinds,
                         );

@@ -10,12 +10,18 @@ import initWasm, {
 } from "../../../generated/wasm/web/frey_wasm";
 import { createPerfProfile } from "../../../web/src/app/perf/recorder";
 import { createPerfRunner } from "../../../web/src/app/perf/runner";
+import { type VerificationMode } from "../../../web/src/app/perf/controller-state";
 import { TERRAIN_LEVEL, TERRAIN_PARAMS } from "../../../web/src/interface/params/terrain";
 
 const DEFAULT_THRESHOLD = 0.10;
 const METRIC_NOISE_FLOOR_MS = 0.01;
 const execFileAsync = promisify(execFile);
 const HISTORY_FILE_PATH = resolve("tests/perf/history/perf-history.jsonl");
+const VERIFICATION_MODES: VerificationMode[] = [
+    "interactive",
+    "headless_metrics",
+    "scientific_benchmark",
+];
 
 interface GitMeta {
     commit: string;
@@ -57,6 +63,7 @@ function parseArgs(argv: string[]) {
         noGeometry: false,
         profileEveryTick: false,
         geometryUpdateMinChangedRatio: 0,
+        verificationMode: "interactive" as VerificationMode,
         record: false,
     };
 
@@ -135,6 +142,17 @@ function parseArgs(argv: string[]) {
             );
             i += 1;
             break;
+        case "--verification-mode": {
+            const mode = String(next ?? "");
+            if (!VERIFICATION_MODES.includes(mode as VerificationMode)) {
+                throw new Error(
+                    `--verification-mode must be one of: ${VERIFICATION_MODES.join(", ")}`,
+                );
+            }
+            args.verificationMode = mode as VerificationMode;
+            i += 1;
+            break;
+        }
         case "--record":
             args.record = true;
             break;
@@ -169,6 +187,7 @@ function printHelp() {
     console.error("  --no-geometry");
     console.error("  --profile-every-tick");
     console.error("  --geometry-update-min-changed-ratio <0..1>");
+    console.error("  --verification-mode <interactive|headless_metrics|scientific_benchmark>");
     console.error("  --record");
 }
 
@@ -354,6 +373,7 @@ async function main() {
         profileEveryTick: args.profileEveryTick,
         skipGeometry: args.noGeometry,
         geometryUpdateMinChangedRatio: args.geometryUpdateMinChangedRatio,
+        verificationMode: args.verificationMode,
         meta: {
             user_agent: `node ${process.version}`,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
