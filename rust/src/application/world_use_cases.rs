@@ -5,7 +5,8 @@ use crate::application::world_dto::{
     StepWorldProfiledDetailResponse, StepWorldProfiledResponse,
 };
 use crate::application::world_runtime::{
-    InterventionCommand, ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
+    InterventionCommand, ManagedWorld, ManagedWorldExecState, VerificationMode, WorldArchive,
+    WorldTransportCache,
 };
 use crate::application::world_service::WorldService;
 use crate::application::world_support::{
@@ -48,9 +49,52 @@ fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
 }
 
 fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
-    post_step_sync_light(managed);
-    managed.observe_after_world_change();
-    archive.save_snapshot_if_needed(managed);
+    match managed.verification_mode {
+        VerificationMode::Interactive => {
+            post_step_sync_light(managed);
+            managed.observe_after_world_change();
+            archive.save_snapshot_if_needed(managed);
+        }
+        VerificationMode::HeadlessMetrics => {}
+        VerificationMode::ScientificBenchmark => {
+            post_step_sync_light(managed);
+            managed.observe_after_world_change();
+            archive.save_snapshot_if_needed(managed);
+            managed.push_scientific_benchmark_sample();
+        }
+    }
+}
+
+fn run_post_step_profiled(
+    managed: &mut ManagedWorld,
+    archive: &mut WorldArchive,
+) -> (f64, f64, f64) {
+    match managed.verification_mode {
+        VerificationMode::Interactive | VerificationMode::ScientificBenchmark => {
+            let phase_start = profile_now_ms();
+            post_step_sync_light(managed);
+            let step_sync_erosion_ms = profile_elapsed_ms(phase_start);
+
+            let phase_start = profile_now_ms();
+            managed.observe_after_world_change();
+            let step_observe_world_change_ms = profile_elapsed_ms(phase_start);
+
+            let phase_start = profile_now_ms();
+            archive.save_snapshot_if_needed(managed);
+            let step_history_snapshot_ms = profile_elapsed_ms(phase_start);
+
+            if managed.verification_mode == VerificationMode::ScientificBenchmark {
+                managed.push_scientific_benchmark_sample();
+            }
+
+            (
+                step_sync_erosion_ms,
+                step_observe_world_change_ms,
+                step_history_snapshot_ms,
+            )
+        }
+        VerificationMode::HeadlessMetrics => (0.0, 0.0, 0.0),
+    }
 }
 
 fn scaled_step_count(simulation_rate: f32, tick_count: u32) -> u32 {
@@ -128,6 +172,10 @@ pub(crate) fn init_world(
         geology_dynamics,
         feedback: world::FeedbackQueue::new(cell_count),
         simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
+        verification_mode: config
+            .verification_mode
+            .unwrap_or(VerificationMode::Interactive),
+        scientific_benchmark_samples: Vec::new(),
         geology_params,
         transport_cache,
         exec_state: ManagedWorldExecState::default(),
@@ -211,18 +259,10 @@ pub(crate) fn exec_world_profiled(
             .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states)
             .breakdown;
         sim_breakdown.accumulate(&step_breakdown);
-
-        let phase_start = profile_now_ms();
-        post_step_sync_light(managed);
-        step_sync_erosion_ms += profile_elapsed_ms(phase_start);
-
-        let phase_start = profile_now_ms();
-        managed.observe_after_world_change();
-        step_observe_world_change_ms += profile_elapsed_ms(phase_start);
-
-        let phase_start = profile_now_ms();
-        archive.save_snapshot_if_needed(managed);
-        step_history_snapshot_ms += profile_elapsed_ms(phase_start);
+        let (sync_ms, observe_ms, history_ms) = run_post_step_profiled(managed, archive);
+        step_sync_erosion_ms += sync_ms;
+        step_observe_world_change_ms += observe_ms;
+        step_history_snapshot_ms += history_ms;
     }
 
     Ok(StepWorldProfiledResponse {
@@ -298,18 +338,10 @@ pub(crate) fn exec_world_profiled_detail(
         let step_breakdown =
             managed.with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
         sim_breakdown.accumulate(&step_breakdown);
-
-        let phase_start = profile_now_ms();
-        post_step_sync_light(managed);
-        step_sync_erosion_ms += profile_elapsed_ms(phase_start);
-
-        let phase_start = profile_now_ms();
-        managed.observe_after_world_change();
-        step_observe_world_change_ms += profile_elapsed_ms(phase_start);
-
-        let phase_start = profile_now_ms();
-        archive.save_snapshot_if_needed(managed);
-        step_history_snapshot_ms += profile_elapsed_ms(phase_start);
+        let (sync_ms, observe_ms, history_ms) = run_post_step_profiled(managed, archive);
+        step_sync_erosion_ms += sync_ms;
+        step_observe_world_change_ms += observe_ms;
+        step_history_snapshot_ms += history_ms;
     }
 
     Ok(StepWorldProfiledDetailResponse {
@@ -375,16 +407,6 @@ pub(crate) fn exec_world_slice(
     let mut remaining_budget = budget;
     let mut processed_ticks = 0u32;
     while remaining_budget > 0 && managed.exec_is_busy() {
-        if managed.exec_state.pending_post_step {
-            run_post_step(managed, archive);
-            managed.exec_state.pending_post_step = false;
-            managed.exec_state.remaining_steps =
-                managed.exec_state.remaining_steps.saturating_sub(1);
-            processed_ticks = processed_ticks.saturating_add(1);
-            remaining_budget = remaining_budget.saturating_sub(1);
-            continue;
-        }
-
         let next_phase = managed.exec_state.next_phase;
         archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
         let slice = managed.with_exec_states(|world, feedback, geology_state, hydrology_state| {
@@ -400,18 +422,19 @@ pub(crate) fn exec_world_slice(
         managed.exec_state.next_phase = slice.next_phase;
         remaining_budget = remaining_budget.saturating_sub(slice.work_units_consumed);
         if slice.ticks_completed > 0 {
-            managed.exec_state.pending_post_step = true;
+            run_post_step(managed, archive);
+            managed.exec_state.remaining_steps = managed
+                .exec_state
+                .remaining_steps
+                .saturating_sub(slice.ticks_completed);
+            processed_ticks = processed_ticks.saturating_add(slice.ticks_completed);
         }
         if slice.work_units_consumed == 0 {
             break;
         }
     }
 
-    let phase = if managed.exec_state.pending_post_step {
-        "post_step".to_string()
-    } else {
-        exec_phase_label(managed.exec_state.next_phase).to_string()
-    };
+    let phase = exec_phase_label(managed.exec_state.next_phase).to_string();
     Ok(ExecWorldSliceResponse {
         world_id,
         processed_ticks,
@@ -483,8 +506,7 @@ pub(crate) fn replay_world_to_tick(
     while managed.world.clock.tick < target_tick {
         archive.apply_pending_interventions_for_tick(managed, managed.world.clock.tick);
         managed.with_exec_states(exec_world_with_feedback_and_states);
-        post_step_sync_light(managed);
-        archive.save_snapshot_if_needed(managed);
+        run_post_step(managed, archive);
     }
     archive.apply_pending_interventions_for_tick(managed, target_tick);
 
@@ -534,12 +556,14 @@ mod tests {
     use super::*;
     use crate::application::world_dto::InitWorldConfig;
     use crate::application::world_query_use_cases;
+    use crate::application::world_runtime::VerificationMode;
 
     fn default_init_config() -> InitWorldConfig {
         InitWorldConfig {
             geology_params: None,
             target_sea_ratio: None,
             simulation_rate: None,
+            verification_mode: None,
         }
     }
 
@@ -640,5 +664,72 @@ mod tests {
             restored_metrics.top10_river_flux_sum,
             direct_metrics.top10_river_flux_sum
         );
+    }
+
+    #[test]
+    fn headless_metrics_mode_skips_history_snapshots_on_exec() {
+        let mut service = WorldService::new();
+        let world = init_world(
+            &mut service,
+            "seed-headless-history".to_string(),
+            1,
+            InitWorldConfig {
+                geology_params: None,
+                target_sea_ratio: None,
+                simulation_rate: None,
+                verification_mode: Some(VerificationMode::HeadlessMetrics),
+            },
+        )
+        .expect("init world");
+
+        exec_world(&mut service, &world.world_id, 80).expect("exec world");
+        let history = world_query_use_cases::list_history_ticks(&service, world.world_id.clone())
+            .expect("history ticks");
+        assert_eq!(history.ticks, vec![0.0]);
+    }
+
+    #[test]
+    fn exec_world_slice_phase_does_not_return_post_step_label() {
+        let mut service = WorldService::new();
+        let world = init_world(
+            &mut service,
+            "seed-slice-phase".to_string(),
+            1,
+            default_init_config(),
+        )
+        .expect("init world");
+
+        let mut last_phase = String::new();
+        loop {
+            let response =
+                exec_world_slice(&mut service, world.world_id.clone(), 1).expect("slice exec");
+            last_phase = response.phase.clone();
+            if !response.busy {
+                break;
+            }
+        }
+
+        assert_ne!(last_phase, "post_step");
+    }
+
+    #[test]
+    fn scientific_benchmark_mode_records_samples_during_exec() {
+        let mut service = WorldService::new();
+        let world = init_world(
+            &mut service,
+            "seed-science-sample".to_string(),
+            1,
+            InitWorldConfig {
+                geology_params: None,
+                target_sea_ratio: None,
+                simulation_rate: None,
+                verification_mode: Some(VerificationMode::ScientificBenchmark),
+            },
+        )
+        .expect("init world");
+
+        exec_world(&mut service, &world.world_id, 3).expect("exec world");
+        let managed = service.world(&world.world_id).expect("managed world");
+        assert!(!managed.scientific_benchmark_samples.is_empty());
     }
 }

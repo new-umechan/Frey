@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::application::world_runtime::VerificationMode;
 use crate::sim::geology_types::GeologyParams;
 
 #[derive(Deserialize)]
@@ -12,6 +13,8 @@ pub(crate) struct InitWorldConfig {
     pub target_sea_ratio: Option<f32>,
     #[serde(default)]
     pub simulation_rate: Option<f32>,
+    #[serde(default)]
+    pub verification_mode: Option<VerificationMode>,
 }
 
 #[derive(Deserialize)]

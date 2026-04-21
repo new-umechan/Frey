@@ -34,6 +34,7 @@ impl WorldSimController {
                 geology_params: None,
                 target_sea_ratio: None,
                 simulation_rate: None,
+                verification_mode: None,
             }
         } else {
             serde_wasm_bindgen::from_value::<InitWorldConfig>(config_js)

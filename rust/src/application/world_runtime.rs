@@ -11,6 +11,7 @@ use crate::sim::{first_phase, ExecWorldPhase};
 pub(crate) const DEFAULT_HISTORY_LIMIT: usize = 512;
 pub(crate) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
 pub(crate) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
+pub(crate) const SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT: usize = 512;
 
 fn bitmap_word_len(values_len: usize) -> usize {
     values_len.div_ceil(32)
@@ -157,10 +158,19 @@ pub(crate) struct ManagedWorld {
     pub geology_dynamics: Option<world::GeologyDynamicsState>,
     pub feedback: world::FeedbackQueue,
     pub simulation_rate: f32,
+    pub verification_mode: VerificationMode,
+    pub scientific_benchmark_samples: Vec<ScientificBenchmarkSample>,
     pub geology_params: GeologyParams,
     pub transport_cache: WorldTransportCache,
     pub exec_state: ManagedWorldExecState,
     pub applied_intervention_seq: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ScientificBenchmarkSample {
+    pub tick: u64,
+    pub era: String,
+    pub metrics: world::WorldMetrics,
 }
 
 #[derive(Clone)]
@@ -184,6 +194,15 @@ pub(crate) struct InterventionEvent {
     pub command: InterventionCommand,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum VerificationMode {
+    #[default]
+    Interactive,
+    HeadlessMetrics,
+    ScientificBenchmark,
+}
+
 #[derive(Clone)]
 pub(crate) struct WorldArchive {
     pub history: BTreeMap<u64, WorldHistorySnapshot>,
@@ -195,7 +214,6 @@ pub(crate) struct WorldArchive {
 pub(crate) struct ManagedWorldExecState {
     pub next_phase: ExecWorldPhase,
     pub remaining_steps: u32,
-    pub pending_post_step: bool,
 }
 
 impl Default for ManagedWorldExecState {
@@ -203,7 +221,6 @@ impl Default for ManagedWorldExecState {
         Self {
             next_phase: first_phase(),
             remaining_steps: 0,
-            pending_post_step: false,
         }
     }
 }
@@ -1908,8 +1925,24 @@ impl ManagedWorld {
         // we can avoid scanning untouched fields each tick.
     }
 
+    pub fn push_scientific_benchmark_sample(&mut self) {
+        let sample = ScientificBenchmarkSample {
+            tick: self.world.clock.tick,
+            era: self.world.clock.epoch.as_key().to_string(),
+            metrics: self.world.metrics(),
+        };
+        self.scientific_benchmark_samples.push(sample);
+        if self.scientific_benchmark_samples.len() > SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT {
+            let overflow = self
+                .scientific_benchmark_samples
+                .len()
+                .saturating_sub(SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT);
+            self.scientific_benchmark_samples.drain(0..overflow);
+        }
+    }
+
     pub fn exec_is_busy(&self) -> bool {
-        self.exec_state.pending_post_step || self.exec_state.remaining_steps > 0
+        self.exec_state.remaining_steps > 0
     }
 }
 
@@ -1987,7 +2020,7 @@ impl WorldArchive {
 mod tests {
     use super::{
         F32FieldTracker, I32FieldTracker, ManagedWorld, ManagedWorldExecState, U32FieldTracker,
-        WorldTransportCache,
+        VerificationMode, WorldTransportCache, SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT,
     };
     use crate::sim::geology_types::{GeologyInternal, PlateId};
     use crate::sim::world;
@@ -2203,6 +2236,8 @@ mod tests {
             geology_dynamics: None,
             feedback: world::FeedbackQueue::new(sim_world.cell_count()),
             simulation_rate: 1.0,
+            verification_mode: VerificationMode::Interactive,
+            scientific_benchmark_samples: Vec::new(),
             geology_params: crate::GeologyParams::default(),
             transport_cache: WorldTransportCache::from_world(&sim_world, None),
             exec_state: ManagedWorldExecState::default(),
@@ -2215,6 +2250,77 @@ mod tests {
         assert_eq!(
             snapshot.core.entities.iter_polities().count(),
             sim_world.entities.iter_polities().count()
+        );
+    }
+
+    #[test]
+    fn scientific_benchmark_samples_keep_recent_window() {
+        let geology = world::GeologyState {
+            height: vec![0.2],
+            lake_depth: vec![0.0],
+            plate_id: vec![PlateId(0)],
+            erosion_rate: vec![0.0],
+            deposition_rate: vec![0.0],
+            volcanism: vec![0.0],
+            vertex_buoyancy: vec![0.0],
+            geology_internal: vec![GeologyInternal::default()],
+            boundary_condition: vec![0.0],
+        };
+        let mesh = world::WorldMesh {
+            positions: vec![[0.0, 0.0, 1.0]],
+            nbr_offsets: vec![0, 0],
+            nbrs: vec![],
+        };
+        let sim_world = world::World::new(mesh, geology);
+        let mut managed = ManagedWorld {
+            world: sim_world,
+            hydrology_dynamics: None,
+            geology_dynamics: None,
+            feedback: world::FeedbackQueue::new(1),
+            simulation_rate: 1.0,
+            verification_mode: VerificationMode::ScientificBenchmark,
+            scientific_benchmark_samples: Vec::new(),
+            geology_params: crate::GeologyParams::default(),
+            transport_cache: WorldTransportCache::from_world(
+                &world::World::new(
+                    world::WorldMesh {
+                        positions: vec![[0.0, 0.0, 1.0]],
+                        nbr_offsets: vec![0, 0],
+                        nbrs: vec![],
+                    },
+                    world::GeologyState {
+                        height: vec![0.2],
+                        lake_depth: vec![0.0],
+                        plate_id: vec![PlateId(0)],
+                        erosion_rate: vec![0.0],
+                        deposition_rate: vec![0.0],
+                        volcanism: vec![0.0],
+                        vertex_buoyancy: vec![0.0],
+                        geology_internal: vec![GeologyInternal::default()],
+                        boundary_condition: vec![0.0],
+                    },
+                ),
+                None,
+            ),
+            exec_state: ManagedWorldExecState::default(),
+            applied_intervention_seq: 0,
+        };
+
+        for tick in 0..(SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT + 8) {
+            managed.world.clock.tick = tick as u64;
+            managed.push_scientific_benchmark_sample();
+        }
+
+        assert_eq!(
+            managed.scientific_benchmark_samples.len(),
+            SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT
+        );
+        assert_eq!(
+            managed
+                .scientific_benchmark_samples
+                .first()
+                .map(|sample| sample.tick),
+            Some(8)
         );
     }
 }
