@@ -11,6 +11,14 @@ interface Args {
     out: string | null;
 }
 
+function defaultOutputPath(args: Args): string {
+    const safeSeed = args.seed.replace(/[^a-zA-Z0-9_-]/g, "_");
+    return resolve(
+        "benches/results/scientific_benchmark_samples",
+        `${safeSeed}_L${args.level}_T${args.ticks}.json`,
+    );
+}
+
 function parseNumber(value: unknown, flagName: string): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
@@ -98,11 +106,9 @@ async function main() {
     const output = JSON.stringify(samples, null, 2);
     process.stdout.write(`${output}\n`);
 
-    if (args.out) {
-        const outputPath = resolve(args.out);
-        await mkdir(dirname(outputPath), { recursive: true });
-        await writeFile(outputPath, `${output}\n`, "utf8");
-    }
+    const outputPath = args.out ? resolve(args.out) : defaultOutputPath(args);
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${output}\n`, "utf8");
 }
 
 main().catch((error) => {

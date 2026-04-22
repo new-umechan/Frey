@@ -228,10 +228,10 @@ river_activity_low_threshold:
   value: 0.005
 tectonic_subsidence_gain:
   type: f32
-  value: 0.0
+  value: 0.003
 thermal_subsidence_gain:
   type: f32
-  value: 0.0
+  value: 0.002
 stress_relaxation_rate:
   type: f32
   value: 0.15
