@@ -54,6 +54,9 @@ Hydrologyが読む主な値は次のとおり。
 - `glaciology.glacial_melt_runoff`
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
 
+v1 では glacial sediment は入力に含めない。
+氷河起源 sediment は `Glaciology` / `Geology` 側で source 記録と export accounting に留める。
+
 ## 出力
 
 Hydrologyは次の配列を全セル分持つ。
@@ -158,6 +161,16 @@ x = a * slope + b
 
 侵食量と堆積量はHydrologyが計算してCellStoreに書く。
 標高への最終反映はGeologyが行う。
+
+初版の runtime では、`Geology` 反映時に fluvial `deposition_rate` 総量へ
+Exner 系の budget 制約を掛ける。
+
+- `Σdeposition <= Σerosion + mobile_sediment_budget` を満たすように `deposition_rate` を一様スケールする
+- 超過分は未解像の海盆・深海への sediment export とみなす
+- glacial erosion は別 transport 未実装のため、この budget には含めない
+- `marine_sediment_mass` は v1 では一方向 sink とし、Hydrology は海成堆積物の再露出や再懸濁を扱わない
+- この段階では海陸比を合わせるための全球 terrain shift は行わない
+- 海陸比の復元が必要な場合は、標高ではなく `sea_level_offset` 側を弱く調整する
 
 ## 河川輸送コスト
 

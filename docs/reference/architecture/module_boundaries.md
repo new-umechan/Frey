@@ -130,6 +130,13 @@ Tier1までのモジュールについて、詳細を決定している。
 地形を書き換える責任は `Geology` に一本化する。
 `Hydrology` 切り出し以前は流路・流量も担当していたが、v2では `Hydrology` に移管する。
 氷荷重起点の地盤上下動も `Geology` が `height` に最終反映する。
+また、`Hydrology` 由来の堆積は `Geology` 反映時に sediment budget 制約を受ける。
+初版では fluvial `deposition_rate` 総量を `erosion_rate` 総量以下へ制限し、
+超過分は未解像の深海 export とみなす。
+glacial sediment は v1 では fluvial transport に接続せず、
+glacial erosion source の記録と export / `marine_sediment_mass` accounting に留める。
+さらに、runtime の sea-level 仮定が 0 基準へ寄っているため、
+一定 ocean water inventory を近似する弱い eustatic 補正を `Geology` 最終反映で行う。
 
 ---
 
@@ -197,6 +204,8 @@ Tier1までのモジュールについて、詳細を決定している。
 氷河固有の状態管理に責務を限定する。
 `glacial_melt_runoff` は `Hydrology` の流出入力へ加算される。
 `glacial_erosion_rate` の標高反映は `Geology` が担当する。
+ただし v1 では glacial sediment transport は持たず、
+`Hydrology` へは水だけを渡す。
 氷量から海面基準と地盤応答目標量を計算するが、`height` 自体は書かない。
 
 ---

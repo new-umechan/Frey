@@ -15,6 +15,8 @@
 - モデルを変えるべき判断材料として使う
 
 回帰テストや日常的な壊れ確認は `docs/operations/test.md` を参照する。
+ベンチマーク比較の正本 artifact は `benches/results/` に置く。
+docs には比較指標、更新手順、結果の読み方だけを置き、期待値そのものは artifact 側を正本とする。
 
 ---
 
@@ -198,6 +200,12 @@ Climate単体ベンチで確立したリサンプリング基盤・出力フォ�
 
 Climate+Ecology・フルパイプラインのベンチでは、収束条件を定義して実行を止める。
 具体的な収束閾値は実装時に調整する。
+
+## 比較 artifact の扱い
+
+- hypsometry / relief / river flux / basin occupancy などの比較用サンプルと回帰基準は `benches/results/` を正本とする
+- `docs/operations/bench/` 配下の文書は、生成方法・更新条件・判定基準のみを書く
+- reservoir diagnostics を追加した場合も、継続比較に使う数値出力は `benches/results/` に保存する
 
 ---
 

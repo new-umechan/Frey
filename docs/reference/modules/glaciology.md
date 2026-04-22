@@ -94,6 +94,8 @@ glacial_erosion_rate = ice_thickness * local_relief * erosion_gain
 ```
 
 標高への反映は `Geology` 側で `glacial_erosion_coupling` を通して行う。
+この侵食で生じる sediment は v1 では `Hydrology` へ渡さず、
+glacial erosion source と export / `marine_sediment_mass` diagnostics にのみ計上する。
 
 ## パラメータ管理
 
@@ -119,6 +121,7 @@ glacial_erosion_rate = ice_thickness * local_relief * erosion_gain
 - `Hydrology` は河川ネットワーク・流量・河川侵食を更新する
 - `Geology` は河川侵食と氷河侵食を合算して標高へ反映する
 - `Climate` は気候場を更新し、氷河自体は更新しない
+- v1 では氷河由来 sediment transport は持たず、`Hydrology` に渡すのは `glacial_melt_runoff` のみとする
 
 ## 今後の展望
 

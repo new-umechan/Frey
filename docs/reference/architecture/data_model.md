@@ -65,6 +65,8 @@ struct PlateId(u32);
 
 `WorldState` は「次 tick の計算に必要な正本」だけを持つ。
 各 State は SoA 構造を持ち、セル index がそのまま `CellId` になる。
+v1 の reservoir 分離では、すべての在庫量をただちにセル列へ落とし込まない。
+`solid_earth_mass` のように状態正本ではなく全球 diagnostics として定義する量もある。
 
 ### GeologyState
 
@@ -366,6 +368,19 @@ struct WorldControlState {
 
 `target_sea_ratio` や `sea_level_offset` は projection/derived state ではなく、
 次 tick の計算に効く control 値として `WorldControlState` に置く。
+v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を満たす海面変数として扱い、
+`ocean basin capacity` は現地形から毎 tick 近似再計算する。
+
+## Diagnostics と reservoir proxy
+
+mass-based reservoir への移行では、v1 では次の扱いを採る。
+
+- `solid_earth_mass` は `WorldState` のセル正本には置かず、`height`・密度 proxy・セル面積から導く全球 diagnostic proxy とする
+- `marine_sediment_mass` は export の受け皿として global / basin diagnostics に置き、沿岸再懸濁や再露出の双方向交換はまだ正本化しない
+- glacial sediment は transport 状態を持たず、glacial erosion source と export / marine accounting の診断量として扱う
+
+これらの diagnostics は benchmark と長期 drift 監視のために公開してよいが、
+次 tick の更新正本とは区別して記述する。
 
 ## FeedbackQueue
 

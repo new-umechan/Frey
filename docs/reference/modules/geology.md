@@ -71,6 +71,7 @@ heat_release_rate: プルーム発生時の放熱率
     - 構造隆起
     - 構造沈降
     - 海洋熱沈降
+    - 内生的な鉛直変位の零平均拘束
 
 8. 侵食・堆積の算出と地形反映（算出はHydrologyステージ、反映はHydrologyステージ直後）
 9. アイソスタシー調整
@@ -780,6 +781,8 @@ thickness[cell] += deposited * deposition_thickness_coupling
 
 これにより侵食後のリバウンドと堆積盆の沈降を表現する。
 ただし、河道・湖沼・デルタの形成判定と侵食量・堆積量の算出責務は引き続き `Hydrology` に置く。
+初版 runtime では、`Hydrology` が返す堆積量のうち fluvial 総量が侵食総量を超える場合、
+`Geology` 最終反映で一様スケールして budget を閉じる。
 
 ### 7.8 活動量メトリクス
 
