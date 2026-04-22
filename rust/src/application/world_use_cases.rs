@@ -160,9 +160,6 @@ pub(crate) fn init_world(
     sim_world.state.hydrology.river_flow = terrain.river_flux;
     sim_world.state.hydrology.river_next = terrain.river_next;
     crate::sim::hydrology::rebuild_mfd_from_primary(&mut sim_world.state.hydrology);
-    if let Some(target) = config.target_sea_ratio {
-        sim_world.control.target_sea_ratio = target.clamp(0.02, 0.98);
-    }
     sim_world.control.geology_params = geology_params.clone();
     sim_world.control.erosion_thickness_coupling = geology_params.erosion_thickness_coupling;
     sim_world.control.deposition_thickness_coupling = geology_params.deposition_thickness_coupling;
@@ -473,26 +470,6 @@ pub(crate) fn set_simulation_rate(
     Ok(())
 }
 
-pub(crate) fn set_target_sea_ratio(
-    service: &mut WorldService,
-    world_id: &str,
-    target_sea_ratio: f32,
-) -> Result<(), String> {
-    if !target_sea_ratio.is_finite() {
-        return Err("target_sea_ratio must be finite".to_string());
-    }
-    let (managed, archive) = service
-        .world_and_archive_mut(world_id)
-        .ok_or_else(|| world_not_found_error(world_id))?;
-    let _ = archive.enqueue_intervention(
-        managed,
-        InterventionCommand::SetTargetSeaRatio {
-            value: target_sea_ratio,
-        },
-    );
-    Ok(())
-}
-
 pub(crate) fn replay_world_to_tick(
     managed: &mut ManagedWorld,
     archive: &mut WorldArchive,
@@ -573,7 +550,6 @@ mod tests {
     fn default_init_config() -> InitWorldConfig {
         InitWorldConfig {
             geology_params: None,
-            target_sea_ratio: None,
             simulation_rate: None,
             verification_mode: None,
         }
@@ -687,7 +663,6 @@ mod tests {
             1,
             InitWorldConfig {
                 geology_params: None,
-                target_sea_ratio: None,
                 simulation_rate: None,
                 verification_mode: Some(VerificationMode::HeadlessMetrics),
             },
@@ -730,7 +705,6 @@ mod tests {
             1,
             InitWorldConfig {
                 geology_params: None,
-                target_sea_ratio: None,
                 simulation_rate: None,
                 verification_mode: Some(VerificationMode::ScientificBenchmark),
             },
@@ -751,7 +725,6 @@ mod tests {
             1,
             InitWorldConfig {
                 geology_params: None,
-                target_sea_ratio: None,
                 simulation_rate: None,
                 verification_mode: Some(VerificationMode::ScientificBenchmark),
             },
@@ -764,4 +737,5 @@ mod tests {
         let managed = service.world(&world.world_id).expect("managed world");
         assert!(!managed.scientific_benchmark_samples.is_empty());
     }
+
 }

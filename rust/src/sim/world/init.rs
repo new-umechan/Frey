@@ -21,7 +21,7 @@ use super::state::{
 impl World {
     pub fn new(mesh: WorldMesh, geology: GeologyState) -> Self {
         let cell_count = geology.height.len();
-        let (land_ratio, target_sea_ratio) = land_and_sea_ratios(&geology.height);
+        let land_ratio = land_ratio(&geology.height);
         let terrain = build_terrain_state(&mesh, &geology.height, 0.0);
         let ocean_temperature = terrain
             .latitude
@@ -135,7 +135,6 @@ impl World {
             },
             control: WorldControlState {
                 geology_params: default_geology_params.clone(),
-                target_sea_ratio,
                 sea_level_offset: 0.0,
                 erosion_thickness_coupling: default_geology_params.erosion_thickness_coupling,
                 deposition_thickness_coupling: default_geology_params.deposition_thickness_coupling,
@@ -169,7 +168,7 @@ impl World {
 
 fn land_and_sea_ratios(height: &[f32]) -> (f32, f32) {
     if height.is_empty() {
-        return (1.0 - default_target_sea_ratio(), default_target_sea_ratio());
+        return (1.0, 0.0);
     }
 
     let sea_count = height.iter().filter(|&&h| h <= 0.0).count() as f32;
@@ -178,8 +177,8 @@ fn land_and_sea_ratios(height: &[f32]) -> (f32, f32) {
     (1.0 - sea_ratio, sea_ratio)
 }
 
-pub fn default_target_sea_ratio() -> f32 {
-    0.62
+fn land_ratio(height: &[f32]) -> f32 {
+    land_and_sea_ratios(height).0
 }
 
 fn estimate_ocean_water_inventory(height: &[f32], sea_level_offset: f32) -> f32 {

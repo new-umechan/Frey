@@ -60,9 +60,11 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
             state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
     }
     world.control.ice_inventory = total_ice;
-    let target_water_inventory = (world.control.ocean_water_inventory
-        - total_ice * params.sea_level_coupling.max(0.0))
-    .max(0.0);
+    let target_water_inventory = effective_ocean_water_inventory(
+        world.control.ocean_water_inventory,
+        world.control.ice_inventory,
+        &params,
+    );
     let target_offset = solve_sea_level_for_inventory(
         &world.state.geology.height,
         target_water_inventory,
@@ -158,6 +160,14 @@ fn solve_sea_level_for_inventory(
         }
     }
     0.5 * (lo + hi)
+}
+
+fn effective_ocean_water_inventory(
+    ocean_water_inventory: f32,
+    ice_inventory: f32,
+    params: &GlaciologyParams,
+) -> f32 {
+    (ocean_water_inventory - ice_inventory * params.sea_level_coupling.max(0.0)).max(0.0)
 }
 
 fn sea_water_inventory_at_offset(heights: &[f32], sea_level_offset: f32) -> f32 {

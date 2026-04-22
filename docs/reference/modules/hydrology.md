@@ -56,6 +56,8 @@ Hydrologyが読む主な値は次のとおり。
 
 v1 では glacial sediment は入力に含めない。
 氷河起源 sediment は `Glaciology` / `Geology` 側で source 記録と export accounting に留める。
+v1 の sediment accounting の集計キーは `sink_id` とし、
+`drainage basin` や `depression hierarchy` は将来拡張候補に留める。
 
 ## 出力
 
@@ -94,6 +96,8 @@ sink_spill_level: Vec<f32>,
 一方で sink / lake / spill の正本は HydrologyState に持つ。
 Erosion はその fill-spill 状態を参照して堆積・溢流を進める。
 `sink_id`、`sink_route_next`、`sink_spill_cell`、`sink_spill_to`、`sink_capacity_total`、`sink_capacity_remaining`、`sink_storage_sediment`、`sink_spill_level`、`sink_overflow_active` が sink 正本であり、`is_lake` はそこから導出される公開ビューである。
+v1 の sediment bookkeeping では、各 `sink` について inflow / temporary storage / export / marine transfer を診断する。
+公開境界で要求する ID は `sink_id` のみとし、`drainage_basin_id` や `depression_hierarchy_node_id` は要求しない。
 
 ## 現行実装の制約
 
@@ -168,9 +172,9 @@ Exner 系の budget 制約を掛ける。
 - `Σdeposition <= Σerosion + mobile_sediment_budget` を満たすように `deposition_rate` を一様スケールする
 - 超過分は未解像の海盆・深海への sediment export とみなす
 - glacial erosion は別 transport 未実装のため、この budget には含めない
-- `marine_sediment_mass` は v1 では一方向 sink とし、Hydrology は海成堆積物の再露出や再懸濁を扱わない
+- `marine_sediment_mass` は v1 では非減少の一方向 sink とし、Hydrology は海成堆積物の再露出や再懸濁を扱わない
 - この段階では海陸比を合わせるための全球 terrain shift は行わない
-- 海陸比の復元が必要な場合は、標高ではなく `sea_level_offset` 側を弱く調整する
+- 海陸比の復元が必要な場合は、標高ではなく `sea_level_offset` の `capacity closure` 側で扱う
 
 ## 河川輸送コスト
 

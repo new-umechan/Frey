@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::sim::exec::HYDROLOGY_MFD_ACTIVITY_THRESHOLD;
 use crate::sim::glaciology::types::GlaciologyParams;
 use crate::sim::hydrology::{
@@ -9,7 +7,6 @@ use crate::sim::world::{EraKind, World};
 
 const GEOLOGY_HEIGHT_MIN: f32 = -1.2;
 const GEOLOGY_HEIGHT_MAX: f32 = 1.2;
-const SEA_LEVEL_RELAXATION_RATE: f32 = 0.05;
 
 pub(super) fn run_geology_step_with_state(
     world: &mut World,
@@ -195,35 +192,10 @@ pub(super) fn apply_hydrology_erosion_to_geology(
         }
     }
 
-    relax_sea_level_offset_toward_target_ratio(world);
     world.control.global_sediment_export += marine_increment;
     world.control.marine_sediment_mass += marine_increment;
     world.control.solid_earth_mass_proxy = world.state.geology.height.iter().copied().sum();
 
     let geology = &world.state.geology;
     sync_erosion_height(hydrology_state.as_mut(), &geology.height);
-}
-
-fn relax_sea_level_offset_toward_target_ratio(world: &mut World) {
-    let heights = &world.state.geology.height;
-    if heights.is_empty() {
-        return;
-    }
-
-    let target_sea_ratio = world.control.target_sea_ratio.clamp(0.02, 0.98);
-    let mut sorted = heights.clone();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-    let sea_idx = ((sorted.len() as f32) * target_sea_ratio) as usize;
-    let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
-    let target_offset = sorted[sea_idx];
-    if !target_offset.is_finite() {
-        return;
-    }
-
-    let current = world.control.sea_level_offset;
-    let delta = (target_offset - current) * SEA_LEVEL_RELAXATION_RATE;
-    if delta.abs() <= 1e-8 {
-        return;
-    }
-    world.control.sea_level_offset = current + delta;
 }

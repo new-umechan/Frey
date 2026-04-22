@@ -32,7 +32,6 @@ impl WorldSimController {
         let config = if config_js.is_undefined() || config_js.is_null() {
             InitWorldConfig {
                 geology_params: None,
-                target_sea_ratio: None,
                 simulation_rate: None,
                 verification_mode: None,
             }
@@ -99,16 +98,6 @@ impl WorldSimController {
     #[wasm_bindgen(js_name = set_simulation_rate)]
     pub fn set_simulation_rate_js(&mut self, world_id: String, rate: f32) -> Result<(), JsValue> {
         world_use_cases::set_simulation_rate(&mut self.service, &world_id, rate)
-            .map_err(|err| JsValue::from_str(&err))
-    }
-
-    #[wasm_bindgen(js_name = set_target_sea_ratio)]
-    pub fn set_target_sea_ratio_js(
-        &mut self,
-        world_id: String,
-        target_sea_ratio: f32,
-    ) -> Result<(), JsValue> {
-        world_use_cases::set_target_sea_ratio(&mut self.service, &world_id, target_sea_ratio)
             .map_err(|err| JsValue::from_str(&err))
     }
 

@@ -368,15 +368,20 @@ struct WorldControlState {
 
 `target_sea_ratio` や `sea_level_offset` は projection/derived state ではなく、
 次 tick の計算に効く control 値として `WorldControlState` に置く。
-v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を満たす海面変数として扱い、
+v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を使う
+`capacity closure` で決める海面変数として扱い、
 `ocean basin capacity` は現地形から毎 tick 近似再計算する。
+海面式に直接入る water inventory は `Ocean + Ice` のみとし、
+湖・河川・土壌水・地下水は diagnostics に留める。
 
 ## Diagnostics と reservoir proxy
 
 mass-based reservoir への移行では、v1 では次の扱いを採る。
 
 - `solid_earth_mass` は `WorldState` のセル正本には置かず、`height`・密度 proxy・セル面積から導く全球 diagnostic proxy とする
-- `marine_sediment_mass` は export の受け皿として global / basin diagnostics に置き、沿岸再懸濁や再露出の双方向交換はまだ正本化しない
+- `marine_sediment_mass` は export の受け皿として global / `sink` diagnostics に置き、v1 では非減少の一方向 sink として扱う
+- fluvial sediment accounting の正本集計キーは `sink_id` とし、各 `sink` の inflow / temporary storage / export / marine transfer を記録する
+- `drainage_basin_id` や `depression_hierarchy_node_id` は v1 の公開 API に含めない
 - glacial sediment は transport 状態を持たず、glacial erosion source と export / marine accounting の診断量として扱う
 
 これらの diagnostics は benchmark と長期 drift 監視のために公開してよいが、

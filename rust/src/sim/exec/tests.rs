@@ -81,7 +81,6 @@ fn hydrology_budget_constraint_does_not_recenter_global_heights() {
     let mut geology_state = None;
     let mut hydrology_state = None;
     let initial_height = world.state.geology.height.clone();
-    world.control.target_sea_ratio = 0.75;
     world.control.sea_level_offset = -0.25;
     world.state.geology.erosion_rate = vec![0.0; 4];
     world.state.geology.deposition_rate = vec![0.0; 4];
@@ -97,12 +96,11 @@ fn hydrology_budget_constraint_does_not_recenter_global_heights() {
 }
 
 #[test]
-fn hydrology_budget_constraint_relaxes_sea_level_offset_instead_of_heights() {
+fn hydrology_budget_constraint_does_not_override_sea_level_offset() {
     let mut world = build_test_world();
     let mut geology_state = None;
     let mut hydrology_state = None;
-    world.control.target_sea_ratio = 0.75;
-    world.control.sea_level_offset = 0.0;
+    world.control.sea_level_offset = 0.12;
     world.state.geology.erosion_rate = vec![0.0; 4];
     world.state.geology.deposition_rate = vec![0.0; 4];
     world.state.glaciology.glacial_erosion_rate = vec![0.0; 4];
@@ -113,7 +111,7 @@ fn hydrology_budget_constraint_relaxes_sea_level_offset_instead_of_heights() {
         &mut hydrology_state,
     );
 
-    assert!(world.control.sea_level_offset > 0.0);
+    assert!((world.control.sea_level_offset - 0.12).abs() < 1e-6);
 }
 
 #[test]

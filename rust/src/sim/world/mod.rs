@@ -18,7 +18,6 @@ pub use exec::{
     FeedbackEntry, FeedbackPayload, FeedbackQueue, FieldValue, ModuleId, SubsystemBudgets,
     TargetRef, TransitionState,
 };
-pub use init::default_target_sea_ratio;
 pub use metrics::WorldMetrics;
 pub use state::{
     ArchiveState, Biome, BoundaryDynamicsState, BoundaryType, CellId, CellStore, CellStoreMut,

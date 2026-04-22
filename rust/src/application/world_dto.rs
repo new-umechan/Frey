@@ -10,8 +10,6 @@ pub(crate) struct InitWorldConfig {
     #[serde(default)]
     pub geology_params: Option<GeologyParams>,
     #[serde(default)]
-    pub target_sea_ratio: Option<f32>,
-    #[serde(default)]
     pub simulation_rate: Option<f32>,
     #[serde(default)]
     pub verification_mode: Option<VerificationMode>,

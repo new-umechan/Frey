@@ -217,7 +217,6 @@ pub(crate) struct WorldHistorySnapshot {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) enum InterventionCommand {
     SetSimulationRate { value: f32 },
-    SetTargetSeaRatio { value: f32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -2061,9 +2060,6 @@ impl WorldArchive {
         match event.command {
             InterventionCommand::SetSimulationRate { value } => {
                 managed.simulation_rate = value.clamp(0.1, 32.0);
-            }
-            InterventionCommand::SetTargetSeaRatio { value } => {
-                managed.world.control.target_sea_ratio = value.clamp(0.02, 0.98);
             }
         }
         managed.applied_intervention_seq = event.sequence.saturating_add(1);

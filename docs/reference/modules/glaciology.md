@@ -3,13 +3,16 @@
 ## 目的
 
 Glaciologyは、地形と気候から氷河の質量収支を計算し、氷厚・融解流出・氷河侵食率を更新する。
-毎tickで次の値を `World State` に書く。
+毎tickで次の値を `World State` / `WorldControlState` に書く。
 
 - 氷厚（`glaciology.ice_thickness`）
+- 氷荷重（`glaciology.ice_load`）
 - 堆積量（`glaciology.accumulation`）
 - 消耗量（`glaciology.ablation`）
+- 地盤応答目標量（`glaciology.isostatic_adjustment`）
 - 融解流出量（`glaciology.glacial_melt_runoff`）
 - 氷河侵食率（`glaciology.glacial_erosion_rate`）
+- 全球海面基準（`control.sea_level_offset`）
 
 Glaciologyは「氷河固有状態の更新」に責務を限定し、標高の最終反映は `Geology` が担う。
 
@@ -26,13 +29,16 @@ Glaciologyが読む主な値は次のとおり。
 
 ## 出力
 
-Glaciologyは次の配列を全セル分持つ。
+Glaciologyは次のセル配列と global control を出力する。
 
 - `glaciology.ice_thickness`
+- `glaciology.ice_load`
 - `glaciology.accumulation`
 - `glaciology.ablation`
+- `glaciology.isostatic_adjustment`
 - `glaciology.glacial_melt_runoff`
 - `glaciology.glacial_erosion_rate`
+- `control.sea_level_offset`
 
 ## 処理ロジック
 
@@ -85,6 +91,16 @@ melt_source = max(ablation - accumulation, 0)
 glacial_melt_runoff = melt_source * melt_runoff_gain
 ```
 
+### 海面基準
+
+v1 の `sea_level_offset` は `capacity closure` で扱う。
+現地形から近似再計算した `ocean basin capacity` と
+`ocean_water_inventory` / `ice_inventory` を入力に、
+有効海水量に対応する海面を代数的に解く。
+
+海面式に直接入る water inventory は `Ocean + Ice` のみとし、
+湖・河川・土壌水・地下水などの陸上一時貯留水は diagnostics に留める。
+
 ### 氷河侵食率
 
 v1では氷厚と起伏の近似式で侵食率を与える。
@@ -118,6 +134,7 @@ glacial erosion source と export / `marine_sediment_mass` diagnostics にのみ
 ## 責務分離
 
 - `Glaciology` は氷河状態と氷河由来フラックスのみ書く
+- `Glaciology` は `ocean basin capacity` と `Ocean + Ice` inventory から `sea_level_offset` を導く
 - `Hydrology` は河川ネットワーク・流量・河川侵食を更新する
 - `Geology` は河川侵食と氷河侵食を合算して標高へ反映する
 - `Climate` は気候場を更新し、氷河自体は更新しない

@@ -34,7 +34,6 @@ JSから利用する現行WASM公開APIを定義する。
 `InitWorldConfig`:
 
 - `geology_params?: GeologyParams`
-- `target_sea_ratio?: number`（内部で`0.02..=0.98`にclamp）
 - `simulation_rate?: number`（内部で`0.1..=32.0`にclamp）
 
 実行仕様:

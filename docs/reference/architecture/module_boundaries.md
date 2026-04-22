@@ -135,8 +135,8 @@ Tier1までのモジュールについて、詳細を決定している。
 超過分は未解像の深海 export とみなす。
 glacial sediment は v1 では fluvial transport に接続せず、
 glacial erosion source の記録と export / `marine_sediment_mass` accounting に留める。
-さらに、runtime の sea-level 仮定が 0 基準へ寄っているため、
-一定 ocean water inventory を近似する弱い eustatic 補正を `Geology` 最終反映で行う。
+`sea_level_offset` 自体は `Glaciology` 側の `capacity closure` で求め、
+`Geology` はその結果を読んで海面と標高の相対関係を最終反映する。
 
 ---
 
@@ -206,6 +206,9 @@ glacial erosion source の記録と export / `marine_sediment_mass` accounting �
 `glacial_erosion_rate` の標高反映は `Geology` が担当する。
 ただし v1 では glacial sediment transport は持たず、
 `Hydrology` へは水だけを渡す。
+`sea_level_offset` は、現地形から近似再計算した `ocean basin capacity` と
+`ocean_water_inventory` / `ice_inventory` を使う `capacity closure` で導く。
+湖・河川・土壌水・地下水などの陸上一時貯留水は v1 ではこの海面式に直接入れない。
 氷量から海面基準と地盤応答目標量を計算するが、`height` 自体は書かない。
 
 ---
@@ -284,6 +287,9 @@ MFD（Multiple Flow Direction）を採用する。
 
 侵食・堆積率は `Hydrology` が計算して `CellStore` に書き、標高への最終反映は `Geology` が行う。
 河川輸送コストは `Settlement` と `Trade` が読む。
+v1 の sediment accounting は `sink_id` を正本集計キーとし、
+各 `sink` の inflow / temporary storage / export / marine transfer を診断する。
+`drainage_basin_id` や `depression_hierarchy_node_id` は v1 では公開境界に要求しない。
 
 ---
 

@@ -273,7 +273,7 @@ fn entity_state_round_trips_through_serde() {
 }
 
 #[test]
-fn world_initializes_land_ratio_independently_from_sea_ratio() {
+fn world_initializes_land_ratio_from_initial_height_distribution() {
     let world = World::new(
         WorldMesh {
             positions: vec![[0.0, 0.0, 1.0]; 4],
@@ -293,7 +293,6 @@ fn world_initializes_land_ratio_independently_from_sea_ratio() {
         },
     );
 
-    assert_eq!(world.control.target_sea_ratio, 0.25);
     assert_eq!(world.clock.transition.last_land_ratio, 0.75);
 }
 

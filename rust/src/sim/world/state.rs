@@ -45,7 +45,6 @@ pub struct WorldRelations {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldControlState {
     pub geology_params: crate::sim::geology_types::GeologyParams,
-    pub target_sea_ratio: f32,
     pub sea_level_offset: f32,
     pub erosion_thickness_coupling: f32,
     pub deposition_thickness_coupling: f32,
