@@ -737,5 +737,4 @@ mod tests {
         let managed = service.world(&world.world_id).expect("managed world");
         assert!(!managed.scientific_benchmark_samples.is_empty());
     }
-
 }

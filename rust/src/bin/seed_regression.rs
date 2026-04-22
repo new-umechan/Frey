@@ -25,7 +25,10 @@ const METRIC_SPECS: [MetricSpec; 10] = [
     MetricSpec::new("top10_river_flux_sum", "top10-river-flux-sum"),
     MetricSpec::new("global_sediment_export", "global-sediment-export"),
     MetricSpec::new("marine_sediment_mass", "marine-sediment-mass"),
-    MetricSpec::new("solid_earth_mass_proxy_drift", "solid-earth-mass-proxy-drift"),
+    MetricSpec::new(
+        "solid_earth_mass_proxy_drift",
+        "solid-earth-mass-proxy-drift",
+    ),
     MetricSpec::new("ocean_water_inventory_drift", "ocean-water-inventory-drift"),
     MetricSpec::new("ice_inventory", "ice-inventory"),
 ];
@@ -331,8 +334,7 @@ fn build_effective_thresholds(args: &Args) -> ThresholdMap {
         } else {
             args.threshold
         },
-        ocean_water_inventory_drift: if args.threshold_by_metric.ocean_water_inventory_drift > 0.0
-        {
+        ocean_water_inventory_drift: if args.threshold_by_metric.ocean_water_inventory_drift > 0.0 {
             args.threshold_by_metric.ocean_water_inventory_drift
         } else {
             args.threshold

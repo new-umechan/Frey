@@ -133,9 +133,9 @@ baseline誤用防止:
 - `tests/perf/scripts/perf.ts` の `--baseline` / `--threshold` をCIで常時実行する
 - perf gate は `native + wasm + worker` の3レーンすべて必須とする
 - baselineファイル:
-  - `tests/perf/bench-baseline-native.json`
-  - `tests/perf/bench-baseline-wasm.json`
-  - `tests/perf/bench-baseline-worker.json`
+    - `tests/perf/bench-baseline-native.json`
+    - `tests/perf/bench-baseline-wasm.json`
+    - `tests/perf/bench-baseline-worker.json`
 - `wasm` / `worker` レーンの `verification_mode` は `interactive` 固定で実行する
 - コマンド:
 
@@ -165,8 +165,8 @@ pnpm bench:perf:gate:worker
 #### ScientificBenchmark artifact 保存（2026-04-21）
 
 - `ScientificBenchmark` サンプルは次の2経路で保持する
-  - CI artifact: workflow 実行時に `actions/upload-artifact` で保存
-  - リポジトリ内ファイル: `tests/scientific-benchmark/scientific-benchmark-samples.json`
+    - CI artifact: workflow 実行時に `actions/upload-artifact` で保存
+    - リポジトリ内ファイル: `tests/scientific-benchmark/scientific-benchmark-samples.json`
 - コマンド:
 
 ```sh
