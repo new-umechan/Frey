@@ -77,5 +77,9 @@ describe("perf/runner", () => {
         expect(result.diagnostics.profile_attempt_count).toBe(1);
         expect(result.diagnostics.profile_success_count).toBe(1);
         expect(result.diagnostics.profile_fallback_count).toBe(0);
+        expect(result.diagnostics.modules.geology.exec_time_ms_total).toBe(0);
+        expect(result.diagnostics.modules.climate.exec_time_ms_total).toBe(0);
+        expect(result.diagnostics.modules.hydrology.exec_time_ms_total).toBe(0);
+        expect(result.diagnostics.normalized.module_hydrology_exec_time_ms_total).toBe(0);
     });
 });

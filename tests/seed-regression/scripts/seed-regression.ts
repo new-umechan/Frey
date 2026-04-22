@@ -23,6 +23,31 @@ const METRIC_SPECS = [
         sourceKey: "top10_river_flux_sum",
         flagSuffix: "top10-river-flux-sum",
     },
+    {
+        key: "global_sediment_export",
+        sourceKey: "global_sediment_export",
+        flagSuffix: "global-sediment-export",
+    },
+    {
+        key: "marine_sediment_mass",
+        sourceKey: "marine_sediment_mass",
+        flagSuffix: "marine-sediment-mass",
+    },
+    {
+        key: "solid_earth_mass_proxy_drift",
+        sourceKey: "solid_earth_mass_proxy_drift",
+        flagSuffix: "solid-earth-mass-proxy-drift",
+    },
+    {
+        key: "ocean_water_inventory_drift",
+        sourceKey: "ocean_water_inventory_drift",
+        flagSuffix: "ocean-water-inventory-drift",
+    },
+    {
+        key: "ice_inventory",
+        sourceKey: "ice_inventory",
+        flagSuffix: "ice-inventory",
+    },
 ];
 
 function parseNumber(value: unknown, flagName: string): number {

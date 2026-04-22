@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-04-21T04:05:07Z",
+    "generated_at": "2026-04-22T08:20:16Z",
     "ticks": 24,
     "level": 6,
     "seeds": [
@@ -18,7 +18,12 @@
       "height_mean": 0.005,
       "height_std": 0.005,
       "max_river_flux": 0.005,
-      "top10_river_flux_sum": 0.01
+      "top10_river_flux_sum": 0.005,
+      "global_sediment_export": 0.005,
+      "marine_sediment_mass": 0.005,
+      "solid_earth_mass_proxy_drift": 0.005,
+      "ocean_water_inventory_drift": 0.005,
+      "ice_inventory": 0.005
     },
     "transition_mode": "fixed_tick",
     "era_boundaries": [
@@ -45,11 +50,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13468.0,
-        "height_mean": -0.0688679963350296,
-        "height_std": 0.13641875982284546,
-        "max_river_flux": 57.29468536376953,
-        "top10_river_flux_sum": 525.33447265625
+        "land_cells": 12492.0,
+        "height_mean": -0.1104760244488716,
+        "height_std": 0.141520157456398,
+        "max_river_flux": 53.86151885986328,
+        "top10_river_flux_sum": 480.2071533203125,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.794921875,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -57,11 +67,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13427.0,
-        "height_mean": -0.08663808554410934,
-        "height_std": 0.15485171973705292,
-        "max_river_flux": 64.94713592529297,
-        "top10_river_flux_sum": 606.9625854492188
+        "land_cells": 12457.0,
+        "height_mean": -0.13426662981510162,
+        "height_std": 0.1614512801170349,
+        "max_river_flux": 57.36170959472656,
+        "top10_river_flux_sum": 539.0790405273438,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.9384765625,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -69,11 +84,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13559.0,
-        "height_mean": -0.06973714381456375,
-        "height_std": 0.13035733997821808,
-        "max_river_flux": 87.26288604736328,
-        "top10_river_flux_sum": 784.7071533203125
+        "land_cells": 12597.0,
+        "height_mean": -0.11158794909715652,
+        "height_std": 0.13436226546764374,
+        "max_river_flux": 59.66762161254883,
+        "top10_river_flux_sum": 575.6741333007812,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.7744140625,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -81,11 +101,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13361.0,
-        "height_mean": -0.1022680401802063,
-        "height_std": 0.16175276041030884,
-        "max_river_flux": 102.71807861328124,
-        "top10_river_flux_sum": 998.739501953125
+        "land_cells": 12544.0,
+        "height_mean": -0.15517114102840424,
+        "height_std": 0.16601088643074036,
+        "max_river_flux": 29.24764060974121,
+        "top10_river_flux_sum": 274.822998046875,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.60302734375,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -93,11 +118,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13373.0,
-        "height_mean": -0.022147467359900475,
-        "height_std": 0.1525518149137497,
-        "max_river_flux": 65.15763854980469,
-        "top10_river_flux_sum": 613.3270263671875
+        "land_cells": 12745.0,
+        "height_mean": -0.048373788595199585,
+        "height_std": 0.16202451288700104,
+        "max_river_flux": 59.70243453979492,
+        "top10_river_flux_sum": 526.1729736328125,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -1.0289306640625,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -105,11 +135,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13351.0,
-        "height_mean": -0.08826400339603424,
-        "height_std": 0.15767881274223328,
-        "max_river_flux": 80.8660888671875,
-        "top10_river_flux_sum": 786.4354248046875
+        "land_cells": 12524.0,
+        "height_mean": -0.13654015958309174,
+        "height_std": 0.16390211880207062,
+        "max_river_flux": 78.63048553466797,
+        "top10_river_flux_sum": 750.9952392578125,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.947265625,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -117,11 +152,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13405.0,
-        "height_mean": -0.0854201689362526,
-        "height_std": 0.1416148841381073,
-        "max_river_flux": 89.63804626464844,
-        "top10_river_flux_sum": 690.0289306640625
+        "land_cells": 12573.0,
+        "height_mean": -0.13257984817028046,
+        "height_std": 0.14596129953861237,
+        "max_river_flux": 47.032005310058594,
+        "top10_river_flux_sum": 400.3367309570313,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.78515625,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     },
     {
@@ -129,11 +169,16 @@
       "tick": 24,
       "era": "crust",
       "metrics": {
-        "land_cells": 13784.0,
-        "height_mean": -0.05477941781282425,
-        "height_std": 0.12017602473497392,
-        "max_river_flux": 84.22208404541016,
-        "top10_river_flux_sum": 755.2987670898438
+        "land_cells": 12569.0,
+        "height_mean": -0.09154260903596878,
+        "height_std": 0.12441027164459229,
+        "max_river_flux": 69.46228790283203,
+        "top10_river_flux_sum": 547.11376953125,
+        "global_sediment_export": 0.0,
+        "marine_sediment_mass": 0.0,
+        "solid_earth_mass_proxy_drift": -0.630859375,
+        "ocean_water_inventory_drift": 0.0,
+        "ice_inventory": 0.0
       }
     }
   ]
