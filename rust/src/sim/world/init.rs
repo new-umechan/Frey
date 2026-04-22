@@ -30,6 +30,8 @@ impl World {
             .collect::<Vec<_>>();
         let era = EraKind::Crust;
         let default_geology_params = crate::GeologyParams::default();
+        let ocean_water_inventory = estimate_ocean_water_inventory(&geology.height, 0.0);
+        let solid_earth_mass_proxy = estimate_solid_earth_mass_proxy(&geology.height);
         Self {
             metadata: WorldMetadata { mesh },
             state: WorldState {
@@ -137,6 +139,13 @@ impl World {
                 sea_level_offset: 0.0,
                 erosion_thickness_coupling: default_geology_params.erosion_thickness_coupling,
                 deposition_thickness_coupling: default_geology_params.deposition_thickness_coupling,
+                ocean_water_inventory,
+                ocean_water_inventory_baseline: ocean_water_inventory,
+                ice_inventory: 0.0,
+                marine_sediment_mass: 0.0,
+                global_sediment_export: 0.0,
+                solid_earth_mass_proxy,
+                solid_earth_mass_proxy_baseline: solid_earth_mass_proxy,
             },
             exec_scratch: ExecScratchState {
                 geology_dynamics: None,
@@ -171,6 +180,18 @@ fn land_and_sea_ratios(height: &[f32]) -> (f32, f32) {
 
 pub fn default_target_sea_ratio() -> f32 {
     0.62
+}
+
+fn estimate_ocean_water_inventory(height: &[f32], sea_level_offset: f32) -> f32 {
+    height
+        .iter()
+        .copied()
+        .map(|h| (sea_level_offset - h).max(0.0))
+        .sum()
+}
+
+fn estimate_solid_earth_mass_proxy(height: &[f32]) -> f32 {
+    height.iter().copied().sum()
 }
 
 fn build_terrain_state(mesh: &WorldMesh, height: &[f32], sea_level_offset: f32) -> TerrainState {

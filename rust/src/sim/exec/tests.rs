@@ -54,6 +54,69 @@ fn glaciology_forcing_updates_geology_height_once_per_delta() {
 }
 
 #[test]
+fn hydrology_deposition_is_limited_by_fluvial_erosion_budget() {
+    let mut world = build_test_world();
+    let mut geology_state = None;
+    let mut hydrology_state = None;
+    world.state.geology.erosion_rate = vec![0.10, 0.05, 0.0, 0.0];
+    world.state.geology.deposition_rate = vec![0.20, 0.20, 0.10, 0.10];
+    world.state.glaciology.glacial_erosion_rate = vec![0.0; 4];
+    super::geology::apply_hydrology_erosion_to_geology(
+        &mut world,
+        &mut geology_state,
+        &mut hydrology_state,
+    );
+
+    let applied_deposition = world.state.geology.deposition_rate.iter().sum::<f32>();
+    let applied_erosion = world.state.geology.erosion_rate.iter().sum::<f32>();
+
+    assert!((applied_deposition - applied_erosion).abs() < 1e-6);
+    assert!(world.state.geology.deposition_rate[0] < 0.20);
+    assert!(world.state.geology.deposition_rate[3] < 0.10);
+}
+
+#[test]
+fn hydrology_budget_constraint_does_not_recenter_global_heights() {
+    let mut world = build_test_world();
+    let mut geology_state = None;
+    let mut hydrology_state = None;
+    let initial_height = world.state.geology.height.clone();
+    world.control.target_sea_ratio = 0.75;
+    world.control.sea_level_offset = -0.25;
+    world.state.geology.erosion_rate = vec![0.0; 4];
+    world.state.geology.deposition_rate = vec![0.0; 4];
+    world.state.glaciology.glacial_erosion_rate = vec![0.0; 4];
+
+    super::geology::apply_hydrology_erosion_to_geology(
+        &mut world,
+        &mut geology_state,
+        &mut hydrology_state,
+    );
+
+    assert_eq!(world.state.geology.height, initial_height);
+}
+
+#[test]
+fn hydrology_budget_constraint_relaxes_sea_level_offset_instead_of_heights() {
+    let mut world = build_test_world();
+    let mut geology_state = None;
+    let mut hydrology_state = None;
+    world.control.target_sea_ratio = 0.75;
+    world.control.sea_level_offset = 0.0;
+    world.state.geology.erosion_rate = vec![0.0; 4];
+    world.state.geology.deposition_rate = vec![0.0; 4];
+    world.state.glaciology.glacial_erosion_rate = vec![0.0; 4];
+
+    super::geology::apply_hydrology_erosion_to_geology(
+        &mut world,
+        &mut geology_state,
+        &mut hydrology_state,
+    );
+
+    assert!(world.control.sea_level_offset > 0.0);
+}
+
+#[test]
 fn exec_world_advances_tick_and_sets_budget_to_one() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::History;

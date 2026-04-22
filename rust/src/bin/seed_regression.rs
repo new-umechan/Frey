@@ -17,12 +17,17 @@ const DEFAULT_JOBS: usize = 1;
 const DEFAULT_SEEDS: [&str; 1] = ["alpha"];
 const TRANSITION_MODE: &str = "fixed_tick";
 const ERA_BOUNDARIES: [u32; 5] = [0, 800, 1300, 1395, 1445];
-const METRIC_SPECS: [MetricSpec; 5] = [
+const METRIC_SPECS: [MetricSpec; 10] = [
     MetricSpec::new("land_cells", "land-cells"),
     MetricSpec::new("height_mean", "height-mean"),
     MetricSpec::new("height_std", "height-std"),
     MetricSpec::new("max_river_flux", "max-river-flux"),
     MetricSpec::new("top10_river_flux_sum", "top10-river-flux-sum"),
+    MetricSpec::new("global_sediment_export", "global-sediment-export"),
+    MetricSpec::new("marine_sediment_mass", "marine-sediment-mass"),
+    MetricSpec::new("solid_earth_mass_proxy_drift", "solid-earth-mass-proxy-drift"),
+    MetricSpec::new("ocean_water_inventory_drift", "ocean-water-inventory-drift"),
+    MetricSpec::new("ice_inventory", "ice-inventory"),
 ];
 
 #[derive(Clone, Copy)]
@@ -84,6 +89,11 @@ struct MetricValues {
     height_std: f64,
     max_river_flux: f64,
     top10_river_flux_sum: f64,
+    global_sediment_export: f64,
+    marine_sediment_mass: f64,
+    solid_earth_mass_proxy_drift: f64,
+    ocean_water_inventory_drift: f64,
+    ice_inventory: f64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -93,6 +103,11 @@ struct ThresholdMap {
     height_std: f64,
     max_river_flux: f64,
     top10_river_flux_sum: f64,
+    global_sediment_export: f64,
+    marine_sediment_mass: f64,
+    solid_earth_mass_proxy_drift: f64,
+    ocean_water_inventory_drift: f64,
+    ice_inventory: f64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -300,6 +315,33 @@ fn build_effective_thresholds(args: &Args) -> ThresholdMap {
         } else {
             args.threshold
         },
+        global_sediment_export: if args.threshold_by_metric.global_sediment_export > 0.0 {
+            args.threshold_by_metric.global_sediment_export
+        } else {
+            args.threshold
+        },
+        marine_sediment_mass: if args.threshold_by_metric.marine_sediment_mass > 0.0 {
+            args.threshold_by_metric.marine_sediment_mass
+        } else {
+            args.threshold
+        },
+        solid_earth_mass_proxy_drift: if args.threshold_by_metric.solid_earth_mass_proxy_drift > 0.0
+        {
+            args.threshold_by_metric.solid_earth_mass_proxy_drift
+        } else {
+            args.threshold
+        },
+        ocean_water_inventory_drift: if args.threshold_by_metric.ocean_water_inventory_drift > 0.0
+        {
+            args.threshold_by_metric.ocean_water_inventory_drift
+        } else {
+            args.threshold
+        },
+        ice_inventory: if args.threshold_by_metric.ice_inventory > 0.0 {
+            args.threshold_by_metric.ice_inventory
+        } else {
+            args.threshold
+        },
     }
 }
 
@@ -310,6 +352,11 @@ fn set_threshold_by_key(map: &mut ThresholdMap, key: &str, value: f64) -> Result
         "height_std" => map.height_std = value,
         "max_river_flux" => map.max_river_flux = value,
         "top10_river_flux_sum" => map.top10_river_flux_sum = value,
+        "global_sediment_export" => map.global_sediment_export = value,
+        "marine_sediment_mass" => map.marine_sediment_mass = value,
+        "solid_earth_mass_proxy_drift" => map.solid_earth_mass_proxy_drift = value,
+        "ocean_water_inventory_drift" => map.ocean_water_inventory_drift = value,
+        "ice_inventory" => map.ice_inventory = value,
         _ => return Err(format!("unsupported metric key: {key}")),
     }
     Ok(())
@@ -322,6 +369,11 @@ fn metric_value(metrics: &MetricValues, key: &str) -> Result<f64, String> {
         "height_std" => Ok(metrics.height_std),
         "max_river_flux" => Ok(metrics.max_river_flux),
         "top10_river_flux_sum" => Ok(metrics.top10_river_flux_sum),
+        "global_sediment_export" => Ok(metrics.global_sediment_export),
+        "marine_sediment_mass" => Ok(metrics.marine_sediment_mass),
+        "solid_earth_mass_proxy_drift" => Ok(metrics.solid_earth_mass_proxy_drift),
+        "ocean_water_inventory_drift" => Ok(metrics.ocean_water_inventory_drift),
+        "ice_inventory" => Ok(metrics.ice_inventory),
         _ => Err(format!("unsupported metric key: {key}")),
     }
 }
@@ -333,6 +385,11 @@ fn threshold_value(thresholds: &ThresholdMap, key: &str) -> Result<f64, String> 
         "height_std" => Ok(thresholds.height_std),
         "max_river_flux" => Ok(thresholds.max_river_flux),
         "top10_river_flux_sum" => Ok(thresholds.top10_river_flux_sum),
+        "global_sediment_export" => Ok(thresholds.global_sediment_export),
+        "marine_sediment_mass" => Ok(thresholds.marine_sediment_mass),
+        "solid_earth_mass_proxy_drift" => Ok(thresholds.solid_earth_mass_proxy_drift),
+        "ocean_water_inventory_drift" => Ok(thresholds.ocean_water_inventory_drift),
+        "ice_inventory" => Ok(thresholds.ice_inventory),
         _ => Err(format!("unsupported metric key: {key}")),
     }
 }
@@ -498,6 +555,11 @@ fn collect_metrics(metrics: &WorldMetrics) -> MetricValues {
         height_std: metrics.height_std_dev as f64,
         max_river_flux: metrics.max_river_flux as f64,
         top10_river_flux_sum: metrics.top10_river_flux_sum as f64,
+        global_sediment_export: metrics.global_sediment_export as f64,
+        marine_sediment_mass: metrics.marine_sediment_mass as f64,
+        solid_earth_mass_proxy_drift: metrics.solid_earth_mass_proxy_drift as f64,
+        ocean_water_inventory_drift: metrics.ocean_water_inventory_drift as f64,
+        ice_inventory: metrics.ice_inventory as f64,
     }
 }
 

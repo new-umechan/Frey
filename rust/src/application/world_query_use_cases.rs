@@ -39,6 +39,13 @@ fn scientific_metrics_from_world_metrics(
         river_flux_concentration: metrics.river_flux_concentration,
         continent_count: metrics.continent_count,
         largest_continent_cells: metrics.largest_continent_cells,
+        global_sediment_export: metrics.global_sediment_export,
+        marine_sediment_mass: metrics.marine_sediment_mass,
+        solid_earth_mass_proxy: metrics.solid_earth_mass_proxy,
+        solid_earth_mass_proxy_drift: metrics.solid_earth_mass_proxy_drift,
+        ocean_water_inventory: metrics.ocean_water_inventory,
+        ocean_water_inventory_drift: metrics.ocean_water_inventory_drift,
+        ice_inventory: metrics.ice_inventory,
     }
 }
 
@@ -856,6 +863,13 @@ pub(crate) fn get_metrics(
         river_flux_concentration: metrics.river_flux_concentration,
         continent_count: metrics.continent_count,
         largest_continent_cells: metrics.largest_continent_cells,
+        global_sediment_export: metrics.global_sediment_export,
+        marine_sediment_mass: metrics.marine_sediment_mass,
+        solid_earth_mass_proxy: metrics.solid_earth_mass_proxy,
+        solid_earth_mass_proxy_drift: metrics.solid_earth_mass_proxy_drift,
+        ocean_water_inventory: metrics.ocean_water_inventory,
+        ocean_water_inventory_drift: metrics.ocean_water_inventory_drift,
+        ice_inventory: metrics.ice_inventory,
     })
 }
 

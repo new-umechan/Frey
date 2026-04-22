@@ -7,97 +7,41 @@ use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyParams;
 use crate::sim::world;
 use crate::sim::{first_phase, ExecWorldPhase};
+use verification_runtime::{
+    reduce_metrics_for_headless, HeadlessMetrics, VerificationMode,
+    SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT,
+};
 
 pub(crate) const DEFAULT_HISTORY_LIMIT: usize = 512;
 pub(crate) const HISTORY_SNAPSHOT_INTERVAL: u64 = 64;
 pub(crate) const DELTA_FULL_THRESHOLD_RATIO: f32 = 0.40;
-pub(crate) const SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT: usize = 512;
 
-fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {
-    if !value.is_finite() || value <= 0.0 {
-        return;
-    }
-    if *len < top_fluxes.len() {
-        top_fluxes[*len] = value;
-        *len += 1;
-        return;
-    }
-    let mut min_index = 0usize;
-    for i in 1..top_fluxes.len() {
-        if top_fluxes[i] < top_fluxes[min_index] {
-            min_index = i;
-        }
-    }
-    if value > top_fluxes[min_index] {
-        top_fluxes[min_index] = value;
-    }
-}
-
-fn reduce_metrics_for_headless(world: &world::World) -> world::WorldMetrics {
-    let cells = world.cell_store();
-    let cell_count = cells.height.len().min(cells.river_flow.len());
-    if cell_count == 0 {
-        return world::WorldMetrics::default();
-    }
-
-    let sea_level = world.sea_level_offset();
-    let mut land_cells = 0usize;
-    let mut min_height = f32::INFINITY;
-    let mut max_height = f32::NEG_INFINITY;
-    let mut sum_height = 0.0f32;
-    let mut sum_height_sq = 0.0f32;
-    let mut sum_flux = 0.0f32;
-    let mut max_flux = 0.0f32;
-    let mut top_fluxes = [0.0f32; 10];
-    let mut top_fluxes_len = 0usize;
-
-    for index in 0..cell_count {
-        let height = cells.height[index];
-        let flux = cells.river_flow[index].max(0.0);
-        if height > sea_level {
-            land_cells += 1;
-        }
-        min_height = min_height.min(height);
-        max_height = max_height.max(height);
-        sum_height += height;
-        sum_height_sq += height * height;
-        sum_flux += flux;
-        max_flux = max_flux.max(flux);
-        push_top_flux(&mut top_fluxes, &mut top_fluxes_len, flux);
-    }
-
-    let cell_count_f32 = cell_count as f32;
-    let mean_height = sum_height / cell_count_f32;
-    let variance = (sum_height_sq / cell_count_f32) - (mean_height * mean_height);
-
+fn to_world_metrics(metrics: HeadlessMetrics) -> world::WorldMetrics {
     world::WorldMetrics {
-        cell_count: cell_count as u32,
-        land_cells: land_cells as u32,
-        land_ratio: land_cells as f32 / cell_count_f32,
-        mean_height,
-        height_std_dev: variance.max(0.0).sqrt(),
-        min_height: if min_height.is_finite() {
-            min_height
-        } else {
-            0.0
-        },
-        max_height: if max_height.is_finite() {
-            max_height
-        } else {
-            0.0
-        },
-        mean_river_flux: sum_flux / cell_count_f32,
-        max_river_flux: max_flux,
-        top10_river_flux_sum: top_fluxes.iter().take(top_fluxes_len).sum::<f32>(),
-        // Trade-off: skip graph-heavy river/continent diagnostics in HeadlessMetrics
-        // to reduce verification cost; these fields are not used by seed regression.
-        river_active_cells: 0,
-        river_fragmentation_ratio: 0.0,
-        river_ocean_reach_ratio: 0.0,
-        river_mainstem_persistence: 0.0,
-        river_flux_concentration: 0.0,
-        continent_count: 0,
-        largest_continent_cells: 0,
+        cell_count: metrics.cell_count,
+        land_cells: metrics.land_cells,
+        land_ratio: metrics.land_ratio,
+        mean_height: metrics.mean_height,
+        height_std_dev: metrics.height_std_dev,
+        min_height: metrics.min_height,
+        max_height: metrics.max_height,
+        mean_river_flux: metrics.mean_river_flux,
+        max_river_flux: metrics.max_river_flux,
+        top10_river_flux_sum: metrics.top10_river_flux_sum,
+        river_active_cells: metrics.river_active_cells,
+        river_fragmentation_ratio: metrics.river_fragmentation_ratio,
+        river_ocean_reach_ratio: metrics.river_ocean_reach_ratio,
+        river_mainstem_persistence: metrics.river_mainstem_persistence,
+        river_flux_concentration: metrics.river_flux_concentration,
+        continent_count: metrics.continent_count,
+        largest_continent_cells: metrics.largest_continent_cells,
+        global_sediment_export: 0.0,
+        marine_sediment_mass: 0.0,
+        solid_earth_mass_proxy: 0.0,
+        solid_earth_mass_proxy_drift: 0.0,
+        ocean_water_inventory: 0.0,
+        ocean_water_inventory_drift: 0.0,
+        ice_inventory: 0.0,
     }
 }
 
@@ -281,15 +225,6 @@ pub(crate) struct InterventionEvent {
     pub tick: u64,
     pub sequence: u64,
     pub command: InterventionCommand,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum VerificationMode {
-    #[default]
-    Interactive,
-    HeadlessMetrics,
-    ScientificBenchmark,
 }
 
 #[derive(Clone)]
@@ -1978,11 +1913,26 @@ impl ManagedWorld {
             self.reduced_metrics = None;
             return;
         }
-        self.reduced_metrics = Some(reduce_metrics_for_headless(&self.world));
+        let cells = self.world.cell_store();
+        let metrics = reduce_metrics_for_headless(
+            cells.height,
+            cells.river_flow,
+            self.world.sea_level_offset(),
+        );
+        self.reduced_metrics = Some(to_world_metrics(metrics));
     }
 
     pub fn current_metrics(&self) -> world::WorldMetrics {
-        if let Some(metrics) = self.reduced_metrics {
+        if let Some(mut metrics) = self.reduced_metrics {
+            metrics.global_sediment_export = self.world.control.global_sediment_export.max(0.0);
+            metrics.marine_sediment_mass = self.world.control.marine_sediment_mass.max(0.0);
+            metrics.solid_earth_mass_proxy = self.world.control.solid_earth_mass_proxy;
+            metrics.solid_earth_mass_proxy_drift = self.world.control.solid_earth_mass_proxy
+                - self.world.control.solid_earth_mass_proxy_baseline;
+            metrics.ocean_water_inventory = self.world.control.ocean_water_inventory.max(0.0);
+            metrics.ocean_water_inventory_drift = self.world.control.ocean_water_inventory
+                - self.world.control.ocean_water_inventory_baseline;
+            metrics.ice_inventory = self.world.control.ice_inventory.max(0.0);
             return metrics;
         }
         self.world.metrics()
@@ -2124,10 +2074,11 @@ impl WorldArchive {
 mod tests {
     use super::{
         F32FieldTracker, I32FieldTracker, ManagedWorld, ManagedWorldExecState, U32FieldTracker,
-        VerificationMode, WorldTransportCache, SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT,
+        WorldTransportCache,
     };
     use crate::sim::geology_types::{GeologyInternal, PlateId};
     use crate::sim::world;
+    use verification_runtime::{VerificationMode, SCIENTIFIC_BENCHMARK_SAMPLE_LIMIT};
 
     #[test]
     fn f32_tracker_collects_delta_ranges_once() {

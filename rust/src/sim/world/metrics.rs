@@ -23,6 +23,13 @@ pub struct WorldMetrics {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub global_sediment_export: f32,
+    pub marine_sediment_mass: f32,
+    pub solid_earth_mass_proxy: f32,
+    pub solid_earth_mass_proxy_drift: f32,
+    pub ocean_water_inventory: f32,
+    pub ocean_water_inventory_drift: f32,
+    pub ice_inventory: f32,
 }
 
 impl World {
@@ -105,6 +112,15 @@ impl World {
             river_flux_concentration,
             continent_count: continent_count as u32,
             largest_continent_cells: largest_continent_cells as u32,
+            global_sediment_export: self.control.global_sediment_export.max(0.0),
+            marine_sediment_mass: self.control.marine_sediment_mass.max(0.0),
+            solid_earth_mass_proxy: self.control.solid_earth_mass_proxy,
+            solid_earth_mass_proxy_drift: self.control.solid_earth_mass_proxy
+                - self.control.solid_earth_mass_proxy_baseline,
+            ocean_water_inventory: self.control.ocean_water_inventory.max(0.0),
+            ocean_water_inventory_drift: self.control.ocean_water_inventory
+                - self.control.ocean_water_inventory_baseline,
+            ice_inventory: self.control.ice_inventory.max(0.0),
         }
     }
 }

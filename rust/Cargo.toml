@@ -18,6 +18,7 @@ wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 smallvec = { version = "1.13", features = ["serde"] }
 slotmap = "1.0"
+verification_runtime = { path = "crates/verification_runtime" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

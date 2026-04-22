@@ -49,6 +49,20 @@ pub struct WorldControlState {
     pub sea_level_offset: f32,
     pub erosion_thickness_coupling: f32,
     pub deposition_thickness_coupling: f32,
+    #[serde(default)]
+    pub ocean_water_inventory: f32,
+    #[serde(default)]
+    pub ocean_water_inventory_baseline: f32,
+    #[serde(default)]
+    pub ice_inventory: f32,
+    #[serde(default)]
+    pub marine_sediment_mass: f32,
+    #[serde(default)]
+    pub global_sediment_export: f32,
+    #[serde(default)]
+    pub solid_earth_mass_proxy: f32,
+    #[serde(default)]
+    pub solid_earth_mass_proxy_baseline: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

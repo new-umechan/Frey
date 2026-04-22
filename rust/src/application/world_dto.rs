@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::application::world_runtime::VerificationMode;
 use crate::sim::geology_types::GeologyParams;
+use verification_runtime::VerificationMode;
 
 #[derive(Deserialize)]
 pub(crate) struct InitWorldConfig {
@@ -76,6 +76,13 @@ pub(crate) struct MetricsResponse {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub global_sediment_export: f32,
+    pub marine_sediment_mass: f32,
+    pub solid_earth_mass_proxy: f32,
+    pub solid_earth_mass_proxy_drift: f32,
+    pub ocean_water_inventory: f32,
+    pub ocean_water_inventory_drift: f32,
+    pub ice_inventory: f32,
 }
 
 #[derive(Serialize)]
@@ -97,6 +104,13 @@ pub(crate) struct ScientificBenchmarkMetricsResponse {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub global_sediment_export: f32,
+    pub marine_sediment_mass: f32,
+    pub solid_earth_mass_proxy: f32,
+    pub solid_earth_mass_proxy_drift: f32,
+    pub ocean_water_inventory: f32,
+    pub ocean_water_inventory_drift: f32,
+    pub ice_inventory: f32,
 }
 
 #[derive(Serialize)]

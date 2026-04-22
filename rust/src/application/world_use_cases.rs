@@ -5,8 +5,7 @@ use crate::application::world_dto::{
     StepWorldProfiledDetailResponse, StepWorldProfiledResponse,
 };
 use crate::application::world_runtime::{
-    InterventionCommand, ManagedWorld, ManagedWorldExecState, VerificationMode, WorldArchive,
-    WorldTransportCache,
+    InterventionCommand, ManagedWorld, ManagedWorldExecState, WorldArchive, WorldTransportCache,
 };
 use crate::application::world_service::WorldService;
 use crate::application::world_support::{
@@ -19,6 +18,11 @@ use crate::sim::{
     exec_world_slice_with_states, exec_world_with_feedback_and_states, first_phase,
     phase_display_group, world, ExecWorldBreakdown, ExecWorldBreakdownDetailed, ExecWorldPhase,
 };
+use verification_runtime::{
+    run_post_step as run_post_step_runtime,
+    run_post_step_profiled as run_post_step_profiled_runtime, PostStepProfile, PostStepRuntime,
+    ProfileClock, VerificationMode,
+};
 
 fn world_not_found_error(world_id: &str) -> String {
     format!("world not found: {world_id}")
@@ -26,82 +30,6 @@ fn world_not_found_error(world_id: &str) -> String {
 
 fn history_tick_not_available_error(tick: u64) -> String {
     format!("tick {tick} is not available in history")
-}
-
-#[cfg(target_arch = "wasm32")]
-fn profile_now_ms() -> f64 {
-    js_sys::Date::now()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn profile_now_ms() -> std::time::Instant {
-    std::time::Instant::now()
-}
-
-#[cfg(target_arch = "wasm32")]
-fn profile_elapsed_ms(start: f64) -> f64 {
-    js_sys::Date::now() - start
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn profile_elapsed_ms(start: std::time::Instant) -> f64 {
-    start.elapsed().as_secs_f64() * 1000.0
-}
-
-fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
-    match managed.verification_mode {
-        VerificationMode::Interactive => {
-            post_step_sync_light(managed);
-            managed.observe_after_world_change();
-            archive.save_snapshot_if_needed(managed);
-        }
-        VerificationMode::HeadlessMetrics => {
-            managed.refresh_reduced_metrics();
-        }
-        VerificationMode::ScientificBenchmark => {
-            post_step_sync_light(managed);
-            managed.observe_after_world_change();
-            archive.save_snapshot_if_needed(managed);
-            managed.push_scientific_benchmark_sample();
-        }
-    }
-}
-
-fn run_post_step_profiled(
-    managed: &mut ManagedWorld,
-    archive: &mut WorldArchive,
-) -> (f64, f64, f64) {
-    match managed.verification_mode {
-        VerificationMode::Interactive | VerificationMode::ScientificBenchmark => {
-            let phase_start = profile_now_ms();
-            post_step_sync_light(managed);
-            let step_sync_erosion_ms = profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            managed.observe_after_world_change();
-            let step_observe_world_change_ms = profile_elapsed_ms(phase_start);
-
-            let phase_start = profile_now_ms();
-            archive.save_snapshot_if_needed(managed);
-            let step_history_snapshot_ms = profile_elapsed_ms(phase_start);
-
-            if managed.verification_mode == VerificationMode::ScientificBenchmark {
-                managed.push_scientific_benchmark_sample();
-            }
-
-            (
-                step_sync_erosion_ms,
-                step_observe_world_change_ms,
-                step_history_snapshot_ms,
-            )
-        }
-        VerificationMode::HeadlessMetrics => {
-            let phase_start = profile_now_ms();
-            managed.refresh_reduced_metrics();
-            let step_reduce_metrics_ms = profile_elapsed_ms(phase_start);
-            (0.0, step_reduce_metrics_ms, 0.0)
-        }
-    }
 }
 
 fn scaled_step_count(simulation_rate: f32, tick_count: u32) -> u32 {
@@ -115,6 +43,79 @@ fn reset_pending_slice(managed: &mut ManagedWorld) {
 
 fn exec_phase_label(phase: ExecWorldPhase) -> &'static str {
     display_group_key(phase_display_group(phase))
+}
+
+struct WorldPostStepRuntime<'a> {
+    managed: &'a mut ManagedWorld,
+    archive: &'a mut WorldArchive,
+}
+
+impl PostStepRuntime for WorldPostStepRuntime<'_> {
+    fn verification_mode(&self) -> VerificationMode {
+        self.managed.verification_mode
+    }
+
+    fn sync_light(&mut self) {
+        post_step_sync_light(self.managed);
+    }
+
+    fn observe_after_world_change(&mut self) {
+        self.managed.observe_after_world_change();
+    }
+
+    fn save_snapshot_if_needed(&mut self) {
+        self.archive.save_snapshot_if_needed(self.managed);
+    }
+
+    fn refresh_reduced_metrics(&mut self) {
+        self.managed.refresh_reduced_metrics();
+    }
+
+    fn push_scientific_benchmark_sample(&mut self) {
+        self.managed.push_scientific_benchmark_sample();
+    }
+}
+
+struct DefaultProfileClock;
+
+impl ProfileClock for DefaultProfileClock {
+    #[cfg(target_arch = "wasm32")]
+    type Stamp = f64;
+    #[cfg(not(target_arch = "wasm32"))]
+    type Stamp = std::time::Instant;
+
+    #[cfg(target_arch = "wasm32")]
+    fn now(&self) -> Self::Stamp {
+        js_sys::Date::now()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn now(&self) -> Self::Stamp {
+        std::time::Instant::now()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn elapsed_ms(&self, start: Self::Stamp) -> f64 {
+        js_sys::Date::now() - start
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn elapsed_ms(&self, start: Self::Stamp) -> f64 {
+        start.elapsed().as_secs_f64() * 1000.0
+    }
+}
+
+fn run_post_step(managed: &mut ManagedWorld, archive: &mut WorldArchive) {
+    let mut runtime = WorldPostStepRuntime { managed, archive };
+    run_post_step_runtime(&mut runtime);
+}
+
+fn run_post_step_profiled(
+    managed: &mut ManagedWorld,
+    archive: &mut WorldArchive,
+) -> PostStepProfile {
+    let mut runtime = WorldPostStepRuntime { managed, archive };
+    run_post_step_profiled_runtime(&mut runtime, &DefaultProfileClock)
 }
 
 pub(crate) fn init_world(
@@ -269,10 +270,10 @@ pub(crate) fn exec_world_profiled(
             .with_exec_states(exec_world_profiled_detailed_with_feedback_and_states)
             .breakdown;
         sim_breakdown.accumulate(&step_breakdown);
-        let (sync_ms, observe_ms, history_ms) = run_post_step_profiled(managed, archive);
-        step_sync_erosion_ms += sync_ms;
-        step_observe_world_change_ms += observe_ms;
-        step_history_snapshot_ms += history_ms;
+        let profile = run_post_step_profiled(managed, archive);
+        step_sync_erosion_ms += profile.step_sync_erosion_ms;
+        step_observe_world_change_ms += profile.step_observe_world_change_ms;
+        step_history_snapshot_ms += profile.step_history_snapshot_ms;
     }
 
     Ok(StepWorldProfiledResponse {
@@ -348,10 +349,10 @@ pub(crate) fn exec_world_profiled_detail(
         let step_breakdown =
             managed.with_exec_states(exec_world_profiled_detailed_with_feedback_and_states);
         sim_breakdown.accumulate(&step_breakdown);
-        let (sync_ms, observe_ms, history_ms) = run_post_step_profiled(managed, archive);
-        step_sync_erosion_ms += sync_ms;
-        step_observe_world_change_ms += observe_ms;
-        step_history_snapshot_ms += history_ms;
+        let profile = run_post_step_profiled(managed, archive);
+        step_sync_erosion_ms += profile.step_sync_erosion_ms;
+        step_observe_world_change_ms += profile.step_observe_world_change_ms;
+        step_history_snapshot_ms += profile.step_history_snapshot_ms;
     }
 
     Ok(StepWorldProfiledDetailResponse {
@@ -567,7 +568,7 @@ mod tests {
     use super::*;
     use crate::application::world_dto::InitWorldConfig;
     use crate::application::world_query_use_cases;
-    use crate::application::world_runtime::VerificationMode;
+    use verification_runtime::VerificationMode;
 
     fn default_init_config() -> InitWorldConfig {
         InitWorldConfig {
@@ -710,17 +711,14 @@ mod tests {
         )
         .expect("init world");
 
-        let mut last_phase = String::new();
         loop {
             let response =
                 exec_world_slice(&mut service, world.world_id.clone(), 1).expect("slice exec");
-            last_phase = response.phase.clone();
             if !response.busy {
+                assert_ne!(response.phase, "post_step");
                 break;
             }
         }
-
-        assert_ne!(last_phase, "post_step");
     }
 
     #[test]
@@ -740,6 +738,29 @@ mod tests {
         .expect("init world");
 
         exec_world(&mut service, &world.world_id, 3).expect("exec world");
+        let managed = service.world(&world.world_id).expect("managed world");
+        assert!(!managed.scientific_benchmark_samples.is_empty());
+    }
+
+    #[test]
+    fn scientific_benchmark_mode_records_samples_during_profiled_exec() {
+        let mut service = WorldService::new();
+        let world = init_world(
+            &mut service,
+            "seed-science-profiled-sample".to_string(),
+            1,
+            InitWorldConfig {
+                geology_params: None,
+                target_sea_ratio: None,
+                simulation_rate: None,
+                verification_mode: Some(VerificationMode::ScientificBenchmark),
+            },
+        )
+        .expect("init world");
+
+        let response =
+            exec_world_profiled(&mut service, world.world_id.clone(), 3).expect("profiled exec");
+        assert_eq!(response.steps, 3);
         let managed = service.world(&world.world_id).expect("managed world");
         assert!(!managed.scientific_benchmark_samples.is_empty());
     }

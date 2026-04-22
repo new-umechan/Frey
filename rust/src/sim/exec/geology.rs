@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::sim::exec::HYDROLOGY_MFD_ACTIVITY_THRESHOLD;
 use crate::sim::glaciology::types::GlaciologyParams;
 use crate::sim::hydrology::{
@@ -7,6 +9,7 @@ use crate::sim::world::{EraKind, World};
 
 const GEOLOGY_HEIGHT_MIN: f32 = -1.2;
 const GEOLOGY_HEIGHT_MAX: f32 = 1.2;
+const SEA_LEVEL_RELAXATION_RATE: f32 = 0.05;
 
 pub(super) fn run_geology_step_with_state(
     world: &mut World,
@@ -94,6 +97,23 @@ pub(super) fn apply_hydrology_erosion_to_geology(
     let thickness_erosion_scale = erosion_thickness_coupling.max(0.0);
     let thickness_deposition_scale = deposition_thickness_coupling.max(0.0);
     let glacial_erosion_scale = glaciology_params.glacial_erosion_coupling.max(0.0);
+    let mobile_sediment_budget = hydrology_state
+        .as_ref()
+        .map(|state| {
+            state
+                .sediment
+                .iter()
+                .copied()
+                .map(|value| value.max(0.0))
+                .sum::<f32>()
+                + state
+                    .sink_storage_sediment
+                    .iter()
+                    .copied()
+                    .map(|value| value.max(0.0))
+                    .sum::<f32>()
+        })
+        .unwrap_or(0.0);
     let geology = &mut world.state.geology;
     let count = geology
         .height
@@ -101,14 +121,50 @@ pub(super) fn apply_hydrology_erosion_to_geology(
         .min(geology.erosion_rate.len())
         .min(geology.deposition_rate.len())
         .min(world.state.glaciology.glacial_erosion_rate.len());
+    let total_fluvial_erosion = geology
+        .erosion_rate
+        .iter()
+        .take(count)
+        .map(|value| value.max(0.0))
+        .sum::<f32>();
+    let total_requested_deposition = geology
+        .deposition_rate
+        .iter()
+        .take(count)
+        .map(|value| value.max(0.0))
+        .sum::<f32>();
+    let total_glacial_erosion = world
+        .state
+        .glaciology
+        .glacial_erosion_rate
+        .iter()
+        .take(count)
+        .map(|value| value.max(0.0) * glacial_erosion_scale)
+        .sum::<f32>();
+    let available_deposition_budget =
+        total_fluvial_erosion + mobile_sediment_budget * thickness_deposition_scale.min(1.0);
+    let deposition_scale = if total_requested_deposition <= 1e-8 || total_fluvial_erosion <= 1e-8 {
+        if total_requested_deposition <= 1e-8 || available_deposition_budget <= 1e-8 {
+            0.0
+        } else {
+            (available_deposition_budget / total_requested_deposition).clamp(0.0, 1.0)
+        }
+    } else {
+        (available_deposition_budget / total_requested_deposition).clamp(0.0, 1.0)
+    };
+    let total_applied_deposition = total_requested_deposition * deposition_scale;
+    let fluvial_export = (total_requested_deposition - total_applied_deposition).max(0.0);
+    let glacial_export = total_glacial_erosion.max(0.0);
+    let marine_increment = fluvial_export + glacial_export;
     if let Some(dynamics) = geology_state.as_mut() {
         let thickness_count = count.min(dynamics.vertex_states.len());
         for i in 0..thickness_count {
             let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0);
+            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
+            geology.deposition_rate[i] = deposition;
             geology.height[i] =
                 (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
             dynamics.vertex_states[i].thickness = (dynamics.vertex_states[i].thickness
@@ -118,25 +174,56 @@ pub(super) fn apply_hydrology_erosion_to_geology(
         }
         for i in thickness_count..count {
             let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0);
+            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
+            geology.deposition_rate[i] = deposition;
             geology.height[i] =
                 (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     } else {
         for i in 0..count {
             let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0);
+            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
+            geology.deposition_rate[i] = deposition;
             geology.height[i] =
                 (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     }
 
+    relax_sea_level_offset_toward_target_ratio(world);
+    world.control.global_sediment_export += marine_increment;
+    world.control.marine_sediment_mass += marine_increment;
+    world.control.solid_earth_mass_proxy = world.state.geology.height.iter().copied().sum();
+
     let geology = &world.state.geology;
     sync_erosion_height(hydrology_state.as_mut(), &geology.height);
+}
+
+fn relax_sea_level_offset_toward_target_ratio(world: &mut World) {
+    let heights = &world.state.geology.height;
+    if heights.is_empty() {
+        return;
+    }
+
+    let target_sea_ratio = world.control.target_sea_ratio.clamp(0.02, 0.98);
+    let mut sorted = heights.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let sea_idx = ((sorted.len() as f32) * target_sea_ratio) as usize;
+    let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
+    let target_offset = sorted[sea_idx];
+    if !target_offset.is_finite() {
+        return;
+    }
+
+    let current = world.control.sea_level_offset;
+    let delta = (target_offset - current) * SEA_LEVEL_RELAXATION_RATE;
+    if delta.abs() <= 1e-8 {
+        return;
+    }
+    world.control.sea_level_offset = current + delta;
 }

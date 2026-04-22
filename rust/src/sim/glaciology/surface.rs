@@ -3,6 +3,7 @@ use crate::sim::exec::{blend_alpha, lerp};
 use crate::sim::world::World;
 
 const RELIEF_NORMALIZER: f32 = 0.08;
+const SEA_LEVEL_RELAXATION_ALPHA: f32 = 0.20;
 
 pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -58,8 +59,20 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
         state.glacial_erosion_rate[i] =
             state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
     }
-    world.control.sea_level_offset =
-        -(total_ice / cell_count.max(1) as f32) * params.sea_level_coupling.max(0.0);
+    world.control.ice_inventory = total_ice;
+    let target_water_inventory = (world.control.ocean_water_inventory
+        - total_ice * params.sea_level_coupling.max(0.0))
+    .max(0.0);
+    let target_offset = solve_sea_level_for_inventory(
+        &world.state.geology.height,
+        target_water_inventory,
+        world.control.sea_level_offset,
+    );
+    world.control.sea_level_offset = lerp(
+        world.control.sea_level_offset,
+        target_offset,
+        SEA_LEVEL_RELAXATION_ALPHA,
+    );
 }
 
 fn ensure_state_len(world: &mut World, cell_count: usize) {
@@ -114,6 +127,45 @@ fn local_relief(i: usize, height: &[f32], nbr_offsets: &[u32], nbrs: &[u32]) -> 
         return 0.0;
     }
     (sum / count / RELIEF_NORMALIZER).clamp(0.0, 1.0)
+}
+
+fn solve_sea_level_for_inventory(
+    heights: &[f32],
+    target_inventory: f32,
+    fallback_offset: f32,
+) -> f32 {
+    if heights.is_empty() {
+        return fallback_offset;
+    }
+    let mut min_h = f32::INFINITY;
+    let mut max_h = f32::NEG_INFINITY;
+    for h in heights.iter().copied() {
+        min_h = min_h.min(h);
+        max_h = max_h.max(h);
+    }
+    if !min_h.is_finite() || !max_h.is_finite() {
+        return fallback_offset;
+    }
+    let mut lo = min_h - 1.0;
+    let mut hi = max_h + 1.0;
+    for _ in 0..32 {
+        let mid = 0.5 * (lo + hi);
+        let inventory = sea_water_inventory_at_offset(heights, mid);
+        if inventory < target_inventory {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
+fn sea_water_inventory_at_offset(heights: &[f32], sea_level_offset: f32) -> f32 {
+    heights
+        .iter()
+        .copied()
+        .map(|h| (sea_level_offset - h).max(0.0))
+        .sum()
 }
 
 #[cfg(test)]

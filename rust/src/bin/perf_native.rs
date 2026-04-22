@@ -399,13 +399,9 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
 
     let normalized = NormalizedDiagnosticsSummary {
         module_geology_exec_time_ms_total: modules.geology.exec_time_ms_total,
-        module_geology_exec_time_share_of_exec_world: modules
-            .geology
-            .exec_time_share_of_exec_world,
+        module_geology_exec_time_share_of_exec_world: modules.geology.exec_time_share_of_exec_world,
         module_climate_exec_time_ms_total: modules.climate.exec_time_ms_total,
-        module_climate_exec_time_share_of_exec_world: modules
-            .climate
-            .exec_time_share_of_exec_world,
+        module_climate_exec_time_share_of_exec_world: modules.climate.exec_time_share_of_exec_world,
         module_hydrology_exec_time_ms_total: modules.hydrology.exec_time_ms_total,
         module_hydrology_exec_time_share_of_exec_world: modules
             .hydrology
@@ -414,9 +410,7 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
             .hydrology
             .river_network_rebuild_count_total,
         module_hydrology_river_rebuild_rate: modules.hydrology.river_rebuild_rate,
-        module_hydrology_river_fallback_count_total: modules
-            .hydrology
-            .river_fallback_count_total,
+        module_hydrology_river_fallback_count_total: modules.hydrology.river_fallback_count_total,
         module_hydrology_sink_rebuild_full_count_total: modules
             .hydrology
             .sink_rebuild_full_count_total,
@@ -432,9 +426,7 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
         module_hydrology_sink_validation_fail_count_total: modules
             .hydrology
             .sink_validation_fail_count_total,
-        module_hydrology_sink_affected_ratio_mean: modules
-            .hydrology
-            .sink_affected_ratio_mean,
+        module_hydrology_sink_affected_ratio_mean: modules.hydrology.sink_affected_ratio_mean,
     };
 
     let diagnostics = DiagnosticsSummary {
@@ -485,7 +477,10 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
     metrics.insert("step_geology_river".to_string(), step_hydrology_summary);
 
     let mut profile = BTreeMap::new();
-    profile.insert("label".to_string(), serde_json::Value::String("perf-native".to_string()));
+    profile.insert(
+        "label".to_string(),
+        serde_json::Value::String("perf-native".to_string()),
+    );
     profile.insert("tickCount".to_string(), serde_json::Value::from(args.ticks));
     profile.insert(
         "seed".to_string(),
@@ -495,8 +490,14 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
     profile.insert("tickEnd".to_string(), serde_json::Value::from(args.ticks));
 
     let mut totals = BTreeMap::new();
-    totals.insert("wall_time_ms".to_string(), serde_json::Value::from(round_ms(wall_time_ms)));
-    totals.insert("processed_ticks".to_string(), serde_json::Value::from(args.ticks));
+    totals.insert(
+        "wall_time_ms".to_string(),
+        serde_json::Value::from(round_ms(wall_time_ms)),
+    );
+    totals.insert(
+        "processed_ticks".to_string(),
+        serde_json::Value::from(args.ticks),
+    );
 
     let mut meta = BTreeMap::new();
     meta.insert("generated_at".to_string(), iso8601_now_utc());

@@ -6,6 +6,9 @@ use crate::GeologyParams;
 
 use crate::sim::exec::{DEFAULT_DIFFUSION_WEIGHT, MAX_HEIGHT_DELTA_PER_STEP};
 
+const SURFACE_HEIGHT_MIN: f32 = -1.0;
+const SURFACE_HEIGHT_MAX: f32 = 1.0;
+
 pub(super) struct SurfaceUpdateInput<'a> {
     pub nbr_offsets: &'a [u32],
     pub nbrs: &'a [u32],
@@ -43,10 +46,8 @@ pub(super) fn apply_stress_and_surface_update(
     let next_vertex_buoyancy = &mut *output.next_vertex_buoyancy;
 
     let cell_count = heights.len();
-    let mut terrain_delta_sum = 0.0_f32;
     let mut boundary_sum = 0.0_f32;
-    let mut uplift_sum = 0.0_f32;
-    let mut subsidence_sum = 0.0_f32;
+    let mut isostatic_equilibrium = vec![0.0; cell_count];
 
     for i in 0..cell_count {
         let boundary_type = boundary_state
@@ -215,7 +216,8 @@ pub(super) fn apply_stress_and_surface_update(
         };
         let raw_delta = finite_or(uplift - total_subsidence + diffusive, 0.0);
         let delta = raw_delta.clamp(-MAX_HEIGHT_DELTA_PER_STEP, MAX_HEIGHT_DELTA_PER_STEP);
-        let mut next_h = finite_or(heights[i] + delta, heights[i]).clamp(-1.0, 1.0);
+        let mut next_h =
+            finite_or(heights[i] + delta, heights[i]).clamp(SURFACE_HEIGHT_MIN, SURFACE_HEIGHT_MAX);
 
         if matches!(boundary_type, BoundaryType::Ridge | BoundaryType::Rift) && next_h < -0.02 {
             state.crust_type = CrustType::Oceanic;
@@ -245,21 +247,31 @@ pub(super) fn apply_stress_and_surface_update(
             next_h + (h_eq - next_h) * params.isostatic_adjustment_rate.max(0.0),
             next_h,
         )
-        .clamp(-1.0, 1.0);
+        .clamp(SURFACE_HEIGHT_MIN, SURFACE_HEIGHT_MAX);
         state.rigidity = rigidity;
 
-        terrain_delta_sum += delta.abs();
         boundary_sum += boundary_state.activity.get(i).copied().unwrap_or(0.0);
+
+        next_vertex_states[i] = state;
+        next_height[i] = next_h;
+        next_volcanism[i] = volcanism;
+        isostatic_equilibrium[i] = h_eq;
+    }
+
+    enforce_zero_mean_endogenous_height_change(heights, next_height);
+
+    let mut terrain_delta_sum = 0.0_f32;
+    let mut uplift_sum = 0.0_f32;
+    let mut subsidence_sum = 0.0_f32;
+    for i in 0..cell_count {
+        let delta = next_height[i] - heights[i];
+        terrain_delta_sum += delta.abs();
         if delta > 0.0 {
             uplift_sum += delta;
         } else {
             subsidence_sum += -delta;
         }
-
-        next_vertex_states[i] = state;
-        next_height[i] = next_h;
-        next_volcanism[i] = volcanism;
-        next_vertex_buoyancy[i] = finite_or(h_eq - next_h, 0.0);
+        next_vertex_buoyancy[i] = finite_or(isostatic_equilibrium[i] - next_height[i], 0.0);
     }
 
     let denom = cell_count.max(1) as f32;
@@ -268,6 +280,66 @@ pub(super) fn apply_stress_and_surface_update(
         boundary_activity: (boundary_sum / denom).clamp(0.0, 1.0),
         uplift_rate: uplift_sum / denom,
         subsidence_rate: subsidence_sum / denom,
+    }
+}
+
+fn enforce_zero_mean_endogenous_height_change(prev_height: &[f32], next_height: &mut [f32]) {
+    if prev_height.len() != next_height.len() || next_height.is_empty() {
+        return;
+    }
+
+    let mut residual = next_height
+        .iter()
+        .zip(prev_height.iter())
+        .map(|(next, prev)| next - prev)
+        .sum::<f32>();
+    if !residual.is_finite() || residual.abs() <= 1e-6 {
+        return;
+    }
+
+    for _ in 0..8 {
+        let lowering = residual > 0.0;
+        let active = next_height
+            .iter()
+            .enumerate()
+            .filter(|(_, value)| {
+                if lowering {
+                    **value > SURFACE_HEIGHT_MIN + 1e-6
+                } else {
+                    **value < SURFACE_HEIGHT_MAX - 1e-6
+                }
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        if active.is_empty() {
+            break;
+        }
+
+        let correction = residual / active.len() as f32;
+        let mut applied = 0.0f32;
+        for index in active {
+            let room = if lowering {
+                next_height[index] - SURFACE_HEIGHT_MIN
+            } else {
+                SURFACE_HEIGHT_MAX - next_height[index]
+            };
+            let delta = correction.abs().min(room.max(0.0));
+            if delta <= 0.0 {
+                continue;
+            }
+            if lowering {
+                next_height[index] -= delta;
+                applied += delta;
+            } else {
+                next_height[index] += delta;
+                applied -= delta;
+            }
+        }
+
+        residual -= applied;
+        if residual.abs() <= 1e-6 {
+            break;
+        }
     }
 }
 
@@ -302,5 +374,43 @@ fn finite_or(value: f32, fallback: f32) -> f32 {
         value
     } else {
         fallback
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::enforce_zero_mean_endogenous_height_change;
+
+    #[test]
+    fn endogenous_height_change_preserves_global_mean() {
+        let prev = vec![0.10, -0.20, 0.05, -0.05];
+        let mut next = vec![0.18, -0.10, 0.12, 0.02];
+
+        enforce_zero_mean_endogenous_height_change(&prev, &mut next);
+
+        let mean_delta = next
+            .iter()
+            .zip(prev.iter())
+            .map(|(next, prev)| next - prev)
+            .sum::<f32>()
+            / prev.len() as f32;
+        assert!(mean_delta.abs() <= 1e-6);
+    }
+
+    #[test]
+    fn endogenous_height_change_respects_clamps() {
+        let prev = vec![0.95, 0.90, -0.95, -0.90];
+        let mut next = vec![1.0, 1.0, -0.70, -0.60];
+
+        enforce_zero_mean_endogenous_height_change(&prev, &mut next);
+
+        assert!(next.iter().all(|value| (-1.0..=1.0).contains(value)));
+        let mean_delta = next
+            .iter()
+            .zip(prev.iter())
+            .map(|(next, prev)| next - prev)
+            .sum::<f32>()
+            / prev.len() as f32;
+        assert!(mean_delta.abs() <= 1e-6);
     }
 }
