@@ -1,4 +1,5 @@
 import { createApp } from "./app/app";
+import { setupBackgroundMusic } from "./app/bootstrap/background-music";
 import { formatStatusError } from "./app/state/status-error";
 
 function showInitializationError(error: unknown) {
@@ -19,6 +20,7 @@ function showInitializationError(error: unknown) {
 }
 
 async function main() {
+    setupBackgroundMusic();
     const app = await createApp();
 
     function frame(nowMs: number) {
