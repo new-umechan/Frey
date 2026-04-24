@@ -128,10 +128,6 @@ export class EngineWorkerClient implements EngineClient {
         await this.request("set_simulation_rate", { worldId, rate });
     }
 
-    async set_target_sea_ratio(worldId: string, targetSeaRatio: number): Promise<void> {
-        await this.request("set_target_sea_ratio", { worldId, targetSeaRatio });
-    }
-
     async fork_world(worldId: string, tick: number): Promise<ForkWorldResult> {
         return await this.request("fork_world", { worldId, tick }) as ForkWorldResult;
     }

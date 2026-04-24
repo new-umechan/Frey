@@ -116,7 +116,6 @@ export interface EngineClient {
     list_history_ticks: (worldId: string) => Promise<HistoryTicksResult>;
     restore_world_to_tick: (worldId: string, tick: number) => Promise<void>;
     set_simulation_rate: (worldId: string, rate: number) => Promise<void>;
-    set_target_sea_ratio: (worldId: string, targetSeaRatio: number) => Promise<void>;
     fork_world: (worldId: string, tick: number) => Promise<ForkWorldResult>;
     get_exec_modules: () => Promise<ExecModuleDocRecord[]>;
     get_exec_module_graph: () => Promise<ExecModuleGraphRecord>;

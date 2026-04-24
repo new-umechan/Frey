@@ -24,7 +24,6 @@ const REQUIRED_CLASS_SNIPPETS = [
     "list_history_ticks(world_id: string): any;",
     "restore_world_to_tick(world_id: string, tick: number): any;",
     "set_simulation_rate(world_id: string, rate: number): void;",
-    "set_target_sea_ratio(world_id: string, target_sea_ratio: number): void;",
     "fork_world(world_id: string, tick: number): any;",
 ];
 

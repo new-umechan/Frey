@@ -56,11 +56,6 @@ export type EngineWorkerRequest =
     }
     | {
         id: number;
-        kind: "set_target_sea_ratio";
-        payload: { worldId: string; targetSeaRatio: number };
-    }
-    | {
-        id: number;
         kind: "fork_world";
         payload: { worldId: string; tick: number };
     }
