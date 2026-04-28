@@ -126,6 +126,8 @@ ExecSystem（切り替えと実行制御）
     - `docs/concepts/runtime_layers.md`
 - 時代・tick・予算・遷移
     - `docs/concepts/phase_control.md`
+- 因果探索の背景・全体像・設計思想
+    - `docs/concepts/causal-exploration.md`
 - CellStore・EntityState・Clock・FeedbackQueue・Archiveの構造と型定義
     - `docs/reference/architecture/data_model.md`
 - 各Systemが何を読み、何を書くか
