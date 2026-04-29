@@ -16,6 +16,7 @@ benches/raw
 benches/data/
 benches/data
 benches/results/
+benches/rust/benches/results/
 rust/benches/result/
 rust/benches/results/
 tests/perf/history/
