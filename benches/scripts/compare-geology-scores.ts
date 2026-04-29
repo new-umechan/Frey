@@ -7,53 +7,42 @@ interface Args {
     writeBaseline: string | null;
 }
 
-interface HydrologyScoreRecord {
-    timestamp_unix_ms: number;
-    bench: string;
-    seed: string;
-    mesh_level: number;
-    cell_count: number;
+type NumberLike = number | null | undefined;
+
+interface GeologyScoreRecord {
+    timestamp_unix_ms?: number;
+    bench?: string;
+    seed?: string;
+    mesh_level?: number;
+    cell_count?: number;
     runtime?: {
-        hydrology_step_ms?: number | null;
+        geology_step_p50_ms?: NumberLike;
+        geology_step_p95_ms?: NumberLike;
+        stabilization_ticks?: number;
+        sample_ticks?: number;
     };
     phase2?: {
         state?: string;
-        ref_path?: string | null;
-        error?: string | null;
-        metrics?: Record<string, number | null>;
+        metrics?: Record<string, NumberLike>;
     };
-    phase1?: Record<string, {
-        matched?: number;
-        total?: number;
-        excluded_known_hard?: number;
-        coverage_ratio?: number | null;
-    }>;
-    diagnostics?: {
-        flow_stats?: Record<string, number | null>;
-        lake_stats?: Record<string, number | null>;
-        fill_spill_stats?: Record<string, number | null>;
-    };
+    diagnostics?: Record<string, NumberLike>;
 }
 
-const METRIC_KEYS = [
-    "river_flow_rho",
-    "is_lake_precision",
-    "is_lake_recall",
-    "is_lake_f1",
-    "erosion_rate_spearman",
+const PHASE2_KEYS = [
+    "sediment_budget_ratio",
+    "coastal_deposition_share",
+    "low_slope_deposition_share",
 ] as const;
 
-const PHASE1_KEYS = ["river_flow_ranking"] as const;
-const FILL_SPILL_DIAGNOSTIC_KEYS = [
-    "active_sink_count",
-    "overflow_active_ratio",
-    "mean_sink_fill_ratio",
-    "ponded_cell_count",
+const DIAGNOSTIC_KEYS = [
+    "open_boundary_export_fraction",
+    "erosion_reference_coverage",
+    "lake_deposition_share",
 ] as const;
 
 function parseArgs(argv: string[]): Args {
     const args: Args = {
-        jsonl: "benches/results/hydrology_main_scores.jsonl",
+        jsonl: "benches/results/geology_main_scores.jsonl",
         baseline: null,
         writeBaseline: null,
     };
@@ -89,51 +78,55 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printHelp() {
-    console.error("Usage: tsx benches/scripts/compare-hydrology-scores.ts [options]");
+    console.error("Usage: tsx benches/scripts/compare-geology-scores.ts [options]");
     console.error("  --jsonl <path>");
     console.error("  --baseline <path>");
     console.error("  --write-baseline <path>");
 }
 
-async function loadJsonlRecords(pathname: string): Promise<HydrologyScoreRecord[]> {
+async function loadJsonlRecords(pathname: string): Promise<GeologyScoreRecord[]> {
     const content = await readFile(resolve(pathname), "utf8");
     return content
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        .map((line) => JSON.parse(line) as HydrologyScoreRecord);
+        .map((line) => JSON.parse(line) as GeologyScoreRecord);
 }
 
-async function loadJson(pathname: string): Promise<HydrologyScoreRecord> {
+async function loadJson(pathname: string): Promise<GeologyScoreRecord> {
     const content = await readFile(resolve(pathname), "utf8");
-    return JSON.parse(content) as HydrologyScoreRecord;
+    return JSON.parse(content) as GeologyScoreRecord;
 }
 
-async function saveJson(pathname: string, record: HydrologyScoreRecord): Promise<void> {
+async function saveJson(pathname: string, record: GeologyScoreRecord): Promise<void> {
     const outputPath = resolve(pathname);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
 }
 
-function formatValue(value: number | null | undefined, digits = 3): string {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-        return "n/a";
-    }
-    return value.toFixed(digits);
+function toFinite(value: NumberLike): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function formatDelta(current: number | null | undefined, baseline: number | null | undefined, digits = 3): string {
-    if (typeof current !== "number" || !Number.isFinite(current) || typeof baseline !== "number" || !Number.isFinite(baseline)) {
+function formatValue(value: NumberLike, digits = 6): string {
+    const numeric = toFinite(value);
+    return numeric === null ? "n/a" : numeric.toFixed(digits);
+}
+
+function formatDelta(current: NumberLike, baseline: NumberLike, digits = 6): string {
+    const c = toFinite(current);
+    const b = toFinite(baseline);
+    if (c === null || b === null) {
         return "n/a";
     }
-    const delta = current - baseline;
+    const delta = c - b;
     return `${delta >= 0 ? "+" : ""}${delta.toFixed(digits)}`;
 }
 
-function printMetricSection(title: string, rows: Array<{ label: string; current: number | null | undefined; baseline: number | null | undefined; digits?: number }>) {
+function printMetricSection(title: string, rows: Array<{ label: string; current: NumberLike; baseline: NumberLike; digits?: number }>) {
     console.log(title);
     for (const row of rows) {
-        const digits = row.digits ?? 3;
+        const digits = row.digits ?? 6;
         console.log(
             `${row.label}: current=${formatValue(row.current, digits)} baseline=${formatValue(row.baseline, digits)} delta=${formatDelta(row.current, row.baseline, digits)}`,
         );
@@ -165,27 +158,34 @@ async function main() {
         return;
     }
 
-    console.log("=== Hydrology Score Comparison ===");
-    console.log(`current_timestamp_unix_ms=${current.timestamp_unix_ms}`);
-    console.log(`baseline_timestamp_unix_ms=${baseline.timestamp_unix_ms}`);
-    console.log(`current_seed=${current.seed}`);
-    console.log(`baseline_seed=${baseline.seed}`);
+    console.log("=== Geology Score Comparison ===");
+    console.log(`current_timestamp_unix_ms=${current.timestamp_unix_ms ?? "n/a"}`);
+    console.log(`baseline_timestamp_unix_ms=${baseline.timestamp_unix_ms ?? "n/a"}`);
+    console.log(`current_seed=${current.seed ?? "n/a"}`);
+    console.log(`baseline_seed=${baseline.seed ?? "n/a"}`);
+    console.log(`current_phase2_state=${current.phase2?.state ?? "n/a"}`);
+    console.log(`baseline_phase2_state=${baseline.phase2?.state ?? "n/a"}`);
     console.log("");
 
     printMetricSection(
         "-- Runtime --",
         [
             {
-                label: "hydrology_step_ms",
-                current: current.runtime?.hydrology_step_ms,
-                baseline: baseline.runtime?.hydrology_step_ms,
+                label: "geology_step_p50_ms",
+                current: current.runtime?.geology_step_p50_ms,
+                baseline: baseline.runtime?.geology_step_p50_ms,
+            },
+            {
+                label: "geology_step_p95_ms",
+                current: current.runtime?.geology_step_p95_ms,
+                baseline: baseline.runtime?.geology_step_p95_ms,
             },
         ],
     );
 
     printMetricSection(
         "-- Phase2 Metrics --",
-        METRIC_KEYS.map((key) => ({
+        PHASE2_KEYS.map((key) => ({
             label: key,
             current: current.phase2?.metrics?.[key],
             baseline: baseline.phase2?.metrics?.[key],
@@ -193,20 +193,11 @@ async function main() {
     );
 
     printMetricSection(
-        "-- Phase1 Coverage --",
-        PHASE1_KEYS.map((key) => ({
+        "-- Diagnostics --",
+        DIAGNOSTIC_KEYS.map((key) => ({
             label: key,
-            current: current.phase1?.[key]?.coverage_ratio,
-            baseline: baseline.phase1?.[key]?.coverage_ratio,
-        })),
-    );
-
-    printMetricSection(
-        "-- Fill-Spill Diagnostics --",
-        FILL_SPILL_DIAGNOSTIC_KEYS.map((key) => ({
-            label: key,
-            current: current.diagnostics?.fill_spill_stats?.[key],
-            baseline: baseline.diagnostics?.fill_spill_stats?.[key],
+            current: current.diagnostics?.[key],
+            baseline: baseline.diagnostics?.[key],
         })),
     );
 }

@@ -25,7 +25,8 @@
       "river_flow_rho": 0.614673,
       "is_lake_precision": 0,
       "is_lake_recall": 0,
-      "is_lake_f1": 0
+      "is_lake_f1": 0,
+      "erosion_rate_spearman": null
     }
   },
   "phase1": {

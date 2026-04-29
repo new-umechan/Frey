@@ -1054,7 +1054,7 @@ fn append_score_record_jsonl(
             Some(reference_path.display().to_string()),
             None,
             format!(
-                "{{\"river_flow_rho\":{},\"is_lake_precision\":{},\"is_lake_recall\":{},\"is_lake_f1\":{}}}",
+                "{{\"river_flow_rho\":{},\"is_lake_precision\":{},\"is_lake_recall\":{},\"is_lake_f1\":{},\"erosion_rate_spearman\":null}}",
                 format_json_number(flow.rho),
                 format_json_number(lake.precision),
                 format_json_number(lake.recall),
@@ -1065,13 +1065,13 @@ fn append_score_record_jsonl(
             "skipped",
             None,
             None,
-            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null}".to_string(),
+            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null,\"erosion_rate_spearman\":null}".to_string(),
         ),
         MainEvaluationState::Error(error) => (
             "error",
             None,
             Some(error.clone()),
-            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null}".to_string(),
+            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null,\"erosion_rate_spearman\":null}".to_string(),
         ),
     };
 

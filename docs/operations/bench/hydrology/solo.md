@@ -5,6 +5,8 @@
 入力として実地形（`geology.height`、固定）と実気候データ（`climate.runoff`、ERA5-Land由来）を与え、
 安定化 tick 実行後の `river_flow`・`is_lake` を主指標として評価する。
 `erosion_rate`・`deposition_rate` は実データが粗いため参考値として記録する。
+ただし河口・デルタの堆積 hotspot と最終搬出先の妥当性は Geology 単体ではなく
+Hydrology 側の downstream transport 検証として扱う方針とし、この文書の将来拡張先に位置づける。
 
 Hydrologyモジュール単体の評価が目的であり、Climateの誤差を混入させないため
 `climate.runoff` はClimateモジュールの出力ではなくERA5-Landの実測値を直接入力する。
@@ -194,6 +196,8 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 ### 1-C：参考値（erosion_rate・deposition_rate）
 
 実データが粗いため主評価には含めない。シミュレーション出力の絶対値と分布形状を記録するにとどめる。
+
+下流輸送と河口寄りの堆積検証は、本書末尾の「将来拡張: downstream sediment benchmark」で別管理する。
 
 ---
 
@@ -392,7 +396,7 @@ python benches/scripts/resample.py --module hydro-ref \
 補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
 - 保存先: `benches/results/hydrology_main_scores.jsonl`
-- 1実行 = 1行（時刻、seed、mesh_level、cell_count、river_flow_rho、is_lake_precision/recall/f1、補助評価要約）
+- 1実行 = 1行（時刻、seed、mesh_level、cell_count、river_flow_rho、is_lake_precision/recall/f1、erosion_rate_spearman（未実装時は `null`）、補助評価要約）
 
 ---
 
@@ -404,6 +408,50 @@ python benches/scripts/resample.py --module hydro-ref \
 - 地下水・湧水由来の流量（Hydrologyは地表流のみを扱う）
 - 人工ダム・取水による流量改変（FeedbackQueue経由の将来実装まで未考慮）
 - チャド湖など面積が1,500 km²を下回る・または変動が大きい湖（フィルタで除外）
+
+---
+
+## 将来拡張: downstream sediment benchmark
+
+### 目的
+
+`river_flow` / `is_lake` に加えて、Hydrology が「どこへ sediment を運び、どこで滞留または海へ抜くか」を
+Earth 条件で検証する。
+
+この拡張は Geology 単体ベンチの責務ではない。
+Geology は固定地形に対する侵食・堆積応答と mass balance を見る。
+一方で、主要河川の終端位置、デルタ周辺の hotspot、内陸 sink への滞留は
+流路ネットワークと downstream routing の妥当性に強く依存するため、Hydrology 側で扱う。
+
+### 参照データ方針
+
+- 主参照 1: GSED などの全球 suspended sediment / outlet 系データ
+- 主参照 2: Global Delta Change などのデルタ・河口 hotspot 参照
+- 補助参照: HydroLAKES / 既存 sink 診断
+
+`HydroRIVERS` は河道線の幾何参照としては有用だが、単体では
+「どの outlet へ sediment が届くか」「どこで堆積するか」の正解にはならないため、
+downstream sediment benchmark の主参照には採用しない。
+
+### 想定する指標
+
+- `sediment_export_rank_coverage`
+  代表河川・主要 outlet に対して、モデルの sediment export 順位がどこまで一致するかを見る。
+- `delta_hotspot_coverage`
+  主要デルタ・河口セル群で、モデル堆積 hotspot がどれだけ重なるかを見る。
+- `terminal_sink_partition_agreement`
+  海洋出口・内陸湖・閉鎖盆地への終端分類が、参照とどこまで整合するかを見る。
+
+### 実装ルール
+
+- `mesh_level=6` の under-resolved 制約を前提に、絶対量一致ではなく順位・coverage・終端分類を主評価にする
+- 河道線そのものの形状一致ではなく、主要 outlet と終端 sink の一致を優先する
+- 出力先は `hydrology_main_scores.jsonl` の別フェーズ、または専用 artifact とする
+
+### 前提
+
+- `geology_solo` にはこの拡張指標を持ち込まない
+- `Hydrology` の比較仕様を拡張するときも、`river_flow` / `is_lake` の現行主評価は維持する
 
 関連:
 
