@@ -1,4 +1,5 @@
 import type { GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+import type { CausalExplorationLayer } from "../../gfx/views/causal-exploration-layer";
 import type { PlateHoverController } from "./plate-hover";
 
 export interface CanvasInputHandlers {
@@ -25,20 +26,24 @@ function createNoopPinchFocusController(): GlobePinchFocusController {
 export function createCanvasInputHandlers({
     plateHover,
     globePinchFocusController,
+    causalExplorationLayer,
 }: {
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController | null;
+    causalExplorationLayer: CausalExplorationLayer;
 }): CanvasInputHandlers {
     const pinchFocusController = globePinchFocusController ?? createNoopPinchFocusController();
     return {
         onPointerDown: (event) => {
             pinchFocusController.onPointerDown(event);
+            causalExplorationLayer.handlePointerDown(event);
             if (event.pointerType === "touch") {
                 plateHover.hidePopup();
             }
         },
         onPointerMove: (event) => {
             pinchFocusController.onPointerMove(event);
+            causalExplorationLayer.handlePointerMove(event);
             if (event.pointerType === "touch") {
                 return;
             }
@@ -56,6 +61,7 @@ export function createCanvasInputHandlers({
         onLeave: () => {
             pinchFocusController.reset();
             plateHover.hidePopup();
+            causalExplorationLayer.handlePointerLeave();
         },
     };
 }

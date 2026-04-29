@@ -31,6 +31,11 @@ export type EngineWorkerRequest =
     }
     | {
         id: number;
+        kind: "get_causal_exploration_demo";
+        payload: { worldId: string };
+    }
+    | {
+        id: number;
         kind: "get_metrics";
         payload: { worldId: string };
     }

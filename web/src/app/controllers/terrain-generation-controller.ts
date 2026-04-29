@@ -34,6 +34,7 @@ export interface TerrainGenerationControllerOptions {
     setCurrentEraMetrics: (metrics: EraMetrics) => void;
     setPlaybackRunning: (isPlaying: boolean) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
+    onWorldInitialized?: (worldId: string) => Promise<void>;
     onInitWorldStart?: () => Promise<void>;
     onInitWorldEnd?: () => void;
 }
@@ -60,6 +61,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
         setCurrentEraMetrics,
         setPlaybackRunning,
         appendPlaybackEvent,
+        onWorldInitialized = async () => {},
         onInitWorldStart = () => {},
         onInitWorldEnd = () => {},
     } = options;
@@ -101,6 +103,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
                 currentSeed: nextSeed,
             });
             setCurrentEraMetrics(currentEraMetrics);
+            await onWorldInitialized(worldId);
 
             setPlaybackRunning(true);
             await syncWorldFromActiveController();

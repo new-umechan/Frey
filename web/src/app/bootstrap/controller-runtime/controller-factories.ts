@@ -38,6 +38,7 @@ import { createPerfRuntime } from "../perf-runtime";
 import { type RuntimeContext } from "./create-controller-runtime";
 import { type CoreBuffers, type SyncWorldResult } from "../../sim/sync/types";
 import { type MetricsResult } from "../../engine/engine-client";
+import { normalizeCausalExplorationDemo } from "../../engine/causal-exploration-demo";
 
 const PERF_BENCH_WORKER_URL = new URL("../../../workers/perf-worker.js", import.meta.url);
 
@@ -201,6 +202,10 @@ function createTerrainGenerationRuntime(
         },
         appendPlaybackEvent: (type: string, label: string, detail?: string) => {
             playbackControllerRef.current?.appendPlaybackEvent(type, label, detail);
+        },
+        onWorldInitialized: async (worldId: string) => {
+            const demo = await context.engineClient.get_causal_exploration_demo(worldId);
+            context.scene.setCausalExplorationDemo(normalizeCausalExplorationDemo(demo));
         },
         onInitWorldStart: async () => {
             context.scene.loadingOverlayController.setWorldInitializing(true);

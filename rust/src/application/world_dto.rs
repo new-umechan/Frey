@@ -250,3 +250,124 @@ pub(crate) struct ExecWorldSliceResponse {
     pub phase: String,
     pub tick: f64,
 }
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CausalFeatureType {
+    BorderSegment,
+    RidgeOrMountainBand,
+    TectonicCompressionOrPlateBoundary,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CausalRelationType {
+    ConstraintAlignment,
+    GeomorphicStructure,
+    TectonicDriver,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum EvidenceType {
+    Morphology,
+    PassabilityProxy,
+    TectonicProxy,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum UncertaintyStage {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalLocationPoint {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalMetricValue {
+    pub metric_id: String,
+    pub label: String,
+    pub value: f32,
+    pub unit: String,
+    pub display_value: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalFeatureDescriptor {
+    pub feature_id: String,
+    pub feature_type: CausalFeatureType,
+    pub label: String,
+    pub short_label: String,
+    pub anchor: CausalLocationPoint,
+    pub metrics: Vec<CausalMetricValue>,
+    pub uncertainty_stage: UncertaintyStage,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalTraceSegment {
+    pub trace_id: String,
+    pub label: String,
+    pub source_feature_id: String,
+    pub target_feature_id: String,
+    pub relation_type: CausalRelationType,
+    pub path: Vec<CausalLocationPoint>,
+    pub metrics: Vec<CausalMetricValue>,
+    pub uncertainty_stage: UncertaintyStage,
+    pub evidence_ids: Vec<String>,
+    pub display_key: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalDisplayFeatureStyle {
+    pub feature_id: String,
+    pub color_hex: String,
+    pub glow_intensity: f32,
+    pub pulse_hz: f32,
+    pub radius: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalDisplayTraceStyle {
+    pub trace_id: String,
+    pub color_hex: String,
+    pub thickness: f32,
+    pub flow_speed: f32,
+    pub jitter_amplitude: f32,
+    pub label_short: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalDisplayMapping {
+    pub feature_styles: Vec<CausalDisplayFeatureStyle>,
+    pub trace_styles: Vec<CausalDisplayTraceStyle>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalEvidenceEntry {
+    pub evidence_id: String,
+    pub trace_id: String,
+    pub evidence_type: EvidenceType,
+    pub summary: String,
+    pub assumptions: Vec<String>,
+    pub approximations: Vec<String>,
+    pub uncertainty_reason: String,
+    pub reference_model: String,
+    pub reference_notes: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct CausalExplorationDemoResponse {
+    pub demo_id: String,
+    pub features: Vec<CausalFeatureDescriptor>,
+    pub trace_segments: Vec<CausalTraceSegment>,
+    pub metrics: Vec<CausalMetricValue>,
+    pub display_mapping: CausalDisplayMapping,
+    pub evidence: Vec<CausalEvidenceEntry>,
+}

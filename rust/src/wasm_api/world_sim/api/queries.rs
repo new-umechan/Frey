@@ -4,7 +4,7 @@ use js_sys::{Float32Array, Int32Array, Object, Uint32Array};
 use wasm_bindgen::prelude::*;
 
 use crate::application::world_dto::WorldDeltaQuery;
-use crate::application::world_query_use_cases;
+use crate::application::{world_causal_exploration_use_cases, world_query_use_cases};
 
 use super::super::WorldSimController;
 
@@ -193,6 +193,20 @@ impl WorldSimController {
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(
                 "failed to serialize scientific benchmark samples: {err}"
+            ))
+        })
+    }
+
+    #[wasm_bindgen(js_name = get_causal_exploration_demo)]
+    pub fn get_causal_exploration_demo_js(&self, world_id: String) -> Result<JsValue, JsValue> {
+        let response = world_causal_exploration_use_cases::get_causal_exploration_demo(
+            &self.service,
+            &world_id,
+        )
+        .map_err(|err| JsValue::from_str(&err))?;
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!(
+                "failed to serialize causal exploration demo response: {err}"
             ))
         })
     }

@@ -69,6 +69,103 @@ export interface MetricsResult {
     plate_count?: number;
 }
 
+export type CausalFeatureType =
+    | "border_segment"
+    | "ridge_or_mountain_band"
+    | "tectonic_compression_or_plate_boundary";
+
+export type CausalRelationType =
+    | "constraint_alignment"
+    | "geomorphic_structure"
+    | "tectonic_driver";
+
+export type CausalEvidenceType =
+    | "morphology"
+    | "passability_proxy"
+    | "tectonic_proxy";
+
+export type UncertaintyStage = "low" | "medium" | "high";
+
+export interface CausalLocationPoint {
+    x: number;
+    y: number;
+    z: number;
+}
+
+export interface CausalMetricValue {
+    metric_id: string;
+    label: string;
+    value: number;
+    unit: string;
+    display_value: string;
+}
+
+export interface CausalFeatureDescriptor {
+    feature_id: string;
+    feature_type: CausalFeatureType;
+    label: string;
+    short_label: string;
+    anchor: CausalLocationPoint;
+    metrics: CausalMetricValue[];
+    uncertainty_stage: UncertaintyStage;
+}
+
+export interface CausalTraceSegment {
+    trace_id: string;
+    label: string;
+    source_feature_id: string;
+    target_feature_id: string;
+    relation_type: CausalRelationType;
+    path: CausalLocationPoint[];
+    metrics: CausalMetricValue[];
+    uncertainty_stage: UncertaintyStage;
+    evidence_ids: string[];
+    display_key: string;
+}
+
+export interface CausalDisplayFeatureStyle {
+    feature_id: string;
+    color_hex: string;
+    glow_intensity: number;
+    pulse_hz: number;
+    radius: number;
+}
+
+export interface CausalDisplayTraceStyle {
+    trace_id: string;
+    color_hex: string;
+    thickness: number;
+    flow_speed: number;
+    jitter_amplitude: number;
+    label_short: string;
+}
+
+export interface CausalDisplayMapping {
+    feature_styles: CausalDisplayFeatureStyle[];
+    trace_styles: CausalDisplayTraceStyle[];
+}
+
+export interface CausalEvidenceEntry {
+    evidence_id: string;
+    trace_id: string;
+    evidence_type: CausalEvidenceType;
+    summary: string;
+    assumptions: string[];
+    approximations: string[];
+    uncertainty_reason: string;
+    reference_model: string;
+    reference_notes: string;
+}
+
+export interface CausalExplorationDemoResult {
+    demo_id: string;
+    features: CausalFeatureDescriptor[];
+    trace_segments: CausalTraceSegment[];
+    metrics: CausalMetricValue[];
+    display_mapping: CausalDisplayMapping;
+    evidence: CausalEvidenceEntry[];
+}
+
 export type ProfiledExecResult = Record<string, unknown>;
 
 export interface DeltaRangeResult {
@@ -111,6 +208,7 @@ export interface EngineClient {
     ) => Promise<ExecWorldSliceAndDeltaResult>;
     exec_world_profiled: (worldId: string, tickCount: number) => Promise<ProfiledExecResult>;
     get_world_delta: (worldId: string, options?: unknown) => Promise<WorldDeltaResult>;
+    get_causal_exploration_demo: (worldId: string) => Promise<CausalExplorationDemoResult>;
     get_metrics: (worldId: string) => Promise<MetricsResult | null>;
     get_field: (worldId: string, fieldKind: string, window: number) => Promise<FieldResult>;
     list_history_ticks: (worldId: string) => Promise<HistoryTicksResult>;

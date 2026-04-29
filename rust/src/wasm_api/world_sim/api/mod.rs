@@ -89,6 +89,35 @@ mod tests {
         tick: f64,
     }
 
+    #[derive(Deserialize)]
+    struct CausalExplorationDemoResponse {
+        demo_id: String,
+        features: Vec<CausalFeatureDescriptor>,
+        trace_segments: Vec<CausalTraceSegment>,
+        evidence: Vec<CausalEvidenceEntry>,
+    }
+
+    #[derive(Deserialize)]
+    struct CausalFeatureDescriptor {
+        #[serde(rename = "feature_id")]
+        _feature_id: String,
+    }
+
+    #[derive(Deserialize)]
+    struct CausalTraceSegment {
+        #[serde(rename = "trace_id")]
+        _trace_id: String,
+        relation_type: String,
+        evidence_ids: Vec<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct CausalEvidenceEntry {
+        #[serde(rename = "evidence_id")]
+        _evidence_id: String,
+        uncertainty_reason: String,
+    }
+
     #[wasm_bindgen_test]
     fn init_step_and_metrics_work() {
         let mut controller = WorldSimController::new();
@@ -105,6 +134,53 @@ mod tests {
         let metrics_data: MetricsResponse =
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert!(metrics_data.tick >= 1.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn causal_exploration_demo_returns_three_traces_and_evidence() {
+        let mut controller = WorldSimController::new();
+        let init = controller
+            .init_world_js("seed-causal-demo".to_string(), 1, JsValue::NULL)
+            .expect("init world");
+        let init_data: InitResponse = serde_wasm_bindgen::from_value(init).expect("parse init");
+
+        let demo = controller
+            .get_causal_exploration_demo_js(init_data.world_id)
+            .expect("get causal exploration demo");
+        let demo_data: CausalExplorationDemoResponse =
+            serde_wasm_bindgen::from_value(demo).expect("parse causal exploration demo");
+
+        assert_eq!(demo_data.demo_id, "border_mountain_plate_demo");
+        assert_eq!(demo_data.features.len(), 3);
+        assert_eq!(demo_data.trace_segments.len(), 3);
+        assert_eq!(demo_data.evidence.len(), 3);
+        assert_eq!(
+            demo_data.trace_segments[0].relation_type,
+            "constraint_alignment"
+        );
+        assert_eq!(
+            demo_data.trace_segments[1].relation_type,
+            "geomorphic_structure"
+        );
+        assert_eq!(demo_data.trace_segments[2].relation_type, "tectonic_driver");
+        assert!(demo_data
+            .trace_segments
+            .iter()
+            .all(|trace| !trace.evidence_ids.is_empty()));
+        assert!(demo_data
+            .evidence
+            .iter()
+            .all(|entry| !entry.uncertainty_reason.is_empty()));
+    }
+
+    #[wasm_bindgen_test]
+    fn causal_exploration_demo_rejects_unknown_world() {
+        let controller = WorldSimController::new();
+        let error = controller
+            .get_causal_exploration_demo_js("world-missing".to_string())
+            .expect_err("unknown world should fail");
+        let message = error.as_string().expect("error string");
+        assert!(message.contains("world not found"));
     }
 
     #[wasm_bindgen_test]

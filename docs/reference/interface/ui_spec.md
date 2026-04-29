@@ -24,6 +24,7 @@
 - 地形、気候、水文などのレイヤ表示
 - カメラ操作
 - レイヤごとの凡例表示
+- 因果探索 Demo Slice の発光点、trace、短い数値ラベル表示
 
 ### Inspection
 
@@ -41,3 +42,14 @@
 
 - 現時点では、詳細レイアウトよりも機能責務の整理を優先する
 - UI 実装の公開インターフェースは `docs/reference/interface/wasm_api.md` に依存する
+
+## 因果探索 Demo Slice
+
+- この節は恒久 UI 仕様ではなく、体験検証用の実験境界を記録する
+- 初回は `border_mountain_plate_demo` を既存 Three.js scene 上の追加レイヤとして表示する
+- 3 feature と 3 trace だけを描画し、UI で trace を増やさない
+- `hover/focus` は近接反応として feature の発光と短い数値ラベルを強める
+- `click/tap` で trace を固定し、選択中 trace の evidence 種別と不確実性理由だけを短く出す
+- `trace click/tap` は target feature へフォーカスを移し、次の探索対象を強調する
+- 色、太さ、流速、揺らぎは `display_mapping` からだけ導く
+- 国境と山脈の関係は直接因果として説明しない

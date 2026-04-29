@@ -4,6 +4,7 @@ import { createCanvasInputHandlers } from "../input/canvas-input-handlers";
 import { formatStatusError } from "../state/status-error";
 import type { PlateHoverController } from "../input/plate-hover";
 import type { GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
+import type { CausalExplorationLayer } from "../../gfx/views/causal-exploration-layer";
 import type { PlaybackController } from "../playback/playback-controller";
 
 function createSidebarToggleHandler(
@@ -69,6 +70,7 @@ interface CreateUiHandlersOptions {
     seedForm: HTMLFormElement;
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
+    causalExplorationLayer: CausalExplorationLayer;
     setDebugModeEnabled: (enabled: boolean) => void;
     setViewMode: (mode: string) => void;
     setCellMetric: (metric: string) => void;
@@ -95,6 +97,7 @@ function createUiHandlers(options: CreateUiHandlersOptions) {
         seedForm,
         plateHover,
         globePinchFocusController,
+        causalExplorationLayer,
         setDebugModeEnabled,
         setViewMode,
         setCellMetric,
@@ -124,6 +127,7 @@ function createUiHandlers(options: CreateUiHandlersOptions) {
         canvasInputHandlers: createCanvasInputHandlers({
             plateHover,
             globePinchFocusController,
+            causalExplorationLayer,
         }),
         onDebugToggle: setDebugModeEnabled,
         onViewModeChange: setViewMode,
@@ -163,6 +167,7 @@ export interface BindAppUiControlsOptions {
     setSidebarOpen: ((isOpen: boolean) => void) | undefined;
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
+    causalExplorationLayer: CausalExplorationLayer;
     setDebugModeEnabled: (enabled: boolean) => void;
     setEraScale: (value: string) => void;
     setViewMode: (mode: string) => void;
@@ -202,6 +207,7 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         setSidebarOpen,
         plateHover,
         globePinchFocusController,
+        causalExplorationLayer,
         setDebugModeEnabled,
         setEraScale,
         setViewMode,
