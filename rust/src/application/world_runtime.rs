@@ -974,7 +974,8 @@ impl WorldTransportCache {
         self.temperature.observe(&world.state.climate.temperature);
         self.precipitation
             .observe(&world.state.climate.precipitation);
-        self.erosion_rate.observe(&world.state.hydrology.erosion_rate);
+        self.erosion_rate
+            .observe(&world.state.hydrology.erosion_rate);
         self.deposition_rate
             .observe(&world.state.hydrology.deposition_rate);
         self.evapotranspiration
@@ -1203,7 +1204,8 @@ impl WorldTransportCache {
             }
         }
         if include_field("erosion_rate") {
-            self.erosion_rate.observe(&world.state.hydrology.erosion_rate);
+            self.erosion_rate
+                .observe(&world.state.hydrology.erosion_rate);
         }
         if include_field("deposition_rate") {
             self.deposition_rate

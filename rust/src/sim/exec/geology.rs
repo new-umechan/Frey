@@ -167,8 +167,8 @@ pub(super) fn apply_hydrology_erosion_to_geology(
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
             world.state.hydrology.deposition_rate[i] = deposition;
-            world.state.geology.height[i] =
-                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.geology.height[i] = (world.state.geology.height[i] + delta)
+                .clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
             dynamics.vertex_states[i].thickness = (dynamics.vertex_states[i].thickness
                 - erosion * thickness_erosion_scale
                 + deposition * thickness_deposition_scale)
@@ -181,8 +181,8 @@ pub(super) fn apply_hydrology_erosion_to_geology(
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
             world.state.hydrology.deposition_rate[i] = deposition;
-            world.state.geology.height[i] =
-                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.geology.height[i] = (world.state.geology.height[i] + delta)
+                .clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     } else {
         for i in 0..count {
@@ -192,8 +192,8 @@ pub(super) fn apply_hydrology_erosion_to_geology(
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
             world.state.hydrology.deposition_rate[i] = deposition;
-            world.state.geology.height[i] =
-                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.geology.height[i] = (world.state.geology.height[i] + delta)
+                .clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     }
 

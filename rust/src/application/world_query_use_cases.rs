@@ -167,7 +167,10 @@ pub(crate) fn get_field(
             stride,
             cell_count: world_ref.state.hydrology.deposition_rate.len() as u32,
             sampled_count: sampled_len(world_ref.state.hydrology.deposition_rate.len(), stride),
-            f32_data: Some(sample_f32(&world_ref.state.hydrology.deposition_rate, stride)),
+            f32_data: Some(sample_f32(
+                &world_ref.state.hydrology.deposition_rate,
+                stride,
+            )),
             u32_data: None,
             i32_data: None,
         },

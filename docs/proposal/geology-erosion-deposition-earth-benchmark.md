@@ -2,7 +2,8 @@
 
 ## Status
 
-Superseded by `geology-benchmark-split-and-hydrology-sediment-ownership.md`
+Superseded
+by `geology-benchmark-split-and-hydrology-sediment-ownership.md`
 
 ## 背景
 
