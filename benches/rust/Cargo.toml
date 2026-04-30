@@ -33,3 +33,7 @@ harness = false
 [[bench]]
 name = "geology_validation_solo"
 harness = false
+
+[[bench]]
+name = "geology_solo"
+harness = false

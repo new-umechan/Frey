@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "timestamp_unix_ms": 1777547363305,
+  "bench": "geology_solo",
+  "run_id": "default-1777547363",
+  "repeat_index": null,
+  "repeat_total": null,
+  "git_commit": "01a09a8ee8b8b664abe023530f147a0c832b5577",
+  "seed": "earth",
+  "mesh_level": 6,
+  "cell_count": 40962,
+  "runtime": {
+    "geology_build_ms": 47.839
+  },
+  "phase2": {
+    "state": "ready",
+    "metrics": {
+      "oceanic_age_depth_spearman": 0.623865,
+      "oceanic_age_bin_spearman": 1,
+      "oceanic_age_coverage_ratio": 0.99927,
+      "ridge_distance_depth_spearman": 0.455005,
+      "ridge_distance_bin_spearman": 0.660079,
+      "ridge_distance_coverage_ratio": 0.99927,
+      "continental_ocean_mean_gap": 0.739958,
+      "continental_ocean_median_gap": 0.758756,
+      "continental_ocean_overlap_ratio": 0.116704
+    }
+  },
+  "diagnostics": {
+    "generated_land_ratio": 0.289708,
+    "oceanic_age_min_myr": 0.018223,
+    "oceanic_age_max_myr": 99.996933,
+    "mean_depth": 0.694247,
+    "oceanic_age_valid_cells": 17802,
+    "oceanic_age_total_cells": 17815,
+    "oceanic_age_bin_count": 6,
+    "oceanic_age_populated_bins": 5,
+    "ridge_distance_valid_cells": 17802,
+    "ridge_distance_total_cells": 17815,
+    "ridge_distance_bin_count": 23,
+    "ridge_distance_populated_bins": 22,
+    "continental_valid_cells": 16733,
+    "continental_ocean_cells": 24229,
+    "continental_mean_height": 0.040523,
+    "ocean_mean_height": -0.699435,
+    "continental_median_height": 0.034996,
+    "ocean_median_height": -0.72376
+  }
+}

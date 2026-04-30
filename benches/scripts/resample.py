@@ -13,6 +13,9 @@ import numpy as np
 
 CLIMATE_MAGIC = b"CLIMREF1"
 TERRAIN_MAGIC = b"TERRREF1"
+GEOLOGY_AGE_MAGIC = b"GEOAG001"
+GEOLOGY_RIDGE_MAGIC = b"GEORIDG1"
+GEOLOGY_CONTINENTAL_MASK_MAGIC = b"GEOCNTL1"
 HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
 ECOLOGY_REF_MAGIC = b"ECOREF01"
@@ -60,6 +63,9 @@ def parse_args() -> argparse.Namespace:
         choices=[
             "climate",
             "terrain",
+            "geology-age",
+            "plate-boundary",
+            "continental-mask",
             "hydro-input",
             "hydro-ref",
             "ecology-ref",
@@ -113,6 +119,20 @@ def parse_args() -> argparse.Namespace:
         help="Optional NetCDF variable mapping, e.g. temperature=tavg.",
     )
     parser.add_argument("--height", help="Input raster/NetCDF for terrain height.")
+    parser.add_argument("--age", help="Input raster/NetCDF for oceanic crust age.")
+    parser.add_argument(
+        "--ridges",
+        help="Input GeoJSON file for spreading ridge line features.",
+    )
+    parser.add_argument(
+        "--polygons",
+        help="Input shapefile for continental polygons.",
+    )
+    parser.add_argument(
+        "--age-var-name",
+        default=None,
+        help="Optional NetCDF variable name for oceanic crust age.",
+    )
     parser.add_argument("--tree-cover", help="Input raster for MOD44B tree cover.")
     parser.add_argument(
         "--non-tree-cover",
@@ -266,6 +286,189 @@ def load_input_grid(path: Path, preferred_var: str | None) -> GridData:
     raise ValueError(
         f"unsupported input extension for {path}. Use GeoTIFF(.tif/.tiff) or NetCDF(.nc/.nc4)."
     )
+
+
+def sample_ridge_distance_at_centroids(
+    path: Path, query_lat: np.ndarray, query_lon: np.ndarray
+) -> np.ndarray:
+    ridge_segments = load_ridge_segments(path)
+    if not ridge_segments:
+        raise ValueError(f"no line segments found in ridge file: {path}")
+
+    lat_index = build_ridge_lat_index(ridge_segments)
+    distances = np.full(query_lat.shape, np.inf, dtype=np.float64)
+    for idx in range(query_lat.size):
+        lat = float(query_lat[idx])
+        lon = float(query_lon[idx])
+        best = np.inf
+        candidate_indexes = candidate_ridge_segments(lat, lat_index)
+        if not candidate_indexes:
+            candidate_indexes = list(range(len(ridge_segments)))
+        for segment_index in candidate_indexes:
+            segment = ridge_segments[segment_index]
+            best = min(best, point_to_segment_distance_km(lat, lon, segment[0], segment[1]))
+        distances[idx] = best
+    return distances
+
+
+def load_ridge_segments(path: Path) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    with path.open("r", encoding="utf-8") as handle:
+        if path.suffix.lower() == ".xy":
+            return line_strings_to_segments(load_xy_line_strings(handle))
+        data = json.load(handle)
+
+    geometries = []
+
+    def collect_geometry(geometry: dict | None) -> None:
+        if not geometry:
+            return
+        geom_type = geometry.get("type")
+        coordinates = geometry.get("coordinates")
+        if geom_type == "LineString" and coordinates:
+            geometries.append([(float(lon), float(lat)) for lon, lat in coordinates])
+        elif geom_type == "MultiLineString" and coordinates:
+            for line in coordinates:
+                geometries.append([(float(lon), float(lat)) for lon, lat in line])
+        elif geom_type == "GeometryCollection":
+            for child in geometry.get("geometries", []) or []:
+                collect_geometry(child)
+
+    if data.get("type") == "FeatureCollection":
+        for feature in data.get("features", []) or []:
+            collect_geometry(feature.get("geometry"))
+    elif data.get("type") in {"LineString", "MultiLineString", "GeometryCollection"}:
+        collect_geometry(data)
+    else:
+        raise ValueError(f"unsupported GeoJSON type for ridge file: {data.get('type')}")
+
+    return line_strings_to_segments([line for line in geometries if len(line) >= 2])
+
+
+def load_xy_line_strings(handle) -> list[list[tuple[float, float]]]:
+    lines: list[list[tuple[float, float]]] = []
+    current: list[tuple[float, float]] = []
+    keep_current = False
+    awaiting_numeric_header = False
+
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            if line.startswith("> "):
+                header_parts = line[1:].split()
+                if len(header_parts) >= 2:
+                    try:
+                        keep_current = abs(float(header_parts[1])) <= 1e-6
+                    except ValueError:
+                        keep_current = True
+                else:
+                    keep_current = True
+                awaiting_numeric_header = False
+                continue
+
+            if len(current) >= 2 and keep_current:
+                lines.append(current)
+            current = []
+            keep_current = False
+            awaiting_numeric_header = True
+            continue
+        if awaiting_numeric_header:
+            continue
+        if not keep_current:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        try:
+            lon = float(parts[0])
+            lat = float(parts[1])
+        except ValueError:
+            continue
+        current.append((lon, lat))
+
+    if len(current) >= 2:
+        lines.append(current)
+
+    return lines
+
+
+def line_strings_to_segments(
+    lines: list[list[tuple[float, float]]],
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for line in lines:
+        for start_index in range(0, max(0, len(line) - 1), 4):
+            start = line[start_index]
+            end = line[min(start_index + 4, len(line) - 1)]
+            segments.append((start, end))
+    return segments
+
+
+def build_ridge_lat_index(
+    segments: list[tuple[tuple[float, float], tuple[float, float]]],
+    bin_size_deg: float = 5.0,
+) -> dict[int, list[int]]:
+    index: dict[int, list[int]] = {}
+    for segment_index, (start, end) in enumerate(segments):
+        lat_min = min(start[1], end[1])
+        lat_max = max(start[1], end[1])
+        start_bin = int(np.floor((lat_min + 90.0) / bin_size_deg))
+        end_bin = int(np.floor((lat_max + 90.0) / bin_size_deg))
+        for bin_index in range(start_bin, end_bin + 1):
+            index.setdefault(bin_index, []).append(segment_index)
+    return index
+
+
+def candidate_ridge_segments(
+    lat: float, index: dict[int, list[int]], bin_size_deg: float = 5.0
+) -> list[int]:
+    lat_bin = int(np.floor((lat + 90.0) / bin_size_deg))
+    candidate_indexes: list[int] = []
+    seen = set()
+    for bin_index in range(lat_bin - 2, lat_bin + 3):
+        for segment_index in index.get(bin_index, []):
+            if segment_index not in seen:
+                seen.add(segment_index)
+                candidate_indexes.append(segment_index)
+    return candidate_indexes
+
+
+def point_to_segment_distance_km(
+    lat: float,
+    lon: float,
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> float:
+    radius_km = 6371.0
+    lat_rad = np.deg2rad(lat)
+    cos_lat = np.cos(lat_rad)
+
+    def project(point: tuple[float, float]) -> tuple[float, float]:
+        lon_pt, lat_pt = point
+        dlon = lon_pt - lon
+        while dlon <= -180.0:
+            dlon += 360.0
+        while dlon > 180.0:
+            dlon -= 360.0
+        x = np.deg2rad(dlon) * radius_km * cos_lat
+        y = np.deg2rad(lat_pt - lat) * radius_km
+        return x, y
+
+    px, py = 0.0, 0.0
+    ax, ay = project(start)
+    bx, by = project(end)
+    vx = bx - ax
+    vy = by - ay
+    wx = px - ax
+    wy = py - ay
+    denom = vx * vx + vy * vy
+    if denom <= 1e-12:
+        return float(np.hypot(wx, wy))
+    t = max(0.0, min(1.0, (wx * vx + wy * vy) / denom))
+    cx = ax + t * vx
+    cy = ay + t * vy
+    return float(np.hypot(px - cx, py - cy))
 
 
 def load_geotiff(path: Path) -> GridData:
@@ -748,6 +951,40 @@ def rasterize_lake_polygons(
     return is_lake
 
 
+def rasterize_continental_polygons(
+    path: Path, centroid_lat: np.ndarray, centroid_lon: np.ndarray
+) -> np.ndarray:
+    try:
+        import shapefile
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError("pyshp is required to read continental polygons") from exc
+
+    reader = shapefile.Reader(str(path), encoding="latin1")
+    if reader.numRecords == 0:
+        return np.zeros(centroid_lat.shape, dtype=np.uint8)
+
+    is_continental = np.zeros(centroid_lat.shape, dtype=np.uint8)
+    for shape_record in reader.iterShapeRecords():
+        min_lon, min_lat, max_lon, max_lat = shape_record.shape.bbox
+        candidates = np.where(
+            (is_continental == 0)
+            & (centroid_lon >= min_lon)
+            & (centroid_lon <= max_lon)
+            & (centroid_lat >= min_lat)
+            & (centroid_lat <= max_lat)
+        )[0]
+        if candidates.size == 0:
+            continue
+        for index in candidates:
+            if shape_contains_point(
+                float(centroid_lon[index]),
+                float(centroid_lat[index]),
+                shape_record.shape,
+            ):
+                is_continental[index] = 1
+    return is_continental
+
+
 def transform_aridity(values: np.ndarray, source: str) -> np.ndarray:
     if source == "pet_over_precip":
         return values
@@ -785,6 +1022,36 @@ def write_terrain_ref_bin(path: Path, heights: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
         handle.write(TERRAIN_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_geology_age_ref_bin(path: Path, ages: np.ndarray) -> None:
+    values = np.asarray(ages, dtype="<f4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GEOLOGY_AGE_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_geology_ridge_ref_bin(path: Path, ridge_distance_km: np.ndarray) -> None:
+    values = np.asarray(ridge_distance_km, dtype="<f4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GEOLOGY_RIDGE_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_geology_continental_mask_ref_bin(path: Path, mask: np.ndarray) -> None:
+    values = np.asarray(mask, dtype=np.uint8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GEOLOGY_CONTINENTAL_MASK_MAGIC)
         handle.write(struct.pack("<I", VERSION))
         handle.write(struct.pack("<Q", int(values.size)))
         handle.write(values.tobytes(order="C"))
@@ -1150,6 +1417,12 @@ def main() -> None:
     if args.output is None:
         if args.module == "climate":
             output_path = Path("benches/data/climate_ref.bin")
+        elif args.module == "geology-age":
+            output_path = Path("benches/data/oceanic_crust_age_ref.bin")
+        elif args.module == "plate-boundary":
+            output_path = Path("benches/data/plate_boundary_ref.bin")
+        elif args.module == "continental-mask":
+            output_path = Path("benches/data/continental_mask_ref.bin")
         elif args.module == "hydro-input":
             output_path = Path("benches/data/hydro_input.bin")
         elif args.module == "hydro-ref":
@@ -1197,6 +1470,57 @@ def main() -> None:
         write_climate_ref_bin(output_path, output_vectors)
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(output_vectors['temperature'])}")
+        return
+
+    if args.module == "geology-age":
+        if not args.age:
+            raise ValueError("missing required arg for geology-age module: --age")
+
+        grid = load_input_grid(Path(args.age), args.age_var_name)
+        ages = interpolate_grid(
+            grid=grid,
+            query_lat=centroid_lat,
+            query_lon=centroid_lon,
+            method=args.method,
+        ).astype(np.float32, copy=False)
+        print(summarize("oceanic_age", ages))
+        write_geology_age_ref_bin(output_path, ages)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(ages)}")
+        return
+
+    if args.module == "plate-boundary":
+        if not args.ridges:
+            raise ValueError(
+                "missing required arg for plate-boundary module: --ridges"
+            )
+
+        ridge_distance_km = sample_ridge_distance_at_centroids(
+            Path(args.ridges), centroid_lat, centroid_lon
+        ).astype(np.float32, copy=False)
+        print(summarize("ridge_distance_km", ridge_distance_km))
+        write_geology_ridge_ref_bin(output_path, ridge_distance_km)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(ridge_distance_km)}")
+        return
+
+    if args.module == "continental-mask":
+        if not args.polygons:
+            raise ValueError(
+                "missing required arg for continental-mask module: --polygons"
+            )
+
+        continental_mask = rasterize_continental_polygons(
+            Path(args.polygons), centroid_lat, centroid_lon
+        )
+        print(
+            f"continental_mask: valid={int(continental_mask.size)}/{int(continental_mask.size)} "
+            f"true={int(np.count_nonzero(continental_mask))} "
+            f"false={int(continental_mask.size - np.count_nonzero(continental_mask))}"
+        )
+        write_geology_continental_mask_ref_bin(output_path, continental_mask)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(continental_mask)}")
         return
 
     if args.module == "hydro-input":

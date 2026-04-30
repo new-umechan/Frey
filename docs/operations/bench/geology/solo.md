@@ -1,34 +1,231 @@
-# Geology単体ベンチ（Earth 実データ入力, planned）
+# Geology単体ベンチ（Earth 実データ入力）
 
 ## 概要
 
-`geology_solo` は将来実装する Earth 実データ入力 bench の予約名である。
-現時点では未実装であり、既存の tectonics 診断 bench は `geology_validation_solo` として別管理する。
+`geology_solo` は、Earth 実データを入力として与えたときの `Geology` 単体応答を比較する bench である。
+既存の tectonics 診断 bench は `geology_validation_solo` として別管理する。
 
-- 想定入力: Earth 地形・気候・水文などの外部入力
-- 想定目的: Geology 系の Earth 応答を I/O として比較する
+- 想定入力: Earth の地形・海洋地殻年齢・プレート境界などの外部データ
+- 想定目的: `Geology` が主責務を持つ tectonic / lithospheric 応答だけを比較する
 - 非目的: tectonics validation bench の兼用
+- 非目的: `Hydrology` 責務の河川・侵食・堆積主比較
 
 設計方針は次のとおり。
 
 - Earth 固有 preset への過剰適合ではなく、Earth 実データ入力に対する出口比較を行う
+- `height` の全球一致そのものではなく、`Geology` 固有の構造応答を主評価に置く
 - fluvial `erosion_rate` / `deposition_rate` は Hydrology の責務として扱う
 - 現行 `hydrology_solo` と責務が衝突しない指標だけを持ち込む
 
 ## 現在の状態
 
-まだ実装していない。
-現行 bench は [validation_solo.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/validation_solo.md) を参照する。
+`geology_solo` は実装済みで、`terrain_ref.bin` と `oceanic_crust_age_ref.bin` を使い、`plate_boundary_ref.bin` があれば ridge 距離指標、`continental_mask_ref.bin` があれば hypsometry 分離指標も出す。
+現行の tectonics 診断 bench は [validation_solo.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/validation_solo.md) を参照する。
 
-## 想定範囲
+## ベンチの考え方
 
-候補は今後の proposal / decision で確定するが、少なくとも次を前提にする。
+この bench では、「Earth 実データを input として読ませたとき、その出力が `Geology` 単体の妥当性を測れているか」を最優先にする。
 
-- Earth 地形入力は preset ではなく外部データを読む
-- `erosion_rate` / `deposition_rate` の主比較は Hydrology 側へ置く
-- Geology bench には Geology 固有の応答指標だけを載せる
+そのため、次のような項目は主評価に置かない。
+
+- 全球 `height` の直接一致
+- `river_flow`
+- fluvial `erosion_rate`
+- fluvial `deposition_rate`
+- 湖分布
+
+これらは `Climate` / `Hydrology` / `Glaciology` の影響が強く、`Geology` 単体の検証としては責務境界が曖昧になる。
+
+代わりに、現実の tectonic setting を入力し、その setting に対する lithosphere / topography 応答だけを測る。
+
+## 想定入力
+
+`geology_solo` の v1 では、少なくとも次のどれかを input として読める構成を想定する。
+
+| 入力ID | 内容 | 主用途 |
+| --- | --- | --- |
+| `terrain_ref` | Earth DEM を CellStore に落とした標高参照 | 海陸・海盆・粗い hypsometry 参照 |
+| `oceanic_crust_age_ref` | 現実の海洋地殻年齢グリッドを CellStore に集約した参照 | age-depth / ridge 距離検証 |
+| `plate_boundary_ref` | 現実のプレート境界種別と ridge / trench 軸 | 境界条件付き relief 応答検証 |
+| `continental_mask_ref` | 大陸地殻 / 海洋地殻の Earth 参照分類 | 条件付き hypsometry 分離検証 |
+
+最初の実装では、`terrain_ref` と `oceanic_crust_age_ref` を優先する。
+理由は次の通り。
+
+- `terrain_ref` は既存の `benches/data/terrain_ref.bin` を再利用しやすい
+- `oceanic_crust_age_ref` は `Geology` 単体性が高く、`Climate` / `Hydrology` をほぼ切れる
+- `plate_boundary_ref` は有望だが、前処理と truth 定義がやや重い
+
+v1 の推奨 dataset は次の通り。
+
+- `terrain_ref`
+    - 第一候補: 既存 `ETOPO 2022`
+    - oceanic age-depth 用の海底深度 truth を強める場合の補助候補: `GEBCO Grid`
+- `oceanic_crust_age_ref`
+    - 第一候補: `Seton et al. (2020)` present-day age grid
+- `plate_boundary_ref`
+    - ridge 距離のみ先行実装する第一候補: EarthByte `Global Spreading Ridge File`
+    - 境界種別まで含める拡張候補: `Bird (2003) PB2002`
+- `continental_mask_ref`
+    - 第一候補: EarthByte `Continental Polygons`
+    - 単純 land/ocean マスクの簡易候補: `Natural Earth land polygons`
+
+## v1 の主評価候補
+
+v1 の主評価は、次の 4 指標を候補とする。
+優先順位は上から順とする。
+
+### 1. `oceanic_age_depth_consistency`
+
+最優先候補。
+海洋地殻年齢を入力として与えたとき、海洋地殻が age とともに深くなるかをみる。
+
+- input:
+    - `oceanic_crust_age_ref`
+    - `terrain_ref` または海底深度参照
+    - 必要なら `continental_mask_ref`
+- model output:
+    - `geology.height`
+    - 海洋セル集合
+- score:
+    - age bin ごとの median depth の単調性
+    - age と depth の Spearman 相関
+    - ridge 近傍と老齢海洋地殻の depth 差
+
+これは `Geology` の thermal subsidence / oceanic lithosphere 応答を見る指標であり、他 module 依存が小さい。
+
+### 2. `ridge_distance_depth_gradient`
+
+海嶺軸からの距離に応じて海底が深くなるかをみる。
+`oceanic_age_depth_consistency` の代替または補完として使う。
+
+- input:
+    - `plate_boundary_ref` 内の ridge 軸
+    - `terrain_ref`
+- model output:
+    - `geology.height`
+- note:
+    - `plate_boundary_ref.bin` があるときのみ追加評価する任意指標
+- score:
+    - ridge からの最短距離と海底深度の Spearman 相関
+    - 距離 bin ごとの median depth の単調性
+
+年齢データが揃わない場合でも成立する。
+一方で、海嶺からの距離は transform / microplate の影響を受けるため、主指標としては age-depth より一段弱い。
+
+### 3. `crust_conditioned_hypsometry_separation`
+
+大陸地殻と海洋地殻の高度分布が十分に分離しているかをみる。
+これは既存の geology validation 文脈とも整合する。
+`continental_mask_ref.bin` がある場合にだけ追加評価する。
+
+- input:
+    - `continental_mask_ref`
+    - `terrain_ref`
+- model output:
+    - `geology.height`
+    - 必要なら `crust_type` 相当の出力
+- score:
+    - continental / oceanic の mean height 差
+    - median 差
+    - Wasserstein 距離
+    - 分布の overlap ratio
+
+これは「地球らしい二峰性」そのものではなく、「地殻種別条件付きで高度分布が分離しているか」を見る。
+
+### 4. `boundary_type_to_relief_consistency`
+
+プレート境界種別を入力として、境界近傍の relief 応答が tectonic setting に合うかをみる。
+
+- input:
+    - `plate_boundary_ref`
+    - 必要なら relative plate motion
+    - `terrain_ref`
+- model output:
+    - `geology.height`
+    - `debug_trench_strength`
+    - `debug_arc_strength`
+    - `debug_backarc_strength`
+- score:
+    - trench 近傍の負標高比率
+    - arc / collision 帯の高 relief 比率
+    - ridge 近傍の浅海比率
+
+境界と relief の対応を直接測れるため geology 専用度は高いが、truth の整備が重いため v1 では補助主指標寄りとする。
+
+## 補助評価候補
+
+主評価を読む補助として、次は採用しやすい。
+
+- `hypsometry_distance`
+    - 全球または海陸別の標高ヒストグラム距離
+- `relief_distribution_distance`
+    - 局所 relief 分布の距離
+- `continent_count`
+    - 陸塊数
+- `largest_continent_cells`
+    - 最大陸塊サイズ
+- `coastal_mask_agreement`
+    - 海岸セルの precision / recall
+
+これらは `terrain_ref` だけで比較可能で、主指標のスコア変動理由を掘りやすい。
+ただし、これ単独では `Geology` 単体性が弱いため、主評価にはしない。
+
+## v1 で優先しない項目
+
+次の項目は、v1 では主評価に置かない。
+
+- `river_flow`
+- `erosion_rate`
+- `deposition_rate`
+- `is_lake`
+- sediment outlet / delta hotspot
+- 全球 `height` の RMSE
+
+理由:
+
+- `river_flow` / `is_lake` は `Hydrology` 単体ベンチの責務
+- `erosion_rate` / `deposition_rate` は Hydrology 所有の state として整理中
+- delta / outlet は downstream transport bench で扱う方が責務境界が明確
+- 全球 `height` の RMSE は module 分離が弱く、`Geology` 単体の退行原因を読みにくい
+
+## 実装優先順
+
+最小の `geology_solo` を切るなら、次の順で進める。
+
+1. `terrain_ref.bin` を固定入力として読む
+2. `oceanic_crust_age_ref.bin` を追加する
+3. `oceanic_age_depth_consistency` を実装する
+4. `ridge_distance_depth_gradient` を実装する
+5. `crust_conditioned_hypsometry_separation` を実装する
+6. `plate_boundary_ref.bin` を追加し、`boundary_type_to_relief_consistency` を実装する
+
+この順なら、最初の 2 指標だけで `Geology` 単体 bench としてかなり成立する。
+
+## 実行コマンド
+
+```bash
+pnpm run bench --suite geology_solo
+```
+
+baseline 比較:
+
+```bash
+pnpm bench:compare:geology-solo -- --baseline tests/perf/geology-solo-baseline.json
+```
+
+JSONL 出力先:
+
+- `benches/results/geology_solo_main_scores.jsonl`
+
+v1 は `terrain_ref.bin` と `oceanic_crust_age_ref.bin` を同じセル集合で突き合わせ、
+海洋セルの age-depth 関係を主に読む。
+ただし `oceanic_age_depth_consistency` は若い海洋地殻帯を主に見るため、`100 Myr` 以内を主評価域とする。
 
 ## 関連
 
 - `docs/proposal/geology-benchmark-split-and-hydrology-sediment-ownership.md`
+- `docs/proposal/geology-erosion-deposition-earth-benchmark.md`
+- `docs/operations/bench/geology/data_acquisition.md`
+- `docs/operations/bench/geology/validation.md`
 - `docs/operations/bench/geology/validation_solo.md`

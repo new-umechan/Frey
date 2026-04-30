@@ -33,8 +33,8 @@ quality gate ではなく、JSONL artifact の最新値・baseline・差分を�
 `erosion_rate` / `deposition_rate` は Hydrology の計算責務として扱い、単体比較も `hydrology_solo` で行う。
 主要河川 outlet やデルタ hotspot の整合も Geology ではなく Hydrology の downstream transport 検証で扱う。
 
-将来の `geology_solo` は Earth 実データ入力ベンチとして別途実装する。
-詳細は `docs/operations/bench/geology/validation_solo.md` と `docs/operations/bench/geology/validation.md` を参照する。
+`geology_solo` は Earth 実データ入力ベンチとして実装済みで、詳細は `docs/operations/bench/geology/solo.md` を参照する。
+tectonics runtime / 構造診断は `docs/operations/bench/geology/validation_solo.md` と `docs/operations/bench/geology/validation.md` を参照する。
 長期のウィルソンサイクルと plate 構造の妥当性は `docs/operations/bench/geology/validation.md` で別管理する。
 
 ---
