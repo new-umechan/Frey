@@ -19,6 +19,7 @@ interface HydrologyScoreRecord {
     phase2?: {
         state?: string;
         ref_path?: string | null;
+        erosion_ref_path?: string | null;
         error?: string | null;
         metrics?: Record<string, number | null>;
     };
@@ -41,6 +42,9 @@ const METRIC_KEYS = [
     "is_lake_recall",
     "is_lake_f1",
     "erosion_rate_spearman",
+    "sediment_budget_ratio",
+    "coastal_deposition_share",
+    "low_slope_deposition_share",
 ] as const;
 
 const PHASE1_KEYS = ["river_flow_ranking"] as const;
@@ -170,6 +174,12 @@ async function main() {
     console.log(`baseline_timestamp_unix_ms=${baseline.timestamp_unix_ms}`);
     console.log(`current_seed=${current.seed}`);
     console.log(`baseline_seed=${baseline.seed}`);
+    console.log(`current_phase2_state=${current.phase2?.state ?? "n/a"}`);
+    console.log(`baseline_phase2_state=${baseline.phase2?.state ?? "n/a"}`);
+    console.log(`current_phase2_ref_path=${current.phase2?.ref_path ?? "n/a"}`);
+    console.log(`baseline_phase2_ref_path=${baseline.phase2?.ref_path ?? "n/a"}`);
+    console.log(`current_phase2_erosion_ref_path=${current.phase2?.erosion_ref_path ?? "n/a"}`);
+    console.log(`baseline_phase2_erosion_ref_path=${baseline.phase2?.erosion_ref_path ?? "n/a"}`);
     console.log("");
 
     printMetricSection(

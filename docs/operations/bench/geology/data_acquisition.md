@@ -179,6 +179,7 @@ v1 推奨取得元:
 
 - 用途: Hydrology 側 `erosion_rate_spearman` の侵食参照
 - 保存先: `benches/raw/hydrology/glosem/` または同等の raw ディレクトリ
+- canonical cache: `benches/data/glosem_ref.bin`
 
 取得元:
 
@@ -198,8 +199,14 @@ v1 推奨取得元:
 - この 2012 / 2001 データは ESDAC 上で free download と案内されているため、通常は Request Form の送信は不要
 - ただし GloSEM 1.3 の cropland dataset は別物で、こちらは registration / Request Form が必要
 - GloSEM は土壌侵食 proxy であり、露岩侵食や氷河起源 sediment は直接表さない
-- `geology_solo` の主評価ではなく、旧 proposal / Hydrology 側の補助比較に留める
+- `hydrology_solo` の主比較入力として使い、`erosion_rate_spearman` の参照になる
 - 取得形態が複数タイルに分かれる場合は、前処理で全球モザイクを作ってから参照化する
+
+生成コマンド:
+
+```bash
+pnpm bench:resample:glosem-ref
+```
 
 ## 既存スクリプトで再生成するもの
 

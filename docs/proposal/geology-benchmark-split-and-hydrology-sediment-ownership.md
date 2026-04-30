@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft
+Accepted
 
 ## 背景
 

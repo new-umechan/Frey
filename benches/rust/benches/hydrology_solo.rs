@@ -51,6 +51,11 @@ struct HydroRef {
     is_lake: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
+struct HydroErosionRef {
+    erosion_rate: Vec<f32>,
+}
+
 struct DiagnosticSummary {
     matched: usize,
     total: usize,
@@ -74,11 +79,22 @@ struct LakeMetricResult {
     f1: f32,
 }
 
+struct Phase2Metrics {
+    river_flow_rho: Option<f32>,
+    is_lake_precision: Option<f32>,
+    is_lake_recall: Option<f32>,
+    is_lake_f1: Option<f32>,
+    erosion_rate_spearman: Option<f32>,
+    sediment_budget_ratio: Option<f32>,
+    coastal_deposition_share: Option<f32>,
+    low_slope_deposition_share: Option<f32>,
+}
+
 enum MainEvaluationState {
     Ready {
         reference_path: PathBuf,
-        flow: FlowMetricResult,
-        lake: LakeMetricResult,
+        erosion_reference_path: Option<PathBuf>,
+        metrics: Phase2Metrics,
     },
     Skipped,
     Error(String),
@@ -318,25 +334,63 @@ fn main() {
     println!();
     println!("-- Main Evaluation 1-A: river_flow Spearman (log scale, land cells only) --");
 
+    let erosion_ref_path = find_hydro_erosion_ref_cache_path();
     let main_eval_state = match find_hydro_ref_cache_path() {
         Some(path) => match load_hydro_ref(&path) {
             Ok(reference) => {
                 let flow = evaluate_flow_metric(&sim_world, &reference);
+                let lake = evaluate_lake_metric(&sim_world, &reference);
+                let sediment_metrics = evaluate_sediment_metrics(&sim_world);
+                let erosion_metric = match erosion_ref_path.as_ref() {
+                    Some(path) => match load_hydro_erosion_ref(path) {
+                        Ok(reference) => evaluate_erosion_metric(&sim_world, &reference),
+                        Err(error) => {
+                            println!("-- Main Evaluation 1-C: erosion reference ERROR ({}) --", error);
+                            None
+                        }
+                    },
+                    None => None,
+                };
+
                 println!("river_flow:  rho={:.3}", flow.rho);
                 println!();
                 println!("-- Main Evaluation 1-B: is_lake F1 (land cells only) --");
-                let lake = evaluate_lake_metric(&sim_world, &reference);
                 println!(
                     "precision={:.3}  recall={:.3}  f1={:.3}",
                     lake.precision, lake.recall, lake.f1
                 );
                 println!();
+                println!("-- Main Evaluation 1-C: erosion_rate / sediment diagnostics --");
+                match erosion_ref_path.as_ref() {
+                    Some(path) => println!("-- Erosion Reference Source: {} --", path.display()),
+                    None => println!(
+                        "-- Erosion Reference Source: SKIPPED (benches/data/glosem_ref.bin not found) --"
+                    ),
+                }
+                println!("erosion_rate:  rho={}", format_option_number(erosion_metric));
+                println!(
+                    "sediment_budget_ratio={:.3}  coastal_deposition_share={:.3}  low_slope_deposition_share={:.3}",
+                    sediment_metrics.sediment_budget_ratio.unwrap_or(f32::NAN),
+                    sediment_metrics.coastal_deposition_share.unwrap_or(f32::NAN),
+                    sediment_metrics.low_slope_deposition_share.unwrap_or(f32::NAN),
+                );
+                println!();
                 println!("-- Main Evaluation 1-A Summary: metrics_reported=1 --");
                 println!("-- Main Evaluation 1-B Summary: metrics_reported=3 --");
+                println!("-- Main Evaluation 1-C Summary: metrics_reported=4 --");
                 MainEvaluationState::Ready {
                     reference_path: path,
-                    flow,
-                    lake,
+                    erosion_reference_path: erosion_ref_path,
+                    metrics: Phase2Metrics {
+                        river_flow_rho: Some(flow.rho),
+                        is_lake_precision: Some(lake.precision),
+                        is_lake_recall: Some(lake.recall),
+                        is_lake_f1: Some(lake.f1),
+                        erosion_rate_spearman: erosion_metric,
+                        sediment_budget_ratio: sediment_metrics.sediment_budget_ratio,
+                        coastal_deposition_share: sediment_metrics.coastal_deposition_share,
+                        low_slope_deposition_share: sediment_metrics.low_slope_deposition_share,
+                    },
                 }
             }
             Err(error) => {
@@ -353,7 +407,7 @@ fn main() {
         }
     };
 
-    println!("-- Main Evaluation 1-C: Reference Only --");
+    println!("-- Main Evaluation 1-D: Reference Only --");
     let erosion_summary = summarize_land_values(
         &sim_world.state.hydrology.erosion_rate,
         &sim_world.state.geology.height,
@@ -498,6 +552,71 @@ fn evaluate_lake_metric(world: &world::World, reference: &HydroRef) -> LakeMetri
     }
 }
 
+fn evaluate_erosion_metric(world: &world::World, reference: &HydroErosionRef) -> Option<f32> {
+    spearman_on_land(
+        &world.state.hydrology.erosion_rate,
+        &reference.erosion_rate,
+        &world.state.geology.height,
+    )
+}
+
+struct SedimentMetrics {
+    sediment_budget_ratio: Option<f32>,
+    coastal_deposition_share: Option<f32>,
+    low_slope_deposition_share: Option<f32>,
+}
+
+fn evaluate_sediment_metrics(world: &world::World) -> SedimentMetrics {
+    let mut erosion_sum = 0.0_f32;
+    let mut deposition_sum = 0.0_f32;
+    let mut coastal_deposition_sum = 0.0_f32;
+    let mut low_slope_deposition_sum = 0.0_f32;
+    let coastal = world.coastal_flags();
+    let height = &world.state.geology.height;
+    let deposition = &world.state.hydrology.deposition_rate;
+    let erosion = &world.state.hydrology.erosion_rate;
+    let shallow_sea_floor = world.control.geology_params.shallow_sea_floor;
+    let mesh = world.mesh();
+
+    for i in 0..height.len().min(erosion.len()).min(deposition.len()) {
+        let er = erosion[i];
+        let dep = deposition[i];
+        if er.is_finite() && er > 0.0 {
+            erosion_sum += er;
+        }
+        if dep.is_finite() && dep > 0.0 {
+            deposition_sum += dep;
+            let is_coastal = coastal.get(i).copied().unwrap_or(false);
+            let h = height[i];
+            let is_shallow_marine = h <= 0.0 && h >= shallow_sea_floor;
+            if is_coastal || is_shallow_marine {
+                coastal_deposition_sum += dep;
+            }
+            if slope_proxy(mesh, height, i) < 0.015 {
+                low_slope_deposition_sum += dep;
+            }
+        }
+    }
+
+    SedimentMetrics {
+        sediment_budget_ratio: if erosion_sum > 0.0 {
+            Some(deposition_sum / erosion_sum)
+        } else {
+            None
+        },
+        coastal_deposition_share: if deposition_sum > 0.0 {
+            Some(coastal_deposition_sum / deposition_sum)
+        } else {
+            None
+        },
+        low_slope_deposition_share: if deposition_sum > 0.0 {
+            Some(low_slope_deposition_sum / deposition_sum)
+        } else {
+            None
+        },
+    }
+}
+
 fn spearman_log_flow_on_land(
     model_field: &[f32],
     ref_field: &[f32],
@@ -527,6 +646,65 @@ fn spearman_log_flow_on_land(
         }
         model_values.push(model.ln());
         ref_values.push(reference.ln());
+    }
+    if model_values.len() < 3 {
+        return None;
+    }
+    spearman(&model_values, &ref_values)
+}
+
+fn slope_proxy(mesh: &world::WorldMesh, height: &[f32], index: usize) -> f32 {
+    let center = height.get(index).copied().unwrap_or(0.0);
+    let neighbors = mesh.cell_neighbors(index);
+    if neighbors.is_empty() {
+        return 0.0;
+    }
+    let mut sum = 0.0_f32;
+    let mut count = 0_u32;
+    for &n_u32 in neighbors {
+        let n = n_u32 as usize;
+        if n >= height.len() {
+            continue;
+        }
+        let diff = (center - height[n]).abs();
+        if diff.is_finite() {
+            sum += diff;
+            count += 1;
+        }
+    }
+    if count == 0 {
+        0.0
+    } else {
+        sum / count as f32
+    }
+}
+
+fn spearman_on_land(
+    model_field: &[f32],
+    ref_field: &[f32],
+    geology_height: &[f32],
+) -> Option<f32> {
+    let len = model_field
+        .len()
+        .min(ref_field.len())
+        .min(geology_height.len());
+    if len < 3 {
+        return None;
+    }
+
+    let mut model_values = Vec::with_capacity(len);
+    let mut ref_values = Vec::with_capacity(len);
+    for i in 0..len {
+        if geology_height[i] <= 0.0 {
+            continue;
+        }
+        let model = model_field[i];
+        let reference = ref_field[i];
+        if !model.is_finite() || !reference.is_finite() {
+            continue;
+        }
+        model_values.push(model);
+        ref_values.push(reference);
     }
     if model_values.len() < 3 {
         return None;
@@ -687,6 +865,25 @@ fn find_hydro_ref_cache_path() -> Option<PathBuf> {
         .map(|path| (*path).to_path_buf())
 }
 
+fn find_hydro_erosion_ref_cache_path() -> Option<PathBuf> {
+    let candidates = [
+        Path::new("data/glosem_ref.bin"),
+        Path::new("../data/glosem_ref.bin"),
+        Path::new("benches/data/glosem_ref.bin"),
+        Path::new("../benches/data/glosem_ref.bin"),
+        Path::new("../../benches/data/glosem_ref.bin"),
+        Path::new("data/hydro_erosion_ref.bin"),
+        Path::new("../data/hydro_erosion_ref.bin"),
+        Path::new("benches/data/hydro_erosion_ref.bin"),
+        Path::new("../benches/data/hydro_erosion_ref.bin"),
+        Path::new("../../benches/data/hydro_erosion_ref.bin"),
+    ];
+    candidates
+        .iter()
+        .find(|path| path.exists())
+        .map(|path| (*path).to_path_buf())
+}
+
 fn load_terrain_ref(path: &Path) -> Result<TerrainRef, String> {
     let file = File::open(path)
         .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
@@ -708,6 +905,14 @@ fn load_hydro_ref(path: &Path) -> Result<HydroRef, String> {
         .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
     decode_hydro_ref_custom(&mut reader)
+        .map_err(|error| format!("failed to decode {}: {}", path.display(), error))
+}
+
+fn load_hydro_erosion_ref(path: &Path) -> Result<HydroErosionRef, String> {
+    let file = File::open(path)
+        .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
+    let mut reader = BufReader::new(file);
+    decode_hydro_erosion_ref_custom(&mut reader)
         .map_err(|error| format!("failed to decode {}: {}", path.display(), error))
 }
 
@@ -773,6 +978,26 @@ fn decode_hydro_ref_custom<R: Read>(reader: &mut R) -> Result<HydroRef, String> 
         river_flow,
         is_lake,
     })
+}
+
+fn decode_hydro_erosion_ref_custom<R: Read>(reader: &mut R) -> Result<HydroErosionRef, String> {
+    const MAGIC: &[u8; 8] = b"GLOSEM01";
+    let mut magic = [0_u8; 8];
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| format!("failed to read magic: {}", error))?;
+    if &magic != MAGIC {
+        return Err("invalid magic (expected GLOSEM01)".to_string());
+    }
+
+    let version = read_u32_le(reader)?;
+    if version != 1 {
+        return Err(format!("unsupported version: {}", version));
+    }
+
+    let cell_count = read_u64_le(reader)? as usize;
+    let erosion_rate = read_f32_vec(reader, cell_count)?;
+    Ok(HydroErosionRef { erosion_rate })
 }
 
 fn read_u32_le<R: Read>(reader: &mut R) -> Result<u32, String> {
@@ -989,9 +1214,18 @@ fn resolve_git_commit() -> Option<String> {
 }
 
 fn score_output_path() -> PathBuf {
+    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let candidate = PathBuf::from(manifest_dir).join("../results/hydrology_main_scores.jsonl");
+        if let Some(parent) = candidate.parent() {
+            if parent.exists() {
+                return candidate;
+            }
+        }
+    }
     let candidates = [
-        Path::new("benches/results/hydrology_main_scores.jsonl"),
         Path::new("../benches/results/hydrology_main_scores.jsonl"),
+        Path::new("benches/results/hydrology_main_scores.jsonl"),
+        Path::new("../../benches/results/hydrology_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {
@@ -1027,6 +1261,38 @@ fn format_json_number(value: f32) -> String {
     }
 }
 
+fn format_option_number(value: Option<f32>) -> String {
+    match value {
+        Some(value) => format_json_number(value),
+        None => "null".to_string(),
+    }
+}
+
+fn format_json_number_opt(value: Option<f32>) -> String {
+    match value {
+        Some(value) => format_json_number(value),
+        None => "null".to_string(),
+    }
+}
+
+fn phase2_metrics_null_json() -> String {
+    "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null,\"erosion_rate_spearman\":null,\"sediment_budget_ratio\":null,\"coastal_deposition_share\":null,\"low_slope_deposition_share\":null}".to_string()
+}
+
+fn format_phase2_metrics_json(metrics: &Phase2Metrics) -> String {
+    format!(
+        "{{\"river_flow_rho\":{},\"is_lake_precision\":{},\"is_lake_recall\":{},\"is_lake_f1\":{},\"erosion_rate_spearman\":{},\"sediment_budget_ratio\":{},\"coastal_deposition_share\":{},\"low_slope_deposition_share\":{}}}",
+        format_json_number_opt(metrics.river_flow_rho),
+        format_json_number_opt(metrics.is_lake_precision),
+        format_json_number_opt(metrics.is_lake_recall),
+        format_json_number_opt(metrics.is_lake_f1),
+        format_json_number_opt(metrics.erosion_rate_spearman),
+        format_json_number_opt(metrics.sediment_budget_ratio),
+        format_json_number_opt(metrics.coastal_deposition_share),
+        format_json_number_opt(metrics.low_slope_deposition_share),
+    )
+}
+
 fn append_score_record_jsonl(
     main_eval_state: &MainEvaluationState,
     run_metadata: &BenchRunMetadata,
@@ -1042,39 +1308,39 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("system time error: {}", error))?
         .as_millis();
 
-    let (main_state_label, main_ref_path, main_error, metrics_json) = match main_eval_state {
+    let (main_state_label, main_ref_path, main_erosion_ref_path, main_error, metrics_json) = match main_eval_state {
         MainEvaluationState::Ready {
             reference_path,
-            flow,
-            lake,
+            erosion_reference_path,
+            metrics,
         } => (
             "ready",
             Some(reference_path.display().to_string()),
+            erosion_reference_path
+                .as_ref()
+                .map(|value| format!("\"{}\"", json_escape(&value.display().to_string())))
+                .unwrap_or_else(|| "null".to_string()),
             None,
-            format!(
-                "{{\"river_flow_rho\":{},\"is_lake_precision\":{},\"is_lake_recall\":{},\"is_lake_f1\":{},\"erosion_rate_spearman\":null}}",
-                format_json_number(flow.rho),
-                format_json_number(lake.precision),
-                format_json_number(lake.recall),
-                format_json_number(lake.f1),
-            ),
+            format_phase2_metrics_json(metrics),
         ),
         MainEvaluationState::Skipped => (
             "skipped",
             None,
+            "null".to_string(),
             None,
-            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null,\"erosion_rate_spearman\":null}".to_string(),
+            phase2_metrics_null_json(),
         ),
         MainEvaluationState::Error(error) => (
             "error",
             None,
+            "null".to_string(),
             Some(error.clone()),
-            "{\"river_flow_rho\":null,\"is_lake_precision\":null,\"is_lake_recall\":null,\"is_lake_f1\":null,\"erosion_rate_spearman\":null}".to_string(),
+            phase2_metrics_null_json(),
         ),
     };
 
     let line = format!(
-        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"fill_spill_stats\":{{\"active_sink_count\":{},\"overflow_active_ratio\":{},\"mean_sink_fill_ratio\":{},\"ponded_cell_count\":{}}}}}}}\n",
+        "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"erosion_ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"fill_spill_stats\":{{\"active_sink_count\":{},\"overflow_active_ratio\":{},\"mean_sink_fill_ratio\":{},\"ponded_cell_count\":{}}}}}}}\n",
         timestamp_unix_ms,
         json_escape(&run_metadata.run_id),
         run_metadata
@@ -1100,6 +1366,7 @@ fn append_score_record_jsonl(
         main_ref_path
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),
+        main_erosion_ref_path,
         main_error
             .map(|value| format!("\"{}\"", json_escape(&value)))
             .unwrap_or_else(|| "null".to_string()),

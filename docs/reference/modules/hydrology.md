@@ -59,6 +59,10 @@ v1 では glacial sediment は入力に含めない。
 v1 の sediment accounting の集計キーは `sink_id` とし、
 `drainage basin` や `depression hierarchy` は将来拡張候補に留める。
 
+Hydrology 単体ベンチの `hydrology_solo` は、`river_flow` / `is_lake` に加えて
+GloSEM 由来の `erosion_rate_spearman` と、`sediment_budget_ratio` / `coastal_deposition_share` /
+`low_slope_deposition_share` を比較用 JSONL に記録する。
+
 ## 出力
 
 Hydrologyは次の配列を全セル分持つ。
@@ -175,6 +179,9 @@ Exner 系の budget 制約を掛ける。
 - `marine_sediment_mass` は v1 では非減少の一方向 sink とし、Hydrology は海成堆積物の再露出や再懸濁を扱わない
 - この段階では海陸比を合わせるための全球 terrain shift は行わない
 - 海陸比の復元が必要な場合は、標高ではなく `sea_level_offset` の `capacity closure` 側で扱う
+
+`hydrology_solo` ではこの節の実装を直接 gate にはしないが、
+`erosion_rate_spearman` と sediment 診断値を比較用 artifact に残す。
 
 ## 河川輸送コスト
 

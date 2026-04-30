@@ -1,40 +1,52 @@
 {
   "schema_version": 2,
-  "timestamp_unix_ms": 1774930866630,
+  "timestamp_unix_ms": 1777548722926,
   "bench": "hydrology_solo",
-  "run_id": "series-1774930860486-9fc7df96",
-  "repeat_index": 5,
-  "repeat_total": 5,
-  "git_commit": "145dd8035e9b7451f14f303997fc509c795290b4",
+  "run_id": "default-1777548722",
+  "repeat_index": null,
+  "repeat_total": null,
+  "git_commit": "9c82e6921ff88fc0275a1e53de5b3621adbc59d3",
   "seed": "earth",
   "mesh_level": 6,
   "cell_count": 40962,
   "runtime": {
-    "hydrology_step_ms": 33.35754
+    "hydrology_step_ms": 29.299042
   },
   "runtime_stats": {
-    "count": 5,
-    "median_ms": 32.920876,
-    "p95_ms": 33.720791
+    "count": 1,
+    "median_ms": 29.299042,
+    "p95_ms": 29.299042
   },
   "phase2": {
     "state": "ready",
-    "ref_path": "../benches/data/hydro_ref.bin",
+    "ref_path": "../data/hydro_ref.bin",
+    "erosion_ref_path": "../data/glosem_ref.bin",
     "error": null,
     "metrics": {
-      "river_flow_rho": 0.614673,
-      "is_lake_precision": 0,
-      "is_lake_recall": 0,
-      "is_lake_f1": 0,
-      "erosion_rate_spearman": null
+      "river_flow_rho": 0.623667,
+      "is_lake_precision": 0.030043,
+      "is_lake_recall": 0.3,
+      "is_lake_f1": 0.054616,
+      "erosion_rate_spearman": 0.261199,
+      "sediment_budget_ratio": 0.630599,
+      "coastal_deposition_share": 0.17571,
+      "low_slope_deposition_share": 0.26493
     }
   },
   "phase1": {
     "river_flow_ranking": {
-      "matched": 4,
+      "matched": 5,
       "total": 5,
       "excluded_known_hard": 0,
-      "coverage_ratio": 0.8
+      "coverage_ratio": 1
+    }
+  },
+  "diagnostics": {
+    "fill_spill_stats": {
+      "active_sink_count": 506,
+      "overflow_active_ratio": 0.332016,
+      "mean_sink_fill_ratio": 0.375811,
+      "ponded_cell_count": 699
     }
   }
 }

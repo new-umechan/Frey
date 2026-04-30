@@ -18,6 +18,7 @@ GEOLOGY_RIDGE_MAGIC = b"GEORIDG1"
 GEOLOGY_CONTINENTAL_MASK_MAGIC = b"GEOCNTL1"
 HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
+GLOSEM_REF_MAGIC = b"GLOSEM01"
 ECOLOGY_REF_MAGIC = b"ECOREF01"
 GLACIOLOGY_REF_MAGIC = b"GLACREF1"
 DOMESTICATES_REF_MAGIC = b"DOMEREF2"
@@ -68,6 +69,7 @@ def parse_args() -> argparse.Namespace:
             "continental-mask",
             "hydro-input",
             "hydro-ref",
+            "glosem-ref",
             "ecology-ref",
             "domesticates-ref",
             "glaciology-ref",
@@ -100,6 +102,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runoff", help="Input raster/NetCDF for runoff.")
     parser.add_argument("--river-flow", help="Input raster/NetCDF for river flow.")
     parser.add_argument("--lakes", help="Input shapefile for lake polygons.")
+    parser.add_argument("--soil-loss", help="Input raster/NetCDF for GloSEM soil loss.")
     parser.add_argument("--aridity", help="Input raster/NetCDF for aridity.")
     parser.add_argument(
         "--aridity-source",
@@ -802,6 +805,16 @@ def write_hydro_ref_bin(
         handle.write(struct.pack("<Q", int(flow_values.size)))
         handle.write(flow_values.tobytes(order="C"))
         handle.write(lake_values.tobytes(order="C"))
+
+
+def write_glosem_ref_bin(path: Path, erosion_rate: np.ndarray) -> None:
+    values = np.asarray(erosion_rate, dtype="<f4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GLOSEM_REF_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
 
 
 def write_ecology_ref_bin(
@@ -1563,6 +1576,23 @@ def main() -> None:
         write_hydro_ref_bin(output_path, river_flow, is_lake)
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(river_flow)}")
+        return
+
+    if args.module == "glosem-ref":
+        if not args.soil_loss:
+            raise ValueError("missing required arg for glosem-ref module: --soil-loss")
+
+        grid = load_input_grid(Path(args.soil_loss), None)
+        erosion_rate = interpolate_grid(
+            grid=grid,
+            query_lat=centroid_lat,
+            query_lon=centroid_lon,
+            method=args.method,
+        ).astype(np.float32, copy=False)
+        print(summarize("erosion_rate", erosion_rate))
+        write_glosem_ref_bin(output_path, erosion_rate)
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(erosion_rate)}")
         return
 
     if args.module == "ecology-ref":

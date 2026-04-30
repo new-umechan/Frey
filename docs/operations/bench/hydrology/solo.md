@@ -4,9 +4,11 @@
 
 入力として実地形（`geology.height`、固定）と実気候データ（`climate.runoff`、ERA5-Land由来）を与え、
 安定化 tick 実行後の `river_flow`・`is_lake` を主指標として評価する。
-`erosion_rate`・`deposition_rate` は実データが粗いため参考値として記録する。
-ただし河口・デルタの堆積 hotspot と最終搬出先の妥当性は Geology 単体ではなく
-Hydrology 側の downstream transport 検証として扱う方針とし、この文書の将来拡張先に位置づける。
+`erosion_rate_spearman` は GloSEM 由来の侵食参照との順位相関として記録し、
+`sediment_budget_ratio`・`coastal_deposition_share`・`low_slope_deposition_share` は
+Hydrology の堆積診断として同じ JSONL artifact に保存する。
+河口・デルタの堆積 hotspot と最終搬出先の厳密な検証は、なお Hydrology 側の downstream transport
+benchmark へ分離し、この文書では粗い診断値のみを扱う。
 
 Hydrologyモジュール単体の評価が目的であり、Climateの誤差を混入させないため
 `climate.runoff` はClimateモジュールの出力ではなくERA5-Landの実測値を直接入力する。
@@ -49,6 +51,7 @@ Hydrology単体ベンチ専用の入力キャッシュ `benches/data/hydro_input
 3. `pnpm bench:prepare:era5`（未実行の場合のみ）
 4. `pnpm bench:resample:hydro-input -- --runoff benches/raw/climate/era5_land_annual_1970_2000.nc --var-name runoff=runoff_mm_yr`
 5. `pnpm bench:resample:hydro-ref -- --river-flow benches/raw/hydrology/glofas_era5_annual_mean.nc --lakes benches/raw/hydrology/HydroLAKES_polys_v10.shp`
+6. `pnpm bench:resample:glosem-ref`
 
 `bench:prepare:era5` の前提として、`benches/raw/climate/era5_land_monthly_1970_2000.zip` を用意する
 （`pnpm bench:fetch:era5` で取得可）。
@@ -193,9 +196,11 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 ---
 
-### 1-C：参考値（erosion_rate・deposition_rate）
+### 1-C：侵食・堆積の参照比較と粗い診断値
 
-実データが粗いため主評価には含めない。シミュレーション出力の絶対値と分布形状を記録するにとどめる。
+`erosion_rate_spearman` は GloSEM の soil loss とモデル `erosion_rate` の順位相関を記録する。
+`sediment_budget_ratio`・`coastal_deposition_share`・`low_slope_deposition_share` は
+モデル内部の収支・配分診断として記録し、PASS/FAIL は付けない。
 
 下流輸送と河口寄りの堆積検証は、本書末尾の「将来拡張: downstream sediment benchmark」で別管理する。
 
@@ -256,6 +261,15 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 
 欠損値は `river_flow` では `f32::NAN`、`is_lake` では `0`（非湖扱い）とする。
 
+### glosem_ref.bin
+
+1. magic: `GLOSEM01`（8 bytes）
+2. version: `u32` little-endian（現行 `1`）
+3. cell_count: `u64` little-endian
+4. `erosion_rate` の `f32` little-endian 配列（`cell_count` 件、単位は GloSEM soil loss の相対値）
+
+欠損値は `erosion_rate` では `f32::NAN` とする。
+
 ---
 
 ## 出力フォーマット
@@ -271,9 +285,10 @@ river_flow:  rho=0.741
 -- Main Evaluation 1-B: is_lake F1 (land cells only) --
 precision=0.412  recall=0.638  f1=0.501
 
--- Main Evaluation 1-C: Reference Only --
-erosion_rate:    mean=0.0031  p50=0.0018  p95=0.0089
-deposition_rate: mean=0.0024  p50=0.0014  p95=0.0071
+-- Main Evaluation 1-C: erosion_rate / sediment diagnostics --
+-- Erosion Reference Source: benches/data/glosem_ref.bin --
+erosion_rate:  rho=0.318
+sediment_budget_ratio=0.912  coastal_deposition_share=0.274  low_slope_deposition_share=0.588
 
 -- Diagnostic Evaluation 2-A: River Flow Ranking Assertions --
 R-01  amazon_mouth > congo_mouth:       match  (182340.0 vs 41000.0)
@@ -294,6 +309,7 @@ ganges_delta:      river_flow=6800.0
 
 -- Main Evaluation 1-A Summary: metrics_reported=1 --
 -- Main Evaluation 1-B Summary: metrics_reported=3 --
+-- Main Evaluation 1-C Summary: metrics_reported=4 --
 -- Diagnostic Evaluation 2-A Summary: matched=5/5 coverage_ratio=1.000 --
 -- Main Evaluation State: READY --
 -- Score Save: OK --
@@ -306,6 +322,7 @@ ganges_delta:      river_flow=6800.0
 `benches/data/terrain_ref.bin` が存在しない場合、ベンチは実行せず終了する。
 `benches/data/hydro_input.bin` が存在しない場合、ベンチは実行せず終了する。
 `benches/data/hydro_ref.bin` が存在しない場合、主評価はスキップして補助評価のみ実行する。
+`benches/data/glosem_ref.bin` が存在しない場合、`erosion_rate_spearman` だけ `null` で記録し、他の主評価は継続する。
 
 補助評価は実データ不要（代表セルのシミュレーション出力値同士を比較するだけ）のため、
 実データ整備前から即座に実行できる。
@@ -353,6 +370,9 @@ CLI 契約は次の通りとする。
 - `--module hydro-ref`
 - 必須引数は `--river-flow` と `--lakes`
 - 出力既定値は `benches/data/hydro_ref.bin`
+- `--module glosem-ref`
+- 必須引数は `--soil-loss`
+- 出力既定値は `benches/data/glosem_ref.bin`
 
 ```bash
 python benches/scripts/resample.py --module hydro-input \
@@ -382,11 +402,15 @@ python benches/scripts/resample.py --module hydro-ref \
 8. `river_flow` は各セルの重心座標でバイリニア補間する
 9. `is_lake` は各セルの重心が湖ポリゴン内に含まれるか判定する
 10. 結果を上記バイナリ形式で保存する
+11. `glosem-ref`
+12. GloSEM 2012 の 25km GeoTIFF を読み、各セル重心でバイリニア補間する
+13. `erosion_rate` を `glosem_ref.bin` に保存する
 
 依存ライブラリ（追加分）：
 
 - `xarray`, `netCDF4`（GloFAS-ERA5 NetCDF 読込）
 - `geopandas`, `shapely`（HydroLAKES ポリゴン処理）
+- `rasterio`（GloSEM GeoTIFF 読込）
 
 ---
 
@@ -396,7 +420,7 @@ python benches/scripts/resample.py --module hydro-ref \
 補助評価要約と主評価生スコアをJSONLへ追記保存する。
 
 - 保存先: `benches/results/hydrology_main_scores.jsonl`
-- 1実行 = 1行（時刻、seed、mesh_level、cell_count、river_flow_rho、is_lake_precision/recall/f1、erosion_rate_spearman（未実装時は `null`）、補助評価要約）
+- 1実行 = 1行（時刻、seed、mesh_level、cell_count、river_flow_rho、is_lake_precision/recall/f1、erosion_rate_spearman、sediment_budget_ratio、coastal_deposition_share、low_slope_deposition_share、補助評価要約）
 
 ---
 

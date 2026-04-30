@@ -31,6 +31,9 @@ Geology は次の 2 系統で検証する。
 quality gate ではなく、JSONL artifact の最新値・baseline・差分を比較して読む運用とする。
 
 `erosion_rate` / `deposition_rate` は Hydrology の計算責務として扱い、単体比較も `hydrology_solo` で行う。
+`hydrology_solo` は `river_flow` / `is_lake` に加えて、GloSEM 参照との `erosion_rate_spearman`
+と、`sediment_budget_ratio` / `coastal_deposition_share` / `low_slope_deposition_share` の
+粗い sediment 診断を記録する。
 主要河川 outlet やデルタ hotspot の整合も Geology ではなく Hydrology の downstream transport 検証で扱う。
 
 `geology_solo` は Earth 実データ入力ベンチとして実装済みで、詳細は `docs/operations/bench/geology/solo.md` を参照する。
@@ -103,8 +106,10 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 | ----------------- | ------ | ------------------------------------------------ |
 | `river_flow`      | 中     | 主要河川の流量分布。対数スケールで評価           |
 | `is_lake`         | 中     | 主要湖の位置再現（バイカル・カスピ・五大湖など） |
-| `erosion_rate`    | 低     | 実データが粗い                                   |
-| `deposition_rate` | 低     | 下流輸送・河口 hotspot は Hydrology 側の将来拡張で扱う |
+| `erosion_rate_spearman` | 低 | GloSEM 由来の侵食 proxy との順位相関。絶対量ではなく傾向を見る |
+| `sediment_budget_ratio` | 低 | モデル内部の収支診断。`Σdeposition / Σerosion` を見る |
+| `coastal_deposition_share` | 低 | 海岸・浅海への堆積偏りをみる粗い診断 |
+| `low_slope_deposition_share` | 低 | 低勾配域への堆積集中をみる粗い診断 |
 
 ### Ecology
 
