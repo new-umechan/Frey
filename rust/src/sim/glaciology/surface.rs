@@ -199,8 +199,6 @@ mod tests {
             height: vec![0.45, 0.15, -0.25, 0.05],
             lake_depth: vec![0.0; 4],
             plate_id: vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)],
-            erosion_rate: vec![0.0; 4],
-            deposition_rate: vec![0.0; 4],
             volcanism: vec![0.0; 4],
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],

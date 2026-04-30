@@ -31,5 +31,5 @@ name = "glaciology_sea_level_series"
 harness = false
 
 [[bench]]
-name = "geology_solo"
+name = "geology_validation_solo"
 harness = false

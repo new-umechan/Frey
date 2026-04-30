@@ -450,7 +450,7 @@ downstream sediment benchmark の主参照には採用しない。
 
 ### 前提
 
-- `geology_solo` にはこの拡張指標を持ち込まない
+- `geology_validation_solo` にはこの拡張指標を持ち込まない
 - `Hydrology` の比較仕様を拡張するときも、`river_flow` / `is_lake` の現行主評価は維持する
 
 関連:

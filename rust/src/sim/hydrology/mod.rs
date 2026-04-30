@@ -87,8 +87,8 @@ pub(crate) fn run_hydrology_step(
     ) {
         let phase_start = profile_now();
         run_river_fallback(world, &runoff, hydrology_state.as_mut());
-        world.state.geology.erosion_rate.fill(0.0);
-        world.state.geology.deposition_rate.fill(0.0);
+        world.state.hydrology.erosion_rate.fill(0.0);
+        world.state.hydrology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
         detail.fallback_count = detail.fallback_count.saturating_add(1);
     }
@@ -198,8 +198,8 @@ pub(crate) fn run_hydrology_flow_step(
     if !run_river_flow_only_with_state(world, hydrology_state.as_mut(), &runoff, &mut detail) {
         let phase_start = profile_now();
         run_river_fallback(world, &runoff, hydrology_state.as_mut());
-        world.state.geology.erosion_rate.fill(0.0);
-        world.state.geology.deposition_rate.fill(0.0);
+        world.state.hydrology.erosion_rate.fill(0.0);
+        world.state.hydrology.deposition_rate.fill(0.0);
         detail.river_fallback_ms += profile_elapsed_ms(phase_start);
         detail.fallback_count = detail.fallback_count.saturating_add(1);
     }
@@ -412,7 +412,7 @@ fn run_river_step_with_erosion_state(
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
-    update_erosion_and_deposition_rates(geology, &state.height);
+    update_erosion_and_deposition_rates(geology, hydrology, &state.height);
     // raw_river_flux（正規化前）を river_flow として使用
     hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
@@ -532,8 +532,8 @@ fn run_river_flow_only_with_state(
     hydrology.river_next.clone_from(&state.river_next);
     rebuild_mfd_from_primary(hydrology);
     update_public_lake_flags(hydrology, &state.height, &state.params);
-    geology.erosion_rate.fill(0.0);
-    geology.deposition_rate.fill(0.0);
+    hydrology.erosion_rate.fill(0.0);
+    hydrology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
@@ -574,23 +574,24 @@ fn flow_flux_on_primary_network(height: &[f32], river_next: &[i32], runoff: &[f3
 }
 
 fn update_erosion_and_deposition_rates(
-    geology: &mut crate::sim::world::GeologyState,
+    geology: &crate::sim::world::GeologyState,
+    hydrology: &mut crate::sim::world::HydrologyState,
     next_height: &[f32],
 ) {
     let count = geology
         .height
         .len()
-        .min(geology.erosion_rate.len())
-        .min(geology.deposition_rate.len())
+        .min(hydrology.erosion_rate.len())
+        .min(hydrology.deposition_rate.len())
         .min(next_height.len());
-    geology.erosion_rate.fill(0.0);
-    geology.deposition_rate.fill(0.0);
+    hydrology.erosion_rate.fill(0.0);
+    hydrology.deposition_rate.fill(0.0);
     for (i, &next_h) in next_height.iter().enumerate().take(count) {
         let delta = next_h - geology.height[i];
         if delta >= 0.0 {
-            geology.deposition_rate[i] = delta;
+            hydrology.deposition_rate[i] = delta;
         } else {
-            geology.erosion_rate[i] = -delta;
+            hydrology.erosion_rate[i] = -delta;
         }
     }
 }
@@ -694,8 +695,6 @@ mod tests {
                 height: vec![1.2, 0.9, 0.6, -0.2],
                 lake_depth: vec![0.0; 4],
                 plate_id: vec![PlateId(0); 4],
-                erosion_rate: vec![0.0; 4],
-                deposition_rate: vec![0.0; 4],
                 volcanism: vec![0.0; 4],
                 vertex_buoyancy: vec![0.0; 4],
                 geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],

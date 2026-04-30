@@ -20,23 +20,22 @@ docs には比較指標、更新手順、結果の読み方だけを置き、期
 
 ---
 
-## Plateの検証方針（ベンチマーク対象外）
+## Geologyの検証方針
 
-Plateは実データとの定量比較になじまないため、ベンチマークの対象外とする。
-代わりに以下の2種類の検証を別枠で設ける。
+Geology は次の 2 系統で検証する。
 
-詳細は `docs/operations/bench/geology/validation.md` を参照する。
+- tectonics / runtime 診断ベンチ（`geology_validation_solo`）
+- 長期 tectonics 検証（`validation.md`）
 
-### サニティチェック（定性・形状確認）
+現行の単体 bench は `geology_validation_solo` であり、Earth preset 上で tectonics の runtime / 構造診断を記録する validation bench とする。
+quality gate ではなく、JSONL artifact の最新値・baseline・差分を比較して読む運用とする。
 
-- プレート境界が破綻した形状になっていないか
-- 流路・地形が不自然に曲がっていないか
-- 陸地・海洋の割合が極端に偏っていないか
+`erosion_rate` / `deposition_rate` は Hydrology の計算責務として扱い、単体比較も `hydrology_solo` で行う。
+主要河川 outlet やデルタ hotspot の整合も Geology ではなく Hydrology の downstream transport 検証で扱う。
 
-### ウィルソンサイクルの定性再現
-
-長期実行したときに、超大陸の集合と分裂のサイクルが観察できるかを目視で確認する。
-実データとの比較ではなく、「それらしい挙動が起きているか」の定性評価とする。
+将来の `geology_solo` は Earth 実データ入力ベンチとして別途実装する。
+詳細は `docs/operations/bench/geology/validation_solo.md` と `docs/operations/bench/geology/validation.md` を参照する。
+長期のウィルソンサイクルと plate 構造の妥当性は `docs/operations/bench/geology/validation.md` で別管理する。
 
 ---
 
@@ -48,6 +47,7 @@ Plateは実データとの定量比較になじまないため、ベンチマー
 | -------------------- | ------------------------------------------------- | -------------- | ---------------------------- |
 | Climate単体          | 実地形 + 固定植生（0.5）                          | 1 tick         | Climateモデル自体の評価      |
 | Hydrology単体        | 実地形 + 実気候データ                             | 1 tick         | Hydrologyモデル自体の評価    |
+| Geology validation単体 | Earth preset                                     | 12+10 tick     | tectonics runtime / 構造診断 |
 | Ecology単体          | 実気候データ + 実水文データ                       | 収束まで       | Ecologyモデル自体の評価      |
 | Domesticates単体     | 実地形 + 実気候 + 実水文 + 実植生 + 現代分布proxy | 1 tick         | Domesticatesの適地モデル評価 |
 | Glaciology単体       | 実地形 + Climate出力                              | 1 tick         | Glaciologyモデル自体の評価   |
@@ -104,7 +104,7 @@ Phase 1（代表地域ランキング）は、Phase 2のスコアが変動した
 | `river_flow`      | 中     | 主要河川の流量分布。対数スケールで評価           |
 | `is_lake`         | 中     | 主要湖の位置再現（バイカル・カスピ・五大湖など） |
 | `erosion_rate`    | 低     | 実データが粗い                                   |
-| `deposition_rate` | 低     | 実データが粗い                                   |
+| `deposition_rate` | 低     | 下流輸送・河口 hotspot は Hydrology 側の将来拡張で扱う |
 
 ### Ecology
 

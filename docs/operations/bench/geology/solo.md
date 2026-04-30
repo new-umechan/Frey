@@ -1,71 +1,34 @@
-# Geology単体ベンチ（Earth 侵食・堆積 v1）
+# Geology単体ベンチ（Earth 実データ入力, planned）
 
 ## 概要
 
-`geology_solo` は Earth 固定条件で侵食・堆積の傾向場を診断する手動ベンチである。
-v1 は quality gate ではなく、JSONL artifact の時系列比較を目的にする。
+`geology_solo` は将来実装する Earth 実データ入力 bench の予約名である。
+現時点では未実装であり、既存の tectonics 診断 bench は `geology_validation_solo` として別管理する。
 
-- seed: `earth`
-- mesh_level: `6`
-- 評価軸: 空間傾向（順位相関 / hotspot / 収支診断）
+- 想定入力: Earth 地形・気候・水文などの外部入力
+- 想定目的: Geology 系の Earth 応答を I/O として比較する
+- 非目的: tectonics validation bench の兼用
 
-このベンチは次の知見に整合する近似を採る。
+設計方針は次のとおり。
 
-- 全球土壌侵食 proxy（Borrelli et al., GloSEM）との順位整合
-- 全球河川 sediment flux の地域差（Syvitski 系レビュー）との整合
+- Earth 固有 preset への過剰適合ではなく、Earth 実データ入力に対する出口比較を行う
+- fluvial `erosion_rate` / `deposition_rate` は Hydrology の責務として扱う
+- 現行 `hydrology_solo` と責務が衝突しない指標だけを持ち込む
 
-## 実行コマンド
+## 現在の状態
 
-```bash
-pnpm run bench --suite geology_solo
-```
+まだ実装していない。
+現行 bench は [validation_solo.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/validation_solo.md) を参照する。
 
-系列実行と比較:
+## 想定範囲
 
-```bash
-pnpm run bench:run:geology-series -- --runs 5
-pnpm run bench:compare:geology
-```
+候補は今後の proposal / decision で確定するが、少なくとも次を前提にする。
 
-## 出力 artifact
+- Earth 地形入力は preset ではなく外部データを読む
+- `erosion_rate` / `deposition_rate` の主比較は Hydrology 側へ置く
+- Geology bench には Geology 固有の応答指標だけを載せる
 
-- JSONL: `benches/results/geology_main_scores.jsonl`
-- 1 run = 1 record
+## 関連
 
-v1 で最低限記録する項目:
-
-- runtime: `geology_step_p50_ms`, `geology_step_p95_ms`
-- phase2.metrics: `sediment_budget_ratio`, `coastal_deposition_share`, `low_slope_deposition_share`
-- diagnostics: `open_boundary_export_fraction`, `erosion_reference_coverage`, `lake_deposition_share`
-
-## 入力データ要件
-
-必須（地形）:
-
-- `benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`
-
-推奨（比較参照）:
-
-- GloSEM（侵食参照）
-
-v1 実装では、参照データ未整備でもベンチ自体は実行し、計算不能な指標は `null` で保存する。
-
-取得手順の詳細は `docs/operations/bench/geology/data_acquisition.md` を参照する。
-
-## データ取得メモ
-
-ETOPO は既存運用の `bench:resample:terrain` と同じ入力を使う。
-GloSEM は配布形態や利用規約の都合で手動取得が必要な場合があるため、プロジェクトでの再配布は行わない。
-
-## 運用ルール
-
-- PASS/FAIL 判定はしない
-- 最新値と baseline の差分を読む
-- under-resolved な狭小地形（デルタ・狭湾・小流域）の扱いは Hydrology 側の堆積診断で扱う
-- モデル変更時は `bench:run:geology-series` を実行して比較記録を残す
-
-## 既知の限界
-
-- `mesh_level=6`（約100 km）では局所地形を解像しきれない
-- GloSEM は土壌侵食 proxy であり、露岩侵食・氷河輸送・海底輸送を直接は表さない
-- 河口・デルタの堆積 hotspot と主要 outlet の整合は Geology 単体より Hydrology 側の downstream transport 検証に近い
+- `docs/proposal/geology-benchmark-split-and-hydrology-sediment-ownership.md`
+- `docs/operations/bench/geology/validation_solo.md`

@@ -51,6 +51,8 @@
         "bench:compare:hydrology": "tsx benches/scripts/compare-hydrology-scores.ts",
         "bench:check:hydrology-runtime": "tsx benches/scripts/check-hydrology-runtime.ts",
         "bench:check:hydrology-quality": "tsx benches/scripts/check-hydrology-quality.ts",
+        "bench:run:geology-validation-series": "tsx benches/scripts/bench-geology-validation-series.ts",
+        "bench:compare:geology-validation": "tsx benches/scripts/compare-geology-validation-scores.ts",
         "bench:run:glaciology-series": "tsx benches/scripts/bench-glaciology-series.ts",
         "bench:compare:glaciology": "tsx benches/scripts/compare-glaciology-scores.ts",
         "bench:compare:domesticates": "tsx benches/scripts/compare-domesticates-scores.ts",

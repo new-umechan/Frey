@@ -142,8 +142,6 @@ pub(crate) fn init_world(
         height: terrain.height,
         lake_depth: terrain.lake_depth,
         plate_id: terrain.plate_id,
-        erosion_rate: vec![0.0; positions.len()],
-        deposition_rate: vec![0.0; positions.len()],
         volcanism: terrain.volcanism,
         vertex_buoyancy: terrain.vertex_buoyancy,
         geology_internal: vec![GeologyInternal::default(); positions.len()],

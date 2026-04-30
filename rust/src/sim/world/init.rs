@@ -64,6 +64,8 @@ impl World {
                     river_downstream: vec![SmallVec::new(); cell_count],
                     river_next: vec![-1; cell_count],
                     river_flow: vec![0.0; cell_count],
+                    erosion_rate: vec![0.0; cell_count],
+                    deposition_rate: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
                     is_lake: vec![false; cell_count],
                     sink_id: vec![-1; cell_count],

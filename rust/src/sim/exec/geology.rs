@@ -111,20 +111,25 @@ pub(super) fn apply_hydrology_erosion_to_geology(
                     .sum::<f32>()
         })
         .unwrap_or(0.0);
-    let geology = &mut world.state.geology;
-    let count = geology
+    let count = world
+        .state
+        .geology
         .height
         .len()
-        .min(geology.erosion_rate.len())
-        .min(geology.deposition_rate.len())
+        .min(world.state.hydrology.erosion_rate.len())
+        .min(world.state.hydrology.deposition_rate.len())
         .min(world.state.glaciology.glacial_erosion_rate.len());
-    let total_fluvial_erosion = geology
+    let total_fluvial_erosion = world
+        .state
+        .hydrology
         .erosion_rate
         .iter()
         .take(count)
         .map(|value| value.max(0.0))
         .sum::<f32>();
-    let total_requested_deposition = geology
+    let total_requested_deposition = world
+        .state
+        .hydrology
         .deposition_rate
         .iter()
         .take(count)
@@ -156,39 +161,39 @@ pub(super) fn apply_hydrology_erosion_to_geology(
     if let Some(dynamics) = geology_state.as_mut() {
         let thickness_count = count.min(dynamics.vertex_states.len());
         for i in 0..thickness_count {
-            let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
+            let erosion = world.state.hydrology.erosion_rate[i].max(0.0);
+            let deposition = world.state.hydrology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
-            geology.deposition_rate[i] = deposition;
-            geology.height[i] =
-                (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.hydrology.deposition_rate[i] = deposition;
+            world.state.geology.height[i] =
+                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
             dynamics.vertex_states[i].thickness = (dynamics.vertex_states[i].thickness
                 - erosion * thickness_erosion_scale
                 + deposition * thickness_deposition_scale)
                 .clamp(0.18, 1.25);
         }
         for i in thickness_count..count {
-            let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
+            let erosion = world.state.hydrology.erosion_rate[i].max(0.0);
+            let deposition = world.state.hydrology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
-            geology.deposition_rate[i] = deposition;
-            geology.height[i] =
-                (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.hydrology.deposition_rate[i] = deposition;
+            world.state.geology.height[i] =
+                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     } else {
         for i in 0..count {
-            let erosion = geology.erosion_rate[i].max(0.0);
-            let deposition = geology.deposition_rate[i].max(0.0) * deposition_scale;
+            let erosion = world.state.hydrology.erosion_rate[i].max(0.0);
+            let deposition = world.state.hydrology.deposition_rate[i].max(0.0) * deposition_scale;
             let glacial_erosion =
                 world.state.glaciology.glacial_erosion_rate[i].max(0.0) * glacial_erosion_scale;
             let delta = deposition - erosion - glacial_erosion;
-            geology.deposition_rate[i] = deposition;
-            geology.height[i] =
-                (geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+            world.state.hydrology.deposition_rate[i] = deposition;
+            world.state.geology.height[i] =
+                (world.state.geology.height[i] + delta).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
         }
     }
 

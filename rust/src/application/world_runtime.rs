@@ -876,8 +876,8 @@ impl WorldTransportCache {
             river_flux: F32FieldTracker::new(&world.state.hydrology.river_flow),
             river_next: I32FieldTracker::new(&world.state.hydrology.river_next),
             mantle_heat: F32FieldTracker::new(&mantle_heat),
-            erosion_rate: F32FieldTracker::new(&world.state.geology.erosion_rate),
-            deposition_rate: F32FieldTracker::new(&world.state.geology.deposition_rate),
+            erosion_rate: F32FieldTracker::new(&world.state.hydrology.erosion_rate),
+            deposition_rate: F32FieldTracker::new(&world.state.hydrology.deposition_rate),
             temperature: F32FieldTracker::new(&world.state.climate.temperature),
             precipitation: F32FieldTracker::new(&world.state.climate.precipitation),
             evapotranspiration: F32FieldTracker::new(&world.state.climate.evapotranspiration),
@@ -974,9 +974,9 @@ impl WorldTransportCache {
         self.temperature.observe(&world.state.climate.temperature);
         self.precipitation
             .observe(&world.state.climate.precipitation);
-        self.erosion_rate.observe(&world.state.geology.erosion_rate);
+        self.erosion_rate.observe(&world.state.hydrology.erosion_rate);
         self.deposition_rate
-            .observe(&world.state.geology.deposition_rate);
+            .observe(&world.state.hydrology.deposition_rate);
         self.evapotranspiration
             .observe(&world.state.climate.evapotranspiration);
         self.aridity.observe(&world.state.climate.aridity);
@@ -1203,11 +1203,11 @@ impl WorldTransportCache {
             }
         }
         if include_field("erosion_rate") {
-            self.erosion_rate.observe(&world.state.geology.erosion_rate);
+            self.erosion_rate.observe(&world.state.hydrology.erosion_rate);
         }
         if include_field("deposition_rate") {
             self.deposition_rate
-                .observe(&world.state.geology.deposition_rate);
+                .observe(&world.state.hydrology.deposition_rate);
         }
         if include_field("temperature") {
             self.temperature.observe(&world.state.climate.temperature);
@@ -2266,8 +2266,6 @@ mod tests {
             height: vec![0.2],
             lake_depth: vec![0.0],
             plate_id: vec![PlateId(0)],
-            erosion_rate: vec![0.0],
-            deposition_rate: vec![0.0],
             volcanism: vec![0.0],
             vertex_buoyancy: vec![0.0],
             geology_internal: vec![GeologyInternal::default()],
@@ -2311,8 +2309,6 @@ mod tests {
             height: vec![0.2],
             lake_depth: vec![0.0],
             plate_id: vec![PlateId(0)],
-            erosion_rate: vec![0.0],
-            deposition_rate: vec![0.0],
             volcanism: vec![0.0],
             vertex_buoyancy: vec![0.0],
             geology_internal: vec![GeologyInternal::default()],
@@ -2345,8 +2341,6 @@ mod tests {
                         height: vec![0.2],
                         lake_depth: vec![0.0],
                         plate_id: vec![PlateId(0)],
-                        erosion_rate: vec![0.0],
-                        deposition_rate: vec![0.0],
                         volcanism: vec![0.0],
                         vertex_buoyancy: vec![0.0],
                         geology_internal: vec![GeologyInternal::default()],

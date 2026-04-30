@@ -62,7 +62,7 @@ pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
         let slash_burn = feedback_value(world, SLASH_BURN_FEEDBACK_KEY, i);
         let farming_consumption = feedback_value(world, FARMING_CONSUMPTION_FEEDBACK_KEY, i);
         let erosion_loss = feedback_value(world, EROSION_FEEDBACK_KEY, i)
-            .max(world.state.geology.erosion_rate[i].max(0.0) * 0.10);
+            .max(world.state.hydrology.erosion_rate[i].max(0.0) * 0.10);
         let flood_deposition = feedback_value(world, FLOOD_DEPOSITION_FEEDBACK_KEY, i);
         let slash_burn_delta = feedback_value(world, SOIL_SLASH_BURN_DELTA_FEEDBACK_KEY, i);
         let disturbance_target =

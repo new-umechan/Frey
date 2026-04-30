@@ -382,8 +382,6 @@ pub struct GeologyState {
     #[serde(default)]
     pub lake_depth: Vec<f32>,
     pub plate_id: Vec<PlateId>,
-    pub erosion_rate: Vec<f32>,
-    pub deposition_rate: Vec<f32>,
     #[serde(default)]
     pub volcanism: Vec<f32>,
     #[serde(default)]
@@ -441,6 +439,10 @@ pub struct HydrologyState {
     #[serde(default)]
     pub river_next: Vec<i32>,
     pub river_flow: Vec<f32>,
+    #[serde(default)]
+    pub erosion_rate: Vec<f32>,
+    #[serde(default)]
+    pub deposition_rate: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]
     pub is_lake: Vec<bool>,
@@ -744,8 +746,8 @@ impl World {
             height: &self.state.geology.height,
             lake_depth: &self.state.geology.lake_depth,
             plate_id: &self.state.geology.plate_id,
-            erosion_rate: &self.state.geology.erosion_rate,
-            deposition_rate: &self.state.geology.deposition_rate,
+            erosion_rate: &self.state.hydrology.erosion_rate,
+            deposition_rate: &self.state.hydrology.deposition_rate,
             volcanism: &self.state.geology.volcanism,
             vertex_buoyancy: &self.state.geology.vertex_buoyancy,
             geology_internal: &self.state.geology.geology_internal,
@@ -774,8 +776,8 @@ impl World {
             height: &mut self.state.geology.height,
             lake_depth: &mut self.state.geology.lake_depth,
             plate_id: &mut self.state.geology.plate_id,
-            erosion_rate: &mut self.state.geology.erosion_rate,
-            deposition_rate: &mut self.state.geology.deposition_rate,
+            erosion_rate: &mut self.state.hydrology.erosion_rate,
+            deposition_rate: &mut self.state.hydrology.deposition_rate,
             volcanism: &mut self.state.geology.volcanism,
             vertex_buoyancy: &mut self.state.geology.vertex_buoyancy,
             geology_internal: &mut self.state.geology.geology_internal,

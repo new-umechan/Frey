@@ -285,8 +285,6 @@ fn main() {
         height: terrain.height,
         lake_depth: vec![0.0; cell_count],
         plate_id,
-        erosion_rate: vec![0.0; cell_count],
-        deposition_rate: vec![0.0; cell_count],
         volcanism: terrain.volcanism,
         vertex_buoyancy: terrain.vertex_buoyancy,
         geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); cell_count],

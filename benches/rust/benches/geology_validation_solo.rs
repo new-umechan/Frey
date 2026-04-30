@@ -65,8 +65,6 @@ fn main() {
         height: terrain.height,
         lake_depth: vec![0.0; cell_count],
         plate_id,
-        erosion_rate: vec![0.0; cell_count],
-        deposition_rate: vec![0.0; cell_count],
         volcanism: terrain.volcanism,
         vertex_buoyancy: terrain.vertex_buoyancy,
         geology_internal: vec![GeologyInternal::default(); cell_count],
@@ -119,7 +117,7 @@ fn main() {
         git_commit,
     };
 
-    println!("=== Geology Solo Bench ===");
+    println!("=== Geology Validation Solo Bench ===");
     println!("seed={}", seed);
     println!(
         "runtime: geology_step_p50_ms={:.3} geology_step_p95_ms={:.3} stabilization_ticks={} sample_ticks={}",
@@ -215,8 +213,8 @@ fn compute_phase2_metrics(world: &world::World) -> Phase2Metrics {
     let mut low_slope_deposition_sum = 0.0_f32;
     let coastal = world.coastal_flags();
     let height = &world.state.geology.height;
-    let deposition = &world.state.geology.deposition_rate;
-    let erosion = &world.state.geology.erosion_rate;
+    let deposition = &world.state.hydrology.deposition_rate;
+    let erosion = &world.state.hydrology.erosion_rate;
     let shallow_sea_floor = world.control.geology_params.shallow_sea_floor;
     let mesh = world.mesh();
     for i in 0..height.len().min(erosion.len()).min(deposition.len()) {
@@ -262,7 +260,7 @@ fn compute_phase2_metrics(world: &world::World) -> Phase2Metrics {
 fn compute_diagnostics(world: &world::World) -> Diagnostics {
     let mut total_deposition = 0.0_f32;
     let mut lake_deposition = 0.0_f32;
-    let deposition = &world.state.geology.deposition_rate;
+    let deposition = &world.state.hydrology.deposition_rate;
     let lake_depth = &world.state.geology.lake_depth;
     let height = &world.state.geology.height;
     for i in 0..deposition.len().min(height.len()) {
@@ -339,7 +337,8 @@ fn resolve_git_commit() -> Option<String> {
 
 fn score_output_path() -> PathBuf {
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let candidate = PathBuf::from(manifest_dir).join("../results/geology_main_scores.jsonl");
+        let candidate =
+            PathBuf::from(manifest_dir).join("../results/geology_validation_main_scores.jsonl");
         if let Some(parent) = candidate.parent() {
             if parent.exists() {
                 return candidate;
@@ -347,11 +346,11 @@ fn score_output_path() -> PathBuf {
         }
     }
     let candidates = [
-        Path::new("benches/results/geology_main_scores.jsonl"),
-        Path::new("results/geology_main_scores.jsonl"),
-        Path::new("../benches/results/geology_main_scores.jsonl"),
-        Path::new("../results/geology_main_scores.jsonl"),
-        Path::new("../../benches/results/geology_main_scores.jsonl"),
+        Path::new("benches/results/geology_validation_main_scores.jsonl"),
+        Path::new("results/geology_validation_main_scores.jsonl"),
+        Path::new("../benches/results/geology_validation_main_scores.jsonl"),
+        Path::new("../results/geology_validation_main_scores.jsonl"),
+        Path::new("../../benches/results/geology_validation_main_scores.jsonl"),
     ];
     for candidate in candidates {
         if let Some(parent) = candidate.parent() {
@@ -416,7 +415,7 @@ fn append_score_record_jsonl(
         .as_millis();
 
     let line = format!(
-        "{{\"schema_version\":1,\"timestamp_unix_ms\":{},\"bench\":\"geology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"geology_step_p50_ms\":{},\"geology_step_p95_ms\":{},\"stabilization_ticks\":{},\"sample_ticks\":{}}},\"phase2\":{{\"state\":\"ready\",\"metrics\":{{\"sediment_budget_ratio\":{},\"coastal_deposition_share\":{},\"low_slope_deposition_share\":{}}}}},\"diagnostics\":{{\"open_boundary_export_fraction\":{},\"erosion_reference_coverage\":{},\"lake_deposition_share\":{}}}}}\n",
+        "{{\"schema_version\":1,\"timestamp_unix_ms\":{},\"bench\":\"geology_validation_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"geology_step_p50_ms\":{},\"geology_step_p95_ms\":{},\"stabilization_ticks\":{},\"sample_ticks\":{}}},\"phase2\":{{\"state\":\"ready\",\"metrics\":{{\"sediment_budget_ratio\":{},\"coastal_deposition_share\":{},\"low_slope_deposition_share\":{}}}}},\"diagnostics\":{{\"open_boundary_export_fraction\":{},\"erosion_reference_coverage\":{},\"lake_deposition_share\":{}}}}}\n",
         timestamp_unix_ms,
         json_escape(&run_metadata.run_id),
         run_metadata

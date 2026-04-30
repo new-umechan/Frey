@@ -7,7 +7,7 @@ const SUITES = [
     "domesticates_solo",
     "glaciology_solo",
     "glaciology_sea_level_series",
-    "geology_solo",
+    "geology_validation_solo",
 ];
 
 function parseArgs(argv: string[]) {
@@ -41,7 +41,7 @@ function parseArgs(argv: string[]) {
 
 function printHelp() {
     console.error("Usage: node benches/scripts/bench.mjs [options]");
-    console.error("  --suite <all|climate_solo|hydrology_solo|ecology_solo|domesticates_solo|glaciology_solo|glaciology_sea_level_series|geology_solo>");
+    console.error("  --suite <all|climate_solo|hydrology_solo|ecology_solo|domesticates_solo|glaciology_solo|glaciology_sea_level_series|geology_validation_solo>");
     console.error("  --list");
 }
 

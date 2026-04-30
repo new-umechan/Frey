@@ -266,7 +266,9 @@ mod tests {
     use serde_json::Value;
 
     use super::build_demo_response;
-    use crate::application::world_dto::CausalRelationType;
+    use crate::application::world_dto::{CausalRelationType, InitWorldConfig};
+    use crate::application::world_service::WorldService;
+    use crate::application::world_use_cases;
 
     #[test]
     fn causal_demo_serializes_all_relation_types_and_evidence() {
@@ -310,5 +312,39 @@ mod tests {
                     && entry.get("uncertainty_reason").is_some()
             })
         }));
+    }
+
+    #[test]
+    fn causal_demo_known_world_returns_static_demo_slice() {
+        let mut service = WorldService::new();
+        let init = world_use_cases::init_world(
+            &mut service,
+            "seed-causal-demo".to_string(),
+            1,
+            InitWorldConfig {
+                geology_params: None,
+                simulation_rate: None,
+                verification_mode: None,
+            },
+        )
+        .expect("init world");
+
+        let response = super::get_causal_exploration_demo(&service, &init.world_id)
+            .expect("get causal exploration demo");
+
+        assert_eq!(response.demo_id, "border_mountain_plate_demo");
+        assert_eq!(response.features.len(), 3);
+        assert_eq!(response.trace_segments.len(), 3);
+        assert_eq!(response.evidence.len(), 3);
+    }
+
+    #[test]
+    fn causal_demo_unknown_world_returns_error() {
+        let service = WorldService::new();
+
+        let error = super::get_causal_exploration_demo(&service, "world-missing")
+            .expect_err("unknown world should fail");
+
+        assert!(error.contains("world not found: world-missing"));
     }
 }

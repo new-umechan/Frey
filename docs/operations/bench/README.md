@@ -22,6 +22,8 @@
 
 ### `geology/` (Geology)
 
+- `docs/operations/bench/geology/data_acquisition.md`
+- `docs/operations/bench/geology/solo.md`
 - `docs/operations/bench/geology/validation.md`
 
 ### `glaciology/` (Glaciology)

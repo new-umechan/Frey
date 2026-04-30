@@ -42,7 +42,7 @@ const DIAGNOSTIC_KEYS = [
 
 function parseArgs(argv: string[]): Args {
     const args: Args = {
-        jsonl: "benches/results/geology_main_scores.jsonl",
+        jsonl: "benches/results/geology_validation_main_scores.jsonl",
         baseline: null,
         writeBaseline: null,
     };
@@ -78,7 +78,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printHelp() {
-    console.error("Usage: tsx benches/scripts/compare-geology-scores.ts [options]");
+    console.error("Usage: tsx benches/scripts/compare-geology-validation-scores.ts [options]");
     console.error("  --jsonl <path>");
     console.error("  --baseline <path>");
     console.error("  --write-baseline <path>");
@@ -158,7 +158,7 @@ async function main() {
         return;
     }
 
-    console.log("=== Geology Score Comparison ===");
+    console.log("=== Geology Validation Score Comparison ===");
     console.log(`current_timestamp_unix_ms=${current.timestamp_unix_ms ?? "n/a"}`);
     console.log(`baseline_timestamp_unix_ms=${baseline.timestamp_unix_ms ?? "n/a"}`);
     console.log(`current_seed=${current.seed ?? "n/a"}`);

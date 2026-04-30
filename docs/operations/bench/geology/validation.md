@@ -1,6 +1,7 @@
 # Geology 検証設計
 
-`benchmark.md` の Plate 節（ベンチマーク対象外）を補完する、Plate 専用の検証ドキュメント。
+`benchmark.md` の Geology 節を補完する、長期 Plate 専用の検証ドキュメント。
+Earth 実データ比較ベンチ（`geology_solo`）は `docs/operations/bench/geology/solo.md` を参照する。
 本書は、重い実データ一致ベンチではなく、Earth 類似の物理整合性をみる軽量な定量評価と、ウィルソンサイクル（WC）の定性評価を組み合わせて運用する。
 
 ---
