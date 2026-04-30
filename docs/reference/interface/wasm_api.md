@@ -49,7 +49,6 @@ JSから利用する現行WASM公開APIを定義する。
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
     - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `biome` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature` / `wind_u` / `wind_v` / `moisture_flux_u` / `moisture_flux_v`
 - `get_world_delta(world_id: string, options?: { include_fields?: string[] }) -> WorldDeltaResponse`
-- `get_causal_exploration_demo(world_id: string) -> CausalExplorationDemoResponse`
 - `get_metrics(world_id: string) -> MetricsResponse`
 - `get_plate_stats(world_id: string) -> PlateStatsResponse`
 - `list_history_ticks(world_id: string) -> { world_id, interval, ticks }`
@@ -100,38 +99,6 @@ JSから利用する現行WASM公開APIを定義する。
 - `continent_count: number`
 - `largest_continent_cells: number`
 
-`CausalExplorationDemoResponse`:
-
-- `demo_id: string`
-- `features: CausalFeatureDescriptor[]`
-- `trace_segments: CausalTraceSegment[]`
-- `metrics: CausalMetricValue[]`
-- `display_mapping: CausalDisplayMapping`
-- `evidence: CausalEvidenceEntry[]`
-
-`CausalFeatureDescriptor`:
-
-- `feature_id: string`
-- `feature_type: "border_segment" | "ridge_or_mountain_band" | "tectonic_compression_or_plate_boundary"`
-- `label: string`
-- `short_label: string`
-- `anchor: { x: number, y: number, z: number }`
-- `metrics: CausalMetricValue[]`
-- `uncertainty_stage: "low" | "medium" | "high"`
-
-`CausalTraceSegment`:
-
-- `trace_id: string`
-- `label: string`
-- `source_feature_id: string`
-- `target_feature_id: string`
-- `relation_type: "constraint_alignment" | "geomorphic_structure" | "tectonic_driver"`
-- `path: { x: number, y: number, z: number }[]`
-- `metrics: CausalMetricValue[]`
-- `uncertainty_stage: "low" | "medium" | "high"`
-- `evidence_ids: string[]`
-- `display_key: string`
-
 `CausalMetricValue`:
 
 - `metric_id: string`
@@ -139,30 +106,6 @@ JSから利用する現行WASM公開APIを定義する。
 - `value: number`
 - `unit: string`
 - `display_value: string`
-
-`CausalDisplayMapping`:
-
-- `feature_styles: { feature_id, color_hex, glow_intensity, pulse_hz, radius }[]`
-- `trace_styles: { trace_id, color_hex, thickness, flow_speed, jitter_amplitude, label_short }[]`
-
-`CausalEvidenceEntry`:
-
-- `evidence_id: string`
-- `trace_id: string`
-- `evidence_type: "morphology" | "passability_proxy" | "tectonic_proxy"`
-- `summary: string`
-- `assumptions: string[]`
-- `approximations: string[]`
-- `uncertainty_reason: string`
-- `reference_model: string`
-- `reference_notes: string`
-
-補足:
-
-- 初回実装は `border_mountain_plate_demo` の固定データを返す。
-- `world_id` は存在確認にだけ使い、不明な world の場合はエラーを返す。
-- UI 層は `display_mapping` にない色・太さ・揺らぎを補完しない。
-- この API は現時点では因果探索モードの恒久仕様ではなく、Demo Slice 実験用の公開面である。
 
 ### 2.3 履歴復元
 

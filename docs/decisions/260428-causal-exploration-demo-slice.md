@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded
+
+Reason: 因果探索 Demo Slice 実装をコードベースから撤去したため
 
 ## Note
 

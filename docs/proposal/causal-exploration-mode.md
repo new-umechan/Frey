@@ -2,7 +2,9 @@
 
 ## Status
 
-Draft
+Superseded
+
+Reason: 全モジュール接続前の Demo Slice 実装を撤去し、因果探索は統合後に再定義するため
 
 本書は `docs/concepts/causal-exploration.md` の vision を検証可能な提案に落とす。
 ここでは、特定のデモをプロダクト全体の初版スコープとはみなさない。

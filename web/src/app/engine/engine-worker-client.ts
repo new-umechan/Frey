@@ -11,7 +11,6 @@ import type {
     MetricsResult,
     FieldResult,
     HistoryTicksResult,
-    CausalExplorationDemoResult,
 } from "./engine-client";
 import type { EngineWorkerRequest, EngineWorkerResponse } from "./worker-protocol";
 
@@ -106,13 +105,6 @@ export class EngineWorkerClient implements EngineClient {
 
     async get_world_delta(worldId: string, options?: unknown): Promise<WorldDeltaResult> {
         return await this.request("get_world_delta", { worldId, options }) as WorldDeltaResult;
-    }
-
-    async get_causal_exploration_demo(worldId: string): Promise<CausalExplorationDemoResult> {
-        return await this.request(
-            "get_causal_exploration_demo",
-            { worldId },
-        ) as CausalExplorationDemoResult;
     }
 
     async get_metrics(worldId: string): Promise<MetricsResult | null> {

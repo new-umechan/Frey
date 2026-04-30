@@ -86,7 +86,6 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         setSidebarOpen: elements.setSidebarOpen,
         plateHover: sceneRuntime.plateHover,
         globePinchFocusController: sceneRuntime.globePinchFocusController,
-        causalExplorationLayer: sceneRuntime.causalExplorationLayer,
         setDebugModeEnabled: controllerRuntime.setDebugModeEnabled,
         setEraScale: controllerRuntime.setEraScale,
         setViewMode: controllerRuntime.setViewMode,

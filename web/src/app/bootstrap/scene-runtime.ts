@@ -13,14 +13,12 @@ import {
     type MetricCellOverlayMesh,
 } from "../../gfx/views/metric-cell-overlay";
 import { createWindVectorOverlayLayer } from "../../gfx/views/wind-vector-overlay";
-import { createCausalExplorationLayer, type CausalExplorationLayer } from "../../gfx/views/causal-exploration-layer";
 import { DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { type AppElements } from "../../components/dom";
 import { type AppState } from "../state/app-state";
 import { type GlobePinchFocusController } from "../../gfx/views/globe-pinch-focus-controller";
 import { type CoreBuffers } from "../sim/sync/types";
 import { type Camera } from "three";
-import { type NormalizedCausalExplorationDemo } from "../engine/causal-exploration-demo";
 
 export interface CameraController {
     onResize: () => void;
@@ -52,9 +50,7 @@ export interface SceneRuntime {
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
     loadingOverlayController: LoadingOverlayController;
-    causalExplorationLayer: CausalExplorationLayer;
     syncClimateUi: () => void;
-    setCausalExplorationDemo: (demo: NormalizedCausalExplorationDemo | null) => void;
     renderFrame: () => void;
     onResize: () => void;
 }
@@ -75,7 +71,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         climateLegend,
         domesticatesLegend,
         plateHoverPopup,
-        causalExplorationOverlay,
     } = elements;
 
     const {
@@ -121,13 +116,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     const windVectorOverlay = createWindVectorOverlayLayer(basePositions);
     windVectorOverlay.mesh.position.setX(sphere.position.x);
     scene.add(windVectorOverlay.mesh);
-    const causalExplorationLayer = createCausalExplorationLayer({
-        canvas,
-        viewportPanel,
-        overlay: causalExplorationOverlay,
-    });
-    causalExplorationLayer.group.position.setX(sphere.position.x);
-    scene.add(causalExplorationLayer.group);
 
     const terrainRenderer = createTerrainRenderer({
         geometry,
@@ -186,7 +174,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     function renderFrame() {
         globePinchFocusController.update();
         cameraController.getActiveControls().update();
-        causalExplorationLayer.update(cameraController.getCamera());
         renderer.render(scene, cameraController.getCamera());
         loadingOverlayController.render();
     }
@@ -203,11 +190,7 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         plateHover,
         globePinchFocusController,
         loadingOverlayController,
-        causalExplorationLayer,
         syncClimateUi,
-        setCausalExplorationDemo: (demo) => {
-            causalExplorationLayer.setDemo(demo);
-        },
         renderFrame,
         onResize,
     };

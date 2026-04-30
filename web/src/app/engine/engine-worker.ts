@@ -130,13 +130,6 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
                 post({ id: request.id, ok: true, kind: request.kind, payload: result }, transferables);
                 return;
             }
-            case "get_causal_exploration_demo": {
-                const result = (runtime as WorldSimController & {
-                    get_causal_exploration_demo(worldId: string): unknown;
-                }).get_causal_exploration_demo(request.payload.worldId);
-                post({ id: request.id, ok: true, kind: request.kind, payload: result });
-                return;
-            }
             case "get_metrics": {
                 const result = runtime.get_metrics(request.payload.worldId);
                 post({ id: request.id, ok: true, kind: request.kind, payload: result });

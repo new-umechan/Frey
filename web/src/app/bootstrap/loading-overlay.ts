@@ -29,6 +29,11 @@ export function createLoadingOverlayController(options: LoadingOverlayOptions) {
     const loadingPlanetEdgeLocal = new THREE.Vector3(1, 0, 0);
     let isWorldInitializing = false;
 
+    function syncVisibility() {
+        loadingOverlayCanvas.hidden = !isWorldInitializing;
+        loadingOverlayCanvas.setAttribute("aria-hidden", isWorldInitializing ? "false" : "true");
+    }
+
     function syncCanvasSize() {
         const panelRect = viewportPanel.getBoundingClientRect();
         const panelWidth = Math.max(1, Math.floor(panelRect.width));
@@ -74,9 +79,11 @@ export function createLoadingOverlayController(options: LoadingOverlayOptions) {
     function render() {
         if (!isWorldInitializing) {
             clear();
+            syncVisibility();
             return;
         }
 
+        syncVisibility();
         const { panelWidth, panelHeight } = syncCanvasSize();
         loadingOverlayContext.clearRect(0, 0, panelWidth, panelHeight);
 
@@ -94,7 +101,10 @@ export function createLoadingOverlayController(options: LoadingOverlayOptions) {
 
     function setWorldInitializing(value: boolean) {
         isWorldInitializing = Boolean(value);
+        syncVisibility();
     }
+
+    syncVisibility();
 
     return {
         clear,
