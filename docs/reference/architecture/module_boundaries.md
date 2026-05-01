@@ -249,7 +249,7 @@ Systemは2つに分かれる。
 
 | System                | 実行条件                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
-| `HydrologyMFDSystem`  | 地殻形成期・環境形成期は毎tick実行。先史期以降は実行文脈の地形活動量（geology exec state）に応じて実行 |
+| `HydrologyMFDSystem`  | 地殻形成期・環境形成期は毎tick実行。先史期以降は ExecSystem が前tick比の地形変化を検知した tick を優先し、変化がない場合のみ geology exec state の活動量を補助判定として使う |
 | `HydrologyFlowSystem` | 先史期以降、毎tick実行                                                                                 |
 
 地形活動判定は実行パイプラインが担う。Geology は CellStore に標高を書くだけであり、判定フラグ自体は持たない。

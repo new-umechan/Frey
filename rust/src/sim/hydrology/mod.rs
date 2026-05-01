@@ -481,8 +481,22 @@ fn run_river_flow_only_with_state(
             if !state.height.is_empty() {
                 detail.sink_affected_ratio += (affected as f64) / (state.height.len() as f64);
             }
+            refresh_fill_spill_storage_and_lakes(
+                hydrology,
+                &state.height,
+                Some(&state.water),
+                Some(&state.sediment),
+                &state.params,
+            );
         }
         FillSpillRebuildMode::Skip => {
+            refresh_fill_spill_storage_and_lakes(
+                hydrology,
+                &state.height,
+                Some(&state.water),
+                Some(&state.sediment),
+                &state.params,
+            );
             detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
         }
     }

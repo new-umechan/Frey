@@ -113,6 +113,99 @@ fn hydrology_budget_constraint_does_not_override_sea_level_offset() {
 }
 
 #[test]
+fn hydrology_mfd_runs_in_later_eras_when_height_changed() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::History;
+    let hydrology_state = Some(crate::sim::build_hydrology_state_for_bench(
+        &world,
+        world.control.geology_params.clone(),
+    ));
+
+    world.state.geology.height[0] += 0.01;
+
+    assert!(super::geology::should_run_hydrology_mfd_for_geology(
+        &world,
+        None,
+        hydrology_state.as_ref(),
+    ));
+}
+
+#[test]
+fn hydrology_mfd_skips_in_later_eras_without_height_change_and_low_activity() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::History;
+    let hydrology_state = Some(crate::sim::build_hydrology_state_for_bench(
+        &world,
+        world.control.geology_params.clone(),
+    ));
+    let geology_state = Some(crate::sim::world::GeologyDynamicsState {
+        update_index: 0,
+        plate_states: Vec::new(),
+        vertex_states: Vec::new(),
+        boundary_state: crate::sim::world::BoundaryDynamicsState::default(),
+        mantle_heat: Vec::new(),
+        cached_metrics: crate::sim::world::GeologyStepMetrics::default(),
+    });
+
+    assert!(!super::geology::should_run_hydrology_mfd_for_geology(
+        &world,
+        geology_state.as_ref(),
+        hydrology_state.as_ref(),
+    ));
+}
+
+#[test]
+fn hydrology_flow_step_refreshes_public_lake_flags_on_skip() {
+    let mut world = build_test_world();
+    world.clock.epoch = EraKind::History;
+    world.clock.tick = 10;
+    world.control.geology_params.sink_full_rebuild_changed_ratio = 1.0;
+    world
+        .control
+        .geology_params
+        .sink_full_rebuild_interval_ticks = u32::MAX;
+    world.state.geology.height = vec![0.4, 0.2, -0.3, 0.1];
+    let params = world.control.geology_params.clone();
+    let mut hydrology_state = Some(crate::sim::build_hydrology_state_for_bench(&world, params));
+
+    {
+        let hydrology = &mut world.state.hydrology;
+        hydrology.sink_id = vec![0, 0, -1, -1];
+        hydrology.sink_route_next = vec![-1; 4];
+        hydrology.sink_member_offsets = vec![0, 2];
+        hydrology.sink_member_cells = vec![0, 1];
+        hydrology.sink_spill_cell = vec![1];
+        hydrology.sink_spill_to = vec![2];
+        hydrology.sink_spill_level = vec![0.25];
+        hydrology.sink_capacity_total = vec![1.0];
+        hydrology.sink_capacity_remaining = vec![0.5];
+        hydrology.sink_storage_water = vec![0.0];
+        hydrology.sink_storage_sediment = vec![0.0];
+        hydrology.sink_overflow_active = vec![0];
+        hydrology.is_lake.fill(false);
+    }
+    crate::sim::hydrology::sync_fill_spill_to_erosion(
+        hydrology_state
+            .as_mut()
+            .expect("hydrology state should exist"),
+        &world.state.hydrology,
+    );
+    hydrology_state
+        .as_mut()
+        .expect("hydrology state should exist")
+        .last_sink_full_rebuild_tick = world.clock.tick;
+
+    let detail =
+        crate::sim::hydrology::run_hydrology_flow_step(&mut world, &mut hydrology_state, 1);
+
+    assert_eq!(detail.sink_rebuild_skipped_count, 1);
+    assert_eq!(
+        world.state.hydrology.is_lake,
+        vec![false, true, false, false]
+    );
+}
+
+#[test]
 fn exec_world_advances_tick_and_sets_budget_to_one() {
     let mut world = build_test_world();
     world.clock.epoch = EraKind::History;

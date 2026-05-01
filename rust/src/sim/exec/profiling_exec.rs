@@ -74,8 +74,11 @@ pub fn exec_world_profiled_detailed_with_feedback_and_states(
         let phase_start = profile_now();
         match phase_execution_kind(phase) {
             ExecutionKind::HydrologyCoupled => {
-                let run_mfd =
-                    should_run_hydrology_mfd_for_geology(world, ctx.geology_state.as_ref());
+                let run_mfd = should_run_hydrology_mfd_for_geology(
+                    world,
+                    ctx.geology_state.as_ref(),
+                    ctx.hydrology_state.as_ref(),
+                );
                 let river_profile = run_hydrology_step_profiled(
                     world,
                     ctx.hydrology_state,

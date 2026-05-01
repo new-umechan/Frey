@@ -73,7 +73,11 @@ pub(super) fn run_hydrology_stage_with_hydrology(
     geology_state: &mut crate::sim::exec::GeologyExecState,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
 ) {
-    let run_mfd = should_run_hydrology_mfd_for_geology(world, geology_state.as_ref());
+    let run_mfd = should_run_hydrology_mfd_for_geology(
+        world,
+        geology_state.as_ref(),
+        hydrology_state.as_ref(),
+    );
     run_hydrology_step_unprofiled(
         world,
         hydrology_state,

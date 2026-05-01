@@ -3,6 +3,7 @@ use crate::sim::glaciology::types::GlaciologyParams;
 use crate::sim::hydrology::{
     run_hydrology_flow_step, run_hydrology_step, sync_erosion_height, HydrologyStepDetailBreakdown,
 };
+use crate::sim::state::erosion::ErosionAutomatonState;
 use crate::sim::world::{EraKind, World};
 
 const GEOLOGY_HEIGHT_MIN: f32 = -1.2;
@@ -44,19 +45,44 @@ pub(super) fn apply_glaciology_forcing_to_geology(
 pub(super) fn should_run_hydrology_mfd_for_geology(
     world: &World,
     geology_state: Option<&crate::sim::world::GeologyDynamicsState>,
+    hydrology_state: Option<&ErosionAutomatonState>,
 ) -> bool {
     match world.clock.epoch {
         EraKind::Crust | EraKind::Environment => true,
-        EraKind::Life | EraKind::Civilization | EraKind::History => geology_state
-            .map(|state| {
-                state
-                    .cached_metrics
-                    .geology_activity
-                    .max(state.cached_metrics.boundary_activity)
-                    > HYDROLOGY_MFD_ACTIVITY_THRESHOLD
-            })
-            .unwrap_or(true),
+        EraKind::Life | EraKind::Civilization | EraKind::History => {
+            if has_hydrology_relevant_height_change(world, hydrology_state) {
+                return true;
+            }
+            geology_state
+                .map(|state| {
+                    state
+                        .cached_metrics
+                        .geology_activity
+                        .max(state.cached_metrics.boundary_activity)
+                        > HYDROLOGY_MFD_ACTIVITY_THRESHOLD
+                })
+                .unwrap_or(true)
+        }
     }
+}
+
+fn has_hydrology_relevant_height_change(
+    world: &World,
+    hydrology_state: Option<&ErosionAutomatonState>,
+) -> bool {
+    const HEIGHT_CHANGE_EPS: f32 = 1e-6;
+
+    let Some(state) = hydrology_state else {
+        return true;
+    };
+    if state.height.len() != world.state.geology.height.len() {
+        return true;
+    }
+    state
+        .height
+        .iter()
+        .zip(world.state.geology.height.iter())
+        .any(|(previous, current)| (*current - *previous).abs() > HEIGHT_CHANGE_EPS)
 }
 
 pub(super) fn run_hydrology_step_unprofiled(
