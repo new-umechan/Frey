@@ -322,7 +322,7 @@ tick進行・時代・予算を管理する。「世界の状態」ではなく�
 ```rust
 struct ClockState {
     tick:    Tick,
-    epoch:   Epoch,
+    epoch:   EraKind,
     budgets: SubsystemBudgets,
 }
 ```
