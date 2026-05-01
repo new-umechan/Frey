@@ -248,12 +248,41 @@ pub(crate) fn exec_world_profiled(
             step_history_snapshot_ms: 0.0,
         });
     }
+
     let (managed, archive) = service
         .world_and_archive_mut(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
-    reset_pending_slice(managed);
 
-    let steps = scaled_step_count(managed.simulation_rate, tick_count);
+    let steps = exec_profiled_loop(managed, archive, scaled_step_count(managed.simulation_rate, tick_count));
+
+    let breakdown = &steps.sim_breakdown;
+    Ok(StepWorldProfiledResponse {
+        world_id,
+        steps: steps.ticks,
+        exec_feedback_ms: breakdown.exec_feedback_ms,
+        exec_geology_terrain_ms: breakdown.exec_geology_terrain_ms,
+        exec_climate_ms: breakdown.exec_climate_ms,
+        exec_glaciology_ms: breakdown.exec_glaciology_ms,
+        exec_hydrology_ms: breakdown.exec_hydrology_ms,
+        exec_ecology_ms: breakdown.exec_ecology_ms,
+        exec_society_ms: breakdown.exec_society_ms,
+        exec_transition_ms: breakdown.exec_transition_ms,
+        step_sync_erosion_ms: steps.step_sync_erosion_ms,
+        step_observe_world_change_ms: steps.step_observe_world_change_ms,
+        step_history_snapshot_ms: steps.step_history_snapshot_ms,
+    })
+}
+
+struct ProfiledStepsResult {
+    ticks: u32,
+    sim_breakdown: ExecWorldBreakdown,
+    step_sync_erosion_ms: f64,
+    step_observe_world_change_ms: f64,
+    step_history_snapshot_ms: f64,
+}
+
+fn exec_profiled_loop(managed: &mut ManagedWorld, archive: &mut WorldArchive, steps: u32) -> ProfiledStepsResult {
+    reset_pending_slice(managed);
     let mut sim_breakdown = ExecWorldBreakdown::default();
     let mut step_sync_erosion_ms = 0.0;
     let mut step_observe_world_change_ms = 0.0;
@@ -271,21 +300,13 @@ pub(crate) fn exec_world_profiled(
         step_history_snapshot_ms += profile.step_history_snapshot_ms;
     }
 
-    Ok(StepWorldProfiledResponse {
-        world_id,
-        steps,
-        exec_feedback_ms: sim_breakdown.exec_feedback_ms,
-        exec_geology_terrain_ms: sim_breakdown.exec_geology_terrain_ms,
-        exec_climate_ms: sim_breakdown.exec_climate_ms,
-        exec_glaciology_ms: sim_breakdown.exec_glaciology_ms,
-        exec_hydrology_ms: sim_breakdown.exec_hydrology_ms,
-        exec_ecology_ms: sim_breakdown.exec_ecology_ms,
-        exec_society_ms: sim_breakdown.exec_society_ms,
-        exec_transition_ms: sim_breakdown.exec_transition_ms,
+    ProfiledStepsResult {
+        ticks: steps,
+        sim_breakdown,
         step_sync_erosion_ms,
         step_observe_world_change_ms,
         step_history_snapshot_ms,
-    })
+    }
 }
 
 pub(crate) fn exec_world_profiled_detail(
@@ -328,12 +349,14 @@ pub(crate) fn exec_world_profiled_detail(
             sink_validation_fail_count: 0,
         });
     }
+
     let (managed, archive) = service
         .world_and_archive_mut(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
-    reset_pending_slice(managed);
 
     let steps = scaled_step_count(managed.simulation_rate, tick_count);
+    reset_pending_slice(managed);
+
     let mut sim_breakdown = ExecWorldBreakdownDetailed::default();
     let mut step_sync_erosion_ms = 0.0;
     let mut step_observe_world_change_ms = 0.0;
@@ -350,48 +373,40 @@ pub(crate) fn exec_world_profiled_detail(
         step_history_snapshot_ms += profile.step_history_snapshot_ms;
     }
 
+    let breakdown = &sim_breakdown.breakdown;
+    let river = &sim_breakdown.river;
     Ok(StepWorldProfiledDetailResponse {
         world_id,
         steps,
-        exec_feedback_ms: sim_breakdown.breakdown.exec_feedback_ms,
-        exec_geology_terrain_ms: sim_breakdown.breakdown.exec_geology_terrain_ms,
-        exec_climate_ms: sim_breakdown.breakdown.exec_climate_ms,
-        exec_glaciology_ms: sim_breakdown.breakdown.exec_glaciology_ms,
-        exec_hydrology_ms: sim_breakdown.breakdown.exec_hydrology_ms,
-        exec_ecology_ms: sim_breakdown.breakdown.exec_ecology_ms,
-        exec_society_ms: sim_breakdown.breakdown.exec_society_ms,
-        exec_transition_ms: sim_breakdown.breakdown.exec_transition_ms,
+        exec_feedback_ms: breakdown.exec_feedback_ms,
+        exec_geology_terrain_ms: breakdown.exec_geology_terrain_ms,
+        exec_climate_ms: breakdown.exec_climate_ms,
+        exec_glaciology_ms: breakdown.exec_glaciology_ms,
+        exec_hydrology_ms: breakdown.exec_hydrology_ms,
+        exec_ecology_ms: breakdown.exec_ecology_ms,
+        exec_society_ms: breakdown.exec_society_ms,
+        exec_transition_ms: breakdown.exec_transition_ms,
         step_sync_erosion_ms,
         step_observe_world_change_ms,
         step_history_snapshot_ms,
-        step_geology_river_prepare_ms: sim_breakdown.river.step_geology_river_prepare_ms,
-        step_geology_river_automaton_ms: sim_breakdown.river.step_geology_river_automaton_ms,
-        step_geology_river_automaton_sink_ms: sim_breakdown
-            .river
-            .step_geology_river_automaton_sink_ms,
-        step_geology_river_automaton_cell_ms: sim_breakdown
-            .river
-            .step_geology_river_automaton_cell_ms,
-        step_geology_river_automaton_queue_ms: sim_breakdown
-            .river
-            .step_geology_river_automaton_queue_ms,
-        step_geology_river_network_ms: sim_breakdown.river.step_geology_river_network_ms,
-        step_geology_river_sync_ms: sim_breakdown.river.step_geology_river_sync_ms,
-        step_geology_river_fallback_ms: sim_breakdown.river.step_geology_river_fallback_ms,
-        river_network_rebuild_count: sim_breakdown.river.river_network_rebuild_count,
-        river_fallback_count: sim_breakdown.river.river_fallback_count,
-        sink_rebuild_full_count: sim_breakdown.river.sink_rebuild_full_count,
-        sink_rebuild_partial_count: sim_breakdown.river.sink_rebuild_partial_count,
-        sink_rebuild_skipped_count: sim_breakdown.river.sink_rebuild_skipped_count,
-        sink_rebuild_fallback_full_count: sim_breakdown.river.sink_rebuild_fallback_full_count,
-        step_geology_river_sink_incremental_rebuild_ms: sim_breakdown
-            .river
-            .step_geology_river_sink_incremental_rebuild_ms,
-        step_geology_river_sink_full_rebuild_ms: sim_breakdown
-            .river
-            .step_geology_river_sink_full_rebuild_ms,
-        sink_affected_ratio: sim_breakdown.river.sink_affected_ratio,
-        sink_validation_fail_count: sim_breakdown.river.sink_validation_fail_count,
+        step_geology_river_prepare_ms: river.step_geology_river_prepare_ms,
+        step_geology_river_automaton_ms: river.step_geology_river_automaton_ms,
+        step_geology_river_automaton_sink_ms: river.step_geology_river_automaton_sink_ms,
+        step_geology_river_automaton_cell_ms: river.step_geology_river_automaton_cell_ms,
+        step_geology_river_automaton_queue_ms: river.step_geology_river_automaton_queue_ms,
+        step_geology_river_network_ms: river.step_geology_river_network_ms,
+        step_geology_river_sync_ms: river.step_geology_river_sync_ms,
+        step_geology_river_fallback_ms: river.step_geology_river_fallback_ms,
+        river_network_rebuild_count: river.river_network_rebuild_count,
+        river_fallback_count: river.river_fallback_count,
+        sink_rebuild_full_count: river.sink_rebuild_full_count,
+        sink_rebuild_partial_count: river.sink_rebuild_partial_count,
+        sink_rebuild_skipped_count: river.sink_rebuild_skipped_count,
+        sink_rebuild_fallback_full_count: river.sink_rebuild_fallback_full_count,
+        step_geology_river_sink_incremental_rebuild_ms: river.step_geology_river_sink_incremental_rebuild_ms,
+        step_geology_river_sink_full_rebuild_ms: river.step_geology_river_sink_full_rebuild_ms,
+        sink_affected_ratio: river.sink_affected_ratio,
+        sink_validation_fail_count: river.sink_validation_fail_count,
     })
 }
 
