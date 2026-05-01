@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-04-22T08:18:54Z",
+    "generated_at": "2026-05-01T08:59:51Z",
     "ticks": 16,
     "level": 6,
     "seeds": [
@@ -42,8 +42,8 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12403.0,
-        "height_mean": -0.1104712337255478,
+        "land_cells": 12120.0,
+        "height_mean": -0.11047123372554779,
         "height_std": 0.1549464464187622,
         "max_river_flux": 52.76390838623047,
         "top10_river_flux_sum": 502.7723388671875,
@@ -59,7 +59,7 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12363.0,
+        "land_cells": 11939.0,
         "height_mean": -0.13426059484481812,
         "height_std": 0.17542025446891785,
         "max_river_flux": 55.11294937133789,
@@ -76,8 +76,8 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12476.0,
-        "height_mean": -0.11157931387424468,
+        "land_cells": 12163.0,
+        "height_mean": -0.11157931387424469,
         "height_std": 0.14828714728355408,
         "max_river_flux": 69.48565673828125,
         "top10_river_flux_sum": 615.237060546875,
@@ -93,7 +93,7 @@
       "tick": 16,
       "era": "crust",
       "metrics": {
-        "land_cells": 12451.0,
+        "land_cells": 11919.0,
         "height_mean": -0.15516674518585205,
         "height_std": 0.1832566261291504,
         "max_river_flux": 155.54220581054688,
