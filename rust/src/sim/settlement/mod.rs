@@ -12,7 +12,7 @@ use crate::sim::world::{
 pub(crate) fn update_settlement(
     world: &mut World,
     budget: u32,
-    mut feedback: Option<&mut FeedbackQueue>,
+    feedback: Option<&mut FeedbackQueue>,
 ) {
     if budget == 0 {
         return;
@@ -38,7 +38,7 @@ pub(crate) fn update_settlement(
         }
     }
 
-    if let Some(queue) = feedback.as_deref_mut() {
+    if let Some(queue) = feedback {
         if active_cells.len() < 2 {
             world.entities.replace_settlements(settlements);
             return;

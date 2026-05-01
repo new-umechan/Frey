@@ -287,7 +287,7 @@ pub(crate) fn update_domesticates_with_diagnostics(
         .iter()
         .any(|internal| internal.origin_initialized)
     {
-        seed_origins(world, &crop_niche, &livestock_niche, river_max, &params);
+        seed_origins(world, crop_niche, livestock_niche, river_max, &params);
     }
 
     for i in 0..n {

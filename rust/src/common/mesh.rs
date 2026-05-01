@@ -228,6 +228,33 @@ pub(crate) fn generate_icosphere(level: u32) -> (Vec<[f32; 3]>, Vec<u32>) {
     (positions, indices)
 }
 
+fn midpoint_index(
+    i0: u32,
+    i1: u32,
+    positions: &mut Vec<[f32; 3]>,
+    midpoint_cache: &mut HashMap<(u32, u32), u32>,
+) -> u32 {
+    let key = if i0 < i1 { (i0, i1) } else { (i1, i0) };
+    if let Some(index) = midpoint_cache.get(&key) {
+        return *index;
+    }
+
+    let v0 = positions[i0 as usize];
+    let v1 = positions[i1 as usize];
+
+    let mut midpoint = [
+        (v0[0] + v1[0]) * 0.5,
+        (v0[1] + v1[1]) * 0.5,
+        (v0[2] + v1[2]) * 0.5,
+    ];
+    normalize(&mut midpoint);
+
+    let index = positions.len() as u32;
+    positions.push(midpoint);
+    midpoint_cache.insert(key, index);
+    index
+}
+
 #[cfg(test)]
 mod tests {
     use super::{build_dual_cell_overlay, generate_icosphere};
@@ -255,31 +282,4 @@ mod tests {
             .iter()
             .any(|lift| (*lift - 1.0).abs() < f32::EPSILON));
     }
-}
-
-fn midpoint_index(
-    i0: u32,
-    i1: u32,
-    positions: &mut Vec<[f32; 3]>,
-    midpoint_cache: &mut HashMap<(u32, u32), u32>,
-) -> u32 {
-    let key = if i0 < i1 { (i0, i1) } else { (i1, i0) };
-    if let Some(index) = midpoint_cache.get(&key) {
-        return *index;
-    }
-
-    let v0 = positions[i0 as usize];
-    let v1 = positions[i1 as usize];
-
-    let mut midpoint = [
-        (v0[0] + v1[0]) * 0.5,
-        (v0[1] + v1[1]) * 0.5,
-        (v0[2] + v1[2]) * 0.5,
-    ];
-    normalize(&mut midpoint);
-
-    let index = positions.len() as u32;
-    positions.push(midpoint);
-    midpoint_cache.insert(key, index);
-    index
 }
