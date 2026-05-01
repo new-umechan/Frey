@@ -31,13 +31,6 @@ pnpm run bench:compare:geology-validation
 最低限記録する項目:
 
 - runtime: `geology_step_p50_ms`, `geology_step_p95_ms`
-- phase2.metrics: `sediment_budget_ratio`, `coastal_deposition_share`, `low_slope_deposition_share`
-- diagnostics: `open_boundary_export_fraction`, `erosion_reference_coverage`, `lake_deposition_share`
-
-注:
-
-- 上記 sediment 系指標は、現行実装では Earth 実測比較ではなく、runtime 上の補助診断である
-- 主責務は Hydrology 側の `erosion_rate` / `deposition_rate` 単体比較ではない
 
 ## 運用ルール
 
