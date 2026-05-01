@@ -140,7 +140,7 @@ fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -
         && state.scratch_changed_mark.len() == expected
 }
 
-fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
+pub(crate) fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
     if state.sink_id.len() != expected {
         state.sink_id = vec![-1; expected];
     }
