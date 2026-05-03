@@ -15,39 +15,16 @@ const ERA_BOUNDARIES = [0, 800, 1300, 1395, 1445];
 const SEED_REGRESSION_SCRIPT_PATH = fileURLToPath(new URL("./seed-regression.ts", import.meta.url));
 const METRIC_SPECS = [
     { key: "land_cells", sourceKey: "land_cells", flagSuffix: "land-cells" },
+    { key: "land_ratio", sourceKey: "land_ratio", flagSuffix: "land-ratio" },
     { key: "height_mean", sourceKey: "mean_height", flagSuffix: "height-mean" },
     { key: "height_std", sourceKey: "height_std_dev", flagSuffix: "height-std" },
     { key: "max_river_flux", sourceKey: "max_river_flux", flagSuffix: "max-river-flux" },
-    {
-        key: "top10_river_flux_sum",
-        sourceKey: "top10_river_flux_sum",
-        flagSuffix: "top10-river-flux-sum",
-    },
-    {
-        key: "global_sediment_export",
-        sourceKey: "global_sediment_export",
-        flagSuffix: "global-sediment-export",
-    },
-    {
-        key: "marine_sediment_mass",
-        sourceKey: "marine_sediment_mass",
-        flagSuffix: "marine-sediment-mass",
-    },
-    {
-        key: "solid_earth_mass_proxy_drift",
-        sourceKey: "solid_earth_mass_proxy_drift",
-        flagSuffix: "solid-earth-mass-proxy-drift",
-    },
-    {
-        key: "ocean_water_inventory_drift",
-        sourceKey: "ocean_water_inventory_drift",
-        flagSuffix: "ocean-water-inventory-drift",
-    },
-    {
-        key: "ice_inventory",
-        sourceKey: "ice_inventory",
-        flagSuffix: "ice-inventory",
-    },
+    { key: "top10_river_flux_sum", sourceKey: "top10_river_flux_sum", flagSuffix: "top10-river-flux-sum" },
+    { key: "global_sediment_export", sourceKey: "global_sediment_export", flagSuffix: "global-sediment-export" },
+    { key: "marine_sediment_mass", sourceKey: "marine_sediment_mass", flagSuffix: "marine-sediment-mass" },
+    { key: "solid_earth_mass_proxy_drift", sourceKey: "solid_earth_mass_proxy_drift", flagSuffix: "solid-earth-mass-proxy-drift" },
+    { key: "ocean_water_inventory_drift", sourceKey: "ocean_water_inventory_drift", flagSuffix: "ocean-water-inventory-drift" },
+    { key: "ice_inventory", sourceKey: "ice_inventory", flagSuffix: "ice-inventory" },
 ];
 
 function parseNumber(value: unknown, flagName: string): number {
@@ -79,6 +56,12 @@ function parseArgs(argv: string[]) {
         check: false,
         threshold: DEFAULT_THRESHOLD,
         thresholdByMetric: {} as Record<string, number>,
+        absoluteGuards: {
+            land_ratio_warn_min: 0,
+            land_ratio_warn_max: 0,
+            land_ratio_fail_min: 0,
+            land_ratio_fail_max: 0,
+        },
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -136,6 +119,22 @@ function parseArgs(argv: string[]) {
             args.threshold = Math.max(0, parseNumber(next, "--threshold"));
             i += 1;
             break;
+        case "--land-ratio-warn-min":
+            args.absoluteGuards.land_ratio_warn_min = Math.min(1, Math.max(0, parseNumber(next, token)));
+            i += 1;
+            break;
+        case "--land-ratio-warn-max":
+            args.absoluteGuards.land_ratio_warn_max = Math.min(1, Math.max(0, parseNumber(next, token)));
+            i += 1;
+            break;
+        case "--land-ratio-fail-min":
+            args.absoluteGuards.land_ratio_fail_min = Math.min(1, Math.max(0, parseNumber(next, token)));
+            i += 1;
+            break;
+        case "--land-ratio-fail-max":
+            args.absoluteGuards.land_ratio_fail_max = Math.min(1, Math.max(0, parseNumber(next, token)));
+            i += 1;
+            break;
         case "--help":
             printHelp();
             process.exit(0);
@@ -162,6 +161,10 @@ function printHelp() {
     console.error("  --baseline <path>");
     console.error("  --check");
     console.error("  --threshold <ratio>");
+    console.error("  --land-ratio-warn-min <0..1>");
+    console.error("  --land-ratio-warn-max <0..1>");
+    console.error("  --land-ratio-fail-min <0..1>");
+    console.error("  --land-ratio-fail-max <0..1>");
     for (const spec of METRIC_SPECS) {
         console.error(`  --threshold-${spec.flagSuffix} <ratio>`);
     }
@@ -185,7 +188,10 @@ async function loadBaseline(pathname: string): Promise<unknown> {
 function collectMetricsFromResponse(metrics: unknown): Record<string, number> {
     const result: Record<string, number> = {};
     for (const spec of METRIC_SPECS) {
-        const value = Number((metrics as Record<string, unknown>)?.[spec.sourceKey]);
+        let value = Number((metrics as Record<string, unknown>)?.[spec.sourceKey]);
+        if (!Number.isFinite(value) && spec.key === "sea_level_offset") {
+            value = 0;
+        }
         if (!Number.isFinite(value)) {
             throw new Error(`missing numeric metric from wasm response: ${spec.sourceKey}`);
         }
@@ -247,6 +253,12 @@ interface BaselineMeta {
     transition_mode: string;
     era_boundaries: unknown;
     eras_at_measurement: Record<string, string>;
+    absolute_guards?: {
+        land_ratio_warn_min?: number;
+        land_ratio_warn_max?: number;
+        land_ratio_fail_min?: number;
+        land_ratio_fail_max?: number;
+    };
 }
 
 function validateBaselineMeta(current: { meta: BaselineMeta }, baseline: { meta: BaselineMeta }): MetaFailure[] {
@@ -420,6 +432,48 @@ function evaluateAgainstBaseline(
         }
     }
 
+    const guards = current.meta.absolute_guards ?? {};
+    const failMin = Number(guards.land_ratio_fail_min ?? 0);
+    const failMax = Number(guards.land_ratio_fail_max ?? 0);
+    const warnMin = Number(guards.land_ratio_warn_min ?? 0);
+    const warnMax = Number(guards.land_ratio_warn_max ?? 0);
+    for (const entry of current.results) {
+        const landRatio = Number(entry.metrics.land_ratio);
+        if (!Number.isFinite(landRatio)) {
+            continue;
+        }
+        if (failMin > 0 && landRatio < failMin) {
+            deviations.push({
+                seed: entry.seed,
+                metric: "land_ratio",
+                reason: "absolute_guard_fail_min",
+                mode: "absolute",
+                currentValue: landRatio,
+                threshold: failMin,
+            });
+        }
+        if (failMax > 0 && landRatio > failMax) {
+            deviations.push({
+                seed: entry.seed,
+                metric: "land_ratio",
+                reason: "absolute_guard_fail_max",
+                mode: "absolute",
+                currentValue: landRatio,
+                threshold: failMax,
+            });
+        }
+        if (warnMin > 0 && landRatio < warnMin) {
+            warnings.push(
+                `seed=${entry.seed} metric=land_ratio reason=absolute_guard_warn_min current=${landRatio} threshold=${warnMin}`,
+            );
+        }
+        if (warnMax > 0 && landRatio > warnMax) {
+            warnings.push(
+                `seed=${entry.seed} metric=land_ratio reason=absolute_guard_warn_max current=${landRatio} threshold=${warnMax}`,
+            );
+        }
+    }
+
     return { warnings, deviations };
 }
 
@@ -470,7 +524,10 @@ function runCommandCapture(command: string, args: string[]): Promise<CommandResu
 function collectMetricsFromOutputEntry(metrics: unknown): Record<string, number> {
     const result: Record<string, number> = {};
     for (const spec of METRIC_SPECS) {
-        const value = Number((metrics as Record<string, unknown>)?.[spec.key]);
+        let value = Number((metrics as Record<string, unknown>)?.[spec.key]);
+        if (!Number.isFinite(value) && spec.key === "sea_level_offset") {
+            value = 0;
+        }
         if (!Number.isFinite(value)) {
             throw new Error(`missing numeric metric from subprocess output: ${spec.key}`);
         }
@@ -613,6 +670,12 @@ interface OutputData {
         level: number;
         seeds: string[];
         thresholds: Thresholds;
+        absolute_guards: {
+            land_ratio_warn_min: number;
+            land_ratio_warn_max: number;
+            land_ratio_fail_min: number;
+            land_ratio_fail_max: number;
+        };
         transition_mode: string;
         era_boundaries: number[];
         eras_at_measurement: Record<string, string>;
@@ -620,7 +683,21 @@ interface OutputData {
     results: Array<{ seed: string; tick: number; era: string; metrics: Record<string, number> }>;
 }
 
-function buildOutput(args: { ticks: number; level: number; seeds: string[] }, thresholds: Thresholds, results: Array<{ seed: string; era: string; metrics: Record<string, number> }>): OutputData {
+function buildOutput(
+    args: {
+        ticks: number;
+        level: number;
+        seeds: string[];
+        absoluteGuards: {
+            land_ratio_warn_min: number;
+            land_ratio_warn_max: number;
+            land_ratio_fail_min: number;
+            land_ratio_fail_max: number;
+        };
+    },
+    thresholds: Thresholds,
+    results: Array<{ seed: string; era: string; metrics: Record<string, number> }>,
+): OutputData {
     const erasAtMeasurement: Record<string, string> = {};
     for (const result of results) {
         erasAtMeasurement[result.seed] = result.era;
@@ -633,6 +710,7 @@ function buildOutput(args: { ticks: number; level: number; seeds: string[] }, th
             level: args.level,
             seeds: args.seeds,
             thresholds,
+            absolute_guards: args.absoluteGuards,
             transition_mode: TRANSITION_MODE,
             era_boundaries: [...ERA_BOUNDARIES],
             eras_at_measurement: erasAtMeasurement,

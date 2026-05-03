@@ -21,6 +21,8 @@
 
 `geology_solo` は実装済みで、`terrain_ref.bin` と `oceanic_crust_age_ref.bin` を使い、`plate_boundary_ref.bin` があれば ridge 距離指標、`continental_mask_ref.bin` があれば hypsometry 分離指標も出す。
 現行の tectonics 診断 bench は [validation_solo.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/validation_solo.md) を参照する。
+加えて、`terrain_ref.bin` の海岸近傍 hypsometry を使い、`+1m/+5m/+10m/+20m/+50m` の海面上昇時に
+generated terrain と reference terrain で land ratio / newly inundated ratio がどれだけずれるかを diagnostics に残す。
 
 ## ベンチの考え方
 
@@ -171,6 +173,23 @@ v1 の主評価は、次の 4 指標を候補とする。
 これらは `terrain_ref` だけで比較可能で、主指標のスコア変動理由を掘りやすい。
 ただし、これ単独では `Geology` 単体性が弱いため、主評価にはしない。
 
+### 沿岸浸水応答診断
+
+`terrain_ref.bin` は `height_to_meters=6000` の内部高さへ正規化されている。
+したがって `+50m` は内部高さ `50 / 6000 = 0.008333...` に対応する。
+
+この bench では次を diagnostics として記録する。
+
+- `coastal_inundation_response[].sea_level_rise_m`
+- `coastal_inundation_response[].generated_land_ratio`
+- `coastal_inundation_response[].reference_land_ratio`
+- `coastal_inundation_response[].land_ratio_gap`
+- `coastal_inundation_response[].generated_newly_inundated_ratio`
+- `coastal_inundation_response[].reference_newly_inundated_ratio`
+- `coastal_inundation_response[].newly_inundated_ratio_gap`
+
+これは局所 coastline の厳密一致ではなく、Earth 条件で「海面近傍の hypsometry が不自然に平坦すぎる / 急すぎる」退行を検出する粗い指標である。
+
 ## v1 で優先しない項目
 
 次の項目は、v1 では主評価に置かない。
@@ -188,6 +207,15 @@ v1 の主評価は、次の 4 指標を候補とする。
 - `erosion_rate` / `deposition_rate` は Hydrology 所有の state として整理中
 - delta / outlet は downstream transport bench で扱う方が責務境界が明確
 - 全球 `height` の RMSE は module 分離が弱く、`Geology` 単体の退行原因を読みにくい
+
+## 評価基準の所在
+
+学術的な妥当性基準（何を pass/fail とみなすか）は
+[validation.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/validation.md)
+を正本とする。
+
+本書 (`solo.md`) は Earth 実データ入力ベンチの
+実行方法・入出力・比較対象の定義だけを持つ。
 
 ## 実装優先順
 

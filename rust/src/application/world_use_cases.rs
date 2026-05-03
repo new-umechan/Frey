@@ -146,6 +146,11 @@ pub(crate) fn init_world(
         vertex_buoyancy: terrain.vertex_buoyancy,
         geology_internal: vec![GeologyInternal::default(); positions.len()],
         boundary_condition: vec![0.0; positions.len()],
+        smoothing_limited_cells_ratio: 0.0,
+        mean_smoothing_factor: 1.0,
+        zero_mean_adjusted_cells_ratio: 0.0,
+        zero_mean_mean_abs_correction: 0.0,
+        zero_mean_std_delta: 0.0,
     };
 
     let mesh = world::WorldMesh {
@@ -253,7 +258,11 @@ pub(crate) fn exec_world_profiled(
         .world_and_archive_mut(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
 
-    let steps = exec_profiled_loop(managed, archive, scaled_step_count(managed.simulation_rate, tick_count));
+    let steps = exec_profiled_loop(
+        managed,
+        archive,
+        scaled_step_count(managed.simulation_rate, tick_count),
+    );
 
     let breakdown = &steps.sim_breakdown;
     Ok(StepWorldProfiledResponse {
@@ -281,7 +290,11 @@ struct ProfiledStepsResult {
     step_history_snapshot_ms: f64,
 }
 
-fn exec_profiled_loop(managed: &mut ManagedWorld, archive: &mut WorldArchive, steps: u32) -> ProfiledStepsResult {
+fn exec_profiled_loop(
+    managed: &mut ManagedWorld,
+    archive: &mut WorldArchive,
+    steps: u32,
+) -> ProfiledStepsResult {
     reset_pending_slice(managed);
     let mut sim_breakdown = ExecWorldBreakdown::default();
     let mut step_sync_erosion_ms = 0.0;
@@ -403,7 +416,8 @@ pub(crate) fn exec_world_profiled_detail(
         sink_rebuild_partial_count: river.sink_rebuild_partial_count,
         sink_rebuild_skipped_count: river.sink_rebuild_skipped_count,
         sink_rebuild_fallback_full_count: river.sink_rebuild_fallback_full_count,
-        step_geology_river_sink_incremental_rebuild_ms: river.step_geology_river_sink_incremental_rebuild_ms,
+        step_geology_river_sink_incremental_rebuild_ms: river
+            .step_geology_river_sink_incremental_rebuild_ms,
         step_geology_river_sink_full_rebuild_ms: river.step_geology_river_sink_full_rebuild_ms,
         sink_affected_ratio: river.sink_affected_ratio,
         sink_validation_fail_count: river.sink_validation_fail_count,

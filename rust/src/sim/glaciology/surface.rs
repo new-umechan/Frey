@@ -1,12 +1,15 @@
 use super::types::GlaciologyParams;
 use crate::sim::exec::{blend_alpha, lerp};
-use crate::sim::world::World;
+use crate::sim::world::{EraKind, World};
 
 const RELIEF_NORMALIZER: f32 = 0.08;
 const SEA_LEVEL_RELAXATION_ALPHA: f32 = 0.20;
 
 pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     if budget == 0 {
+        return;
+    }
+    if world.clock.epoch == EraKind::Crust {
         return;
     }
 
@@ -203,6 +206,11 @@ mod tests {
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         };
         World::new(mesh, geology)
     }
@@ -240,6 +248,25 @@ mod tests {
             .glacial_melt_runoff
             .iter()
             .any(|v| *v > 0.0));
+    }
+
+    #[test]
+    fn crust_era_skips_glaciology_and_sea_level_update() {
+        let mut world = build_test_world();
+        world.clock.epoch = EraKind::Crust;
+        world.control.sea_level_offset = 0.07;
+        world.state.climate.temperature = vec![-12.0, -11.0, -10.0, -9.0];
+        world.state.climate.precipitation = vec![2000.0, 1800.0, 1600.0, 1400.0];
+
+        run_glaciology_step(&mut world, 1);
+
+        assert!((world.control.sea_level_offset - 0.07).abs() < 1e-6);
+        assert!(world
+            .state
+            .glaciology
+            .ice_thickness
+            .iter()
+            .all(|value| value.abs() <= f32::EPSILON));
     }
 
     #[test]

@@ -3,12 +3,14 @@ use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 
 use super::state::World;
+use crate::sim::geology_types::CrustType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct WorldMetrics {
     pub cell_count: u32,
     pub land_cells: u32,
     pub land_ratio: f32,
+    pub sea_level_offset: f32,
     pub mean_height: f32,
     pub height_std_dev: f32,
     pub min_height: f32,
@@ -30,6 +32,31 @@ pub struct WorldMetrics {
     pub ocean_water_inventory: f32,
     pub ocean_water_inventory_drift: f32,
     pub ice_inventory: f32,
+    pub smoothing_limited_cells_ratio: f32,
+    pub mean_smoothing_factor: f32,
+    pub zero_mean_adjusted_cells_ratio: f32,
+    pub zero_mean_mean_abs_correction: f32,
+    pub zero_mean_std_delta: f32,
+    pub geology_activity: f32,
+    pub boundary_activity: f32,
+    pub uplift_rate: f32,
+    pub subsidence_rate: f32,
+    pub mean_compressive: f32,
+    pub mean_tensile: f32,
+    pub mean_abs_diffusive_raw: f32,
+    pub mean_abs_isostatic_raw: f32,
+    pub mean_thickness: f32,
+    pub std_thickness: f32,
+    pub mean_density: f32,
+    pub std_density: f32,
+    pub mean_rigidity: f32,
+    pub std_rigidity: f32,
+    pub oceanic_cell_ratio: f32,
+    pub continental_cell_ratio: f32,
+    pub mean_thickness_oceanic: f32,
+    pub mean_thickness_continental: f32,
+    pub mean_rigidity_oceanic: f32,
+    pub mean_rigidity_continental: f32,
 }
 
 impl World {
@@ -85,11 +112,39 @@ impl World {
             sum_flux,
             max_flux,
         );
+        let cached_geology = self.exec_scratch.geology_dynamics.as_ref().map(|state| {
+            let metrics = state.cached_metrics;
+            (
+                finite_or(metrics.geology_activity),
+                finite_or(metrics.boundary_activity),
+                finite_or(metrics.uplift_rate),
+                finite_or(metrics.subsidence_rate),
+                finite_or(metrics.mean_compressive),
+                finite_or(metrics.mean_tensile),
+                finite_or(metrics.mean_abs_diffusive_raw),
+                finite_or(metrics.mean_abs_isostatic_raw),
+            )
+        });
+        let (
+            mean_thickness,
+            std_thickness,
+            mean_density,
+            std_density,
+            mean_rigidity,
+            std_rigidity,
+            oceanic_cell_ratio,
+            continental_cell_ratio,
+            mean_thickness_oceanic,
+            mean_thickness_continental,
+            mean_rigidity_oceanic,
+            mean_rigidity_continental,
+        ) = geology_internal_stats(&self.state.geology.geology_internal);
 
         WorldMetrics {
             cell_count: cell_count as u32,
             land_cells: land_cells as u32,
             land_ratio: land_cells as f32 / cell_count_f32,
+            sea_level_offset: self.control.sea_level_offset,
             mean_height,
             height_std_dev,
             min_height: if min_height.is_finite() {
@@ -121,8 +176,155 @@ impl World {
             ocean_water_inventory_drift: self.control.ocean_water_inventory
                 - self.control.ocean_water_inventory_baseline,
             ice_inventory: self.control.ice_inventory.max(0.0),
+            smoothing_limited_cells_ratio: self.state.geology.smoothing_limited_cells_ratio,
+            mean_smoothing_factor: self.state.geology.mean_smoothing_factor,
+            zero_mean_adjusted_cells_ratio: self.state.geology.zero_mean_adjusted_cells_ratio,
+            zero_mean_mean_abs_correction: self.state.geology.zero_mean_mean_abs_correction,
+            zero_mean_std_delta: self.state.geology.zero_mean_std_delta,
+            geology_activity: cached_geology.map(|values| values.0).unwrap_or(0.0),
+            boundary_activity: cached_geology.map(|values| values.1).unwrap_or(0.0),
+            uplift_rate: cached_geology.map(|values| values.2).unwrap_or(0.0),
+            subsidence_rate: cached_geology.map(|values| values.3).unwrap_or(0.0),
+            mean_compressive: cached_geology.map(|values| values.4).unwrap_or(0.0),
+            mean_tensile: cached_geology.map(|values| values.5).unwrap_or(0.0),
+            mean_abs_diffusive_raw: cached_geology.map(|values| values.6).unwrap_or(0.0),
+            mean_abs_isostatic_raw: cached_geology.map(|values| values.7).unwrap_or(0.0),
+            mean_thickness,
+            std_thickness,
+            mean_density,
+            std_density,
+            mean_rigidity,
+            std_rigidity,
+            oceanic_cell_ratio,
+            continental_cell_ratio,
+            mean_thickness_oceanic,
+            mean_thickness_continental,
+            mean_rigidity_oceanic,
+            mean_rigidity_continental,
         }
     }
+}
+
+fn finite_or(value: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        0.0
+    }
+}
+
+fn geology_internal_stats(
+    values: &[crate::sim::geology_types::GeologyInternal],
+) -> (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32) {
+    if values.is_empty() {
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    }
+
+    let len = values.len() as f32;
+    let mean_thickness = values
+        .iter()
+        .map(|value| finite_or(value.thickness))
+        .sum::<f32>()
+        / len;
+    let mean_density = values
+        .iter()
+        .map(|value| finite_or(value.density))
+        .sum::<f32>()
+        / len;
+    let mean_rigidity = values
+        .iter()
+        .map(|value| finite_or(value.rigidity))
+        .sum::<f32>()
+        / len;
+
+    let std_thickness = std_from_mean(
+        values.iter().map(|value| finite_or(value.thickness)),
+        mean_thickness,
+        len,
+    );
+    let std_density = std_from_mean(
+        values.iter().map(|value| finite_or(value.density)),
+        mean_density,
+        len,
+    );
+    let std_rigidity = std_from_mean(
+        values.iter().map(|value| finite_or(value.rigidity)),
+        mean_rigidity,
+        len,
+    );
+
+    let mut oceanic_count = 0usize;
+    let mut oceanic_thickness_sum = 0.0f32;
+    let mut oceanic_rigidity_sum = 0.0f32;
+    let mut continental_count = 0usize;
+    let mut continental_thickness_sum = 0.0f32;
+    let mut continental_rigidity_sum = 0.0f32;
+    for value in values {
+        match value.crust_type {
+            CrustType::Oceanic => {
+                oceanic_count += 1;
+                oceanic_thickness_sum += finite_or(value.thickness);
+                oceanic_rigidity_sum += finite_or(value.rigidity);
+            }
+            CrustType::Continental => {
+                continental_count += 1;
+                continental_thickness_sum += finite_or(value.thickness);
+                continental_rigidity_sum += finite_or(value.rigidity);
+            }
+        }
+    }
+    let total = values.len() as f32;
+    let oceanic_count_f32 = oceanic_count as f32;
+    let continental_count_f32 = continental_count as f32;
+    let mean_thickness_oceanic = if oceanic_count > 0 {
+        oceanic_thickness_sum / oceanic_count_f32
+    } else {
+        0.0
+    };
+    let mean_thickness_continental = if continental_count > 0 {
+        continental_thickness_sum / continental_count_f32
+    } else {
+        0.0
+    };
+    let mean_rigidity_oceanic = if oceanic_count > 0 {
+        oceanic_rigidity_sum / oceanic_count_f32
+    } else {
+        0.0
+    };
+    let mean_rigidity_continental = if continental_count > 0 {
+        continental_rigidity_sum / continental_count_f32
+    } else {
+        0.0
+    };
+
+    (
+        mean_thickness,
+        std_thickness,
+        mean_density,
+        std_density,
+        mean_rigidity,
+        std_rigidity,
+        oceanic_count_f32 / total,
+        continental_count_f32 / total,
+        mean_thickness_oceanic,
+        mean_thickness_continental,
+        mean_rigidity_oceanic,
+        mean_rigidity_continental,
+    )
+}
+
+fn std_from_mean<I>(values: I, mean: f32, len: f32) -> f32
+where
+    I: Iterator<Item = f32>,
+{
+    let variance = values
+        .map(|value| {
+            let delta = value - mean;
+            delta * delta
+        })
+        .sum::<f32>()
+        / len;
+    variance.max(0.0).sqrt()
 }
 
 fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {

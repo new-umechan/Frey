@@ -214,6 +214,11 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     world.state.geology.plate_id = next_plate_id;
     world.state.geology.volcanism = next_volcanism;
     world.state.geology.vertex_buoyancy = next_vertex_buoyancy;
+    world.state.geology.smoothing_limited_cells_ratio = metrics.smoothing_limited_cells_ratio;
+    world.state.geology.mean_smoothing_factor = metrics.mean_smoothing_factor;
+    world.state.geology.zero_mean_adjusted_cells_ratio = metrics.zero_mean_adjusted_cells_ratio;
+    world.state.geology.zero_mean_mean_abs_correction = metrics.zero_mean_mean_abs_correction;
+    world.state.geology.zero_mean_std_delta = metrics.zero_mean_std_delta;
     if world.state.geology.boundary_condition.len() == dynamics.boundary_state.activity.len() {
         world
             .state

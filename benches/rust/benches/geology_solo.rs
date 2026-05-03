@@ -14,6 +14,8 @@ use frey_wasm::sim::geology_types::GeologyParams;
 const OCEANIC_AGE_DEPTH_MAX_MYR: f32 = 100.0;
 const RIDGE_DISTANCE_BIN_WIDTH_KM: f32 = 250.0;
 const CONTINENTAL_MASK_MAGIC: &[u8; 8] = b"GEOCNTL1";
+const HEIGHT_TO_METERS: f32 = 6000.0;
+const INUNDATION_SCENARIOS_METERS: [f32; 5] = [1.0, 5.0, 10.0, 20.0, 50.0];
 
 #[derive(Debug, Clone)]
 struct OceanicAgeRef {
@@ -60,6 +62,16 @@ struct Diagnostics {
     oceanic_age_min_myr: Option<f32>,
     oceanic_age_max_myr: Option<f32>,
     mean_depth: Option<f32>,
+    inundation: Vec<InundationScenario>,
+}
+
+#[derive(Clone)]
+struct InundationScenario {
+    sea_level_rise_m: f32,
+    generated_land_ratio: f32,
+    reference_land_ratio: f32,
+    generated_newly_inundated_ratio: f32,
+    reference_newly_inundated_ratio: f32,
 }
 
 #[derive(Clone)]
@@ -205,7 +217,7 @@ fn main() {
     };
 
     let build_started_at = Instant::now();
-    let (_terrain, positions, _nbr_offsets, _nbrs) =
+    let (terrain, positions, _nbr_offsets, _nbrs) =
         sim::build_geology_with_mesh(seed.as_str(), geology_params.clone());
     let geology_build_ms = build_started_at.elapsed().as_secs_f64() * 1000.0;
     let cell_count = positions.len();
@@ -269,7 +281,7 @@ fn main() {
     }
 
     let age_metrics = compute_age_depth_metrics(&terrain_ref.height, &age_ref.age);
-    let diagnostics = compute_diagnostics(&terrain_ref.height, &age_ref.age);
+    let diagnostics = compute_diagnostics(&terrain.height, &terrain_ref.height, &age_ref.age);
     let ridge_metrics = ridge_ref.as_ref().map(|ridge_ref| {
         compute_ridge_distance_depth_metrics(
             &terrain_ref.height,
@@ -351,6 +363,16 @@ fn main() {
         age_metrics.oceanic_age_valid_cells,
         age_metrics.oceanic_age_total_cells
     );
+    for scenario in &diagnostics.inundation {
+        println!(
+            "inundation_{}m: generated_land_ratio={:.3} reference_land_ratio={:.3} generated_newly_inundated_ratio={:.3} reference_newly_inundated_ratio={:.3}",
+            scenario.sea_level_rise_m as i32,
+            scenario.generated_land_ratio,
+            scenario.reference_land_ratio,
+            scenario.generated_newly_inundated_ratio,
+            scenario.reference_newly_inundated_ratio
+        );
+    }
 
     if let Err(error) = append_score_record_jsonl(
         &run_metadata,
@@ -598,7 +620,7 @@ fn compute_age_depth_metrics(height: &[f32], age: &[f32]) -> AgeDepthMetrics {
     }
 }
 
-fn compute_diagnostics(height: &[f32], age: &[f32]) -> Diagnostics {
+fn compute_diagnostics(height: &[f32], reference_height: &[f32], age: &[f32]) -> Diagnostics {
     let mut land_cells = 0usize;
     let mut oceanic_depth_sum = 0.0_f32;
     let mut oceanic_depth_count = 0usize;
@@ -639,7 +661,58 @@ fn compute_diagnostics(height: &[f32], age: &[f32]) -> Diagnostics {
         oceanic_age_min_myr: oceanic_min,
         oceanic_age_max_myr: oceanic_max,
         mean_depth,
+        inundation: compute_inundation_scenarios(height, reference_height),
     }
+}
+
+fn compute_inundation_scenarios(
+    generated_height: &[f32],
+    reference_height: &[f32],
+) -> Vec<InundationScenario> {
+    let count = generated_height.len().min(reference_height.len());
+    if count == 0 {
+        return Vec::new();
+    }
+
+    INUNDATION_SCENARIOS_METERS
+        .iter()
+        .copied()
+        .map(|sea_level_rise_m| {
+            let offset = sea_level_rise_m / HEIGHT_TO_METERS;
+            let mut generated_land = 0usize;
+            let mut reference_land = 0usize;
+            let mut generated_newly_inundated = 0usize;
+            let mut reference_newly_inundated = 0usize;
+
+            for i in 0..count {
+                let generated = generated_height[i];
+                let reference = reference_height[i];
+                if generated.is_finite() {
+                    if generated > offset {
+                        generated_land += 1;
+                    } else if generated > 0.0 {
+                        generated_newly_inundated += 1;
+                    }
+                }
+                if reference.is_finite() {
+                    if reference > offset {
+                        reference_land += 1;
+                    } else if reference > 0.0 {
+                        reference_newly_inundated += 1;
+                    }
+                }
+            }
+
+            let denom = count as f32;
+            InundationScenario {
+                sea_level_rise_m,
+                generated_land_ratio: generated_land as f32 / denom,
+                reference_land_ratio: reference_land as f32 / denom,
+                generated_newly_inundated_ratio: generated_newly_inundated as f32 / denom,
+                reference_newly_inundated_ratio: reference_newly_inundated as f32 / denom,
+            }
+        })
+        .collect()
 }
 
 fn compute_ridge_distance_depth_metrics(
@@ -1188,6 +1261,26 @@ fn append_score_record_jsonl(
         )
         .map_err(|error| format!("failed to write json: {}", error))?;
     }
+    write!(&mut line, ",\"coastal_inundation_response\":[")
+        .map_err(|error| format!("failed to write json: {}", error))?;
+    for (index, scenario) in diagnostics.inundation.iter().enumerate() {
+        if index > 0 {
+            write!(&mut line, ",").map_err(|error| format!("failed to write json: {}", error))?;
+        }
+        write!(
+            &mut line,
+            "{{\"sea_level_rise_m\":{:.1},\"generated_land_ratio\":{:.6},\"reference_land_ratio\":{:.6},\"land_ratio_gap\":{:.6},\"generated_newly_inundated_ratio\":{:.6},\"reference_newly_inundated_ratio\":{:.6},\"newly_inundated_ratio_gap\":{:.6}}}",
+            scenario.sea_level_rise_m,
+            scenario.generated_land_ratio,
+            scenario.reference_land_ratio,
+            scenario.generated_land_ratio - scenario.reference_land_ratio,
+            scenario.generated_newly_inundated_ratio,
+            scenario.reference_newly_inundated_ratio,
+            scenario.generated_newly_inundated_ratio - scenario.reference_newly_inundated_ratio
+        )
+        .map_err(|error| format!("failed to write json: {}", error))?;
+    }
+    write!(&mut line, "]").map_err(|error| format!("failed to write json: {}", error))?;
     write!(&mut line, "}}}}\n")
         .map_err(|error| format!("failed to write json: {}", error))?;
 

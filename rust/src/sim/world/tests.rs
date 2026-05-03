@@ -26,6 +26,11 @@ fn build_world() -> World {
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     )
 }
@@ -53,6 +58,11 @@ fn build_generated_world(seed: &str, params: GeologyParams) -> World {
                 terrain.river_flux.len()
             ],
             boundary_condition: vec![0.0; terrain.river_flux.len()],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
     world.state.hydrology.river_flow = terrain.river_flux;
@@ -284,6 +294,11 @@ fn world_initializes_land_ratio_from_initial_height_distribution() {
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
 
@@ -306,6 +321,11 @@ fn refresh_terrain_state_reclassifies_cells_with_sea_level_offset() {
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
 
@@ -405,6 +425,11 @@ fn metrics_collects_height_and_flux_stats() {
             vertex_buoyancy: vec![0.0; 4],
             geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
             boundary_condition: vec![0.0; 4],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
     world.state.hydrology.river_flow = vec![0.5, 1.2, 3.0, 0.1];
@@ -414,6 +439,7 @@ fn metrics_collects_height_and_flux_stats() {
     assert_eq!(metrics.cell_count, 4);
     assert_eq!(metrics.land_cells, 2);
     assert!((metrics.land_ratio - 0.5).abs() < 1e-6);
+    assert!(metrics.sea_level_offset.abs() < 1e-6);
     assert!((metrics.mean_height - 0.0).abs() < 1e-6);
     assert!((metrics.height_std_dev - 1.5811388).abs() < 1e-5);
     assert!((metrics.mean_river_flux - 1.2).abs() < 1e-6);
@@ -455,6 +481,11 @@ fn metrics_are_deterministic_for_fixed_seed() {
                 positions.len()
             ],
             boundary_condition: vec![0.0; positions.len()],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
     let mut world_b = World::new(
@@ -474,6 +505,11 @@ fn metrics_are_deterministic_for_fixed_seed() {
                 world_a.cell_count()
             ],
             boundary_condition: vec![0.0; world_a.cell_count()],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
 
@@ -529,6 +565,11 @@ fn river_network_persists_without_early_collapse() {
                 positions.len()
             ],
             boundary_condition: vec![0.0; positions.len()],
+            smoothing_limited_cells_ratio: 0.0,
+            mean_smoothing_factor: 1.0,
+            zero_mean_adjusted_cells_ratio: 0.0,
+            zero_mean_mean_abs_correction: 0.0,
+            zero_mean_std_delta: 0.0,
         },
     );
 

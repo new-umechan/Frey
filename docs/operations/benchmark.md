@@ -39,6 +39,8 @@ quality gate ではなく、JSONL artifact の最新値・baseline・差分を�
 `geology_solo` は Earth 実データ入力ベンチとして実装済みで、詳細は `docs/operations/bench/geology/solo.md` を参照する。
 tectonics runtime / 構造診断は `docs/operations/bench/geology/validation_solo.md` と `docs/operations/bench/geology/validation.md` を参照する。
 長期のウィルソンサイクルと plate 構造の妥当性は `docs/operations/bench/geology/validation.md` で別管理する。
+また、沿岸低地と大陸棚の応答をみるため、`geology_solo` は `+1m/+5m/+10m/+20m/+50m` の海面上昇に対する
+land ratio / newly inundated ratio の差分診断も記録する。
 
 ---
 

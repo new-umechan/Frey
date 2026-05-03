@@ -77,6 +77,27 @@ heat_release_rate: プルーム発生時の放熱率
 9. アイソスタシー調整
 10. 活動量メトリクス更新
 
+### 2.4 起伏保持の平滑化リミタ
+
+地形起伏（`height_std`）が急速に縮退する主因は、拡散項とアイソスタシー調整が
+その tick の内生 forcing を上回って relief を消してしまうことである。
+
+そのため、era 固定の分岐ではなく、各セルで以下を比較して平滑化を制御する。
+
+- `endogenous_forcing`: 構造隆起、構造沈降、火山起源 uplift、plume forcing の合計強度
+- `smoothing_strength`: 拡散項とアイソスタシー調整の合計強度
+
+`smoothing_strength` が `endogenous_forcing` の 1.5 倍を超える場合に限り、
+拡散項とアイソスタシー調整率へ同じ減衰係数を掛ける。
+さらに、1 tick で失ってよい local relief の割合にも上限を置く。
+これにより「Crust だから弱める」のではなく、
+「その tick で平滑化が強すぎるときだけ弱める」という制御にする。
+
+診断として以下を保持する。
+
+- `smoothing_limited_cells_ratio`: その tick で limiter が発火したセル比率
+- `mean_smoothing_factor`: 拡散項・アイソスタシー項に掛かった平均係数
+
 ## 3. 具体的な仕様
 
 ### 3.0 プレートの動き

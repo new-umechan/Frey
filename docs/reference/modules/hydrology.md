@@ -28,6 +28,9 @@ HydrologyはCellStoreとClockだけを読む。
 
 地形変化フラグの判定はExecSystemが担う。
 GeologyはCellStoreに標高を書くだけであり、フラグ管理はしない。
+また runtime では `Crust` 期に hydrology の fluvial erosion / deposition を `Geology` へ反映しない。
+`Crust` 期の標高進化は tectonics を主因とし、surface denudation は `Environment` 期以降で反映する。
+また `Crust` 期の海陸比は `Geology` 側の freeboard recentering で初期 land ratio を弱く維持する。
 
 `HydrologyMFDSystem` の sink 再構築は次の3モードで運用する。
 
@@ -177,7 +180,7 @@ Exner 系の budget 制約を掛ける。
 - 超過分は未解像の海盆・深海への sediment export とみなす
 - glacial erosion は別 transport 未実装のため、この budget には含めない
 - `marine_sediment_mass` は v1 では非減少の一方向 sink とし、Hydrology は海成堆積物の再露出や再懸濁を扱わない
-- この段階では海陸比を合わせるための全球 terrain shift は行わない
+- `Environment` 期以降は、海陸比を合わせるための全球 terrain shift は行わない
 - 海陸比の復元が必要な場合は、標高ではなく `sea_level_offset` の `capacity closure` 側で扱う
 
 `hydrology_solo` ではこの節の実装を直接 gate にはしないが、

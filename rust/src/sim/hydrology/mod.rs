@@ -683,6 +683,11 @@ mod tests {
                 vertex_buoyancy: vec![0.0; 4],
                 geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
                 boundary_condition: vec![0.0; 4],
+                smoothing_limited_cells_ratio: 0.0,
+                mean_smoothing_factor: 1.0,
+                zero_mean_adjusted_cells_ratio: 0.0,
+                zero_mean_mean_abs_correction: 0.0,
+                zero_mean_std_delta: 0.0,
             },
         )
     }

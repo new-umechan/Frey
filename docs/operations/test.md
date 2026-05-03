@@ -46,6 +46,7 @@
 採用している比較指標:
 
 - `land_cells`
+- `land_ratio`
 - `height_mean`
 - `height_std`
 - `max_river_flux`
@@ -69,6 +70,27 @@
 - `top10_river_flux_sum` は流路分配モデル変更（SFD -> MFD）に対して感度が高いため、ゲート閾値を個別に `0.01` へ緩和する
 - その他指標は `0.005` を維持する
 
+仕様更新（2026-05-01, Earth-like land ratio guard）:
+
+- `land_ratio` は baseline差分比較に加えて、absolute guard でも監視する
+- Earth-like seed の `Crust` 期 gate では次を使う
+- warning帯: `0.24 - 0.35`
+- fail帯: `0.20 - 0.40`
+- これは「現代 Earth の 0.292 に固定する」ためではなく、`5000万年` スケールでの
+  全海化 / 全陸化ドリフトを検出するための安定性帯として扱う
+
+仕様更新（2026-05-02, crust diagnostics / baseline refresh）:
+
+- 地形平滑化の過剰化を監視するため、seed regression 出力に次の tectonics 診断を追加した
+- `smoothing_limited_cells_ratio`, `mean_smoothing_factor`
+- `zero_mean_adjusted_cells_ratio`, `zero_mean_mean_abs_correction`, `zero_mean_std_delta`
+- `mean_thickness`, `std_thickness`, `mean_rigidity`, `std_rigidity`
+- `oceanic_cell_ratio`, `continental_cell_ratio`
+- `mean_thickness_oceanic`, `mean_thickness_continental`
+- `mean_rigidity_oceanic`, `mean_rigidity_continental`
+- 上記の仕様変更に合わせて `quick/heavy` の baseline を再生成した
+- 以後はこの baseline を正として gate を運用する
+
 仕様更新（2026-03-24, 時代遷移の固定tick化）:
 
 - 時代遷移は動的条件ではなく固定境界で決定する（`0, 800, 1300, 1395, 1445`）
@@ -88,6 +110,8 @@ pnpm test:seed:gate:heavy
 
 - 共通閾値: `--threshold 0.005`
 - 指標別上書き: `--threshold-top10-river-flux-sum 0.01`
+- 絶対ガード:
+  `--land-ratio-warn-min 0.24 --land-ratio-warn-max 0.35 --land-ratio-fail-min 0.20 --land-ratio-fail-max 0.40`
 - 並列実行数: `--jobs <n>`（デフォルト `1`）
 - `test:seed:gate:quick` / `test:seed:gate:heavy` は `--jobs 2` を使用する
 

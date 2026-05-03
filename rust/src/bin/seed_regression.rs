@@ -17,10 +17,46 @@ const DEFAULT_JOBS: usize = 1;
 const DEFAULT_SEEDS: [&str; 1] = ["alpha"];
 const TRANSITION_MODE: &str = "fixed_tick";
 const ERA_BOUNDARIES: [u32; 5] = [0, 800, 1300, 1395, 1445];
-const METRIC_SPECS: [MetricSpec; 10] = [
+const METRIC_SPECS: [MetricSpec; 37] = [
     MetricSpec::new("land_cells", "land-cells"),
+    MetricSpec::new("land_ratio", "land-ratio"),
+    MetricSpec::new("sea_level_offset", "sea-level-offset"),
     MetricSpec::new("height_mean", "height-mean"),
     MetricSpec::new("height_std", "height-std"),
+    MetricSpec::new(
+        "smoothing_limited_cells_ratio",
+        "smoothing-limited-cells-ratio",
+    ),
+    MetricSpec::new("mean_smoothing_factor", "mean-smoothing-factor"),
+    MetricSpec::new(
+        "zero_mean_adjusted_cells_ratio",
+        "zero-mean-adjusted-cells-ratio",
+    ),
+    MetricSpec::new(
+        "zero_mean_mean_abs_correction",
+        "zero-mean-mean-abs-correction",
+    ),
+    MetricSpec::new("zero_mean_std_delta", "zero-mean-std-delta"),
+    MetricSpec::new("geology_activity", "geology-activity"),
+    MetricSpec::new("boundary_activity", "boundary-activity"),
+    MetricSpec::new("uplift_rate", "uplift-rate"),
+    MetricSpec::new("subsidence_rate", "subsidence-rate"),
+    MetricSpec::new("mean_compressive", "mean-compressive"),
+    MetricSpec::new("mean_tensile", "mean-tensile"),
+    MetricSpec::new("mean_abs_diffusive_raw", "mean-abs-diffusive-raw"),
+    MetricSpec::new("mean_abs_isostatic_raw", "mean-abs-isostatic-raw"),
+    MetricSpec::new("mean_thickness", "mean-thickness"),
+    MetricSpec::new("std_thickness", "std-thickness"),
+    MetricSpec::new("mean_density", "mean-density"),
+    MetricSpec::new("std_density", "std-density"),
+    MetricSpec::new("mean_rigidity", "mean-rigidity"),
+    MetricSpec::new("std_rigidity", "std-rigidity"),
+    MetricSpec::new("oceanic_cell_ratio", "oceanic-cell-ratio"),
+    MetricSpec::new("continental_cell_ratio", "continental-cell-ratio"),
+    MetricSpec::new("mean_thickness_oceanic", "mean-thickness-oceanic"),
+    MetricSpec::new("mean_thickness_continental", "mean-thickness-continental"),
+    MetricSpec::new("mean_rigidity_oceanic", "mean-rigidity-oceanic"),
+    MetricSpec::new("mean_rigidity_continental", "mean-rigidity-continental"),
     MetricSpec::new("max_river_flux", "max-river-flux"),
     MetricSpec::new("top10_river_flux_sum", "top10-river-flux-sum"),
     MetricSpec::new("global_sediment_export", "global-sediment-export"),
@@ -56,6 +92,7 @@ struct Args {
     check: bool,
     threshold: f64,
     threshold_by_metric: ThresholdMap,
+    absolute_guards: AbsoluteGuards,
     fail_on_deviation: bool,
 }
 
@@ -65,13 +102,15 @@ struct OutputData {
     results: Vec<OutputEntry>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 struct OutputMeta {
     generated_at: String,
     ticks: u32,
     level: u32,
     seeds: Vec<String>,
     thresholds: ThresholdMap,
+    absolute_guards: AbsoluteGuards,
     transition_mode: String,
     era_boundaries: Vec<u32>,
     eras_at_measurement: std::collections::BTreeMap<String, String>,
@@ -86,10 +125,38 @@ struct OutputEntry {
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 struct MetricValues {
     land_cells: f64,
+    land_ratio: f64,
+    sea_level_offset: f64,
     height_mean: f64,
     height_std: f64,
+    smoothing_limited_cells_ratio: f64,
+    mean_smoothing_factor: f64,
+    zero_mean_adjusted_cells_ratio: f64,
+    zero_mean_mean_abs_correction: f64,
+    zero_mean_std_delta: f64,
+    geology_activity: f64,
+    boundary_activity: f64,
+    uplift_rate: f64,
+    subsidence_rate: f64,
+    mean_compressive: f64,
+    mean_tensile: f64,
+    mean_abs_diffusive_raw: f64,
+    mean_abs_isostatic_raw: f64,
+    mean_thickness: f64,
+    std_thickness: f64,
+    mean_density: f64,
+    std_density: f64,
+    mean_rigidity: f64,
+    std_rigidity: f64,
+    oceanic_cell_ratio: f64,
+    continental_cell_ratio: f64,
+    mean_thickness_oceanic: f64,
+    mean_thickness_continental: f64,
+    mean_rigidity_oceanic: f64,
+    mean_rigidity_continental: f64,
     max_river_flux: f64,
     top10_river_flux_sum: f64,
     global_sediment_export: f64,
@@ -100,10 +167,38 @@ struct MetricValues {
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 struct ThresholdMap {
     land_cells: f64,
+    land_ratio: f64,
+    sea_level_offset: f64,
     height_mean: f64,
     height_std: f64,
+    smoothing_limited_cells_ratio: f64,
+    mean_smoothing_factor: f64,
+    zero_mean_adjusted_cells_ratio: f64,
+    zero_mean_mean_abs_correction: f64,
+    zero_mean_std_delta: f64,
+    geology_activity: f64,
+    boundary_activity: f64,
+    uplift_rate: f64,
+    subsidence_rate: f64,
+    mean_compressive: f64,
+    mean_tensile: f64,
+    mean_abs_diffusive_raw: f64,
+    mean_abs_isostatic_raw: f64,
+    mean_thickness: f64,
+    std_thickness: f64,
+    mean_density: f64,
+    std_density: f64,
+    mean_rigidity: f64,
+    std_rigidity: f64,
+    oceanic_cell_ratio: f64,
+    continental_cell_ratio: f64,
+    mean_thickness_oceanic: f64,
+    mean_thickness_continental: f64,
+    mean_rigidity_oceanic: f64,
+    mean_rigidity_continental: f64,
     max_river_flux: f64,
     top10_river_flux_sum: f64,
     global_sediment_export: f64,
@@ -111,6 +206,15 @@ struct ThresholdMap {
     solid_earth_mass_proxy_drift: f64,
     ocean_water_inventory_drift: f64,
     ice_inventory: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+struct AbsoluteGuards {
+    land_ratio_warn_min: f64,
+    land_ratio_warn_max: f64,
+    land_ratio_fail_min: f64,
+    land_ratio_fail_max: f64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -154,6 +258,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         check: false,
         threshold: DEFAULT_THRESHOLD,
         threshold_by_metric: ThresholdMap::default(),
+        absolute_guards: AbsoluteGuards::default(),
         fail_on_deviation: false,
     };
 
@@ -218,6 +323,26 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
                 args.threshold = parse_f64(next_arg(argv, index, token)?, token)?.max(0.0);
                 index += 2;
             }
+            "--land-ratio-warn-min" => {
+                args.absolute_guards.land_ratio_warn_min =
+                    parse_f64(next_arg(argv, index, token)?, token)?.clamp(0.0, 1.0);
+                index += 2;
+            }
+            "--land-ratio-warn-max" => {
+                args.absolute_guards.land_ratio_warn_max =
+                    parse_f64(next_arg(argv, index, token)?, token)?.clamp(0.0, 1.0);
+                index += 2;
+            }
+            "--land-ratio-fail-min" => {
+                args.absolute_guards.land_ratio_fail_min =
+                    parse_f64(next_arg(argv, index, token)?, token)?.clamp(0.0, 1.0);
+                index += 2;
+            }
+            "--land-ratio-fail-max" => {
+                args.absolute_guards.land_ratio_fail_max =
+                    parse_f64(next_arg(argv, index, token)?, token)?.clamp(0.0, 1.0);
+                index += 2;
+            }
             "--fail-on-deviation" => {
                 args.fail_on_deviation = true;
                 index += 1;
@@ -233,6 +358,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
     if args.check && args.baseline.is_none() {
         return Err("--check requires --baseline <path>".to_string());
     }
+    validate_absolute_guards(&args.absolute_guards)?;
 
     Ok(args)
 }
@@ -249,6 +375,10 @@ fn print_help() {
     eprintln!("  --baseline <path>");
     eprintln!("  --check");
     eprintln!("  --threshold <ratio>");
+    eprintln!("  --land-ratio-warn-min <0..1>");
+    eprintln!("  --land-ratio-warn-max <0..1>");
+    eprintln!("  --land-ratio-fail-min <0..1>");
+    eprintln!("  --land-ratio-fail-max <0..1>");
     eprintln!("  --fail-on-deviation");
     for spec in METRIC_SPECS {
         eprintln!("  --threshold-{} <ratio>", spec.flag_suffix);
@@ -298,6 +428,16 @@ fn build_effective_thresholds(args: &Args) -> ThresholdMap {
         } else {
             args.threshold
         },
+        land_ratio: if args.threshold_by_metric.land_ratio > 0.0 {
+            args.threshold_by_metric.land_ratio
+        } else {
+            args.threshold
+        },
+        sea_level_offset: if args.threshold_by_metric.sea_level_offset > 0.0 {
+            args.threshold_by_metric.sea_level_offset
+        } else {
+            args.threshold
+        },
         height_mean: if args.threshold_by_metric.height_mean > 0.0 {
             args.threshold_by_metric.height_mean
         } else {
@@ -305,6 +445,137 @@ fn build_effective_thresholds(args: &Args) -> ThresholdMap {
         },
         height_std: if args.threshold_by_metric.height_std > 0.0 {
             args.threshold_by_metric.height_std
+        } else {
+            args.threshold
+        },
+        smoothing_limited_cells_ratio: if args.threshold_by_metric.smoothing_limited_cells_ratio
+            > 0.0
+        {
+            args.threshold_by_metric.smoothing_limited_cells_ratio
+        } else {
+            args.threshold
+        },
+        mean_smoothing_factor: if args.threshold_by_metric.mean_smoothing_factor > 0.0 {
+            args.threshold_by_metric.mean_smoothing_factor
+        } else {
+            args.threshold
+        },
+        zero_mean_adjusted_cells_ratio: if args.threshold_by_metric.zero_mean_adjusted_cells_ratio
+            > 0.0
+        {
+            args.threshold_by_metric.zero_mean_adjusted_cells_ratio
+        } else {
+            args.threshold
+        },
+        zero_mean_mean_abs_correction: if args.threshold_by_metric.zero_mean_mean_abs_correction
+            > 0.0
+        {
+            args.threshold_by_metric.zero_mean_mean_abs_correction
+        } else {
+            args.threshold
+        },
+        zero_mean_std_delta: if args.threshold_by_metric.zero_mean_std_delta > 0.0 {
+            args.threshold_by_metric.zero_mean_std_delta
+        } else {
+            args.threshold
+        },
+        geology_activity: if args.threshold_by_metric.geology_activity > 0.0 {
+            args.threshold_by_metric.geology_activity
+        } else {
+            args.threshold
+        },
+        boundary_activity: if args.threshold_by_metric.boundary_activity > 0.0 {
+            args.threshold_by_metric.boundary_activity
+        } else {
+            args.threshold
+        },
+        uplift_rate: if args.threshold_by_metric.uplift_rate > 0.0 {
+            args.threshold_by_metric.uplift_rate
+        } else {
+            args.threshold
+        },
+        subsidence_rate: if args.threshold_by_metric.subsidence_rate > 0.0 {
+            args.threshold_by_metric.subsidence_rate
+        } else {
+            args.threshold
+        },
+        mean_compressive: if args.threshold_by_metric.mean_compressive > 0.0 {
+            args.threshold_by_metric.mean_compressive
+        } else {
+            args.threshold
+        },
+        mean_tensile: if args.threshold_by_metric.mean_tensile > 0.0 {
+            args.threshold_by_metric.mean_tensile
+        } else {
+            args.threshold
+        },
+        mean_abs_diffusive_raw: if args.threshold_by_metric.mean_abs_diffusive_raw > 0.0 {
+            args.threshold_by_metric.mean_abs_diffusive_raw
+        } else {
+            args.threshold
+        },
+        mean_abs_isostatic_raw: if args.threshold_by_metric.mean_abs_isostatic_raw > 0.0 {
+            args.threshold_by_metric.mean_abs_isostatic_raw
+        } else {
+            args.threshold
+        },
+        mean_thickness: if args.threshold_by_metric.mean_thickness > 0.0 {
+            args.threshold_by_metric.mean_thickness
+        } else {
+            args.threshold
+        },
+        std_thickness: if args.threshold_by_metric.std_thickness > 0.0 {
+            args.threshold_by_metric.std_thickness
+        } else {
+            args.threshold
+        },
+        mean_density: if args.threshold_by_metric.mean_density > 0.0 {
+            args.threshold_by_metric.mean_density
+        } else {
+            args.threshold
+        },
+        std_density: if args.threshold_by_metric.std_density > 0.0 {
+            args.threshold_by_metric.std_density
+        } else {
+            args.threshold
+        },
+        mean_rigidity: if args.threshold_by_metric.mean_rigidity > 0.0 {
+            args.threshold_by_metric.mean_rigidity
+        } else {
+            args.threshold
+        },
+        std_rigidity: if args.threshold_by_metric.std_rigidity > 0.0 {
+            args.threshold_by_metric.std_rigidity
+        } else {
+            args.threshold
+        },
+        oceanic_cell_ratio: if args.threshold_by_metric.oceanic_cell_ratio > 0.0 {
+            args.threshold_by_metric.oceanic_cell_ratio
+        } else {
+            args.threshold
+        },
+        continental_cell_ratio: if args.threshold_by_metric.continental_cell_ratio > 0.0 {
+            args.threshold_by_metric.continental_cell_ratio
+        } else {
+            args.threshold
+        },
+        mean_thickness_oceanic: if args.threshold_by_metric.mean_thickness_oceanic > 0.0 {
+            args.threshold_by_metric.mean_thickness_oceanic
+        } else {
+            args.threshold
+        },
+        mean_thickness_continental: if args.threshold_by_metric.mean_thickness_continental > 0.0 {
+            args.threshold_by_metric.mean_thickness_continental
+        } else {
+            args.threshold
+        },
+        mean_rigidity_oceanic: if args.threshold_by_metric.mean_rigidity_oceanic > 0.0 {
+            args.threshold_by_metric.mean_rigidity_oceanic
+        } else {
+            args.threshold
+        },
+        mean_rigidity_continental: if args.threshold_by_metric.mean_rigidity_continental > 0.0 {
+            args.threshold_by_metric.mean_rigidity_continental
         } else {
             args.threshold
         },
@@ -350,8 +621,35 @@ fn build_effective_thresholds(args: &Args) -> ThresholdMap {
 fn set_threshold_by_key(map: &mut ThresholdMap, key: &str, value: f64) -> Result<(), String> {
     match key {
         "land_cells" => map.land_cells = value,
+        "land_ratio" => map.land_ratio = value,
+        "sea_level_offset" => map.sea_level_offset = value,
         "height_mean" => map.height_mean = value,
         "height_std" => map.height_std = value,
+        "smoothing_limited_cells_ratio" => map.smoothing_limited_cells_ratio = value,
+        "mean_smoothing_factor" => map.mean_smoothing_factor = value,
+        "zero_mean_adjusted_cells_ratio" => map.zero_mean_adjusted_cells_ratio = value,
+        "zero_mean_mean_abs_correction" => map.zero_mean_mean_abs_correction = value,
+        "zero_mean_std_delta" => map.zero_mean_std_delta = value,
+        "geology_activity" => map.geology_activity = value,
+        "boundary_activity" => map.boundary_activity = value,
+        "uplift_rate" => map.uplift_rate = value,
+        "subsidence_rate" => map.subsidence_rate = value,
+        "mean_compressive" => map.mean_compressive = value,
+        "mean_tensile" => map.mean_tensile = value,
+        "mean_abs_diffusive_raw" => map.mean_abs_diffusive_raw = value,
+        "mean_abs_isostatic_raw" => map.mean_abs_isostatic_raw = value,
+        "mean_thickness" => map.mean_thickness = value,
+        "std_thickness" => map.std_thickness = value,
+        "mean_density" => map.mean_density = value,
+        "std_density" => map.std_density = value,
+        "mean_rigidity" => map.mean_rigidity = value,
+        "std_rigidity" => map.std_rigidity = value,
+        "oceanic_cell_ratio" => map.oceanic_cell_ratio = value,
+        "continental_cell_ratio" => map.continental_cell_ratio = value,
+        "mean_thickness_oceanic" => map.mean_thickness_oceanic = value,
+        "mean_thickness_continental" => map.mean_thickness_continental = value,
+        "mean_rigidity_oceanic" => map.mean_rigidity_oceanic = value,
+        "mean_rigidity_continental" => map.mean_rigidity_continental = value,
         "max_river_flux" => map.max_river_flux = value,
         "top10_river_flux_sum" => map.top10_river_flux_sum = value,
         "global_sediment_export" => map.global_sediment_export = value,
@@ -367,8 +665,35 @@ fn set_threshold_by_key(map: &mut ThresholdMap, key: &str, value: f64) -> Result
 fn metric_value(metrics: &MetricValues, key: &str) -> Result<f64, String> {
     match key {
         "land_cells" => Ok(metrics.land_cells),
+        "land_ratio" => Ok(metrics.land_ratio),
+        "sea_level_offset" => Ok(metrics.sea_level_offset),
         "height_mean" => Ok(metrics.height_mean),
         "height_std" => Ok(metrics.height_std),
+        "smoothing_limited_cells_ratio" => Ok(metrics.smoothing_limited_cells_ratio),
+        "mean_smoothing_factor" => Ok(metrics.mean_smoothing_factor),
+        "zero_mean_adjusted_cells_ratio" => Ok(metrics.zero_mean_adjusted_cells_ratio),
+        "zero_mean_mean_abs_correction" => Ok(metrics.zero_mean_mean_abs_correction),
+        "zero_mean_std_delta" => Ok(metrics.zero_mean_std_delta),
+        "geology_activity" => Ok(metrics.geology_activity),
+        "boundary_activity" => Ok(metrics.boundary_activity),
+        "uplift_rate" => Ok(metrics.uplift_rate),
+        "subsidence_rate" => Ok(metrics.subsidence_rate),
+        "mean_compressive" => Ok(metrics.mean_compressive),
+        "mean_tensile" => Ok(metrics.mean_tensile),
+        "mean_abs_diffusive_raw" => Ok(metrics.mean_abs_diffusive_raw),
+        "mean_abs_isostatic_raw" => Ok(metrics.mean_abs_isostatic_raw),
+        "mean_thickness" => Ok(metrics.mean_thickness),
+        "std_thickness" => Ok(metrics.std_thickness),
+        "mean_density" => Ok(metrics.mean_density),
+        "std_density" => Ok(metrics.std_density),
+        "mean_rigidity" => Ok(metrics.mean_rigidity),
+        "std_rigidity" => Ok(metrics.std_rigidity),
+        "oceanic_cell_ratio" => Ok(metrics.oceanic_cell_ratio),
+        "continental_cell_ratio" => Ok(metrics.continental_cell_ratio),
+        "mean_thickness_oceanic" => Ok(metrics.mean_thickness_oceanic),
+        "mean_thickness_continental" => Ok(metrics.mean_thickness_continental),
+        "mean_rigidity_oceanic" => Ok(metrics.mean_rigidity_oceanic),
+        "mean_rigidity_continental" => Ok(metrics.mean_rigidity_continental),
         "max_river_flux" => Ok(metrics.max_river_flux),
         "top10_river_flux_sum" => Ok(metrics.top10_river_flux_sum),
         "global_sediment_export" => Ok(metrics.global_sediment_export),
@@ -383,8 +708,35 @@ fn metric_value(metrics: &MetricValues, key: &str) -> Result<f64, String> {
 fn threshold_value(thresholds: &ThresholdMap, key: &str) -> Result<f64, String> {
     match key {
         "land_cells" => Ok(thresholds.land_cells),
+        "land_ratio" => Ok(thresholds.land_ratio),
+        "sea_level_offset" => Ok(thresholds.sea_level_offset),
         "height_mean" => Ok(thresholds.height_mean),
         "height_std" => Ok(thresholds.height_std),
+        "smoothing_limited_cells_ratio" => Ok(thresholds.smoothing_limited_cells_ratio),
+        "mean_smoothing_factor" => Ok(thresholds.mean_smoothing_factor),
+        "zero_mean_adjusted_cells_ratio" => Ok(thresholds.zero_mean_adjusted_cells_ratio),
+        "zero_mean_mean_abs_correction" => Ok(thresholds.zero_mean_mean_abs_correction),
+        "zero_mean_std_delta" => Ok(thresholds.zero_mean_std_delta),
+        "geology_activity" => Ok(thresholds.geology_activity),
+        "boundary_activity" => Ok(thresholds.boundary_activity),
+        "uplift_rate" => Ok(thresholds.uplift_rate),
+        "subsidence_rate" => Ok(thresholds.subsidence_rate),
+        "mean_compressive" => Ok(thresholds.mean_compressive),
+        "mean_tensile" => Ok(thresholds.mean_tensile),
+        "mean_abs_diffusive_raw" => Ok(thresholds.mean_abs_diffusive_raw),
+        "mean_abs_isostatic_raw" => Ok(thresholds.mean_abs_isostatic_raw),
+        "mean_thickness" => Ok(thresholds.mean_thickness),
+        "std_thickness" => Ok(thresholds.std_thickness),
+        "mean_density" => Ok(thresholds.mean_density),
+        "std_density" => Ok(thresholds.std_density),
+        "mean_rigidity" => Ok(thresholds.mean_rigidity),
+        "std_rigidity" => Ok(thresholds.std_rigidity),
+        "oceanic_cell_ratio" => Ok(thresholds.oceanic_cell_ratio),
+        "continental_cell_ratio" => Ok(thresholds.continental_cell_ratio),
+        "mean_thickness_oceanic" => Ok(thresholds.mean_thickness_oceanic),
+        "mean_thickness_continental" => Ok(thresholds.mean_thickness_continental),
+        "mean_rigidity_oceanic" => Ok(thresholds.mean_rigidity_oceanic),
+        "mean_rigidity_continental" => Ok(thresholds.mean_rigidity_continental),
         "max_river_flux" => Ok(thresholds.max_river_flux),
         "top10_river_flux_sum" => Ok(thresholds.top10_river_flux_sum),
         "global_sediment_export" => Ok(thresholds.global_sediment_export),
@@ -413,6 +765,7 @@ fn build_output(
             level: args.level,
             seeds: args.seeds.clone(),
             thresholds,
+            absolute_guards: args.absolute_guards.clone(),
             transition_mode: TRANSITION_MODE.to_string(),
             era_boundaries: ERA_BOUNDARIES.to_vec(),
             eras_at_measurement,
@@ -553,8 +906,35 @@ fn post_step_sync_light(
 fn collect_metrics(metrics: &WorldMetrics) -> MetricValues {
     MetricValues {
         land_cells: metrics.land_cells as f64,
+        land_ratio: metrics.land_ratio as f64,
+        sea_level_offset: metrics.sea_level_offset as f64,
         height_mean: metrics.mean_height as f64,
         height_std: metrics.height_std_dev as f64,
+        smoothing_limited_cells_ratio: metrics.smoothing_limited_cells_ratio as f64,
+        mean_smoothing_factor: metrics.mean_smoothing_factor as f64,
+        zero_mean_adjusted_cells_ratio: metrics.zero_mean_adjusted_cells_ratio as f64,
+        zero_mean_mean_abs_correction: metrics.zero_mean_mean_abs_correction as f64,
+        zero_mean_std_delta: metrics.zero_mean_std_delta as f64,
+        geology_activity: metrics.geology_activity as f64,
+        boundary_activity: metrics.boundary_activity as f64,
+        uplift_rate: metrics.uplift_rate as f64,
+        subsidence_rate: metrics.subsidence_rate as f64,
+        mean_compressive: metrics.mean_compressive as f64,
+        mean_tensile: metrics.mean_tensile as f64,
+        mean_abs_diffusive_raw: metrics.mean_abs_diffusive_raw as f64,
+        mean_abs_isostatic_raw: metrics.mean_abs_isostatic_raw as f64,
+        mean_thickness: metrics.mean_thickness as f64,
+        std_thickness: metrics.std_thickness as f64,
+        mean_density: metrics.mean_density as f64,
+        std_density: metrics.std_density as f64,
+        mean_rigidity: metrics.mean_rigidity as f64,
+        std_rigidity: metrics.std_rigidity as f64,
+        oceanic_cell_ratio: metrics.oceanic_cell_ratio as f64,
+        continental_cell_ratio: metrics.continental_cell_ratio as f64,
+        mean_thickness_oceanic: metrics.mean_thickness_oceanic as f64,
+        mean_thickness_continental: metrics.mean_thickness_continental as f64,
+        mean_rigidity_oceanic: metrics.mean_rigidity_oceanic as f64,
+        mean_rigidity_continental: metrics.mean_rigidity_continental as f64,
         max_river_flux: metrics.max_river_flux as f64,
         top10_river_flux_sum: metrics.top10_river_flux_sum as f64,
         global_sediment_export: metrics.global_sediment_export as f64,
@@ -659,10 +1039,125 @@ fn evaluate_against_baseline(
         }
     }
 
+    evaluate_absolute_guards(current, &mut warnings, &mut deviations);
+
     Ok(EvaluationResult {
         warnings,
         deviations,
     })
+}
+
+fn validate_absolute_guards(guards: &AbsoluteGuards) -> Result<(), String> {
+    validate_guard_pair(
+        guards.land_ratio_warn_min,
+        guards.land_ratio_warn_max,
+        "land_ratio warn",
+    )?;
+    validate_guard_pair(
+        guards.land_ratio_fail_min,
+        guards.land_ratio_fail_max,
+        "land_ratio fail",
+    )?;
+    if guards.land_ratio_warn_min > 0.0
+        && guards.land_ratio_fail_min > 0.0
+        && guards.land_ratio_warn_min < guards.land_ratio_fail_min
+    {
+        return Err("land_ratio warn min must be greater than or equal to fail min".to_string());
+    }
+    if guards.land_ratio_warn_max > 0.0
+        && guards.land_ratio_fail_max > 0.0
+        && guards.land_ratio_warn_max > guards.land_ratio_fail_max
+    {
+        return Err("land_ratio warn max must be less than or equal to fail max".to_string());
+    }
+    Ok(())
+}
+
+fn validate_guard_pair(min: f64, max: f64, label: &str) -> Result<(), String> {
+    if min > 0.0 && max > 0.0 && min > max {
+        return Err(format!("{label} min must be <= max"));
+    }
+    Ok(())
+}
+
+fn evaluate_absolute_guards(
+    current: &OutputData,
+    warnings: &mut Vec<String>,
+    deviations: &mut Vec<Deviation>,
+) {
+    let guards = &current.meta.absolute_guards;
+    for entry in &current.results {
+        evaluate_land_ratio_guards(
+            &entry.seed,
+            entry.metrics.land_ratio,
+            guards,
+            warnings,
+            deviations,
+        );
+    }
+}
+
+fn evaluate_land_ratio_guards(
+    seed: &str,
+    land_ratio: f64,
+    guards: &AbsoluteGuards,
+    warnings: &mut Vec<String>,
+    deviations: &mut Vec<Deviation>,
+) {
+    if guards.land_ratio_fail_min > 0.0 && land_ratio < guards.land_ratio_fail_min {
+        deviations.push(guard_deviation(
+            seed,
+            "land_ratio",
+            "absolute_guard_fail_min",
+            land_ratio,
+            guards.land_ratio_fail_min,
+            "min",
+        ));
+    }
+    if guards.land_ratio_fail_max > 0.0 && land_ratio > guards.land_ratio_fail_max {
+        deviations.push(guard_deviation(
+            seed,
+            "land_ratio",
+            "absolute_guard_fail_max",
+            land_ratio,
+            guards.land_ratio_fail_max,
+            "max",
+        ));
+    }
+    if guards.land_ratio_warn_min > 0.0 && land_ratio < guards.land_ratio_warn_min {
+        warnings.push(format!(
+            "seed={seed} metric=land_ratio reason=absolute_guard_warn_min current={land_ratio} threshold={}",
+            guards.land_ratio_warn_min
+        ));
+    }
+    if guards.land_ratio_warn_max > 0.0 && land_ratio > guards.land_ratio_warn_max {
+        warnings.push(format!(
+            "seed={seed} metric=land_ratio reason=absolute_guard_warn_max current={land_ratio} threshold={}",
+            guards.land_ratio_warn_max
+        ));
+    }
+}
+
+fn guard_deviation(
+    seed: &str,
+    metric: &str,
+    reason: &str,
+    current_value: f64,
+    threshold: f64,
+    bound_kind: &'static str,
+) -> Deviation {
+    Deviation {
+        seed: seed.to_string(),
+        metric: metric.to_string(),
+        reason: Some(reason.to_string()),
+        mode: Some(bound_kind),
+        current_value: Some(current_value),
+        baseline_value: None,
+        diff: None,
+        threshold: Some(threshold),
+        expected: None,
+        actual: None,
+    }
 }
 
 fn validate_baseline_meta(current: &OutputData, baseline: &OutputData) -> Vec<Deviation> {
@@ -814,9 +1309,17 @@ fn run() -> Result<(), String> {
                     .as_ref()
                     .map(|value| format!(" actual={value}"))
                     .unwrap_or_default();
+                let current = deviation
+                    .current_value
+                    .map(|value| format!(" current={value}"))
+                    .unwrap_or_default();
+                let threshold = deviation
+                    .threshold
+                    .map(|value| format!(" threshold={value}"))
+                    .unwrap_or_default();
                 eprintln!(
-                    "[seed-regression] deviation seed={} metric={} reason={}{}{}",
-                    deviation.seed, deviation.metric, reason, expected, actual
+                    "[seed-regression] deviation seed={} metric={} reason={}{}{}{}{}",
+                    deviation.seed, deviation.metric, reason, expected, actual, current, threshold
                 );
                 continue;
             }

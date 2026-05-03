@@ -94,6 +94,28 @@ Earth 類似の plate tectonics を定量評価するうえで、最低限みる
 
 定量評価の最小セットとして、次の 4 指標を採用する。
 
+### 学術アンカー（出典つき）
+
+以下は定量評価で参照する一次事実であり、閾値調整時の根拠に使う。
+
+1. 地表被覆は概ね `water 71% / land 29%`（`land_ratio` は補助ガード用途）
+2. 地球の hypsometry は大陸側・海盆側の二峰構造を持つ
+3. 海洋底は年齢とともに深くなる（age-depth 関係）
+4. 最若年の海洋地殻は海嶺近傍に集中する
+
+出典:
+
+- USGS, *How Much Water is There on Earth?*  
+  https://www.usgs.gov/special-topics/water-science-school/science/how-much-water-there-earth
+- NOAA NCEI, *Hypsographic Curve of Earth’s Surface from ETOPO1*  
+  https://www.ncei.noaa.gov/sites/default/files/2023-01/Hypsographic%20Curve%20of%20Earth%E2%80%99s%20Surface%20from%20ETOPO1.pdf
+- NOAA NCEI, *ETOPO Global Relief Model / ETOPO 2022*  
+  https://www.ncei.noaa.gov/products/etopo-global-relief-model
+- Stein & Stein (1992), *A model for the global variation in oceanic depth and heat flow with lithospheric age*  
+  https://www.nature.com/articles/359123a0
+- NOAA NCEI, *Age, spreading rates and spreading symmetry of the world’s ocean crust (Müller et al., 2008)*  
+  https://www.ngdc.noaa.gov/mgg/ocean_age/
+
 #### 前提ゲート: `crust_type` 独立性
 
 定量評価に入る前に、次を満たすことを確認する。

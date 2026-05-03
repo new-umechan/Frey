@@ -389,6 +389,16 @@ pub struct GeologyState {
     #[serde(default)]
     pub geology_internal: Vec<GeologyInternal>,
     pub boundary_condition: Vec<f32>,
+    #[serde(default)]
+    pub smoothing_limited_cells_ratio: f32,
+    #[serde(default)]
+    pub mean_smoothing_factor: f32,
+    #[serde(default)]
+    pub zero_mean_adjusted_cells_ratio: f32,
+    #[serde(default)]
+    pub zero_mean_mean_abs_correction: f32,
+    #[serde(default)]
+    pub zero_mean_std_delta: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1103,6 +1113,15 @@ pub struct GeologyStepMetrics {
     pub boundary_activity: f32,
     pub uplift_rate: f32,
     pub subsidence_rate: f32,
+    pub smoothing_limited_cells_ratio: f32,
+    pub mean_smoothing_factor: f32,
+    pub zero_mean_adjusted_cells_ratio: f32,
+    pub zero_mean_mean_abs_correction: f32,
+    pub zero_mean_std_delta: f32,
+    pub mean_compressive: f32,
+    pub mean_tensile: f32,
+    pub mean_abs_diffusive_raw: f32,
+    pub mean_abs_isostatic_raw: f32,
 }
 
 fn default_thickness() -> f32 {

@@ -27,6 +27,11 @@ fn build_test_world() -> World {
         vertex_buoyancy: vec![0.0; 4],
         geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
         boundary_condition: vec![0.0; 4],
+        smoothing_limited_cells_ratio: 0.0,
+        mean_smoothing_factor: 1.0,
+        zero_mean_adjusted_cells_ratio: 0.0,
+        zero_mean_mean_abs_correction: 0.0,
+        zero_mean_std_delta: 0.0,
     };
     World::new(mesh, geology)
 }
@@ -83,6 +88,26 @@ fn hydrology_budget_constraint_does_not_recenter_global_heights() {
     world.state.hydrology.erosion_rate = vec![0.0; 4];
     world.state.hydrology.deposition_rate = vec![0.0; 4];
     world.state.glaciology.glacial_erosion_rate = vec![0.0; 4];
+
+    super::geology::apply_hydrology_erosion_to_geology(
+        &mut world,
+        &mut geology_state,
+        &mut hydrology_state,
+    );
+
+    assert_eq!(world.state.geology.height, initial_height);
+}
+
+#[test]
+fn crust_era_hydrology_does_not_modify_geology_height() {
+    let mut world = build_test_world();
+    let mut geology_state = None;
+    let mut hydrology_state = None;
+    let initial_height = world.state.geology.height.clone();
+    world.clock.epoch = EraKind::Crust;
+    world.state.hydrology.erosion_rate = vec![0.20, 0.15, 0.05, 0.01];
+    world.state.hydrology.deposition_rate = vec![0.10, 0.10, 0.10, 0.10];
+    world.state.glaciology.glacial_erosion_rate = vec![0.02; 4];
 
     super::geology::apply_hydrology_erosion_to_geology(
         &mut world,
@@ -203,6 +228,32 @@ fn hydrology_flow_step_refreshes_public_lake_flags_on_skip() {
         world.state.hydrology.is_lake,
         vec![false, true, false, false]
     );
+}
+
+#[test]
+fn geology_step_preserves_crust_land_ratio_target() {
+    let mut world = build_test_world();
+    let mut geology_state = Some(crate::sim::world::GeologyDynamicsState {
+        update_index: 0,
+        plate_states: Vec::new(),
+        vertex_states: Vec::new(),
+        boundary_state: crate::sim::world::BoundaryDynamicsState::default(),
+        mantle_heat: Vec::new(),
+        cached_metrics: crate::sim::world::GeologyStepMetrics::default(),
+    });
+    world.clock.epoch = EraKind::Crust;
+    world.clock.transition.last_land_ratio = 0.5;
+
+    super::geology::run_geology_step_with_state(&mut world, &mut geology_state, 1);
+
+    let land_cells = world
+        .state
+        .geology
+        .height
+        .iter()
+        .filter(|value| **value > 0.0)
+        .count();
+    assert_eq!(land_cells, 2);
 }
 
 #[test]

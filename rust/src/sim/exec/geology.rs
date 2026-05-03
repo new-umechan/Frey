@@ -15,6 +15,40 @@ pub(super) fn run_geology_step_with_state(
     budget: u32,
 ) {
     crate::sim::geology::update_geology(world, geology_state, budget);
+    preserve_crust_freeboard(world);
+}
+
+fn preserve_crust_freeboard(world: &mut World) {
+    if world.clock.epoch != EraKind::Crust {
+        return;
+    }
+
+    let target_land_ratio = world.clock.transition.last_land_ratio.clamp(0.05, 0.95);
+    let height = &mut world.state.geology.height;
+    if height.is_empty() {
+        return;
+    }
+
+    let mut sorted = height
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .collect::<Vec<_>>();
+    if sorted.is_empty() {
+        return;
+    }
+    sorted.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+
+    let target_sea_ratio = 1.0 - target_land_ratio;
+    let sea_idx = ((sorted.len() as f32) * target_sea_ratio).floor() as usize;
+    let sea_level = sorted[sea_idx.min(sorted.len().saturating_sub(1))];
+    if !sea_level.is_finite() || sea_level.abs() <= 1e-6 {
+        return;
+    }
+
+    for value in height.iter_mut() {
+        *value = (*value - sea_level).clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
+    }
 }
 
 pub(super) fn apply_glaciology_forcing_to_geology(
@@ -114,6 +148,12 @@ pub(super) fn apply_hydrology_erosion_to_geology(
     geology_state: &mut crate::sim::exec::GeologyExecState,
     hydrology_state: &mut crate::sim::exec::HydrologyExecState,
 ) {
+    if world.clock.epoch == EraKind::Crust {
+        let geology = &world.state.geology;
+        sync_erosion_height(hydrology_state.as_mut(), &geology.height);
+        return;
+    }
+
     let glaciology_params = GlaciologyParams::default();
     let erosion_thickness_coupling = world.control.erosion_thickness_coupling;
     let deposition_thickness_coupling = world.control.deposition_thickness_coupling;

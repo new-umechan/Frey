@@ -52,6 +52,8 @@ tick内の実行順は次のとおり。
 4. `Hydrology`
 
 `Glaciology` で計算した融解流出量は同tickの `Hydrology` に入力される。
+ただし runtime では `Crust` 期に glaciology 更新を走らせず、`sea_level_offset` の capacity closure も行わない。
+氷床・海面の動的更新は `Environment` 期以降で扱う。
 
 ### 質量収支
 
