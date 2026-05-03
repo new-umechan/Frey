@@ -5,6 +5,11 @@ interface Args {
     jsonl: string;
     baseline: string | null;
     writeBaseline: string | null;
+    check: boolean;
+    failOnDeviation: boolean;
+    minOceanicAgeBinSpearman: number;
+    minRidgeDistanceBinSpearman: number;
+    checkCoastalMonotonicity: boolean;
 }
 
 type NumberLike = number | null | undefined;
@@ -22,7 +27,15 @@ interface GeologySoloScoreRecord {
         state?: string;
         metrics?: Record<string, NumberLike>;
     };
-    diagnostics?: Record<string, NumberLike>;
+    diagnostics?: Record<string, NumberLike | unknown> & {
+        coastal_inundation_response?: Array<{
+            sea_level_rise_m?: NumberLike;
+            generated_land_ratio?: NumberLike;
+            reference_land_ratio?: NumberLike;
+            generated_newly_inundated_ratio?: NumberLike;
+            reference_newly_inundated_ratio?: NumberLike;
+        }>;
+    };
 }
 
 const PHASE2_KEYS = [
@@ -63,6 +76,11 @@ function parseArgs(argv: string[]): Args {
         jsonl: "benches/results/geology_solo_main_scores.jsonl",
         baseline: null,
         writeBaseline: null,
+        check: false,
+        failOnDeviation: false,
+        minOceanicAgeBinSpearman: 0.20,
+        minRidgeDistanceBinSpearman: 0.20,
+        checkCoastalMonotonicity: true,
     };
 
     for (let i = 0; i < argv.length; i += 1) {
@@ -83,6 +101,26 @@ function parseArgs(argv: string[]): Args {
             args.writeBaseline = String(next ?? "");
             i += 1;
             break;
+        case "--check":
+            args.check = true;
+            break;
+        case "--fail-on-deviation":
+            args.failOnDeviation = true;
+            break;
+        case "--min-oceanic-age-bin-spearman":
+            args.minOceanicAgeBinSpearman = Number(next ?? args.minOceanicAgeBinSpearman);
+            i += 1;
+            break;
+        case "--min-ridge-distance-bin-spearman":
+            args.minRidgeDistanceBinSpearman = Number(next ?? args.minRidgeDistanceBinSpearman);
+            i += 1;
+            break;
+        case "--check-coastal-monotonicity":
+            args.checkCoastalMonotonicity = true;
+            break;
+        case "--no-check-coastal-monotonicity":
+            args.checkCoastalMonotonicity = false;
+            break;
         case "--help":
             printHelp();
             process.exit(0);
@@ -100,6 +138,65 @@ function printHelp() {
     console.error("  --jsonl <path>");
     console.error("  --baseline <path>");
     console.error("  --write-baseline <path>");
+    console.error("  --check");
+    console.error("  --fail-on-deviation");
+    console.error("  --min-oceanic-age-bin-spearman <number>");
+    console.error("  --min-ridge-distance-bin-spearman <number>");
+    console.error("  --check-coastal-monotonicity");
+    console.error("  --no-check-coastal-monotonicity");
+}
+
+function validateCoastalMonotonicity(record: GeologySoloScoreRecord): string[] {
+    const series = record.diagnostics?.coastal_inundation_response;
+    if (!Array.isArray(series) || series.length < 2) {
+        return ["metric=coastal_inundation_response reason=missing_or_too_short"];
+    }
+
+    const sorted = [...series].sort(
+        (a, b) => Number(a.sea_level_rise_m ?? 0) - Number(b.sea_level_rise_m ?? 0),
+    );
+    const deviations: string[] = [];
+    for (let i = 1; i < sorted.length; i += 1) {
+        const prevRise = toFinite(sorted[i - 1].sea_level_rise_m);
+        const currRise = toFinite(sorted[i].sea_level_rise_m);
+        const prevGenLand = toFinite(sorted[i - 1].generated_land_ratio);
+        const currGenLand = toFinite(sorted[i].generated_land_ratio);
+        const prevRefLand = toFinite(sorted[i - 1].reference_land_ratio);
+        const currRefLand = toFinite(sorted[i].reference_land_ratio);
+        const prevGenInund = toFinite(sorted[i - 1].generated_newly_inundated_ratio);
+        const currGenInund = toFinite(sorted[i].generated_newly_inundated_ratio);
+        const prevRefInund = toFinite(sorted[i - 1].reference_newly_inundated_ratio);
+        const currRefInund = toFinite(sorted[i].reference_newly_inundated_ratio);
+
+        if (
+            prevRise === null || currRise === null ||
+            prevGenLand === null || currGenLand === null ||
+            prevRefLand === null || currRefLand === null ||
+            prevGenInund === null || currGenInund === null ||
+            prevRefInund === null || currRefInund === null
+        ) {
+            deviations.push(`metric=coastal_inundation_response reason=non_numeric_pair index=${i}`);
+            continue;
+        }
+
+        if (currRise <= prevRise) {
+            deviations.push(`metric=coastal_inundation_response reason=non_increasing_sea_level prev=${prevRise} curr=${currRise}`);
+        }
+        if (currGenLand > prevGenLand + 1e-6) {
+            deviations.push(`metric=generated_land_ratio reason=non_monotonic prev=${prevGenLand.toFixed(6)} curr=${currGenLand.toFixed(6)} rise_prev=${prevRise} rise_curr=${currRise}`);
+        }
+        if (currRefLand > prevRefLand + 1e-6) {
+            deviations.push(`metric=reference_land_ratio reason=non_monotonic prev=${prevRefLand.toFixed(6)} curr=${currRefLand.toFixed(6)} rise_prev=${prevRise} rise_curr=${currRise}`);
+        }
+        if (currGenInund + 1e-6 < prevGenInund) {
+            deviations.push(`metric=generated_newly_inundated_ratio reason=non_monotonic prev=${prevGenInund.toFixed(6)} curr=${currGenInund.toFixed(6)} rise_prev=${prevRise} rise_curr=${currRise}`);
+        }
+        if (currRefInund + 1e-6 < prevRefInund) {
+            deviations.push(`metric=reference_newly_inundated_ratio reason=non_monotonic prev=${prevRefInund.toFixed(6)} curr=${currRefInund.toFixed(6)} rise_prev=${prevRise} rise_curr=${currRise}`);
+        }
+    }
+
+    return deviations;
 }
 
 async function loadJsonlRecords(pathname: string): Promise<GeologySoloScoreRecord[]> {
@@ -217,6 +314,38 @@ async function main() {
             baseline: baseline.diagnostics?.[key],
         })),
     );
+
+    if (!args.check) {
+        return;
+    }
+    const deviations: string[] = [];
+    const oceanicAgeBin = toFinite(current.phase2?.metrics?.oceanic_age_bin_spearman);
+    if (oceanicAgeBin === null || oceanicAgeBin < args.minOceanicAgeBinSpearman) {
+        deviations.push(
+            `metric=oceanic_age_bin_spearman current=${formatValue(oceanicAgeBin)} min=${args.minOceanicAgeBinSpearman.toFixed(3)}`,
+        );
+    }
+    const ridgeDistanceBin = toFinite(current.phase2?.metrics?.ridge_distance_bin_spearman);
+    if (ridgeDistanceBin === null || ridgeDistanceBin < args.minRidgeDistanceBinSpearman) {
+        deviations.push(
+            `metric=ridge_distance_bin_spearman current=${formatValue(ridgeDistanceBin)} min=${args.minRidgeDistanceBinSpearman.toFixed(3)}`,
+        );
+    }
+    if (args.checkCoastalMonotonicity) {
+        deviations.push(...validateCoastalMonotonicity(current));
+    }
+
+    if (deviations.length === 0) {
+        console.log("[geology-solo-check] deviations=0");
+        return;
+    }
+    for (const deviation of deviations) {
+        console.error(`[geology-solo-check] deviation ${deviation}`);
+    }
+    console.error(`[geology-solo-check] deviations=${deviations.length}`);
+    if (args.failOnDeviation) {
+        process.exit(1);
+    }
 }
 
 main().catch((error) => {

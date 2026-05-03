@@ -242,6 +242,20 @@ Earth 類似の plate tectonics を定量評価するうえで、最低限みる
 - `land_ratio` のみ悪化し、Q-1, Q-2, Q-3, Q-4 が維持されている場合は、まず sea level 変動の影響を疑う
 - 前提ゲート未通過の場合、WC 判定をしても「tectonics の妥当性」ではなく「現実装の内部整合性」しか言えない
 
+### 最小自動判定（v1）
+
+`geology_solo` の比較スクリプトで、次の2指標を閾値判定できる。
+
+- `oceanic_age_bin_spearman`（age-depth 単調性）
+- `ridge_distance_bin_spearman`（ridge 距離勾配）
+- `coastal_inundation_response` の単調性（海面上昇に対して land ratio 非増加）
+
+コマンド例:
+
+```bash
+pnpm bench:compare:geology-solo -- --check --fail-on-deviation --min-oceanic-age-bin-spearman 0.20 --min-ridge-distance-bin-spearman 0.20
+```
+
 ---
 
 ## ウィルソンサイクル定量評価
