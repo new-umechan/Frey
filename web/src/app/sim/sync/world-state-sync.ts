@@ -92,10 +92,10 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         worldDelta = preloadedDelta;
     } else if (perfRecorder) {
         const start = performance.now();
-        worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
-        perfRecorder.pushSample("get_world_delta", performance.now() - start);
+        worldDelta = await engineClient.get_view_delta(worldId, { include_fields: deltaFieldKinds });
+        perfRecorder.pushSample("get_view_delta", performance.now() - start);
     } else {
-        worldDelta = await engineClient.get_world_delta(worldId, { include_fields: deltaFieldKinds });
+        worldDelta = await engineClient.get_view_delta(worldId, { include_fields: deltaFieldKinds });
     }
 
     const deltaView = (worldDelta ?? {}) as {
@@ -148,7 +148,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
 
 export async function syncVisibleCoreFieldsFromController(options: SyncVisibleOptions): Promise<CoreDeltaApplyResult> {
     const { engineClient, worldId, core, fieldKinds } = options;
-    const worldDelta = (await engineClient.get_world_delta(worldId, {
+    const worldDelta = (await engineClient.get_view_delta(worldId, {
         include_fields: fieldKinds,
     })) as { deltas?: FieldDelta[] };
     return applyWorldDeltaToCore(core, worldDelta as { deltas?: FieldDelta[] });

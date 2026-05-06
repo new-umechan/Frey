@@ -217,7 +217,7 @@ export function createPlaybackController({
             return;
         }
 
-        const response = await engineClient.list_history_ticks(activeWorldId);
+        const response = await engineClient.list_checkpoint_ticks(activeWorldId);
         const ticks: unknown[] = Array.isArray(response?.ticks) ? response.ticks : [];
         const normalized = normalizeTicks(ticks);
         playbackState.availableTicks = normalized;
@@ -254,14 +254,14 @@ export function createPlaybackController({
         }
 
         try {
-            await engineClient.restore_world_to_tick(activeWorldId, normalizedTick);
+            await engineClient.seek_world_to_tick(activeWorldId, normalizedTick);
             setPlaybackRunning(false);
             await syncWorldFromActiveController();
             playbackState.selectedTick = normalizedTick;
             renderHistorySeekSlider();
             syncPlaybackUi();
         } catch (error) {
-            setStatus(`Restore failed: ${String(error)}`);
+            setStatus(`Seek failed: ${String(error)}`);
             console.error(error);
         }
     }

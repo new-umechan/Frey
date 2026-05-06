@@ -2,7 +2,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::application::world_dto::InitWorldConfig;
 use crate::application::world_use_cases;
-use crate::application::world_validation::{validate_integer_tick, validate_non_negative_tick};
 use crate::sim::{module_doc_records, module_graph_record};
 
 use super::super::WorldSimController;
@@ -34,6 +33,7 @@ impl WorldSimController {
                 geology_params: None,
                 simulation_rate: None,
                 verification_mode: None,
+                timeline: None,
             }
         } else {
             serde_wasm_bindgen::from_value::<InitWorldConfig>(config_js)
@@ -50,6 +50,19 @@ impl WorldSimController {
     pub fn exec_world_js(&mut self, world_id: String, tick_count: u32) -> Result<(), JsValue> {
         world_use_cases::exec_world(&mut self.service, &world_id, tick_count)
             .map_err(|err| JsValue::from_str(&err))
+    }
+
+    #[wasm_bindgen(js_name = advance_timeline)]
+    pub fn advance_timeline_js(
+        &mut self,
+        world_id: String,
+        tick_count: u32,
+    ) -> Result<JsValue, JsValue> {
+        let response = world_use_cases::advance_timeline(&mut self.service, world_id, tick_count)
+            .map_err(|err| JsValue::from_str(&err))?;
+        serde_wasm_bindgen::to_value(&response).map_err(|err| {
+            JsValue::from_str(&format!("failed to serialize advance_timeline: {err}"))
+        })
     }
 
     #[wasm_bindgen(js_name = exec_world_profiled)]
@@ -99,16 +112,5 @@ impl WorldSimController {
     pub fn set_simulation_rate_js(&mut self, world_id: String, rate: f32) -> Result<(), JsValue> {
         world_use_cases::set_simulation_rate(&mut self.service, &world_id, rate)
             .map_err(|err| JsValue::from_str(&err))
-    }
-
-    #[wasm_bindgen(js_name = fork_world)]
-    pub fn fork_world_js(&mut self, world_id: String, tick: f64) -> Result<JsValue, JsValue> {
-        let tick_u64 = validate_non_negative_tick(tick).map_err(|err| JsValue::from_str(&err))?;
-        validate_integer_tick(tick, tick_u64).map_err(|err| JsValue::from_str(&err))?;
-
-        let response = world_use_cases::fork_world(&mut self.service, world_id, tick_u64)
-            .map_err(|err| JsValue::from_str(&err))?;
-        serde_wasm_bindgen::to_value(&response)
-            .map_err(|err| JsValue::from_str(&format!("failed to serialize fork_world: {err}")))
     }
 }

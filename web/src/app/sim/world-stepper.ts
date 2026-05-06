@@ -169,11 +169,11 @@ export function createWorldStepper(options: WorldStepperOptions) {
                     const profiled = await engineClient.exec_world_profiled(activeWorldId, batchCount);
                     pushStepBreakdownSamples(perfRecorder, profiled);
                 } else {
-                    await engineClient.exec_world(activeWorldId, batchCount);
+                    await engineClient.advance_timeline(activeWorldId, batchCount);
                 }
                 perfRecorder.pushSample("exec_world", performance.now() - start);
             } else {
-                await engineClient.exec_world(activeWorldId, batchCount);
+                await engineClient.advance_timeline(activeWorldId, batchCount);
             }
 
             return await syncCompletedWorldStep({
@@ -204,7 +204,7 @@ export function createWorldStepper(options: WorldStepperOptions) {
         }
 
         const deltaFieldKinds = getCurrentDeltaFieldKinds();
-        const response = await engineClient.exec_world_slice_and_delta(
+        const response = await engineClient.advance_timeline_slice_and_delta(
             activeWorldId,
             Math.max(1, Math.floor(worldState.sliceWorkBudget ?? 1)),
             { include_fields: deltaFieldKinds },

@@ -33,7 +33,7 @@ struct World {
 }
 ```
 
-履歴用の snapshot と replay 状態は `World` の正本には含めず、
+checkpoint snapshot と seek 用の補助状態は `World` の正本には含めず、
 管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
 ## Managed 層（WASM transport）
@@ -41,12 +41,43 @@ struct World {
 `ManagedWorld` は `World` 正本の外側で、次を管理する。
 
 - `hydrology_dynamics` / `geology_dynamics` などの実行補助状態
-- 履歴スナップショットと replay 制御
-- transport 用の `WorldTransportCache`（delta 返却用 shadow）
+- 現在 world の進行状態
+- transport 用の `TimelineViewCache`（view delta 返却用 shadow）
 
-`WorldTransportCache` の観測更新は、毎tickで一時配列を生成しないことを原則とする。
+時間軸専用の正本は `TimelineRuntime` に置く。
+
+- `TimelineArchive`
+  checkpoint と intervention の保存
+- `TickUndoLog`
+  将来の巻き戻し用の tick 単位ログ
+  現状は `geology.height`、climate の連続値列、glaciology の連続値列、
+  `hydrology.river_flow` / `river_next` / sink 系 selected fields /
+  `erosion_rate` / `deposition_rate`、`ecology.biome` / `tree_cover` /
+  `ground_cover` / `disturbance` / `soil_fertility`、
+  `domesticates.crop_available` / `crop_adoption` / `livestock_available` /
+  `livestock_adoption` / `domesticates_internal`、
+  `subsistence.subsistence_mix` / `food_production` /
+  `freshwater_access`、`population.population` / `birth_rate` / `death_rate`、
+  `settlement.urbanization`、`polity.polity_id`、
+  `conflict.conflict_intensity` / `occupier_id`、
+  `entities` の create/update/delete を表す structured undo、
+  `relations` の map before-value patch /
+  `polity_groups` の upsert/remove + order_before structured undo、
+  `clock` の scalar fields、`control` の scalar fields
+  を selected sparse field として保持できる
+- `TimelineCursor`
+  現在 tick と timeline head tick を保持する
+- `TimelineRetentionPolicy`
+  checkpoint interval / checkpoint limit / undo log limit / max estimated bytes を保持する
+
+`TimelineViewCache` の観測更新は、毎tickで一時配列を生成しないことを原則とする。
 派生値（例: `plate_id` / `biome` / domesticates 系列）は shadow への直接比較更新で扱い、
 不要な `Vec` 生成を避ける。
+
+時間操作の公開整合点は `tick 完了境界` とする。
+slice 実行中の partial tick は `ManagedWorldExecState` に閉じ込め、
+timeline query / rewind / seek は完了済み tick に対してのみ成立する。
+単一 timeline モデルなので、`seek` や `rewind` で future 側ログを破棄しない。
 
 ## ID型定義
 
@@ -169,6 +200,21 @@ struct GeologyState {
 `latitude` / `distance_from_ocean` / `coast_side` / `is_coastal` のような terrain 系の派生列は
 `WorldState` には置かず、`WorldProjectionState` に分ける。
 隣接トポロジは `WorldMesh` が正本であり、cell state 側に重複保持しない。
+
+`river_downstream` は可変長複合構造であるため、
+undo log では full hydrology clone ではなく `changed cell indices + route offsets + route payload`
+を持つ compact patch を使って巻き戻す。
+
+retention のメモリ予算は近似値で扱う。
+正確な allocator 使用量ではなく、snapshot / undo patch が保持する主要配列長から見積もる。
+structured undo では fixed-size の型だけでなく、`cells_cache` / `cells` / `members`
+のような可変 payload も個別に加算して retention 判断へ反映する。
+checkpoint prune は単純 oldest ではなく、初期 / 最新 / current 最寄り checkpoint を保護しつつ、
+最も冗長な中間 checkpoint から落とす。
+undo log prune も単純 oldest ではなく、`current_tick` の undo を優先保持し、
+future 側と遠距離 tick から落とす current-centric 方針を使う。
+このとき `undo_future_prune_grace_ticks` で future 優先 prune の強さを調整できる。
+また、単一 timeline の seek 可用性を守るため、retention prune でも初期 checkpoint と最新 checkpoint は優先保持する。
 
 ### 内部状態Componentの型定義
 
@@ -497,7 +543,7 @@ struct WorldMesh {
 
 ## ExecScratchState
 
-exec 中だけ必要な scratch を保持する。serialize/fork/replay の正本には含めない。
+exec 中だけ必要な scratch を保持する。serialize/replay の正本には含めない。
 現在は geology 実行補助の scratch slot を持つ。
 
 ```rust

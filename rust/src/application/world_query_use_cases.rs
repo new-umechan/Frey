@@ -3,11 +3,13 @@
 use std::collections::HashSet;
 
 use crate::application::world_dto::{
-    BudgetSummary, FieldResponse, HistoryTicksResponse, MetricsResponse, PlateStat,
+    BudgetSummary, CheckpointTicksResponse, FieldResponse, MetricsResponse, PlateStat,
     PlateStatsResponse, ScientificBenchmarkMetricsResponse, ScientificBenchmarkSampleResponse,
-    ScientificBenchmarkSamplesResponse, WorldDeltaResponse,
+    ScientificBenchmarkSamplesResponse, TimelineStateResponse, ViewDeltaResponse,
 };
-use crate::application::world_runtime::{ManagedWorld, HISTORY_SNAPSHOT_INTERVAL};
+use crate::application::world_runtime::{
+    ManagedWorld, ALL_CHANGED_FIELDS, TICK_BOUNDARY_COMPLETED_TICK,
+};
 use crate::application::world_service::WorldService;
 use crate::application::world_support::{
     sample_f32, sample_i32, sample_u32_from_plate_id, sampled_len,
@@ -899,13 +901,20 @@ pub(crate) fn get_scientific_benchmark_samples(
     })
 }
 
-pub(crate) fn get_world_delta(
+pub(crate) fn list_changed_fields() -> Vec<String> {
+    ALL_CHANGED_FIELDS
+        .iter()
+        .map(|field| field.as_str().to_string())
+        .collect()
+}
+
+pub(crate) fn get_view_delta(
     service: &mut WorldService,
     world_id: String,
     include_fields: Option<HashSet<String>>,
-) -> Result<WorldDeltaResponse, String> {
-    let managed = service
-        .world_mut(&world_id)
+) -> Result<ViewDeltaResponse, String> {
+    let (managed, timeline) = service
+        .world_and_timeline_mut(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
     let include_all_fields = include_fields.is_none();
     if include_all_fields {
@@ -925,9 +934,10 @@ pub(crate) fn get_world_delta(
         );
     }
     let w = &managed.world;
-    Ok(WorldDeltaResponse {
+    Ok(ViewDeltaResponse {
         world_id,
         tick: w.clock.tick as f64,
+        head_tick: timeline.head_tick() as f64,
         era: w.clock.epoch.as_key().to_string(),
         real_years_per_tick: w.clock.real_years_per_tick,
         runtime_tick_ms: w.clock.runtime_tick_ms,
@@ -946,6 +956,15 @@ pub(crate) fn get_world_delta(
                     .unwrap_or(true)
             }),
     })
+}
+
+#[allow(dead_code)]
+pub(crate) fn get_world_delta(
+    service: &mut WorldService,
+    world_id: String,
+    include_fields: Option<HashSet<String>>,
+) -> Result<ViewDeltaResponse, String> {
+    get_view_delta(service, world_id, include_fields)
 }
 
 pub(crate) fn get_plate_stats(
@@ -1007,23 +1026,72 @@ pub(crate) fn get_plate_stats(
     })
 }
 
-pub(crate) fn list_history_ticks(
+pub(crate) fn list_checkpoint_ticks(
     service: &WorldService,
     world_id: String,
-) -> Result<HistoryTicksResponse, String> {
-    let archive = service
-        .archive(&world_id)
+) -> Result<CheckpointTicksResponse, String> {
+    let timeline = service
+        .timeline(&world_id)
         .ok_or_else(|| world_not_found_error(&world_id))?;
-    let ticks = archive
-        .history
+    let ticks = timeline
+        .archive
+        .checkpoints
         .keys()
         .copied()
         .map(|tick| tick as f64)
         .collect::<Vec<_>>();
-    Ok(HistoryTicksResponse {
+    Ok(CheckpointTicksResponse {
         world_id,
-        interval: HISTORY_SNAPSHOT_INTERVAL as u32,
+        interval: timeline.retention.checkpoint_interval as u32,
         ticks,
+    })
+}
+
+#[allow(dead_code)]
+pub(crate) fn list_history_ticks(
+    service: &WorldService,
+    world_id: String,
+) -> Result<CheckpointTicksResponse, String> {
+    list_checkpoint_ticks(service, world_id)
+}
+
+pub(crate) fn get_timeline_state(
+    service: &WorldService,
+    world_id: String,
+) -> Result<TimelineStateResponse, String> {
+    let managed = service
+        .world(&world_id)
+        .ok_or_else(|| world_not_found_error(&world_id))?;
+    let timeline = service
+        .timeline(&world_id)
+        .ok_or_else(|| world_not_found_error(&world_id))?;
+    let checkpoint_start_tick = timeline.archive.checkpoints.keys().next().copied();
+    let checkpoint_end_tick = timeline.archive.checkpoints.keys().next_back().copied();
+    let undo_log_start_tick = timeline.undo_logs.keys().next().copied();
+    let undo_log_end_tick = timeline.undo_logs.keys().next_back().copied();
+
+    Ok(TimelineStateResponse {
+        world_id,
+        current_tick: managed.world.clock.tick as f64,
+        head_tick: timeline.head_tick() as f64,
+        checkpoint_interval: timeline.retention.checkpoint_interval as u32,
+        checkpoint_limit: timeline.retention.checkpoint_limit as u32,
+        checkpoint_count: timeline.archive.checkpoints.len() as u32,
+        checkpoint_start_tick: checkpoint_start_tick.map(|tick| tick as f64),
+        checkpoint_end_tick: checkpoint_end_tick.map(|tick| tick as f64),
+        checkpoint_estimated_bytes: timeline.checkpoint_estimated_bytes() as f64,
+        undo_log_limit: timeline.retention.undo_log_limit as u32,
+        undo_future_prune_grace_ticks: timeline.retention.undo_future_prune_grace_ticks as f64,
+        undo_log_count: timeline.undo_logs.len() as u32,
+        undo_log_start_tick: undo_log_start_tick.map(|tick| tick as f64),
+        undo_log_end_tick: undo_log_end_tick.map(|tick| tick as f64),
+        undo_log_estimated_bytes: timeline.undo_log_estimated_bytes() as f64,
+        total_estimated_bytes: timeline.total_estimated_bytes() as f64,
+        max_estimated_bytes: timeline
+            .retention
+            .max_estimated_bytes
+            .map(|bytes| bytes as f64),
+        tick_boundary: TICK_BOUNDARY_COMPLETED_TICK.to_string(),
     })
 }
 

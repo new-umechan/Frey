@@ -61,13 +61,13 @@ mod tests {
     }
 
     #[derive(Deserialize)]
-    struct HistoryTicksResponse {
+    struct CheckpointTicksResponse {
         interval: u32,
         ticks: Vec<f64>,
     }
 
     #[derive(Deserialize)]
-    struct RestoreWorldResponse {
+    struct SeekWorldResponse {
         tick: f64,
     }
 
@@ -81,12 +81,6 @@ mod tests {
     struct ScientificBenchmarkSample {
         tick: f64,
         era: String,
-    }
-
-    #[derive(Deserialize)]
-    struct ForkWorldResponse {
-        world_id: String,
-        tick: f64,
     }
 
     #[wasm_bindgen_test]
@@ -209,7 +203,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn history_ticks_and_restore_work() {
+    fn checkpoint_ticks_and_seek_work() {
         let mut controller = WorldSimController::new();
         let init = controller
             .init_world_js("seed-c".to_string(), 1, JsValue::NULL)
@@ -221,29 +215,29 @@ mod tests {
             .exec_world_js(world_id.clone(), 80)
             .expect("step world");
 
-        let history_ticks = controller
-            .list_history_ticks_js(world_id.clone())
-            .expect("list history ticks");
-        let history_data: HistoryTicksResponse =
-            serde_wasm_bindgen::from_value(history_ticks).expect("parse history ticks");
-        assert_eq!(history_data.interval, 64);
-        assert!(history_data.ticks.contains(&0.0));
-        assert!(history_data.ticks.contains(&64.0));
+        let checkpoint_ticks = controller
+            .list_checkpoint_ticks_js(world_id.clone())
+            .expect("list checkpoint ticks");
+        let checkpoint_data: CheckpointTicksResponse =
+            serde_wasm_bindgen::from_value(checkpoint_ticks).expect("parse checkpoint ticks");
+        assert_eq!(checkpoint_data.interval, 64);
+        assert!(checkpoint_data.ticks.contains(&0.0));
+        assert!(checkpoint_data.ticks.contains(&64.0));
 
-        let restored = controller
-            .restore_world_to_tick_js(world_id.clone(), 65.0)
-            .expect("restore world");
-        let restored_data: RestoreWorldResponse =
-            serde_wasm_bindgen::from_value(restored).expect("parse restored world");
-        assert_eq!(restored_data.tick, 65.0);
+        let sought = controller
+            .seek_world_to_tick_js(world_id.clone(), 65.0)
+            .expect("seek world");
+        let sought_data: SeekWorldResponse =
+            serde_wasm_bindgen::from_value(sought).expect("parse sought world");
+        assert_eq!(sought_data.tick, 65.0);
 
-        let history_after_restore = controller
-            .list_history_ticks_js(world_id.clone())
-            .expect("list history ticks after restore");
-        let history_after_restore_data: HistoryTicksResponse =
-            serde_wasm_bindgen::from_value(history_after_restore)
-                .expect("parse history ticks after restore");
-        assert!(history_after_restore_data.ticks.contains(&64.0));
+        let checkpoint_after_seek = controller
+            .list_checkpoint_ticks_js(world_id.clone())
+            .expect("list checkpoint ticks after seek");
+        let checkpoint_after_seek_data: CheckpointTicksResponse =
+            serde_wasm_bindgen::from_value(checkpoint_after_seek)
+                .expect("parse checkpoint ticks after seek");
+        assert!(checkpoint_after_seek_data.ticks.contains(&64.0));
 
         let metrics = controller
             .get_metrics_js(world_id)
@@ -274,17 +268,17 @@ mod tests {
         assert!(metrics_data.tick.is_finite());
         assert!(metrics_data.tick >= 96.0);
 
-        let history_ticks = controller
-            .list_history_ticks_js(world_id)
-            .expect("list history ticks");
-        let history_data: HistoryTicksResponse =
-            serde_wasm_bindgen::from_value(history_ticks).expect("parse history ticks");
-        assert!(history_data.ticks.contains(&64.0));
-        assert!(history_data.ticks.iter().all(|tick| tick.is_finite()));
+        let checkpoint_ticks = controller
+            .list_checkpoint_ticks_js(world_id)
+            .expect("list checkpoint ticks");
+        let checkpoint_data: CheckpointTicksResponse =
+            serde_wasm_bindgen::from_value(checkpoint_ticks).expect("parse checkpoint ticks");
+        assert!(checkpoint_data.ticks.contains(&64.0));
+        assert!(checkpoint_data.ticks.iter().all(|tick| tick.is_finite()));
     }
 
     #[wasm_bindgen_test]
-    fn interventions_and_fork_replay_from_checkpoint() {
+    fn interventions_and_seek_replay_from_checkpoint() {
         let mut controller = WorldSimController::new();
         let init = controller
             .init_world_js("seed-intervention".to_string(), 1, JsValue::NULL)
@@ -299,8 +293,8 @@ mod tests {
             .exec_world_js(world_id.clone(), 80)
             .expect("step world to create checkpoints");
         controller
-            .restore_world_to_tick_js(world_id.clone(), 0.0)
-            .expect("restore to tick 0");
+            .seek_world_to_tick_js(world_id.clone(), 0.0)
+            .expect("seek to tick 0");
 
         let metrics = controller
             .get_metrics_js(world_id.clone())
@@ -309,14 +303,6 @@ mod tests {
             serde_wasm_bindgen::from_value(metrics).expect("parse metrics");
         assert_eq!(metrics_data.tick, 0.0);
         assert_eq!(metrics_data.simulation_rate.unwrap_or(0.0), 4.0);
-
-        let forked = controller
-            .fork_world_js(world_id, 0.0)
-            .expect("fork world at tick 0");
-        let forked_data: ForkWorldResponse =
-            serde_wasm_bindgen::from_value(forked).expect("parse fork world");
-        assert_eq!(forked_data.tick, 0.0);
-        assert!(!forked_data.world_id.is_empty());
     }
 
     #[wasm_bindgen_test]

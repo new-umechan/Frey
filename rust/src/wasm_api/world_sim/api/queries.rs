@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use js_sys::{Float32Array, Int32Array, Object, Uint32Array};
 use wasm_bindgen::prelude::*;
 
-use crate::application::world_dto::WorldDeltaQuery;
+use crate::application::world_dto::ViewDeltaQuery;
 use crate::application::world_query_use_cases;
 
 use super::super::WorldSimController;
@@ -182,6 +182,14 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize metrics: {err}")))
     }
 
+    #[wasm_bindgen(js_name = get_timeline_state)]
+    pub fn get_timeline_state_js(&self, world_id: String) -> Result<JsValue, JsValue> {
+        let response = world_query_use_cases::get_timeline_state(&self.service, world_id)
+            .map_err(|err| JsValue::from_str(&err))?;
+        serde_wasm_bindgen::to_value(&response)
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize timeline state: {err}")))
+    }
+
     #[wasm_bindgen(js_name = get_scientific_benchmark_samples)]
     pub fn get_scientific_benchmark_samples_js(
         &self,
@@ -197,8 +205,8 @@ impl WorldSimController {
         })
     }
 
-    #[wasm_bindgen(js_name = get_world_delta)]
-    pub fn get_world_delta_js(
+    #[wasm_bindgen(js_name = get_view_delta)]
+    pub fn get_view_delta_js(
         &mut self,
         world_id: String,
         options_js: JsValue,
@@ -208,15 +216,15 @@ impl WorldSimController {
         {
             None
         } else {
-            let query = serde_wasm_bindgen::from_value::<WorldDeltaQuery>(options_js)
-                .map_err(|err| JsValue::from_str(&format!("invalid world delta query: {err}")))?;
+            let query = serde_wasm_bindgen::from_value::<ViewDeltaQuery>(options_js)
+                .map_err(|err| JsValue::from_str(&format!("invalid view delta query: {err}")))?;
             query
                 .include_fields
                 .map(|fields| fields.into_iter().collect::<HashSet<String>>())
         };
 
         let response =
-            world_query_use_cases::get_world_delta(&mut self.service, world_id, include_fields)
+            world_query_use_cases::get_view_delta(&mut self.service, world_id, include_fields)
                 .map_err(|err| JsValue::from_str(&err))?;
 
         let deltas_js = response
@@ -273,6 +281,22 @@ impl WorldSimController {
         Ok(result.into())
     }
 
+    #[wasm_bindgen(js_name = get_world_delta)]
+    pub fn get_world_delta_js(
+        &mut self,
+        world_id: String,
+        options_js: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        self.get_view_delta_js(world_id, options_js)
+    }
+
+    #[wasm_bindgen(js_name = list_changed_fields)]
+    pub fn list_changed_fields_js(&self) -> Result<JsValue, JsValue> {
+        let fields = world_query_use_cases::list_changed_fields();
+        serde_wasm_bindgen::to_value(&fields)
+            .map_err(|err| JsValue::from_str(&format!("failed to serialize changed fields: {err}")))
+    }
+
     #[wasm_bindgen(js_name = get_plate_stats)]
     pub fn get_plate_stats_js(&self, world_id: String) -> Result<JsValue, JsValue> {
         let response = world_query_use_cases::get_plate_stats(&self.service, world_id)
@@ -281,14 +305,19 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize plate stats: {err}")))
     }
 
-    #[wasm_bindgen(js_name = list_history_ticks)]
-    pub fn list_history_ticks_js(&self, world_id: String) -> Result<JsValue, JsValue> {
-        let response = world_query_use_cases::list_history_ticks(&self.service, world_id)
+    #[wasm_bindgen(js_name = list_checkpoint_ticks)]
+    pub fn list_checkpoint_ticks_js(&self, world_id: String) -> Result<JsValue, JsValue> {
+        let response = world_query_use_cases::list_checkpoint_ticks(&self.service, world_id)
             .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response).map_err(|err| {
             JsValue::from_str(&format!(
-                "failed to serialize history ticks response: {err}"
+                "failed to serialize checkpoint ticks response: {err}"
             ))
         })
+    }
+
+    #[wasm_bindgen(js_name = list_history_ticks)]
+    pub fn list_history_ticks_js(&self, world_id: String) -> Result<JsValue, JsValue> {
+        self.list_checkpoint_ticks_js(world_id)
     }
 }
