@@ -2,7 +2,11 @@
 
 ## Status
 
-Superseded by `../decisions/260506-checkpoint-pruning-preserves-seek-value.md`
+Superseded
+
+## Replaced by
+
+`../decisions/260506-checkpoint-pruning-preserves-seek-value.md`
 
 ## 背景
 

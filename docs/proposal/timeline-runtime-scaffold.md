@@ -2,7 +2,11 @@
 
 ## Status
 
-Superseded by `../decisions/260503-timeline-runtime-scaffold.md`
+Superseded
+
+## Replaced by
+
+`../decisions/260503-timeline-runtime-scaffold.md`
 
 ## 背景
 

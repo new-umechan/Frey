@@ -2,7 +2,11 @@
 
 ## Status
 
-Superseded by `../decisions/260503-selected-sparse-undo-fields.md`
+Superseded
+
+## Replaced by
+
+`../decisions/260503-selected-sparse-undo-fields.md`
 
 ## 背景
 

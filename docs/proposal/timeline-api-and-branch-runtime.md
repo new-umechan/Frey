@@ -2,7 +2,11 @@
 
 ## Status
 
-Superseded by `single-timeline-runtime-without-branch.md`
+Superseded
+
+## Replaced by
+
+`single-timeline-runtime-without-branch.md`
 
 ## 背景
 

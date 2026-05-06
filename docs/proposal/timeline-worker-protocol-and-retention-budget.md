@@ -2,7 +2,13 @@
 
 ## Status
 
-Superseded by `../reference/interface/wasm_api.md` and `../reference/architecture/data_model.md`
+Superseded
+
+## Replaced by
+
+`../reference/interface/wasm_api.md`
+
+`../reference/architecture/data_model.md`
 
 ## 背景
 

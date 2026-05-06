@@ -2,7 +2,11 @@
 
 ## Status
 
-Superseded by `../decisions/260506-undo-log-pruning-preserves-rewind-value.md`
+Superseded
+
+## Replaced by
+
+`../decisions/260506-undo-log-pruning-preserves-rewind-value.md`
 
 ## 背景
 
