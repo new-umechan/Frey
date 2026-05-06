@@ -522,7 +522,7 @@ pub struct DomesticatesState {
     pub domesticates_internal: Vec<DomesticatesInternal>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct DomesticatesInternal {
     #[serde(default)]
     pub diffusion_memory: f32,

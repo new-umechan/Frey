@@ -7,7 +7,7 @@
 
 - simulation core を transport と UI 都合から切り離す
 - Web / WASM / CLI などの入口を差し替え可能にする
-- snapshot / replay / intervention を application 層の責務として固定する
+- checkpoint / seek / rewind / intervention を application 層の責務として固定する
 
 ## レイヤ構成
 
@@ -35,23 +35,25 @@ core を使ってユースケースを提供する層。
 
 - world 初期化
 - work budget 付き slice 実行
-- snapshot / replay
+- checkpoint / seek / rewind
 - intervention 適用
 - debug / metrics / field query
 
 この層は transport 非依存の API を公開し、DTO を返す。
 
-application の責務は、次の 3 種に分ける。
+application の責務は次の 3 種に分ける。
 
 - `WorldService`
-  world registry / archive registry / world id 発番を担当する
+  world registry と timeline registry を管理し、world id を発番する
 - `WorldUseCases`
-  `init_world`、`exec_world`、`exec_world_slice`、`restore_world_to_tick`、`fork_world` などの業務フローを担当する
+  `init_world`、`exec_world`、`exec_world_slice`、`seek_world_to_tick`、`rewind_world_by_ticks` などの業務フローを担当する
 - `WorldRuntime`
-  `ManagedWorld`、`WorldArchive`、`WorldTransportCache` など、world 操作に付随する実行時状態を担当する
+  `ManagedWorld`、`TimelineRuntime`、`TimelineArchive`、`TimelineViewCache` など、world 操作に付随する実行時状態を担当する
 
-transport 層の controller は、application の use case を呼び出し、
-serialization とエラー境界の変換だけを行う。
+`TimelineRuntime` の詳細な構造、undo log の保持方針、retention policy、view delta の表現は
+reference 文書と decision record を正本とする。
+
+transport 層の controller は、application の use case を呼び出し、serialization とエラー境界の変換だけを行う。
 
 ### 3. `transport`
 
@@ -63,6 +65,8 @@ application を外部境界へ接続する層。
 
 transport は serialization、message 境界、エラー変換だけを担当する。
 世界更新の業務ロジックを持ち込まない。
+worker protocol の正本語彙も timeline 中心とし、`advance_timeline` / `seek_world_to_tick` /
+`rewind_world_by_ticks` / `get_timeline_state` を優先する。
 
 ### 4. `presentation`
 
@@ -88,6 +92,7 @@ presentation は world 正本を持たず、transport 経由の view model を�
 
 `application` 層を明示すると、今後追加される以下の機能を整理しやすい。
 
-- replay / restore
+- checkpoint / seek
+- rewind / timeline cursor
 - 検証用の deterministic run
 - headless benchmark 実行

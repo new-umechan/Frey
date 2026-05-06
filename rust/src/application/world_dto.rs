@@ -13,18 +13,38 @@ pub(crate) struct InitWorldConfig {
     pub simulation_rate: Option<f32>,
     #[serde(default)]
     pub verification_mode: Option<VerificationMode>,
+    #[serde(default)]
+    pub timeline: Option<TimelineConfig>,
+}
+
+#[derive(Clone, Deserialize)]
+pub(crate) struct TimelineConfig {
+    #[serde(default)]
+    pub checkpoint_interval: Option<u64>,
+    #[serde(default)]
+    pub checkpoint_limit: Option<usize>,
+    #[serde(default)]
+    pub undo_log_limit: Option<usize>,
+    #[serde(default)]
+    pub undo_future_prune_grace_ticks: Option<u64>,
+    #[serde(default)]
+    pub max_estimated_bytes: Option<usize>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct WorldDeltaQuery {
+pub(crate) struct ViewDeltaQuery {
     #[serde(default)]
     pub include_fields: Option<Vec<String>>,
 }
+
+#[allow(dead_code)]
+pub(crate) type WorldDeltaQuery = ViewDeltaQuery;
 
 #[derive(Serialize)]
 pub(crate) struct InitWorldOutput {
     pub world_id: String,
     pub tick: f64,
+    pub head_tick: f64,
     pub era: String,
     pub cell_count: u32,
 }
@@ -143,23 +163,31 @@ pub(crate) struct PlateStatsResponse {
 }
 
 #[derive(Serialize)]
-pub(crate) struct HistoryTicksResponse {
+pub(crate) struct CheckpointTicksResponse {
     pub world_id: String,
     pub interval: u32,
     pub ticks: Vec<f64>,
 }
 
-#[derive(Serialize)]
-pub(crate) struct RestoreWorldResult {
-    pub world_id: String,
-    pub tick: f64,
-}
+#[allow(dead_code)]
+pub(crate) type HistoryTicksResponse = CheckpointTicksResponse;
 
 #[derive(Serialize)]
-pub(crate) struct ForkWorldOutput {
-    pub source_world_id: String,
+pub(crate) struct SeekWorldResult {
     pub world_id: String,
     pub tick: f64,
+    pub head_tick: f64,
+}
+
+#[allow(dead_code)]
+pub(crate) type RestoreWorldResult = SeekWorldResult;
+
+#[derive(Serialize)]
+pub(crate) struct RewindWorldResult {
+    pub world_id: String,
+    pub tick: f64,
+    pub head_tick: f64,
+    pub rewound_ticks: u32,
 }
 
 #[derive(Serialize)]
@@ -169,7 +197,7 @@ pub(crate) struct DeltaRange {
 }
 
 #[derive(Serialize)]
-pub(crate) struct FieldDeltaResponse {
+pub(crate) struct ViewDeltaFieldResponse {
     pub field_kind: String,
     pub mode: String,
     pub ranges: Vec<DeltaRange>,
@@ -179,16 +207,23 @@ pub(crate) struct FieldDeltaResponse {
     pub i32_data: Option<Vec<i32>>,
 }
 
+#[allow(dead_code)]
+pub(crate) type FieldDeltaResponse = ViewDeltaFieldResponse;
+
 #[derive(Serialize)]
-pub(crate) struct WorldDeltaResponse {
+pub(crate) struct ViewDeltaResponse {
     pub world_id: String,
     pub tick: f64,
+    pub head_tick: f64,
     pub era: String,
     pub real_years_per_tick: f32,
     pub runtime_tick_ms: u32,
     pub budgets: BudgetSummary,
-    pub deltas: Vec<FieldDeltaResponse>,
+    pub deltas: Vec<ViewDeltaFieldResponse>,
 }
+
+#[allow(dead_code)]
+pub(crate) type WorldDeltaResponse = ViewDeltaResponse;
 
 #[derive(Serialize)]
 pub(crate) struct StepWorldProfiledResponse {
@@ -249,4 +284,36 @@ pub(crate) struct ExecWorldSliceResponse {
     pub busy: bool,
     pub phase: String,
     pub tick: f64,
+    pub head_tick: f64,
+    pub tick_boundary: String,
+}
+
+#[derive(Serialize)]
+pub(crate) struct TimelineAdvanceResult {
+    pub world_id: String,
+    pub tick: f64,
+    pub head_tick: f64,
+    pub advanced_ticks: u32,
+}
+
+#[derive(Serialize)]
+pub(crate) struct TimelineStateResponse {
+    pub world_id: String,
+    pub current_tick: f64,
+    pub head_tick: f64,
+    pub checkpoint_interval: u32,
+    pub checkpoint_limit: u32,
+    pub checkpoint_count: u32,
+    pub checkpoint_start_tick: Option<f64>,
+    pub checkpoint_end_tick: Option<f64>,
+    pub checkpoint_estimated_bytes: f64,
+    pub undo_log_limit: u32,
+    pub undo_future_prune_grace_ticks: f64,
+    pub undo_log_count: u32,
+    pub undo_log_start_tick: Option<f64>,
+    pub undo_log_end_tick: Option<f64>,
+    pub undo_log_estimated_bytes: f64,
+    pub total_estimated_bytes: f64,
+    pub max_estimated_bytes: Option<f64>,
+    pub tick_boundary: String,
 }

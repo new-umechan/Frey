@@ -27,6 +27,6 @@ pub use state::{
     HydrologyState, LivestockBitmap, PlateKinematicsState, PolityComponent, PolityGroupId,
     PolityId, PolityState, PopulationState, RegionComponent, RegionId, SettlementComponent,
     SettlementId, SettlementState, SubsistenceMix, SubsistenceState, TerrainState,
-    VertexCrustState, World, WorldControlState, WorldCore, WorldMesh, WorldState, N_CROPS,
-    N_LIVESTOCK,
+    VertexCrustState, World, WorldControlState, WorldCore, WorldMesh, WorldRelations, WorldState,
+    N_CROPS, N_LIVESTOCK,
 };
