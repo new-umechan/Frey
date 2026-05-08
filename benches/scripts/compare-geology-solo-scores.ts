@@ -13,6 +13,27 @@ interface Args {
 }
 
 type NumberLike = number | null | undefined;
+const DIAGNOSTIC_KEYS = [
+    "generated_land_ratio",
+    "oceanic_age_min_myr",
+    "oceanic_age_max_myr",
+    "mean_depth",
+    "oceanic_age_valid_cells",
+    "oceanic_age_total_cells",
+    "oceanic_age_bin_count",
+    "oceanic_age_populated_bins",
+    "ridge_distance_valid_cells",
+    "ridge_distance_total_cells",
+    "ridge_distance_bin_count",
+    "ridge_distance_populated_bins",
+    "continental_valid_cells",
+    "continental_ocean_cells",
+    "continental_mean_height",
+    "ocean_mean_height",
+    "continental_median_height",
+    "ocean_median_height",
+] as const;
+type DiagnosticKey = (typeof DIAGNOSTIC_KEYS)[number];
 
 interface GeologySoloScoreRecord {
     timestamp_unix_ms?: number;
@@ -27,7 +48,7 @@ interface GeologySoloScoreRecord {
         state?: string;
         metrics?: Record<string, NumberLike>;
     };
-    diagnostics?: Record<string, NumberLike | unknown> & {
+    diagnostics?: Partial<Record<DiagnosticKey, NumberLike>> & {
         coastal_inundation_response?: Array<{
             sea_level_rise_m?: NumberLike;
             generated_land_ratio?: NumberLike;
@@ -48,27 +69,6 @@ const PHASE2_KEYS = [
     "continental_ocean_mean_gap",
     "continental_ocean_median_gap",
     "continental_ocean_overlap_ratio",
-] as const;
-
-const DIAGNOSTIC_KEYS = [
-    "generated_land_ratio",
-    "oceanic_age_min_myr",
-    "oceanic_age_max_myr",
-    "mean_depth",
-    "oceanic_age_valid_cells",
-    "oceanic_age_total_cells",
-    "oceanic_age_bin_count",
-    "oceanic_age_populated_bins",
-    "ridge_distance_valid_cells",
-    "ridge_distance_total_cells",
-    "ridge_distance_bin_count",
-    "ridge_distance_populated_bins",
-    "continental_valid_cells",
-    "continental_ocean_cells",
-    "continental_mean_height",
-    "ocean_mean_height",
-    "continental_median_height",
-    "ocean_median_height",
 ] as const;
 
 function parseArgs(argv: string[]): Args {
