@@ -83,7 +83,7 @@ Hydrologyは次の配列を全セル分持つ。
 ## データ構造
 
 ```rust
-river_downstream: Vec<SmallVec<[(CellId, f32); 3]>>,
+river_downstream: Vec<SmallVec<[(CellId, f32); 4]>>,
 river_next:       Vec<i32>,
 is_lake:          Vec<bool>,
 sink_id:          Vec<i32>,
@@ -94,11 +94,10 @@ sink_spill_level: Vec<f32>,
 ```
 
 `river_downstream` の各要素は `(流下先CellId, 分配率f32)` のペアである。
-1セルあたりの流下先は通常1〜3個程度であり、SmallVecの内部バッファサイズを3とする。
+1セルあたりの流下先は通常1〜4個程度であり、SmallVecの内部バッファサイズを4とする。
 
-現行ランタイムでは `river_next` を主流路の代表として保持する。
-公開状態としての `river_downstream` は、この `river_next` から再構築される単一 edge の DAG とみなす。
-つまり現状の `river_downstream` は仕様文中の理想的な MFD をまだ完全には表していない。
+現行ランタイムでは `river_downstream` を流路正本として保持する。
+`river_next` は互換用途の代表流下先（最大重み edge）として派生保持する。
 
 一方で sink / lake / spill の正本は HydrologyState に持つ。
 Erosion はその fill-spill 状態を参照して堆積・溢流を進める。

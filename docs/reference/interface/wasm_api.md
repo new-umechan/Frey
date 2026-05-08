@@ -65,7 +65,7 @@ JSから利用する現行WASM公開APIを定義する。
 - 内部河川表現はMFD（複数流下先+重み）を使用する。
 - `WorldState.hydrology.river_downstream` は `[(cell, weight)]` の配列として保持し、`get_field` の
   `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` は互換のためCSR形式へ変換して返す。
-- `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` はCSR形式で1セルあたり最大3流下先を表す。
+- `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` はCSR形式で1セルあたり最大4流下先を表す。
 - `river_next` は互換用のprimary流下先（最大重みの流下先）を返す。
 - `get_view_delta` は差分のみを返す。`include_fields` 未指定時は全対象フィールドを返す。
 - `get_timeline_state` は `current_tick`、`head_tick`、checkpoint/undo log window、`tick_boundary` を返す。

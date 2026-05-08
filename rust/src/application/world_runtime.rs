@@ -179,8 +179,8 @@ where
 }
 
 fn build_compact_river_downstream_patch(
-    before: &[SmallVec<[(u32, f32); 3]>],
-    after: &[SmallVec<[(u32, f32); 3]>],
+    before: &[SmallVec<[(u32, f32); 4]>],
+    after: &[SmallVec<[(u32, f32); 4]>],
 ) -> Option<CompactRiverDownstreamPatch> {
     if before.len() != after.len() {
         return None;
@@ -240,7 +240,7 @@ where
 }
 
 fn apply_compact_river_downstream_patch(
-    values: &mut [SmallVec<[(u32, f32); 3]>],
+    values: &mut [SmallVec<[(u32, f32); 4]>],
     patch: &CompactRiverDownstreamPatch,
 ) {
     for (patch_index, cell_index) in patch.cell_indices.iter().copied().enumerate() {
@@ -250,7 +250,7 @@ fn apply_compact_river_downstream_patch(
             .get(patch_index + 1)
             .copied()
             .unwrap_or(start as u32) as usize;
-        let mut routes = SmallVec::<[(u32, f32); 3]>::new();
+        let mut routes = SmallVec::<[(u32, f32); 4]>::new();
         for route_index in start..end {
             let next_cell = patch.route_cells.get(route_index).copied().unwrap_or(0);
             let weight = patch.route_weights.get(route_index).copied().unwrap_or(0.0);
@@ -266,7 +266,7 @@ fn vec_bytes<T>(values: &[T]) -> usize {
     values.len() * size_of::<T>()
 }
 
-fn river_downstream_bytes(values: &[SmallVec<[(u32, f32); 3]>]) -> usize {
+fn river_downstream_bytes(values: &[SmallVec<[(u32, f32); 4]>]) -> usize {
     values
         .iter()
         .map(|routes| routes.len() * size_of::<(u32, f32)>())
@@ -1430,8 +1430,7 @@ impl SubsistenceUndoState {
             build_sparse_patch(&before.food_energy_mean, &after.food_energy_mean);
         let food_energy_variance =
             build_sparse_patch(&before.food_energy_variance, &after.food_energy_variance);
-        let buffer_capacity =
-            build_sparse_patch(&before.buffer_capacity, &after.buffer_capacity);
+        let buffer_capacity = build_sparse_patch(&before.buffer_capacity, &after.buffer_capacity);
         let mobility_capacity =
             build_sparse_patch(&before.mobility_capacity, &after.mobility_capacity);
         let land_use_intensity =

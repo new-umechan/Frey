@@ -349,7 +349,10 @@ pub(crate) fn get_field(
             field_kind,
             stride,
             cell_count: world_ref.state.hydrology.surface_water_access.len() as u32,
-            sampled_count: sampled_len(world_ref.state.hydrology.surface_water_access.len(), stride),
+            sampled_count: sampled_len(
+                world_ref.state.hydrology.surface_water_access.len(),
+                stride,
+            ),
             f32_data: Some(sample_f32(
                 &world_ref.state.hydrology.surface_water_access,
                 stride,
@@ -362,7 +365,10 @@ pub(crate) fn get_field(
             stride,
             cell_count: world_ref.state.subsistence.food_energy_mean.len() as u32,
             sampled_count: sampled_len(world_ref.state.subsistence.food_energy_mean.len(), stride),
-            f32_data: Some(sample_f32(&world_ref.state.subsistence.food_energy_mean, stride)),
+            f32_data: Some(sample_f32(
+                &world_ref.state.subsistence.food_energy_mean,
+                stride,
+            )),
             u32_data: None,
             i32_data: None,
         },
@@ -386,7 +392,10 @@ pub(crate) fn get_field(
             stride,
             cell_count: world_ref.state.subsistence.buffer_capacity.len() as u32,
             sampled_count: sampled_len(world_ref.state.subsistence.buffer_capacity.len(), stride),
-            f32_data: Some(sample_f32(&world_ref.state.subsistence.buffer_capacity, stride)),
+            f32_data: Some(sample_f32(
+                &world_ref.state.subsistence.buffer_capacity,
+                stride,
+            )),
             u32_data: None,
             i32_data: None,
         },
@@ -394,11 +403,11 @@ pub(crate) fn get_field(
             field_kind,
             stride,
             cell_count: world_ref.state.subsistence.mobility_capacity.len() as u32,
-            sampled_count: sampled_len(
-                world_ref.state.subsistence.mobility_capacity.len(),
+            sampled_count: sampled_len(world_ref.state.subsistence.mobility_capacity.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref.state.subsistence.mobility_capacity,
                 stride,
-            ),
-            f32_data: Some(sample_f32(&world_ref.state.subsistence.mobility_capacity, stride)),
+            )),
             u32_data: None,
             i32_data: None,
         },
@@ -1331,7 +1340,7 @@ fn sink_fill_ratio_values_by_cell(managed: &ManagedWorld) -> Vec<f32> {
 }
 
 fn hydrology_downstream_to_csr(
-    routes: &[smallvec::SmallVec<[(u32, f32); 3]>],
+    routes: &[smallvec::SmallVec<[(u32, f32); 4]>],
 ) -> (Vec<u32>, Vec<u32>, Vec<f32>) {
     let mut offsets = Vec::with_capacity(routes.len() + 1);
     let mut cells = Vec::new();

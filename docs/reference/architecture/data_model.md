@@ -169,7 +169,7 @@ struct GeologyState {
     glacial_melt_runoff:   Vec<f32>,           // 氷河融解流出量。Hydrology の流出入力へ加算
 
     // --- Hydrology ---
-    river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
+    river_downstream:     Vec<SmallVec<[(CellId, f32); 4]>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用
     surface_water_access: Vec<f32>,      // 表流水アクセス (0..1)。Population・Settlement・Subsistence が読む
