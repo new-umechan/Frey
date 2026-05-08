@@ -36,6 +36,24 @@ struct World {
 checkpoint snapshot と seek 用の補助状態は `World` の正本には含めず、
 管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
+### Alpha 事前計算 Snapshot（dev 専用）
+
+`alpha` の開発 bootstrap 短縮のため、era 境界 snapshot を補助 artifact として扱う。
+
+- 対象 stage:
+  - `environment` (`tick=800`)
+  - `life` (`tick=1300`)
+  - `civilization` (`tick=1395`)
+  - `history` (`tick=1445`)
+- 保存正本: `./.cache/frey/alpha-snapshots/`
+- browser mirror: `web/public/.dev-precomputed/alpha/`
+- artifact:
+  - `manifest.json`（stage, tick, era, fingerprint, filename）
+  - `*.bin`（`WorldCore` + dynamics state + metadata を含む envelope）
+
+復元は dev opt-in のみで有効化する。`seed != alpha` では常に通常の `Crust` 初期化を使う。
+snapshot 不在・破損・fingerprint 不一致時は warning を出し、通常計算へフォールバックする。
+
 ## Managed 層（WASM transport）
 
 `ManagedWorld` は `World` 正本の外側で、次を管理する。
@@ -56,8 +74,9 @@ checkpoint snapshot と seek 用の補助状態は `World` の正本には含め
   `ground_cover` / `disturbance` / `soil_fertility`、
   `domesticates.crop_available` / `crop_adoption` / `livestock_available` /
   `livestock_adoption` / `domesticates_internal`、
-  `subsistence.subsistence_mix` / `food_production` /
-  `freshwater_access`、`population.population` / `birth_rate` / `death_rate`、
+  `subsistence.subsistence_mix` / `food_energy_mean` / `food_energy_variance` /
+  `buffer_capacity` / `mobility_capacity` / `land_use_intensity`、
+  `population.population` / `birth_rate` / `death_rate`、
   `settlement.urbanization`、`polity.polity_id`、
   `conflict.conflict_intensity` / `occupier_id`、
   `entities` の create/update/delete を表す structured undo、
@@ -153,6 +172,7 @@ struct GeologyState {
     river_downstream:     Vec<SmallVec<[(CellId, f32); 3]>>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用
+    surface_water_access: Vec<f32>,      // 表流水アクセス (0..1)。Population・Settlement・Subsistence が読む
     erosion_rate:         Vec<f32>,
     deposition_rate:      Vec<f32>,
     is_lake:              Vec<bool>,      // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
@@ -177,8 +197,11 @@ struct GeologyState {
 
     // --- Subsistence ---
     subsistence_mix:      Vec<SubsistenceMix>,
-    food_production:      Vec<f32>,
-    freshwater_access:    Vec<f32>,  // river_flow・is_lakeから導出。Population・Settlementが読む
+    food_energy_mean:     Vec<f32>,
+    food_energy_variance: Vec<f32>,
+    buffer_capacity:      Vec<f32>,
+    mobility_capacity:    Vec<f32>,
+    land_use_intensity:   Vec<f32>,
 
     // --- Population ---
     population:           Vec<f32>, // f32でも、数百万人のうち下位1桁しか変わらないため許容
@@ -477,8 +500,8 @@ struct SubsistenceMix {
     gathering:   f32,  // 採集
     hunting:     f32,  // 狩猟
     fishing:     f32,  // 漁撈
-    farming:     f32,  // 農耕
-    pastoralism: f32,  // 牧畜
+    cultivation: f32,  // 農耕
+    herding:     f32,  // 牧畜
 }
 
 enum CellFieldId {

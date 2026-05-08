@@ -343,8 +343,11 @@ fn estimate_world_core_bytes(core: &world::WorldCore) -> usize {
         + vec_bytes(&domesticates.livestock_available)
         + vec_bytes(&domesticates.livestock_adoption)
         + vec_bytes(&subsistence.subsistence_mix)
-        + vec_bytes(&subsistence.food_production)
-        + vec_bytes(&subsistence.freshwater_access)
+        + vec_bytes(&subsistence.food_energy_mean)
+        + vec_bytes(&subsistence.food_energy_variance)
+        + vec_bytes(&subsistence.buffer_capacity)
+        + vec_bytes(&subsistence.mobility_capacity)
+        + vec_bytes(&subsistence.land_use_intensity)
         + vec_bytes(&population.population)
         + vec_bytes(&population.birth_rate)
         + vec_bytes(&population.death_rate)
@@ -1423,18 +1426,35 @@ impl SubsistenceUndoState {
             return None;
         }
         let subsistence_mix = build_sparse_patch(&before.subsistence_mix, &after.subsistence_mix);
-        let food_production = build_sparse_patch(&before.food_production, &after.food_production);
-        let freshwater_access =
-            build_sparse_patch(&before.freshwater_access, &after.freshwater_access);
-        let has_sparse_patch = any_patch!(subsistence_mix, food_production, freshwater_access,);
+        let food_energy_mean =
+            build_sparse_patch(&before.food_energy_mean, &after.food_energy_mean);
+        let food_energy_variance =
+            build_sparse_patch(&before.food_energy_variance, &after.food_energy_variance);
+        let buffer_capacity =
+            build_sparse_patch(&before.buffer_capacity, &after.buffer_capacity);
+        let mobility_capacity =
+            build_sparse_patch(&before.mobility_capacity, &after.mobility_capacity);
+        let land_use_intensity =
+            build_sparse_patch(&before.land_use_intensity, &after.land_use_intensity);
+        let has_sparse_patch = any_patch!(
+            subsistence_mix,
+            food_energy_mean,
+            food_energy_variance,
+            buffer_capacity,
+            mobility_capacity,
+            land_use_intensity,
+        );
         if !has_sparse_patch {
             return None;
         }
         Some(Self {
             full: None,
             subsistence_mix,
-            food_production,
-            freshwater_access,
+            food_energy_mean,
+            food_energy_variance,
+            buffer_capacity,
+            mobility_capacity,
+            land_use_intensity,
         })
     }
 
@@ -1445,7 +1465,14 @@ impl SubsistenceUndoState {
             apply_sparse_fields!(
                 target,
                 self,
-                [subsistence_mix, food_production, freshwater_access,]
+                [
+                    subsistence_mix,
+                    food_energy_mean,
+                    food_energy_variance,
+                    buffer_capacity,
+                    mobility_capacity,
+                    land_use_intensity,
+                ]
             );
         }
     }
@@ -2022,8 +2049,11 @@ pub(crate) struct DomesticatesUndoState {
 pub(crate) struct SubsistenceUndoState {
     pub full: Option<world::SubsistenceState>,
     pub subsistence_mix: Option<SparsePatch<world::SubsistenceMix>>,
-    pub food_production: Option<SparseF32Patch>,
-    pub freshwater_access: Option<SparseF32Patch>,
+    pub food_energy_mean: Option<SparseF32Patch>,
+    pub food_energy_variance: Option<SparseF32Patch>,
+    pub buffer_capacity: Option<SparseF32Patch>,
+    pub mobility_capacity: Option<SparseF32Patch>,
+    pub land_use_intensity: Option<SparseF32Patch>,
 }
 
 #[derive(Clone, Default)]
@@ -2319,13 +2349,23 @@ impl SubsistenceUndoState {
             .as_ref()
             .map(|full| {
                 vec_bytes(&full.subsistence_mix)
-                    + vec_bytes(&full.food_production)
-                    + vec_bytes(&full.freshwater_access)
+                    + vec_bytes(&full.food_energy_mean)
+                    + vec_bytes(&full.food_energy_variance)
+                    + vec_bytes(&full.buffer_capacity)
+                    + vec_bytes(&full.mobility_capacity)
+                    + vec_bytes(&full.land_use_intensity)
             })
             .unwrap_or(0)
             + estimate_optional_sparse_patch_bytes!(
                 self,
-                [subsistence_mix, food_production, freshwater_access,]
+                [
+                    subsistence_mix,
+                    food_energy_mean,
+                    food_energy_variance,
+                    buffer_capacity,
+                    mobility_capacity,
+                    land_use_intensity,
+                ]
             )
     }
 }
@@ -4981,17 +5021,20 @@ mod tests {
     fn subsistence_undo_uses_sparse_patches_for_mix_and_scalar_fields() {
         let before = world::SubsistenceState {
             subsistence_mix: vec![world::SubsistenceMix::default(); 2],
-            food_production: vec![0.0, 0.0],
-            freshwater_access: vec![0.0, 0.0],
+            food_energy_mean: vec![0.0, 0.0],
+            food_energy_variance: vec![1.0, 1.0],
+            buffer_capacity: vec![0.0, 0.0],
+            mobility_capacity: vec![0.0, 0.0],
+            land_use_intensity: vec![0.0, 0.0],
         };
         let mut after = before.clone();
-        after.subsistence_mix[0].farming = 0.25;
-        after.food_production[1] = 3.0;
+        after.subsistence_mix[0].cultivation = 0.25;
+        after.food_energy_mean[1] = 0.7;
 
         let undo = SubsistenceUndoState::from_diff(&before, &after).expect("subsistence undo");
         assert!(undo.full.is_none());
         assert!(undo.subsistence_mix.is_some());
-        assert!(undo.food_production.is_some());
+        assert!(undo.food_energy_mean.is_some());
     }
 
     #[test]

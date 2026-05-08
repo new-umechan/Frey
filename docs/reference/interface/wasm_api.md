@@ -53,7 +53,7 @@ JSから利用する現行WASM公開APIを定義する。
 ### 2.2 観測
 
 - `get_field(world_id: string, field_kind: string, lod: number) -> FieldResponse`
-    - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `biome` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature` / `wind_u` / `wind_v` / `moisture_flux_u` / `moisture_flux_v`
+    - `field_kind`: `height` / `river_flux` / `plate_id` / `river_next` / `river_transport_cost` / `surface_water_access` / `food_energy_mean` / `food_energy_variance` / `buffer_capacity` / `mobility_capacity` / `land_use_intensity` / `subsistence_gathering` / `subsistence_hunting` / `subsistence_fishing` / `subsistence_cultivation` / `subsistence_herding` / `river_downstream_offset` / `river_downstream_cell` / `river_downstream_weight` / `sink_id` / `sink_spill_to` / `sink_capacity_remaining` / `sink_fill_ratio` / `biome` / `mantle_heat` / `temperature` / `precipitation` / `runoff` / `ocean_temperature` / `wind_u` / `wind_v` / `moisture_flux_u` / `moisture_flux_v`
 - `get_view_delta(world_id: string, options?: { include_fields?: string[] }) -> ViewDeltaResponse`
 - `get_timeline_state(world_id: string) -> TimelineStateResponse`
 - `get_metrics(world_id: string) -> MetricsResponse`

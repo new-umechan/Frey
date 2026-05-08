@@ -345,6 +345,168 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
+        "surface_water_access" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.hydrology.surface_water_access.len() as u32,
+            sampled_count: sampled_len(world_ref.state.hydrology.surface_water_access.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref.state.hydrology.surface_water_access,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "food_energy_mean" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.food_energy_mean.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.food_energy_mean.len(), stride),
+            f32_data: Some(sample_f32(&world_ref.state.subsistence.food_energy_mean, stride)),
+            u32_data: None,
+            i32_data: None,
+        },
+        "food_energy_variance" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.food_energy_variance.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.subsistence.food_energy_variance.len(),
+                stride,
+            ),
+            f32_data: Some(sample_f32(
+                &world_ref.state.subsistence.food_energy_variance,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "buffer_capacity" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.buffer_capacity.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.buffer_capacity.len(), stride),
+            f32_data: Some(sample_f32(&world_ref.state.subsistence.buffer_capacity, stride)),
+            u32_data: None,
+            i32_data: None,
+        },
+        "mobility_capacity" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.mobility_capacity.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.subsistence.mobility_capacity.len(),
+                stride,
+            ),
+            f32_data: Some(sample_f32(&world_ref.state.subsistence.mobility_capacity, stride)),
+            u32_data: None,
+            i32_data: None,
+        },
+        "land_use_intensity" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.land_use_intensity.len() as u32,
+            sampled_count: sampled_len(
+                world_ref.state.subsistence.land_use_intensity.len(),
+                stride,
+            ),
+            f32_data: Some(sample_f32(
+                &world_ref.state.subsistence.land_use_intensity,
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "subsistence_gathering" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.subsistence_mix.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.subsistence_mix.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref
+                    .state
+                    .subsistence
+                    .subsistence_mix
+                    .iter()
+                    .map(|mix| mix.gathering)
+                    .collect::<Vec<_>>(),
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "subsistence_hunting" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.subsistence_mix.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.subsistence_mix.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref
+                    .state
+                    .subsistence
+                    .subsistence_mix
+                    .iter()
+                    .map(|mix| mix.hunting)
+                    .collect::<Vec<_>>(),
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "subsistence_fishing" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.subsistence_mix.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.subsistence_mix.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref
+                    .state
+                    .subsistence
+                    .subsistence_mix
+                    .iter()
+                    .map(|mix| mix.fishing)
+                    .collect::<Vec<_>>(),
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "subsistence_cultivation" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.subsistence_mix.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.subsistence_mix.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref
+                    .state
+                    .subsistence
+                    .subsistence_mix
+                    .iter()
+                    .map(|mix| mix.cultivation)
+                    .collect::<Vec<_>>(),
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
+        "subsistence_herding" => FieldResponse {
+            field_kind,
+            stride,
+            cell_count: world_ref.state.subsistence.subsistence_mix.len() as u32,
+            sampled_count: sampled_len(world_ref.state.subsistence.subsistence_mix.len(), stride),
+            f32_data: Some(sample_f32(
+                &world_ref
+                    .state
+                    .subsistence
+                    .subsistence_mix
+                    .iter()
+                    .map(|mix| mix.herding)
+                    .collect::<Vec<_>>(),
+                stride,
+            )),
+            u32_data: None,
+            i32_data: None,
+        },
         "crop_adoption_wheat" => FieldResponse {
             field_kind,
             stride,

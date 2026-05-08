@@ -391,6 +391,7 @@ fn run_river_step_with_erosion_state(
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
+    update_surface_water_access(hydrology);
     detail.river_sync_ms += profile_elapsed_ms(phase_start);
     true
 }
@@ -521,6 +522,7 @@ fn run_river_flow_only_with_state(
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
+    update_surface_water_access(hydrology);
     detail.river_sync_ms += profile_elapsed_ms(phase_start);
     true
 }
@@ -577,6 +579,25 @@ fn update_erosion_and_deposition_rates(
         } else {
             hydrology.erosion_rate[i] = -delta;
         }
+    }
+}
+
+fn update_surface_water_access(hydrology: &mut crate::sim::world::HydrologyState) {
+    let max_flow = hydrology
+        .river_flow
+        .iter()
+        .copied()
+        .fold(0.0_f32, f32::max)
+        .max(1e-6);
+    let count = hydrology
+        .surface_water_access
+        .len()
+        .min(hydrology.river_flow.len())
+        .min(hydrology.is_lake.len());
+    for i in 0..count {
+        let flow = (hydrology.river_flow[i] / max_flow).clamp(0.0, 1.0);
+        let lake_bonus = if hydrology.is_lake[i] { 0.2 } else { 0.0 };
+        hydrology.surface_water_access[i] = (flow + lake_bonus).clamp(0.0, 1.0);
     }
 }
 

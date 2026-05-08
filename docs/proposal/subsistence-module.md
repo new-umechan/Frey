@@ -2,13 +2,30 @@
 
 ## Status
 
-Draft
+Accepted
 
 ## Goal
 
-`Subsistence` モジュールの責務、内部 system 構成、公開 state、
-および `Hydrology` / `Ecology` / `Domesticates` / `Population` / `Settlement`
-との接続点を、実装に移れる粒度で固定する文書である。
+`Subsistence` モジュールを、単なる環境適合 proxy ではなく、
+資源 access・技術能力・人口圧・移動性・貯蔵・リスク分散を通じて
+生業配分と食料供給特性を導くモデルとして再定義し、
+実装に移れる粒度で責務と公開 state を固定する文書である。
+
+## Reason
+
+従来案は、
+
+- 局所環境から生業 mix がほぼ決まる
+- 漁撈を内水面と沿岸で分けない
+- 牧畜の移動性を持たない
+- 人口圧による intensification を持たない
+- 供給安定性を資源安定性と十分に分離していない
+
+という点で、簡略モデルとしては動いても、
+考古学・人類学・人間生態学の知見に照らすと説明力が不足していた。
+
+本 proposal は、v1 で実装可能な範囲を保ちつつ、
+学術的に外しにくい因果を明示的に取り込む。
 
 ## Scope
 
@@ -18,96 +35,59 @@ Draft
 - `Subsistence` が何を書くか
 - モジュール内部の system 分割
 - `SubsistenceMix` の軸と意味
-- `food` 系 state の役割
+- `food` 系 state をどう分解するか
 - `surface_water_access` の責務移管
+- 定住・人口側へ何を渡すか
 - `Ecology` feedback の範囲
-- `Population` / `Settlement` 側の読取先変更
+- v1 で必須とする学術的因果
 
 この proposal でまだ決めないこと:
 
-- 詳細な数式
-- 各係数・閾値の最終値
+- 各式の最終係数
+- 地域別の詳細パラメタ
+- 高解像の沿岸生産性モデル
+- 社会制度・交易・文化選好の完全導入
 - ベンチ設計
-- 具体的な UI 可視化仕様
 - `reference` への昇格タイミング
 
 ## Design Decision
 
-### 1. モジュールは残す
+### 1. `Subsistence` は Tier 1 module として維持する
 
 `Subsistence` は Tier 1 module として残す。
 
 理由:
 
-- このコードベースでは `Module` は「近い読み書きを持つ複数 `System` を束ねる単位」である
-- 生業戦略更新、食料供給導出、土地利用 pressure 導出は強く関連している
-- ここで module を細分化すると、現段階では責務分離の利得より接続コストが大きい
+- 資源 access、能力、戦略更新、供給特性、土地利用圧は強く結びつく
+- `Population` / `Settlement` / `Ecology` との接続点を一箇所で固定できる
+- 実装初期段階で module を細分化するより、module 内の system 分割の方が妥当である
 
-したがって、責務分解は module 分割ではなく module 内部の system 分割で表現する。
+### 2. 生業は「環境適合」ではなく「制約下の戦略選択」として扱う
 
-### 2. 内部を複数 system に分ける
+`Subsistence` は各セルの生業を、
+局所環境から直接決まる値としてではなく、
+次の制約と能力のもとで更新される戦略配分として扱う。
 
-`Subsistence` は少なくとも次の system で構成する。
-
-1. `AccessSystem`
-2. `StrategySystem`
-3. `OutputSystem`
-4. `PressureSystem`
-
-`PressureSystem` も当面は `Subsistence` の内部 system とする。
-ただし将来、人口密度や定住強度への依存が大きくなった場合は、
-別 module へ切り出す余地を残す。
+- 資源への access
+- 家畜化・栽培化・漁撈・貯蔵・移動の能力
+- 人口圧による intensification 圧力
+- 供給平均と供給変動の trade-off
+- 混合戦略による risk reduction
 
 ### 3. 水アクセスは `Hydrology` の責務に移す
-
-現行の `freshwater_access` は `Subsistence` が書いているが、
-これは生業構成の結果ではなく、水系由来の人間利用可能性 proxy である。
-
-したがって、本 proposal では次を採用する。
 
 - `freshwater_access` は廃止する
 - `Hydrology` が `surface_water_access` を書く
 - `Population` / `Settlement` は `Hydrology.surface_water_access` を読む
-- `Subsistence` は `surface_water_access` を読むことはあっても書かない
+- `Subsistence` は `surface_water_access` を読むが書かない
+
+`surface_water_access` は、
+飲用・生活用水・基礎的生業で利用可能な表流水 access の proxy である。
+灌漑能力や地下水利用の完全代理ではない。
 
 ### 4. 生業表現は 5 軸を維持する
 
-3 軸 `foraging / farming / pastoralism` への単純化は採用しない。
-
-理由:
-
-- `gathering` / `hunting` / `fishing` は access 条件が異なる
-- aquatic resource 依存を `foraging` に吸収すると、湖沼・河川依存の社会を潰しやすい
-- 牧畜は将来さらに細分化しうるが、現段階では 5 軸の方が拡張余地を保てる
-
-そのため、公開 state としては当面 5 軸 `SubsistenceMix` を維持する。
-
-## Proposed Model
-
-### 公開 state
-
-`Subsistence` は次の state を公開する。
-
-- `subsistence_mix`
-- `food_energy`
-- `food_stability`
-
-`Hydrology` は次の state を公開する。
-
-- `surface_water_access`
-
-`food_production` は廃止し、`food_energy` と `food_stability` に分ける。
-
-理由:
-
-- `Population` に効くのは平均供給量だけではなく、供給安定性でもある
-- 狩猟・採集・漁撈・牧畜は平均収量と安定性の組み合わせが異なる
-- `Settlement` にとっても、定住化や都市化は供給量だけでなく安定性の影響を受ける
-
-両指標は v1 では `0.0..=1.0` の正規化 proxy とし、
-下流 module が比較可能な相対指標として使えることを契約に含める。
-
-### `SubsistenceMix`
+公開 state の `SubsistenceMix` は 5 軸を維持する。
 
 ```rust
 struct SubsistenceMix {
@@ -119,66 +99,163 @@ struct SubsistenceMix {
 }
 ```
 
-各フィールドは `0.0..=1.0` の連続値で、合計が `1.0` になるよう正規化して保持する。
+各フィールドは `0.0..=1.0`、合計は `1.0` とする。
 
-### 各軸の意味
+理由:
+
+- `gathering` / `hunting` / `fishing` は access 条件も risk 構造も異なる
+- 漁撈は定住化・貯蔵・季節性と強く結びつきうるため独立軸が必要
+- `cultivation` と `herding` は intensification と mobility の性質が異なる
+
+### 5. ただし `fishing` は内部的に内水面と沿岸を分ける
+
+公開 state は 1 軸 `fishing` のままとするが、
+内部では少なくとも次を区別する。
+
+- `inland_aquatic_access`
+- `coastal_aquatic_access`
+
+理由:
+
+- 河川・湖沼依存と沿岸依存では、資源集中、季節性、定住性、技術要件が異なる
+- 学術的には両者を同一 access で潰すと説明を歪めやすい
+
+### 6. `food_production` は廃止し、供給平均・供給変動・buffer に分ける
+
+単一の `food_production` は採用しない。
+`Subsistence` は少なくとも次を公開する。
+
+- `food_energy_mean`
+- `food_energy_variance`
+- `buffer_capacity`
+
+必要に応じて下流で `food_stability` を合成してよいが、
+正本は平均・変動・buffer の分解表現とする。
+
+理由:
+
+- 平均供給量と供給変動は別物である
+- 供給安定性は資源の年変動だけでなく、貯蔵・移動・混合戦略で改善する
+- 定住維持や人口ショック耐性は、平均供給だけでなく buffer の有無に左右される
+
+## Proposed Model
+
+### 公開 state
+
+`Subsistence` は次を公開する。
+
+- `subsistence_mix`
+- `food_energy_mean`
+- `food_energy_variance`
+- `buffer_capacity`
+- `mobility_capacity`
+- `land_use_intensity`
+
+`Hydrology` は次を公開する。
+
+- `surface_water_access`
+
+### 公開 state の意味
+
+#### `subsistence_mix`
+
+各セルがどの獲得戦略にどれだけ依存しているかを表す配分である。
+活動量そのものではなく、食料獲得依存の比率である。
+
+#### `food_energy_mean`
+
+- `0.0..=1.0` の正規化 proxy
+- 当該セルが平均的に確保しうる食料供給余力
+- `Population` の人口支持力の主入力
+
+#### `food_energy_variance`
+
+- `0.0..=1.0` の正規化 proxy
+- 当該セルの供給変動性
+- 高いほど供給は不安定
+- `Population` の死亡率ショック、`Settlement` の脆弱性計算に使う
+
+#### `buffer_capacity`
+
+- `0.0..=1.0` の正規化 proxy
+- 貯蔵、乾燥・燻製・発酵などの保存、家畜在庫、季節間持越しの総合 proxy
+- `food_energy_variance` の影響を緩和する
+- 定住維持に強く効く
+
+#### `mobility_capacity`
+
+- `0.0..=1.0` の正規化 proxy
+- 季節移動、放牧移動、採捕レンジ拡張により局所変動を回避できる程度
+- 牧畜・採集・狩猟・一部漁撈の安定化に寄与する
+
+#### `land_use_intensity`
+
+- `0.0..=1.0` の正規化 proxy
+- 当該セルでの土地利用強度
+- `Ecology` への pressure 算出に使う
+- 農耕 intensification や高密度利用を反映する
+
+### `SubsistenceMix` の各軸
 
 - `gathering`
   野生植物採集への依存
 - `hunting`
   野生動物狩猟への依存
 - `fishing`
-  河川・湖沼・沿岸を含む水産資源利用への依存
+  内水面・沿岸を含む水産資源利用への依存
 - `cultivation`
   栽培を主とする食料生産への依存
 - `herding`
   家畜飼養・放牧を主とする食料生産への依存
 
-この mix は「実施した活動量」ではなく、
-各セルがどの獲得戦略にどれだけ依存しているかを表す配分とする。
+### 学術的に v1 で必須とする因果
 
-### 追加の内部派生量
+v1 では少なくとも次を入れる。
 
-`Subsistence` は内部 system 間で次の派生量を使ってよい。
-
-- `wild_plant_access`
-- `wild_animal_access`
-- `aquatic_access`
-- `arable_potential`
-- `grazing_potential`
-- 各生業軸の `expected_energy`
-- 各生業軸の `expected_stability`
-
-これらは v1 では `Subsistence` 内部の計算用量とし、
-公開 state にすることは必須としない。
+1. 資源 access と供給能力を分ける
+2. 平均供給と供給変動を分ける
+3. 貯蔵・移動・混合戦略で安定性が改善する
+4. 人口圧が intensification を押す
+5. 漁撈は内水面と沿岸を内部で分ける
+6. 牧畜の安定性には mobility を効かせる
+7. 定住性は `cultivation` だけでなく、`buffer_capacity` と tethered resource に依存する
 
 ## Module Responsibilities
 
 ### `Subsistence` が決めるもの
 
 - 各セルの生業依存配分 (`subsistence_mix`)
-- 各セルの食料供給量 proxy (`food_energy`)
-- 各セルの食料供給安定性 proxy (`food_stability`)
-- `Ecology` に返す土地利用 pressure
+- 平均供給 proxy (`food_energy_mean`)
+- 供給変動 proxy (`food_energy_variance`)
+- buffer proxy (`buffer_capacity`)
+- mobility proxy (`mobility_capacity`)
+- 土地利用強度 (`land_use_intensity`)
+- `Ecology` に返す人為圧
 
 ### `Subsistence` が決めないもの
 
-- 表流水アクセス (`surface_water_access`)
-- 人口変動
-- 集落形成
+- 表流水 access (`surface_water_access`)
+- 人口変動そのもの
+- 集落形成そのもの
 - 国家形成
-- 近傍セルからの生業伝播
-- 交易ネットワークによる補完
-- polity や文化圏による生業選好
+- 交易ネットワークの完全モデル
+- 制度・政治・文化選好の完全モデル
 
 ## System Breakdown
+
+`Subsistence` は少なくとも次の system で構成する。
+
+1. `AccessSystem`
+2. `CapabilitySystem`
+3. `StrategySystem`
+4. `OutputSystem`
+5. `PressureSystem`
 
 ### 1. `AccessSystem`
 
 役割:
 
-- 環境条件と家畜化状態から、各戦略に対応する access / potential と
-  軸別期待値を導出する
+- 環境条件から各戦略の資源 access を導出する
 
 読むもの:
 
@@ -190,139 +267,135 @@ struct SubsistenceMix {
     - 植生
     - 地被
     - 土壌 fertility
+- `WorldProjection`
+    - `is_coastal`
+    - `distance_from_ocean`
+
+書くもの:
+
+- `wild_plant_access`
+- `wild_animal_access`
+- `inland_aquatic_access`
+- `coastal_aquatic_access`
+- `arable_potential`
+- `grazing_potential`
+- `seasonality`
+- `interannual_variability`
+
+補足:
+
+- `fishing` は内部的に内水面と沿岸を分ける
+- `seasonality` と `interannual_variability` は供給変動の基礎制約である
+- ここではまだ技術能力や人口圧を入れない
+
+### 2. `CapabilitySystem`
+
+役割:
+
+- 家畜化・栽培化・貯蔵・移動の能力を導出する
+
+読むもの:
+
 - `Domesticates`
     - `crop_adoption`
     - `livestock_adoption`
+- `Hydrology`
+    - `surface_water_access`
+    - `river_flow`
+- `WorldProjection`
+    - `is_coastal`
+- 前 tick の `subsistence_mix`
 
 書くもの:
 
-- 内部派生量
-    - `wild_plant_access`
-    - `wild_animal_access`
-    - `aquatic_access`
-    - `arable_potential`
-    - `grazing_potential`
-    - 各生業軸の `expected_energy`
-    - 各生業軸の `expected_stability`
+- `cultivation_capacity`
+- `herding_capacity`
+- `fishing_capacity`
+- `storage_potential`
+- `mobility_capacity_raw`
 
 補足:
 
-- `surface_water_access` 自体は `Hydrology` の責務であり、この system はそれを入力として使う
-- `aquatic_access` は `river_flow` / `is_lake` / `surface_water_access` を統合した生業向け proxy とする
-- `expected_energy` は各生業軸を主とした場合の期待収量 proxy を表す
-- `expected_stability` は各生業軸を主とした場合の期待安定性 proxy を表す
-- 期待値は strategy 判断用の内部量であり、公開 state の `food_energy` /
-  `food_stability` そのものではない
+- 能力は access とは別物である
+- `storage_potential` は保存加工・在庫化可能性の proxy
+- `mobility_capacity_raw` は季節移動・放牧移動の実行可能性の proxy
 
-### 2. `StrategySystem`
+### 3. `StrategySystem`
 
 役割:
 
-- 前 tick の `subsistence_mix` と access / potential から target mix を計算し、
-  慣性付きで次の `subsistence_mix` を決める
+- access・capability・人口圧・前 tick 状態から `subsistence_mix` を更新する
 
 読むもの:
 
-- `subsistence_mix` の前 tick 状態
-- `AccessSystem` の内部派生量
-    - `wild_plant_access`
-    - `wild_animal_access`
-    - `aquatic_access`
-    - `arable_potential`
-    - `grazing_potential`
-    - 各生業軸の `expected_energy`
-    - 各生業軸の `expected_stability`
+- 前 tick の `subsistence_mix`
+- `AccessSystem` の派生量
+- `CapabilitySystem` の派生量
+- `Population`
+    - `population`
 
 書くもの:
 
 - `subsistence_mix`
-
-更新則:
-
-- 現在セルの access / potential と軸別期待値から target mix を計算する
-- 前 tick の mix から target mix へ緩和する
-- 最後に合計 1.0 へ正規化する
-- ただし全軸の重みが 0.0 になった場合は、前 tick の mix を維持するか
-  均等配分へフォールバックする
+- `intensification_pressure`
 
 判断原理:
 
-- `StrategySystem` は公開 `food_energy` / `food_stability` を読まない
-- 各生業軸の `expected_energy` と `expected_stability` を用いて、
-  各軸の魅力度を評価する
-- 高収量だが不安定な戦略と、低収量だが安定した戦略を区別できるようにする
-- v1 では mix 多様化に安定性ボーナスを持たせてよい
-- したがって、戦略選択は平均収量のみでなく供給安定性も見て決まる
+- 各生業軸の期待収益と期待リスクを評価する
+- `population` から局所の `population_pressure` を導出する
+- 人口圧が低いときは広域・低強度戦略が残りやすい
+- 人口圧が高いときは `cultivation` や高強度利用への遷移圧が上がる
+- ただし adoption や環境制約がない場合は遷移しない
+- 混合戦略は risk reduction を通じて選好されうる
+- 牧畜は `mobility_capacity_raw` が高いと変動環境でも維持されやすい
 
-v1 では含めないもの:
+更新則:
 
-- 近傍セルからの戦略伝播
-- 交易による食料補完
-- polity や文化圏による嗜好補正
+- 前 tick の mix から target mix へ緩和する
+- 最後に合計 1.0 へ正規化する
+- 全軸魅力度が 0 の場合は前 tick を保持する
 
-### 3. `OutputSystem`
+### 4. `OutputSystem`
 
 役割:
 
-- `subsistence_mix` と環境条件から、人口・定住側が読む food 系 state を導出する
+- 確定した `subsistence_mix` と各派生量から、
+  人口・定住側が読む供給特性を導出する
 
 読むもの:
 
 - `subsistence_mix`
-- `AccessSystem` の内部派生量
-    - 各生業軸の `expected_energy`
-    - 各生業軸の `expected_stability`
-- `surface_water_access`
+- `AccessSystem` の派生量
+- `CapabilitySystem` の派生量
+- `intensification_pressure`
 
 書くもの:
 
-- `food_energy`
-- `food_stability`
+- `food_energy_mean`
+- `food_energy_variance`
+- `buffer_capacity`
+- `mobility_capacity`
 - `land_use_intensity`
 
-補足:
+導出原理:
 
-- `OutputSystem` は軸別期待値を読んだ上で、
-  確定した `subsistence_mix` に応じて公開 state を集計する
-- 必要な追加計算は `OutputSystem` 側で行ってよい
-- `land_use_intensity` は `PressureSystem` 向けの内部 proxy とし、
-  下流 module への公開 state には含めない
+- `food_energy_mean` は各軸の期待供給の混合平均
+- `food_energy_variance` は季節性・年変動・単一依存・脆弱 access で増える
+- `buffer_capacity` は保存可能資源、栽培 surplus、家畜在庫、定着資源で増える
+- `mobility_capacity` は狩猟・採集・牧畜の変動緩和に効く
+- `land_use_intensity` は `cultivation` 比率だけでなく人口圧と intensification を反映する
 
-#### `food_energy`
-
-- `0.0..=1.0` の正規化 proxy
-- 各セルの平均的な食料供給余力を表す
-- `Population` の carrying capacity や成長余地計算に使う
-- `Settlement` の定住成立や規模拡大の前提条件に使う
-- 農耕・牧畜は高収量化しやすいが、環境条件と adoption に強く依存する
-
-#### `food_stability`
-
-- `0.0..=1.0` の正規化 proxy
-- 各セルの食料供給の年々・季節間安定性を表す
-- `Population` の死亡率ショックや供給変動耐性に使う
-- `Settlement` の定住維持や集約化の持続性に使う
-- 水産資源・混合戦略・水アクセスは安定性を改善しうる
-- mix の多様化は安定性ボーナスを持ちうる
-- 単一戦略依存や脆弱な環境では低くなりうる
-
-#### 下流利用契約
-
-- 同一条件下では `food_energy` が高いほど `Population` の人口支持力は下がらない
-- 同一条件下では `food_stability` が高いほど `Population` の供給ショック脆弱性は上がらない
-- `Settlement` は `food_energy` のみでなく `food_stability` も読む
-- v1 では両指標の厳密な合成式や閾値は固定しないが、上記の単調性は守る
-
-### 4. `PressureSystem`
+### 5. `PressureSystem`
 
 役割:
 
-- `subsistence_mix` をもとに `Ecology` へ返す pressure を導出する
+- 生業配分と利用強度から `Ecology` への pressure を導出する
 
 読むもの:
 
 - `subsistence_mix`
 - `land_use_intensity`
+- `population`
 - 必要に応じて `surface_water_access`
 
 書くもの:
@@ -333,14 +406,11 @@ v1 では含めないもの:
 - `cultivation_pressure`
 - `nutrient_pressure`
 
-v1 では `Population` や `Settlement` を直接読まない。
-つまり pressure は生業依存配分に利用強度 proxy を掛けた近似として扱う。
+補足:
 
-`nutrient_pressure` は `land_use_intensity` と `cultivation` の総合値として扱う。
-v1 では農耕による養分収奪や土壌疲弊の proxy とし、厳密な養分循環モデルは持たない。
-
-将来、人口密度や定住強度の影響を入れたくなった場合は、
-この system の責務再編を別 proposal で行う。
+- pressure は mix だけでなく利用強度で決まる
+- v1 でも `Population.population` は読む
+- これにより、同じ農耕比率でも人口密度が違えば圧力が変わる
 
 ## Inputs
 
@@ -357,67 +427,66 @@ v1 では農耕による養分収奪や土壌疲弊の proxy とし、厳密な�
 - `Domesticates`
     - `crop_adoption`
     - `livestock_adoption`
+- `Population`
+    - `population`
+- `WorldProjection`
+    - `is_coastal`
+    - `distance_from_ocean`
 - 自身の前 tick 状態
     - `subsistence_mix`
 
 ### 読まないもの
 
-- 気候の生値
-- 人口
 - 国家
-- 近傍セルの生業構成
-- 交易量
+- 交易量の正本値
+- 文化圏・宗教圏・制度の完全表現
 
-気候の影響は `Hydrology` / `Ecology` / `Domesticates` の公開値を通じて受ける。
+### 気候入力について
+
+気候の生値は直接読まない。
+気候影響は `Hydrology` / `Ecology` の公開値を通じて受ける。
+
+これは、`Subsistence` を環境統合の下流 module として保つための設計判断である。
+ただし将来、季節性 proxy が上流から十分に来ない場合は再検討する。
 
 ## Downstream Changes
-
-### `Hydrology`
-
-新たに次を書く。
-
-- `surface_water_access`
-
-定義:
-
-- 人間が地表水に到達し利用できる程度の proxy
-- 飲用、生活用水、基礎的生業に使える表流水アクセスを表す
-- 灌漑能力や地下水アクセスの完全代理ではない
 
 ### `Population`
 
 `Population` は次を読む。
 
-- `food_energy` ← `Subsistence` が書く
-- `food_stability` ← `Subsistence` が書く
-- `surface_water_access` ← `Hydrology` が書く
-
-`Population` は単一の `food_production` に依存しない形へ変更する。
+- `food_energy_mean`
+- `food_energy_variance`
+- `buffer_capacity`
+- `surface_water_access`
 
 利用契約:
 
-- `food_energy` を人口支持力と成長余地の主入力として使う
-- `food_stability` を死亡率ショックや供給変動耐性の主入力として使う
-- v1 では両指標の具体的な合成式は固定しないが、両方を読む前提を固定する
+- `food_energy_mean` が高いほど人口支持力は下がらない
+- `food_energy_variance` が高いほど供給ショック脆弱性は下がらない
+- `buffer_capacity` が高いほど変動影響は緩和される
 
 ### `Settlement`
 
 `Settlement` は次を読む。
 
-- `subsistence_mix` ← `Subsistence` が書く
-- `food_energy` ← `Subsistence` が書く
-- `food_stability` ← `Subsistence` が書く
-- `surface_water_access` ← `Hydrology` が書く
+- `subsistence_mix`
+- `food_energy_mean`
+- `food_energy_variance`
+- `buffer_capacity`
+- `mobility_capacity`
+- `surface_water_access`
 
 利用契約:
 
-- `food_energy` を定住成立や規模拡大の主入力として使う
-- `food_stability` を定住維持や集約化持続性の主入力として使う
-- v1 では具体的な閾値や重みは固定しないが、`food_stability` を独立入力として読む前提を固定する
+- 定住成立は `cultivation` のみでなく、
+  `fishing`、`buffer_capacity`、`surface_water_access`、`mobility_capacity` の組み合わせでも起こりうる
+- 高い `food_energy_mean` と低い有効変動は集約化を支える
+- 高い `mobility_capacity` は一部の牧畜・採捕社会で定住圧を弱めうる
 
 ## Ecology Feedback
 
-`Subsistence` は `Ecology` に対して次の pressure を送る。
+`Subsistence` は `Ecology` に次の pressure を送る。
 
 - `logging`
 - `grazing`
@@ -429,38 +498,40 @@ v1 では農耕による養分収奪や土壌疲弊の proxy とし、厳密な�
 
 - `gathering`
     - 基本は低圧
-    - 条件に応じて弱い `anthropogenic_fire` や `logging` を持ちうる
+    - 条件により弱い `anthropogenic_fire` / `logging`
 - `hunting`
     - 植生圧は低い
-    - 条件に応じて弱い `anthropogenic_fire` を持ちうる
+    - 条件により弱い `anthropogenic_fire`
 - `fishing`
     - 陸上植生圧は低い
-    - v1 では `Ecology` への直接圧は小さいものとして扱う
+    - ただし沿岸・河畔利用に伴う局所圧は将来拡張余地を残す
 - `cultivation`
-    - 主に `cultivation_pressure`
-    - 条件に応じて `anthropogenic_fire`
-    - 条件に応じて弱い `logging`
+    - `cultivation_pressure`
+    - `nutrient_pressure`
+    - 条件により `anthropogenic_fire` / `logging`
 - `herding`
-    - 主に `grazing`
-
-`slash_burn` は農耕専用の名称としては使わず、
-`anthropogenic_fire` の一部として扱う。
+    - `grazing`
+    - 条件により弱い `anthropogenic_fire`
 
 ## Compatibility Notes
 
-本 proposal は、現行の `reference` と暫定実装の前提を変更する。
+本 proposal は現行の `reference` と暫定実装を大きく変更する。
 
 主な変更点:
 
-- `food_production` を廃止し、`food_energy` / `food_stability` に置き換える
+- `food_production` を廃止する
 - `freshwater_access` を廃止し、`Hydrology.surface_water_access` に置き換える
+- `food_energy_mean` / `food_energy_variance` / `buffer_capacity` を新設する
+- `mobility_capacity` / `land_use_intensity` を公開 state に追加する
+- `StrategySystem` が `Population.population` を読む
+- `PressureSystem` が `Population.population` を読む
 - `farming` / `pastoralism` は `cultivation` / `herding` に改名する
-- `Subsistence` は内部的に複数 system を持つ前提へ変わる
 
-したがって、採用時には少なくとも次の更新が必要になる。
+採用時に更新が必要なもの:
 
 - `docs/reference/architecture/data_model.md`
 - `docs/reference/architecture/module_boundaries.md`
+- `docs/reference/modules/subsistence.md`
 - `docs/reference/modules/hydrology.md`
 - `docs/reference/modules/ecology.md`
 - `Population` / `Settlement` / `Subsistence` の実装
@@ -471,21 +542,38 @@ v1 では農耕による養分収奪や土壌疲弊の proxy とし、厳密な�
 
 - `Subsistence` が何を読むか
 - `Subsistence` が何を書くか
-- `Hydrology` へ移す state は何か
+- 学術的に v1 で外さない因果は何か
 - 内部 system は何に分かれるか
-- `SubsistenceMix` の 5 軸は何を意味するか
-- `food_energy` と `food_stability` の役割差は何か
-- `Population` / `Settlement` が両指標をどういう役割で読むか
-- `Ecology` への feedback 範囲は何か
-- 近傍影響と交易補完を v1 で含めないこと
+- `fishing` を内部でどう分けるか
+- `food_energy_mean` / `food_energy_variance` / `buffer_capacity` の役割差は何か
+- `Population` / `Settlement` が各指標をどういう役割で読むか
+- `Ecology` への feedback が mix だけでなく利用強度に依存すること
 
 ## Open Items
 
 次段階で別途決める。
 
-- `surface_water_access` の具体的スケーリング
-- `food_energy` と `food_stability` の具体的変換式
-- `Population` が両指標をどう合成するかの数式
-- `Settlement` が両指標に与える重みと閾値
-- `PressureSystem` に人口密度・定住強度をいつ導入するか
-- `reference` 昇格時の移行手順
+- `population_pressure` の具体式
+- `buffer_capacity` の具体的合成式
+- `mobility_capacity` の具体的合成式
+- 沿岸 access の近似方式
+- `food_energy_variance` を `Settlement` がどう閾値化するか
+- 混合戦略ボーナスの大きさ
+- 交易・文化・制度をどの段階で導入するか
+
+## Research Basis
+
+この proposal は少なくとも次の一般的知見と整合する方向を採る。
+
+- aquatic adaptation は独立の説明軸を持つべきである
+- agricultural intensification には risk management と人口圧が関与する
+- sedentism は高収量だけでなく、貯蔵・資源集中・技術・人口圧と結びつく
+- pastoralism は非平衡環境に対する mobility を本質に持つ
+
+採用時には `docs/decisions/` に、
+どこまでを v1 の学術的必須因果とし、
+どこから先を将来拡張とするかを短く固定する。
+
+採用判断:
+
+- `docs/decisions/260508-subsistence-model-foundations.md`

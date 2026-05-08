@@ -67,6 +67,7 @@ impl World {
                     erosion_rate: vec![0.0; cell_count],
                     deposition_rate: vec![0.0; cell_count],
                     river_transport_cost: vec![1.0; cell_count],
+                    surface_water_access: vec![0.0; cell_count],
                     is_lake: vec![false; cell_count],
                     sink_id: vec![-1; cell_count],
                     sink_route_next: vec![-1; cell_count],
@@ -98,8 +99,11 @@ impl World {
                 },
                 subsistence: SubsistenceState {
                     subsistence_mix: vec![SubsistenceMix::default(); cell_count],
-                    food_production: vec![0.0; cell_count],
-                    freshwater_access: vec![0.0; cell_count],
+                    food_energy_mean: vec![0.0; cell_count],
+                    food_energy_variance: vec![1.0; cell_count],
+                    buffer_capacity: vec![0.0; cell_count],
+                    mobility_capacity: vec![0.0; cell_count],
+                    land_use_intensity: vec![0.0; cell_count],
                 },
                 population: PopulationState {
                     population: vec![0.0; cell_count],

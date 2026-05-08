@@ -470,8 +470,10 @@ fn population_stage_enqueues_domesticates_population_pressure() {
     world.clock.budgets.civilization = 4;
     world.state.geology.height = vec![0.3, 0.2, 0.1, 0.2];
     world.state.population.population = vec![180.0, 0.0, 0.0, 0.0];
-    world.state.subsistence.food_production = vec![0.9, 0.0, 0.0, 0.0];
-    world.state.subsistence.freshwater_access = vec![0.9, 0.0, 0.0, 0.0];
+    world.state.subsistence.food_energy_mean = vec![0.9, 0.0, 0.0, 0.0];
+    world.state.subsistence.food_energy_variance = vec![0.1, 0.9, 0.9, 0.9];
+    world.state.subsistence.buffer_capacity = vec![0.8, 0.0, 0.0, 0.0];
+    world.state.hydrology.surface_water_access = vec![0.9, 0.0, 0.0, 0.0];
     world.state.ecology.soil_fertility = vec![0.8, 0.0, 0.0, 0.0];
     let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
 
@@ -838,7 +840,7 @@ fn conflict_generates_region_components_and_updates_relations() {
     world.state.population.population = vec![20.0, 18.0, 0.0, 0.0];
     world.state.population.birth_rate = vec![0.02, 0.02, 0.0, 0.0];
     world.state.population.death_rate = vec![0.01, 0.01, 0.0, 0.0];
-    world.state.subsistence.food_production = vec![0.9, 0.9, 0.0, 0.0];
+    world.state.subsistence.food_energy_mean = vec![0.9, 0.9, 0.0, 0.0];
     world.state.ecology.soil_fertility = vec![0.9, 0.8, 0.0, 0.0];
 
     exec_world(&mut world);

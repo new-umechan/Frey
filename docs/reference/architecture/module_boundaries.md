@@ -374,8 +374,12 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 ### 書くもの
 
 - 生業構成（`subsistence_mix`）
-- 食料生産量（`food_production`）
-- 淡水アクセス（`freshwater_access`）
+- 供給平均（`food_energy_mean`）
+- 供給変動（`food_energy_variance`）
+- 供給バッファ（`buffer_capacity`）
+- 移動能力（`mobility_capacity`）
+- 土地利用強度（`land_use_intensity`）
+- 互換列（`food_production`、`freshwater_access`）
 
 ### 書かないもの
 
@@ -383,15 +387,14 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 - 標高
 - 気候属性
 - 国家
-- 生産性（`food_production` で代替。独立列としては持たない）
-- 土地利用（`SubsistenceMix` から導出可。独立列としては持たない）
+- 生産性（独立列としては持たない。`food_energy_mean` 等で表現する）
 
 ### 補足
 
 生産量と生業様式は別物として扱う。
 生業構成（`SubsistenceMix`）の変化は環境条件と前tickの状態から決まり、転換には慣性がある。
-`crop_adoption` が高い → 農耕転換の圧力が上がる → `farming` 比率が遅延して上昇 → `food_production` が跳ね上がる、という遅延と非線形性が「なぜここで文明が生まれたか」の表現に直結する。
-`freshwater_access` は `river_flow`・`is_lake` から導出し、Population・Settlementが読む。
+`crop_adoption` が高い → 農耕転換の圧力が上がる → `cultivation` 比率が遅延して上昇 → `food_energy_mean` が上がる、という遅延と非線形性が「なぜここで文明が生まれたか」の表現に直結する。
+`surface_water_access` は `Hydrology` が導出し、Population・Settlement・Subsistence が読む。
 計算式の粒度（距離減衰の有無など）はドメイン仕様に委ねる。
 
 ---
@@ -400,8 +403,10 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 
 ### 読むもの
 
-- 食料生産量（`food_production`）← `Subsistence` が書く
-- 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
+- 供給平均（`food_energy_mean`）← `Subsistence` が書く
+- 供給変動（`food_energy_variance`）← `Subsistence` が書く
+- 供給バッファ（`buffer_capacity`）← `Subsistence` が書く
+- 表流水アクセス（`surface_water_access`）← `Hydrology` が書く
 - 前tickまでの人口（`population`）
 - FeedbackQueue（`Conflict` による死亡率上昇・直接人口減）
 
@@ -436,8 +441,8 @@ FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）�
 
 - 人口（`population`）← `Population` が書く
 - 出生率・死亡率（`birth_rate`、`death_rate`）← `Population` が書く
-- 食料生産量・生業構成（`food_production`、`subsistence_mix`）← `Subsistence` が書く
-- 淡水アクセス（`freshwater_access`）← `Subsistence` が書く
+- 食料供給特性・生業構成（`food_energy_mean`、`food_energy_variance`、`buffer_capacity`、`mobility_capacity`、`subsistence_mix`）← `Subsistence` が書く
+- 表流水アクセス（`surface_water_access`）← `Hydrology` が書く
 - 河川輸送コスト（`river_transport_cost`）← `Hydrology` が書く
 - 標高・固定地理量（`geology.height`、`geo.is_coastal`）
 - FeedbackQueue（`Polity` による遷都・強制移住、`Conflict` による都市破壊）
@@ -458,8 +463,8 @@ FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）�
 ### 補足
 
 移動量の計算はSettlement内部で完結させる。
-送り出し側（`food_production` が低い、`population` が高い等）と
-受け入れ側（山地・砂漠は `food_production`・`freshwater_access` が低い）の両方を
+送り出し側（`food_energy_mean` が低い、`population` が高い等）と
+受け入れ側（山地・砂漠は `food_energy_mean`・`surface_water_access` が低い）の両方を
 既存の変数から判断するため、`migration_pressure` を中間値として保持する必要はない。
 
 港市・河港・峠都市などの立地は、地形と河川輸送コストから `urbanization` の計算を通じて自然に決まる。

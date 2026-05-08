@@ -455,6 +455,8 @@ pub struct HydrologyState {
     pub deposition_rate: Vec<f32>,
     pub river_transport_cost: Vec<f32>,
     #[serde(default)]
+    pub surface_water_access: Vec<f32>,
+    #[serde(default)]
     pub is_lake: Vec<bool>,
     #[serde(default)]
     pub sink_id: Vec<i32>,
@@ -554,15 +556,23 @@ pub struct SubsistenceMix {
     pub gathering: f32,
     pub hunting: f32,
     pub fishing: f32,
-    pub farming: f32,
-    pub pastoralism: f32,
+    pub cultivation: f32,
+    pub herding: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubsistenceState {
     pub subsistence_mix: Vec<SubsistenceMix>,
-    pub food_production: Vec<f32>,
-    pub freshwater_access: Vec<f32>,
+    #[serde(default)]
+    pub food_energy_mean: Vec<f32>,
+    #[serde(default)]
+    pub food_energy_variance: Vec<f32>,
+    #[serde(default)]
+    pub buffer_capacity: Vec<f32>,
+    #[serde(default)]
+    pub mobility_capacity: Vec<f32>,
+    #[serde(default)]
+    pub land_use_intensity: Vec<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

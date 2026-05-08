@@ -24,9 +24,18 @@ pub(crate) fn update_settlement(
 
     for i in 0..n {
         let pop = world.state.population.population[i];
+        let food_mean = world.state.subsistence.food_energy_mean[i].clamp(0.0, 1.0);
+        let variance = world.state.subsistence.food_energy_variance[i].clamp(0.0, 1.0);
+        let buffer = world.state.subsistence.buffer_capacity[i].clamp(0.0, 1.0);
+        let mobility = world.state.subsistence.mobility_capacity[i].clamp(0.0, 1.0);
+        let water = world.state.hydrology.surface_water_access[i].clamp(0.0, 1.0);
+        let effective_stability = (1.0 - variance * (1.0 - buffer)).clamp(0.0, 1.0);
         let is_land = world.state.geology.height[i] > world.control.sea_level_offset;
         let next_size = if is_land { pop } else { 0.0 };
-        let urban = (next_size / 60.0).clamp(0.0, 1.0);
+        let sedentary_factor =
+            (food_mean * 0.45 + effective_stability * 0.35 + water * 0.20 - mobility * 0.15)
+                .clamp(0.0, 1.0);
+        let urban = ((next_size / 60.0) * (0.55 + sedentary_factor * 0.9)).clamp(0.0, 1.0);
         world.state.settlement.urbanization[i] =
             lerp(world.state.settlement.urbanization[i], urban, alpha);
         if next_size > 0.5 {

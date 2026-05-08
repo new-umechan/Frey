@@ -946,6 +946,7 @@ mod tests {
             erosion_rate: vec![0.0; cell_count],
             deposition_rate: vec![0.0; cell_count],
             river_transport_cost: vec![1.0; cell_count],
+            surface_water_access: vec![0.0; cell_count],
             is_lake: vec![false; cell_count],
             sink_id: vec![-1; cell_count],
             sink_route_next: vec![-1; cell_count],
