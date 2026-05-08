@@ -145,6 +145,26 @@ baseline誤用防止:
 - `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は差分レポートへ記録する
 - あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` も一致しない場合は差分レポートへ記録する
 
+#### alpha snapshot bootstrap（dev 専用）
+
+- `seed=alpha` のみ対象。`seed!=alpha` は常に通常経路を使う
+- 有効化:
+    - native/Node: `FREY_DEV_SNAPSHOT_STAGE=environment|life|civilization|history`
+    - browser: `?devSnapshotStage=environment|life|civilization|history`
+- 事前生成:
+    - `alpha` を `Crust` から実行し、era 境界 tick の snapshot を生成する
+    - canonical: `./.cache/frey/alpha-snapshots/`
+    - mirror: `web/public/.dev-precomputed/alpha/`
+    - コマンド: `pnpm alpha:snapshot`
+- 無効化・再生成条件:
+    - format version 変更
+    - `GeologyParams` デフォルト変更
+    - era 境界変更
+    - snapshot に含める state schema 変更
+    - `alpha` 生成ロジック変更
+- fallback:
+    - snapshot 不在・破損・fingerprint 不一致時は warning のみ出し、通常計算を継続する
+
 自動化:
 
 - 重ゲートは `.github/workflows/seed-regression-heavy-gate.yaml` で次の契機で自動実行する

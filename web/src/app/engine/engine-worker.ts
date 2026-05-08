@@ -20,6 +20,7 @@ const workerScope = self as unknown as WorkerScope;
 
 let initialized = false;
 let controller: WorldSimController | null = null;
+const ALPHA_STAGES = new Set(["environment", "life", "civilization", "history"]);
 
 async function ensureController(): Promise<WorldSimController> {
   if (!initialized) {
@@ -95,11 +96,85 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
         return;
       }
       case "init_world": {
-        const result = runtime.init_world(
-          request.payload.seed,
-          request.payload.meshLevel,
-          request.payload.config ?? null,
-        );
+        const stage = request.payload.devSnapshotStage;
+        const canTrySnapshot =
+          request.payload.seed === "alpha" &&
+          typeof stage === "string" &&
+          ALPHA_STAGES.has(stage);
+        const result = await (async () => {
+          if (!canTrySnapshot) {
+            return runtime.init_world(
+              request.payload.seed,
+              request.payload.meshLevel,
+              request.payload.config ?? null,
+            );
+          }
+          try {
+            const manifestResponse = await fetch(
+              "/.dev-precomputed/alpha/manifest.json",
+              { cache: "no-store" },
+            );
+            if (!manifestResponse.ok) {
+              throw new Error(`manifest fetch failed: HTTP ${manifestResponse.status}`);
+            }
+            const manifest = (await manifestResponse.json()) as {
+              entries?: Array<{ stage?: string; filename?: string }>;
+            };
+            const entry =
+              Array.isArray(manifest.entries)
+                ? manifest.entries.find((candidate) => candidate?.stage === stage)
+                : null;
+            const filename = entry?.filename;
+            if (!filename) {
+              throw new Error(`manifest entry missing for stage=${stage}`);
+            }
+            const snapshotResponse = await fetch(
+              `/.dev-precomputed/alpha/${filename}`,
+              { cache: "no-store" },
+            );
+            if (!snapshotResponse.ok) {
+              throw new Error(`snapshot fetch failed: HTTP ${snapshotResponse.status}`);
+            }
+            const snapshotBytes = new Uint8Array(await snapshotResponse.arrayBuffer());
+            const runtimeWithSnapshot = runtime as WorldSimController & {
+              init_world_from_snapshot: (
+                seed: string,
+                meshLevel: number,
+                config: unknown,
+                snapshotBytes: Uint8Array,
+              ) => unknown;
+            };
+            return runtimeWithSnapshot.init_world_from_snapshot(
+              request.payload.seed,
+              request.payload.meshLevel,
+              request.payload.config ?? null,
+              snapshotBytes,
+            );
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.warn(
+              `[engine-worker] snapshot restore failed, fallback to normal init: ${reason}`,
+            );
+            const fallbackResult = runtime.init_world(
+              request.payload.seed,
+              request.payload.meshLevel,
+              request.payload.config ?? null,
+            );
+            return {
+              ...((fallbackResult ?? {}) as Record<string, unknown>),
+              dev_snapshot_restore_status: "fallback",
+              dev_snapshot_stage: stage,
+              dev_snapshot_reason: reason,
+            };
+          }
+        })();
+        if (canTrySnapshot && typeof result === "object" && result !== null) {
+          const resultObject = result as Record<string, unknown>;
+          if (!("dev_snapshot_restore_status" in resultObject)) {
+            resultObject.dev_snapshot_restore_status = "used";
+            resultObject.dev_snapshot_stage = stage;
+          }
+        }
         post({ id: request.id, ok: true, kind: request.kind, payload: result });
         return;
       }

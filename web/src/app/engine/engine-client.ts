@@ -15,6 +15,9 @@ export interface InitWorldResult {
   world_id: string;
   tick?: number;
   head_tick?: number;
+  dev_snapshot_restore_status?: "used" | "fallback";
+  dev_snapshot_stage?: string;
+  dev_snapshot_reason?: string;
 }
 
 export interface ExecWorldSliceResult {
@@ -128,6 +131,7 @@ export interface EngineClient {
     seed: string,
     meshLevel: number,
     config: unknown,
+    options?: { devSnapshotStage?: string },
   ) => Promise<InitWorldResult>;
   advance_timeline: (
     worldId: string,

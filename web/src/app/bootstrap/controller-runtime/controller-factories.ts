@@ -218,6 +218,7 @@ function createPlaybackRuntime(
     context: RuntimeContext,
     syncWorldFromActiveController: () => Promise<SyncWorldResult | null>,
     stepWorldTick: (perfRecorder?: TickPerfRecorder | null) => Promise<boolean>,
+    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>,
 ) {
     return createPlaybackController({
         playbackControls: context.dom.playbackControls,
@@ -227,6 +228,9 @@ function createPlaybackRuntime(
         engineClient: context.engineClient,
         getActiveWorldId: context.store.getActiveWorldId,
         getCurrentTerrainData: context.store.getCurrentTerrainData,
+        rebuildFromCrustForHistory: async () => {
+            await updateTerrain(context.store.getState().currentSeed);
+        },
         getWorldTick: () => context.store.world.tick,
         syncWorldFromActiveController,
         stepWorldTick,
@@ -297,7 +301,12 @@ export function createRuntimeControllers(context: RuntimeContext) {
         syncWorldFromActiveController,
     );
 
-    const playbackController = createPlaybackRuntime(context, syncWorldFromActiveController, stepWorldTick);
+    const playbackController = createPlaybackRuntime(
+        context,
+        syncWorldFromActiveController,
+        stepWorldTick,
+        updateTerrain,
+    );
     playbackControllerRef.current = playbackController;
 
     const {

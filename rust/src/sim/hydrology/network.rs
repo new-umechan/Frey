@@ -43,6 +43,12 @@ pub(super) struct RiverNetworkBuildOutput {
     pub downstream_weights: Vec<f32>,
 }
 
+const MAX_MFD_BRANCHES: usize = 4;
+const HOLMGREN_A: f32 = 18.0;
+const HOLMGREN_B: f32 = 1.1;
+const HOLMGREN_X_MIN: f32 = 1.0;
+const HOLMGREN_X_MAX: f32 = 8.0;
+
 pub(super) fn build_river_network(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
@@ -78,7 +84,7 @@ pub(super) fn build_river_network(
 
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
-        let mut candidates = Vec::<(usize, f32)>::new();
+        let mut candidates = Vec::<(usize, f32, f32)>::new();
 
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
@@ -92,12 +98,20 @@ pub(super) fn build_river_network(
             }
 
             let drop = (height[i] - height[n]).max(0.0);
-            let spill_gain = (spill_level[i] - spill_level[n]).max(0.0);
-            let mut score = drop * 32.0 + spill_gain * 0.8;
+            let edge = [
+                positions[n][0] - positions[i][0],
+                positions[n][1] - positions[i][1],
+                positions[n][2] - positions[i][2],
+            ];
+            let edge_len = length3(edge).max(1e-6);
+            let slope = (drop / edge_len).max(0.0);
+            let x = adaptive_holmgren_exponent(slope);
+            let mfd_score = if slope > 0.0 { slope.powf(x) } else { 0.0 };
+            let mut priority_score = mfd_score;
 
             if let Some(prev) = prev_next {
                 if prev.get(i).copied().unwrap_or(-1) == n as i32 {
-                    score += params.river_inertia_gain;
+                    priority_score += params.river_inertia_gain;
                 }
             }
 
@@ -107,20 +121,20 @@ pub(super) fn build_river_network(
                 if prev_len > 1e-6 {
                     let cand_vec = flow_direction(positions, i, n);
                     let align = dot3(prev_vec, cand_vec).clamp(-1.0, 1.0);
-                    score += params.river_inertia_gain * 0.5 * align.max(0.0);
-                    score -= params.river_curvature_penalty * (1.0 - align).max(0.0);
+                    priority_score += params.river_inertia_gain * 0.5 * align.max(0.0);
+                    priority_score -= params.river_curvature_penalty * (1.0 - align).max(0.0);
                 }
             }
 
-            candidates.push((n, score));
+            candidates.push((n, priority_score, mfd_score));
         }
 
         candidates.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         let mut selected = candidates
             .iter()
-            .take(3)
-            .filter(|(_, score)| score.is_finite() && *score > 0.0)
-            .map(|(n, score)| (*n as u32, *score))
+            .take(MAX_MFD_BRANCHES)
+            .filter(|(_, _, score)| score.is_finite() && *score > 0.0)
+            .map(|(n, _, score)| (*n as u32, *score))
             .collect::<Vec<_>>();
 
         if selected.is_empty() {
@@ -148,7 +162,11 @@ pub(super) fn build_river_network(
 
     let mut primary_next = vec![-1; v_count];
     for i in 0..v_count {
-        if let Some((target, _)) = routes[i].first().copied() {
+        if let Some((target, _)) = routes[i]
+            .iter()
+            .copied()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+        {
             primary_next[i] = target as i32;
         }
     }
@@ -493,4 +511,8 @@ pub(super) fn length3(v: [f32; 3]) -> f32 {
 
 pub(super) fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn adaptive_holmgren_exponent(slope: f32) -> f32 {
+    (HOLMGREN_A * slope + HOLMGREN_B).clamp(HOLMGREN_X_MIN, HOLMGREN_X_MAX)
 }

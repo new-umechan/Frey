@@ -121,7 +121,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
         const normalizedSampleInterval = Math.max(1, Math.floor(sampleInterval));
         const totalTicks = Math.max(1, Math.floor(profile?.tickCount ?? 32));
         const deltaFieldKinds = getDeltaFieldKindsForProfile(profile);
-        let controllerState = createControllerState(
+        let controllerState = await createControllerState(
             WorldSimControllerConstructor,
             profile,
             level,
@@ -176,7 +176,7 @@ export function createPerfRunner(deps: PerfRunnerDeps) {
                     notifyWarning(`step profiling trap recovered (${formatError(error)})`);
                     try {
                         const replayStart = nowMs();
-                        controllerState = rebuildControllerState(
+                        controllerState = await rebuildControllerState(
                             WorldSimControllerConstructor,
                             profile,
                             level,

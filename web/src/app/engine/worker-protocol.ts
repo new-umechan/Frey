@@ -7,7 +7,12 @@ export type EngineWorkerRequest =
   | {
       id: number;
       kind: "init_world";
-      payload: { seed: string; meshLevel: number; config: unknown };
+      payload: {
+        seed: string;
+        meshLevel: number;
+        config: unknown;
+        devSnapshotStage?: string;
+      };
     }
   | {
       id: number;

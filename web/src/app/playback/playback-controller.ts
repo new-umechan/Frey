@@ -42,6 +42,7 @@ export function createPlaybackController({
     engineClient,
     getActiveWorldId,
     getCurrentTerrainData,
+    rebuildFromCrustForHistory,
     getWorldTick,
     syncWorldFromActiveController,
     stepWorldTick,
@@ -54,6 +55,7 @@ export function createPlaybackController({
     engineClient: EngineClient;
     getActiveWorldId: () => string | null;
     getCurrentTerrainData: () => CoreBuffers | null;
+    rebuildFromCrustForHistory: () => Promise<void>;
     getWorldTick: () => number;
     syncWorldFromActiveController: () => Promise<SyncWorldResult | null>;
     stepWorldTick: () => Promise<boolean>;
@@ -66,6 +68,11 @@ export function createPlaybackController({
 
     function getAvailableTicks() {
         return Array.isArray(playbackState.availableTicks) ? playbackState.availableTicks : [];
+    }
+
+    function getMinAvailableTick() {
+        const ticks = getAvailableTicks();
+        return ticks.length > 0 ? ticks[0] : 0;
     }
 
     function noteKnownTick(rawTick: unknown) {
@@ -86,7 +93,8 @@ export function createPlaybackController({
 
     function getPreviousHistoryTick(baseTick: number) {
         const normalizedBaseTick = Math.max(0, sanitizeTick(baseTick) ?? 0);
-        const targetTick = Math.max(0, normalizedBaseTick - UI_HISTORY_STEP_TICKS);
+        const minAvailableTick = getMinAvailableTick();
+        const targetTick = Math.max(minAvailableTick, normalizedBaseTick - UI_HISTORY_STEP_TICKS);
         return targetTick === normalizedBaseTick ? null : targetTick;
     }
 
@@ -133,26 +141,28 @@ export function createPlaybackController({
         }
 
         const fallbackTick = Math.max(ticks[ticks.length - 1], currentTick);
+        const minTick = ticks[0];
         const selectedTick = playbackState.selectedTick !== null
-            ? Math.min(fallbackTick, Math.max(0, playbackState.selectedTick))
+            ? Math.min(fallbackTick, Math.max(minTick, playbackState.selectedTick))
             : currentTick;
         playbackState.selectedTick = selectedTick;
 
-        slider.min = "0";
+        slider.min = String(minTick);
         slider.max = String(fallbackTick);
         slider.value = String(selectedTick);
-        playbackControls.seekMinLabel.textContent = `t${ticks[0]}`;
+        playbackControls.seekMinLabel.textContent = `t${minTick}`;
         playbackControls.seekMaxLabel.textContent = `t${fallbackTick}`;
         updateSeekSliderFill();
     }
 
     function syncSeekSliderWithWorldTick() {
         const slider = playbackControls.historySeekSlider;
+        const sliderMin = Math.max(0, sanitizeTick(slider.min) ?? 0);
         const currentTick = getWorldTick();
         noteKnownTick(currentTick);
         const sliderMax = Math.max(0, sanitizeTick(slider.max) ?? 0);
         const max = Math.max(sliderMax, getMaxKnownTick());
-        const clampedTick = Math.min(max, Math.max(0, sanitizeTick(currentTick) ?? 0));
+        const clampedTick = Math.min(max, Math.max(sliderMin, sanitizeTick(currentTick) ?? sliderMin));
         slider.max = String(max);
         playbackControls.seekMaxLabel.textContent = `t${max}`;
         playbackState.selectedTick = clampedTick;
@@ -253,11 +263,28 @@ export function createPlaybackController({
             return;
         }
 
+        const availableTicks = getAvailableTicks();
+        const minAvailableTick = availableTicks.length > 0 ? availableTicks[0] : 0;
+        if (normalizedTick < minAvailableTick && minAvailableTick > 0) {
+            setStatus(`History rewind requires crust rebuild (target=t${normalizedTick}).`);
+            await rebuildFromCrustForHistory();
+            await refreshHistoryTicks();
+        }
+
+        const refreshedTicks = getAvailableTicks();
+        const refreshedMinTick = refreshedTicks.length > 0 ? refreshedTicks[0] : 0;
+        const maxKnownTick = getMaxKnownTick();
+        const clampedTick = Math.min(maxKnownTick, Math.max(refreshedMinTick, normalizedTick));
+        const nextWorldId = getActiveWorldId();
+        if (!nextWorldId) {
+            return;
+        }
+
         try {
-            await engineClient.seek_world_to_tick(activeWorldId, normalizedTick);
+            await engineClient.seek_world_to_tick(nextWorldId, clampedTick);
             setPlaybackRunning(false);
             await syncWorldFromActiveController();
-            playbackState.selectedTick = normalizedTick;
+            playbackState.selectedTick = clampedTick;
             renderHistorySeekSlider();
             syncPlaybackUi();
         } catch (error) {

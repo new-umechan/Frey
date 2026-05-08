@@ -83,11 +83,13 @@ export class EngineWorkerClient implements EngineClient {
     seed: string,
     meshLevel: number,
     config: unknown,
+    options?: { devSnapshotStage?: string },
   ): Promise<InitWorldResult> {
     return (await this.request("init_world", {
       seed,
       meshLevel,
       config,
+      devSnapshotStage: options?.devSnapshotStage,
     })) as InitWorldResult;
   }
 

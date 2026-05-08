@@ -2,7 +2,11 @@
 
 ## Status
 
-Draft
+Accepted
+
+Reason: `river_downstream` 正本化と勾配依存 MFD 分配を実装し、`river_next` は互換ビューへ移行したため。
+
+Replaced by: `docs/decisions/260508-hydrology-ideal-mfd-reproduction.md`
 
 ## 背景
 
@@ -55,9 +59,9 @@ Draft
 - `rebuild_mfd_from_primary` 相当の単一edge再構築を正本計算経路から外せる。
 - `river_flow` 算出が分配率つき流路で一貫して計算される。
 - `hydrology_solo` で次を満たす:
-  - `river_flow` Spearman が現行比で悪化しない（同等以上を目標）
-  - `is_lake` F1 を維持する
-  - `sediment_budget_ratio` 等の診断値に破綻がない
+    - `river_flow` Spearman が現行比で悪化しない（同等以上を目標）
+    - `is_lake` F1 を維持する
+    - `sediment_budget_ratio` 等の診断値に破綻がない
 - seed gate で既存の安定性条件（`top10_river_flux_sum` 個別閾値を含む）を満たす。
 
 ## リスクとトレードオフ

@@ -24,6 +24,8 @@ tests/perf/history/
 .pnpm-store/
 .worktrees
 .git/info/exclude
+/.cache/frey/
+/web/public/.dev-precomputed/
 
 # TypeScript build cache
 tsconfig.tsbuildinfo

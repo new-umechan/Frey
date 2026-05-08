@@ -377,7 +377,9 @@ fn run_river_step_with_erosion_state(
         // raw_flux を state に保存（river_flow 用）
         state.raw_river_flux = raw_flux;
     } else {
-        rebuild_mfd_from_primary(hydrology);
+        if hydrology.river_downstream.len() != hydrology.river_next.len() {
+            rebuild_mfd_from_primary(hydrology);
+        }
     }
     state.scratch_effective_runoff = effective_runoff;
 
@@ -386,7 +388,9 @@ fn run_river_step_with_erosion_state(
     // raw_river_flux（正規化前）を river_flow として使用
     hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
-    rebuild_mfd_from_primary(hydrology);
+    if hydrology.river_downstream.len() != hydrology.river_next.len() {
+        rebuild_mfd_from_primary(hydrology);
+    }
     update_public_lake_flags(hydrology, &state.height, &state.params);
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
@@ -489,10 +493,17 @@ fn run_river_flow_only_with_state(
 
     let phase_start = profile_now();
     sanitize_primary_next_no_cycle(&mut state.river_next);
-    let mut flux =
-        flow_flux_on_primary_network(&geology.height, &state.river_next, &effective_runoff);
+    if hydrology.river_downstream.len() != hydrology.river_next.len() {
+        rebuild_mfd_from_primary(hydrology);
+    }
+    let raw_flux = flow_flux_on_downstream_network(
+        &geology.height,
+        hydrology.river_downstream.as_slice(),
+        &effective_runoff,
+    );
+    let mut normalized_flux = raw_flux.clone();
     smooth_and_normalize_flux(
-        &mut flux,
+        &mut normalized_flux,
         &state.river_flux,
         &mut state.flux_scale_ema,
         &mut state.scratch_flux_samples,
@@ -500,7 +511,8 @@ fn run_river_flow_only_with_state(
     detail.river_network_ms += profile_elapsed_ms(phase_start);
 
     state.prev_river_next.clone_from(&state.river_next);
-    state.river_flux = flux;
+    state.raw_river_flux = raw_flux;
+    state.river_flux = normalized_flux;
     state.scratch_effective_runoff = effective_runoff;
     state.last_river_driver = 0.0;
     sync_fill_spill_from_erosion(hydrology, &state.height, &state.params, state);
@@ -513,9 +525,11 @@ fn run_river_flow_only_with_state(
     );
 
     let phase_start = profile_now();
-    hydrology.river_flow.clone_from(&state.river_flux);
+    hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
-    rebuild_mfd_from_primary(hydrology);
+    if hydrology.river_downstream.len() != hydrology.river_next.len() {
+        rebuild_mfd_from_primary(hydrology);
+    }
     update_public_lake_flags(hydrology, &state.height, &state.params);
     hydrology.erosion_rate.fill(0.0);
     hydrology.deposition_rate.fill(0.0);
@@ -527,8 +541,12 @@ fn run_river_flow_only_with_state(
     true
 }
 
-fn flow_flux_on_primary_network(height: &[f32], river_next: &[i32], runoff: &[f32]) -> Vec<f32> {
-    let count = height.len().min(river_next.len()).min(runoff.len());
+fn flow_flux_on_downstream_network(
+    height: &[f32],
+    river_downstream: &[SmallVec<[(u32, f32); 4]>],
+    runoff: &[f32],
+) -> Vec<f32> {
+    let count = height.len().min(river_downstream.len()).min(runoff.len());
     let mut order = (0..count).collect::<Vec<_>>();
     order.sort_unstable_by(|a, b| {
         height[*b]
@@ -547,13 +565,14 @@ fn flow_flux_on_primary_network(height: &[f32], river_next: &[i32], runoff: &[f3
             flux[i] = 0.0;
             continue;
         }
-        let next = river_next[i];
-        if next < 0 {
-            continue;
-        }
-        let n = next as usize;
-        if n < count {
-            flux[n] += flux[i];
+        for &(target, weight) in &river_downstream[i] {
+            if weight <= 0.0 {
+                continue;
+            }
+            let n = target as usize;
+            if n < count {
+                flux[n] += flux[i] * weight;
+            }
         }
     }
     flux
@@ -616,7 +635,7 @@ pub(crate) fn downstream_from_csr(
     offsets: &[u32],
     cells: &[u32],
     weights: &[f32],
-) -> Vec<SmallVec<[(u32, f32); 3]>> {
+) -> Vec<SmallVec<[(u32, f32); 4]>> {
     let mut result = vec![SmallVec::new(); cell_count];
     if offsets.len() != cell_count + 1 || cells.len() != weights.len() {
         return result;
@@ -723,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn fallback_rebuilds_public_downstream_from_primary_next() {
+    fn fallback_keeps_downstream_and_primary_consistent() {
         let mut world = build_test_world();
         let runoff = vec![1.0, 0.8, 0.6, 0.0];
 
@@ -734,22 +753,22 @@ mod tests {
             world.state.hydrology.river_next.len()
         );
         for (cell, downstream) in world.state.hydrology.river_downstream.iter().enumerate() {
+            assert!(
+                downstream.len() <= 4,
+                "cell {cell} exceeds max branch count"
+            );
             let next = world.state.hydrology.river_next[cell];
             if next < 0 {
                 assert!(downstream.is_empty(), "cell {cell} should terminate");
                 continue;
             }
-
-            assert_eq!(
-                downstream.len(),
-                1,
-                "cell {cell} should expose one primary edge"
-            );
-            assert_eq!(downstream[0].0, next as u32, "cell {cell} target mismatch");
-            assert!(
-                (downstream[0].1 - 1.0).abs() <= 1e-6,
-                "cell {cell} weight mismatch"
-            );
+            let max_weight_target = downstream
+                .iter()
+                .copied()
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+                .map(|(target, _)| target as i32)
+                .unwrap_or(-1);
+            assert_eq!(max_weight_target, next, "cell {cell} target mismatch");
         }
     }
 }

@@ -32,9 +32,9 @@ pub(crate) fn update_settlement(
         let effective_stability = (1.0 - variance * (1.0 - buffer)).clamp(0.0, 1.0);
         let is_land = world.state.geology.height[i] > world.control.sea_level_offset;
         let next_size = if is_land { pop } else { 0.0 };
-        let sedentary_factor =
-            (food_mean * 0.45 + effective_stability * 0.35 + water * 0.20 - mobility * 0.15)
-                .clamp(0.0, 1.0);
+        let sedentary_factor = (food_mean * 0.45 + effective_stability * 0.35 + water * 0.20
+            - mobility * 0.15)
+            .clamp(0.0, 1.0);
         let urban = ((next_size / 60.0) * (0.55 + sedentary_factor * 0.9)).clamp(0.0, 1.0);
         world.state.settlement.urbanization[i] =
             lerp(world.state.settlement.urbanization[i], urban, alpha);

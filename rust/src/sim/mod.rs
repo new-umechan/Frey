@@ -2,6 +2,7 @@
 pub mod exec;
 pub mod geology_types;
 pub mod headless;
+pub mod precomputed;
 pub mod state;
 pub mod world;
 

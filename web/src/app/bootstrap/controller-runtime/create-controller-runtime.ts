@@ -94,7 +94,7 @@ function createRuntimeContext(options: ControllerDeps): RuntimeContext {
 }
 
 interface RuntimeControllerHooks {
-    updateTerrain: (seed: string) => Promise<void>;
+    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
     setEraScale: (era: string) => void;
     playbackController: PlaybackController;
 }

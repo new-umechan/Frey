@@ -171,6 +171,9 @@ export interface AppElements {
     perfPanel: HTMLElement | null;
     perfControls: PerfControlsElements | null;
     perfStatFields: PerfStatFields | null;
+    devSnapshotPanel: HTMLElement | null;
+    devSnapshotStageSelect: HTMLSelectElement | null;
+    devSnapshotJumpButton: HTMLButtonElement | null;
     statFields: StatFields;
     setSidebarOpen?: (isOpen: boolean) => void;
 }
@@ -206,6 +209,9 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
     const eventLogList = requireElement("event-log-list", HTMLUListElement);
 
     const { perfPanel, perfControls, perfStatFields } = collectPerfElements(perfEnabled);
+    const devSnapshotPanel = optionalElement("dev-snapshot-panel", HTMLElement);
+    const devSnapshotStageSelect = optionalElement("dev-snapshot-stage-select", HTMLSelectElement);
+    const devSnapshotJumpButton = optionalElement("dev-snapshot-jump-button", HTMLButtonElement);
 
     const statFields: StatFields = {
         level: requireElement("stat-level", HTMLElement),
@@ -246,6 +252,9 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
         perfPanel,
         perfControls,
         perfStatFields,
+        devSnapshotPanel,
+        devSnapshotStageSelect,
+        devSnapshotJumpButton,
         statFields,
     };
 }

@@ -48,7 +48,7 @@ interface BindRuntimeUiOptions {
         playbackController: PlaybackController;
         runPerf: () => Promise<void>;
         copyPerfResult: () => Promise<void>;
-        updateTerrain: (seed: string) => Promise<void>;
+        updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
     };
     getState: () => AppState;
     getCurrentEraMetrics: () => EraMetrics;
@@ -164,5 +164,6 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         runInitialSync: controllerRuntime.runInitialSync,
         shouldAdvanceWorld: controllerRuntime.shouldAdvanceWorld,
         getLastPerfResult: controllerRuntime.getLastPerfResult,
+        updateTerrain: controllerRuntime.updateTerrain,
     };
 }

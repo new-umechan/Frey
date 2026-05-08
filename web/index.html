@@ -150,6 +150,24 @@
                             </form>
                         </section>
 
+                        <section
+                            class="panel"
+                            id="dev-snapshot-panel"
+                            hidden
+                            aria-label="alpha snapshot development jump"
+                        >
+                            <h2>Dev Checkpoint Jump</h2>
+                            <p>seed=alpha を snapshot 復元で開始（localhost 専用）</p>
+                            <label for="dev-snapshot-stage-select">stage</label>
+                            <select id="dev-snapshot-stage-select">
+                                <option value="environment">environment</option>
+                                <option value="life" selected>life</option>
+                                <option value="civilization">civilization</option>
+                                <option value="history">history</option>
+                            </select>
+                            <button id="dev-snapshot-jump-button" type="button">Jump to Checkpoint</button>
+                        </section>
+
                         <section class="panel">
                             <h2>
                                 View

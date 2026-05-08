@@ -445,7 +445,7 @@ pub struct GlaciologyState {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HydrologyState {
-    pub river_downstream: Vec<SmallVec<[(u32, f32); 3]>>,
+    pub river_downstream: Vec<SmallVec<[(u32, f32); 4]>>,
     #[serde(default)]
     pub river_next: Vec<i32>,
     pub river_flow: Vec<f32>,
@@ -621,7 +621,7 @@ pub struct CellStore<'a> {
     pub wind_v: &'a [f32],
     pub moisture_flux_u: &'a [f32],
     pub moisture_flux_v: &'a [f32],
-    pub river_downstream: &'a [SmallVec<[(u32, f32); 3]>],
+    pub river_downstream: &'a [SmallVec<[(u32, f32); 4]>],
     pub river_next: &'a [i32],
     pub river_flow: &'a [f32],
     pub river_transport_cost: &'a [f32],
@@ -649,7 +649,7 @@ pub struct CellStoreMut<'a> {
     pub wind_v: &'a mut Vec<f32>,
     pub moisture_flux_u: &'a mut Vec<f32>,
     pub moisture_flux_v: &'a mut Vec<f32>,
-    pub river_downstream: &'a mut Vec<SmallVec<[(u32, f32); 3]>>,
+    pub river_downstream: &'a mut Vec<SmallVec<[(u32, f32); 4]>>,
     pub river_next: &'a mut Vec<i32>,
     pub river_flow: &'a mut Vec<f32>,
     pub river_transport_cost: &'a mut Vec<f32>,

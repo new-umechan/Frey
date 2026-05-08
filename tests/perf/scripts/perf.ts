@@ -507,7 +507,8 @@ async function main() {
     }
 
     if (args.record) {
-        const timestamp = result?.meta?.generated_at ?? new Date().toISOString();
+        const timestamp = (result as { meta?: { generated_at?: string } })?.meta?.generated_at
+            ?? new Date().toISOString();
         const gitMeta = await getGitMeta();
         const record = {
             timestamp,

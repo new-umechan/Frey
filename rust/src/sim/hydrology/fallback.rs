@@ -1,6 +1,6 @@
 use super::*;
 use crate::sim::erosion::ErosionAutomatonState;
-use crate::sim::hydrology::rebuild_mfd_from_primary;
+use crate::sim::hydrology::downstream_from_csr;
 use crate::sim::hydrology::sanitize_primary_next_no_cycle;
 
 pub(super) fn run_river_fallback(
@@ -69,7 +69,12 @@ pub(super) fn run_river_fallback(
 
     world.state.hydrology.river_next = rebuilt.primary_next;
     world.state.hydrology.river_flow = rebuilt.flux;
-    rebuild_mfd_from_primary(&mut world.state.hydrology);
+    world.state.hydrology.river_downstream = downstream_from_csr(
+        cell_count,
+        &rebuilt.downstream_offsets,
+        &rebuilt.downstream_cells,
+        &rebuilt.downstream_weights,
+    );
     update_public_lake_flags(
         &mut world.state.hydrology,
         &world.state.geology.height,
