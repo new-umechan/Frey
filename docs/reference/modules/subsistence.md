@@ -20,8 +20,6 @@
 
 - `geology.height`
 - `hydrology.surface_water_access`
-- `hydrology.river_flow`
-- `hydrology.is_lake`
 - `ecology.tree_cover`
 - `ecology.ground_cover`
 - `ecology.soil_fertility`
@@ -45,13 +43,22 @@ struct SubsistenceMix {
 
 各軸は `0.0..=1.0`、合計は `1.0` に正規化する。
 
-## 更新の要点
+## 内部システム
 
-1. `Hydrology.surface_water_access` を水アクセス入力として使う。
-2. `fishing` は内部で内水面と沿岸アクセスを合成する。
-3. `Population.population` から人口圧を導き、`cultivation` と土地利用強度へ反映する。
-4. `food_energy_mean`（供給平均）と `food_energy_variance`（供給変動）を分ける。
-5. `buffer_capacity` と `mobility_capacity` を別列で保持する。
+- `AccessSystem`:
+  `ecology.*`、`hydrology.surface_water_access`、`terrain.is_coastal` から
+  `inland_aquatic_access` / `coastal_aquatic_access` を含むアクセス状態を導出する
+- `CapabilitySystem`:
+  `crop_adoption` / `livestock_adoption` から利用能力を導出する
+- `PressureSystem`:
+  `population.population` から人口圧を導出する
+- `StrategySystem`:
+  access / capability / pressure と前 tick の `subsistence_mix` から
+  次の `SubsistenceMix` を更新する
+- `OutputSystem`:
+  `SubsistenceMix` とアクセス・圧力状態から
+  `food_energy_mean` / `food_energy_variance` / `buffer_capacity` /
+  `mobility_capacity` / `land_use_intensity` を更新する
 
 ## 下流利用
 

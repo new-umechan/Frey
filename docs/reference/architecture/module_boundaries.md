@@ -279,7 +279,7 @@ Systemは2つに分かれる。
 ### 補足
 
 MFD（Multiple Flow Direction）を採用する。
-流下先と分配率はペアで保持する（`SmallVec<[(CellId, f32); 3]>`）。
+流下先と分配率はペアで保持する（`SmallVec<[(CellId, f32); 4]>`）。
 `river_upstream` は保持しない。流域の塗り分けが必要になった時点で再検討する。
 
 窪地は湖（`is_lake=true`）として扱い、流量をそこで吸収する。
@@ -366,9 +366,11 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 ### 読むもの
 
 - 標高
-- 流量
+- 表流水アクセス（`hydrology.surface_water_access`）← `Hydrology` が書く
 - 植生 ← `Ecology` が書く
 - 作物・家畜普及度（`crop_adoption`、`livestock_adoption`）← `Domesticates` が書く
+- 人口（`population`）← `Population` が書く
+- 沿岸フラグ（`terrain.is_coastal`）
 - 前tickまでの生業構成
 
 ### 書くもの
@@ -379,7 +381,6 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 - 供給バッファ（`buffer_capacity`）
 - 移動能力（`mobility_capacity`）
 - 土地利用強度（`land_use_intensity`）
-- 互換列（`food_production`、`freshwater_access`）
 
 ### 書かないもの
 
@@ -395,6 +396,8 @@ v1 の sediment accounting は `sink_id` を正本集計キーとし、
 生業構成（`SubsistenceMix`）の変化は環境条件と前tickの状態から決まり、転換には慣性がある。
 `crop_adoption` が高い → 農耕転換の圧力が上がる → `cultivation` 比率が遅延して上昇 → `food_energy_mean` が上がる、という遅延と非線形性が「なぜここで文明が生まれたか」の表現に直結する。
 `surface_water_access` は `Hydrology` が導出し、Population・Settlement・Subsistence が読む。
+内部では `AccessSystem` / `CapabilitySystem` / `PressureSystem` / `StrategySystem` / `OutputSystem` に段階分解し、
+漁撈は `inland_aquatic_access` と `coastal_aquatic_access` を分けて `fishing` へ集約する。
 計算式の粒度（距離減衰の有無など）はドメイン仕様に委ねる。
 
 ---
