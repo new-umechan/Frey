@@ -58,6 +58,8 @@
         "bench:run:glaciology-series": "tsx benches/scripts/bench-glaciology-series.ts",
         "bench:compare:glaciology": "tsx benches/scripts/compare-glaciology-scores.ts",
         "bench:compare:domesticates": "tsx benches/scripts/compare-domesticates-scores.ts",
+        "bench:alpha:transition": "cargo run --manifest-path rust/Cargo.toml --bin alpha_transition_guard --",
+        "bench:alpha:transition:strict": "ALPHA_TRANSITION_LAND_RATIO_MIN=0.20 ALPHA_TRANSITION_LAND_RATIO_MAX=0.40 ALPHA_TRANSITION_MAX_LAND_RATIO_JUMP=0.02 ALPHA_TRANSITION_MAX_SEA_LEVEL_JUMP=0.05 cargo run --manifest-path rust/Cargo.toml --bin alpha_transition_guard --",
         "bench:tune:hydrology": "python3 benches/scripts/tune-hydrology-params.py",
         "bench:tune:ecology": "python3 benches/scripts/tune-ecology-params.py",
         "bench:check:domesticates-quality": "tsx benches/scripts/check-domesticates-quality.ts",
