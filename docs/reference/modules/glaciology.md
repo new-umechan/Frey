@@ -102,6 +102,10 @@ v1 の `sea_level_offset` は `capacity closure` で扱う。
 
 海面式に直接入る water inventory は `Ocean + Ice` のみとし、
 湖・河川・土壌水・地下水などの陸上一時貯留水は diagnostics に留める。
+`Environment` 期への遷移直後はスピンアップ窓を持ち、`ice -> ocean` coupling を段階的に有効化する。
+また `sea_level_offset` 自体は即時更新せず、`sea_level_relaxation_tau_ticks` で指数緩和する。
+さらに氷量増減に応じて `ocean_water_inventory` を逆符号で更新し、
+`Ocean + (sea_level_coupling * Ice)` の全球 proxy が保存されるようにする。
 
 ### 氷河侵食率
 
@@ -132,6 +136,10 @@ glacial erosion source と export / `marine_sediment_mass` diagnostics にのみ
 - `melt_runoff_gain`
 - `erosion_gain`
 - `glacial_erosion_coupling`
+- `sea_level_relaxation_tau_ticks`
+- `ice_ocean_coupling_tau_ticks`
+- `environment_spinup_ticks`
+- `mass_conservation_epsilon`
 
 ## 責務分離
 
