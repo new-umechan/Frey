@@ -48,6 +48,7 @@ export async function syncWorldFromController(options: SyncOptions): Promise<Syn
     if (!metrics) {
         return null;
     }
+    terrainRenderer.setSeaLevelOffset(Number(metrics.sea_level_offset) || 0);
 
     const era = String(metrics.era ?? world.era);
     const eraMetrics = buildEraMetricsFromRuntime(era, metrics);
@@ -130,6 +131,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         const metrics = await refreshWorldStats();
         statsRefreshed = metrics !== null;
         if (metrics) {
+            terrainRenderer.setSeaLevelOffset(Number(metrics.sea_level_offset) || 0);
             const era = String(metrics.era ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);
             setEraScale(era);

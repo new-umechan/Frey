@@ -142,6 +142,10 @@ export interface GlaciologySchemaParams {
     erosion_gain: number;
     glacial_erosion_coupling: number;
     sea_level_coupling: number;
+    sea_level_relaxation_tau_ticks: number;
+    ice_ocean_coupling_tau_ticks: number;
+    environment_spinup_ticks: number;
+    mass_conservation_epsilon: number;
     ice_load_to_bedrock_coupling: number;
     isostatic_adjustment_rate: number;
 }
@@ -157,6 +161,10 @@ export const GlaciologySchemaParamsKeys = [
     "erosion_gain",
     "glacial_erosion_coupling",
     "sea_level_coupling",
+    "sea_level_relaxation_tau_ticks",
+    "ice_ocean_coupling_tau_ticks",
+    "environment_spinup_ticks",
+    "mass_conservation_epsilon",
     "ice_load_to_bedrock_coupling",
     "isostatic_adjustment_rate",
 ] as const satisfies readonly (keyof GlaciologySchemaParams)[];

@@ -156,6 +156,9 @@ baseline誤用防止:
     - canonical: `./.cache/frey/alpha-snapshots/`
     - mirror: `web/public/.dev-precomputed/alpha/`
     - コマンド: `pnpm alpha:snapshot`
+    - 高速再生成（途中stageから再開）:
+        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-from environment`
+        - `--resume-from` は `environment|life|civilization|history` を受け付ける
 - 無効化・再生成条件:
     - format version 変更
     - `GeologyParams` デフォルト変更

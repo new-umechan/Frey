@@ -42,6 +42,7 @@ export interface TerrainMaterialController {
     setViewMode(mode: string): void;
     setCellMetric(metricKey: string): void;
     setDebugEnabled(enabled: boolean): void;
+    setSeaLevelOffset(offset: number): void;
     setRiverMaskTexture(texture: THREE.Texture): void;
     dispose(): void;
 }
@@ -58,6 +59,7 @@ export function createTerrainMaterial(): TerrainMaterialController {
         uViewMode: { value: 0.0 },
         uMetricKind: { value: 0.0 },
         uDebugEnabled: { value: 0.0 },
+        uSeaLevelOffset: { value: 0.0 },
         uRiverMask: { value: emptyRiverMask as THREE.Texture },
         uSeaColor: { value: srgbHexToLinearRgb("#12406a") },
         uLakeColor: { value: srgbHexToLinearRgb("#2f82c7") },
@@ -121,6 +123,7 @@ vTerrainUv = terrainUv;`,
 uniform float uViewMode;
 uniform float uMetricKind;
 uniform float uDebugEnabled;
+uniform float uSeaLevelOffset;
 uniform sampler2D uRiverMask;
 uniform vec3 uSeaColor;
 uniform vec3 uLakeColor;
@@ -293,7 +296,7 @@ vec3 freyMetricModeColor(float kind) {
 }
 
 vec3 freyNormalModeColor(float h, float lakeDepth, float riverMask) {
-    if (h <= 0.0) {
+    if (h <= uSeaLevelOffset) {
         return uSeaColor;
     }
     float t = min(h, 1.0);
@@ -350,7 +353,7 @@ diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v6";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v7";
 
     const controller: TerrainMaterialController = {
         material,
@@ -362,6 +365,9 @@ diffuseColor.rgb = terrainColor;`,
         },
         setDebugEnabled(enabled) {
             uniforms.uDebugEnabled.value = enabled ? 1.0 : 0.0;
+        },
+        setSeaLevelOffset(offset) {
+            uniforms.uSeaLevelOffset.value = Number.isFinite(offset) ? offset : 0.0;
         },
         setRiverMaskTexture(texture) {
             uniforms.uRiverMask.value = texture;

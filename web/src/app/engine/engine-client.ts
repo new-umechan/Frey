@@ -56,6 +56,7 @@ export interface MetricsResult {
   cell_count: number;
   land_cells: number;
   land_ratio: number;
+  sea_level_offset: number;
   mean_height: number;
   height_std_dev: number;
   mean_river_flux: number;

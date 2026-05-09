@@ -443,6 +443,9 @@ v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を使
 `ocean basin capacity` は現地形から毎 tick 近似再計算する。
 海面式に直接入る water inventory は `Ocean + Ice` のみとし、
 湖・河川・土壌水・地下水は diagnostics に留める。
+`Crust` 期は海面固定で進め、`Crust`→`Environment` 境界で
+`height` と `sea_level_offset` から `ocean_water_inventory` を再基準化してから
+`capacity closure` を有効化する。
 
 ## Diagnostics と reservoir proxy
 
