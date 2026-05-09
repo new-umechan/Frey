@@ -12,6 +12,10 @@ pub struct GlaciologyParams {
     pub erosion_gain: f32,
     pub glacial_erosion_coupling: f32,
     pub sea_level_coupling: f32,
+    pub sea_level_relaxation_tau_ticks: f32,
+    pub ice_ocean_coupling_tau_ticks: f32,
+    pub environment_spinup_ticks: u32,
+    pub mass_conservation_epsilon: f32,
     pub ice_load_to_bedrock_coupling: f32,
     pub isostatic_adjustment_rate: f32,
 }

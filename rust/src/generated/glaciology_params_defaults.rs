@@ -15,6 +15,10 @@ pub(crate) fn build_default_glaciology_params() -> GlaciologyParams {
         erosion_gain: 0.00025f32,
         glacial_erosion_coupling: 0.9f32,
         sea_level_coupling: 0.18f32,
+        sea_level_relaxation_tau_ticks: 24.0f32,
+        ice_ocean_coupling_tau_ticks: 32.0f32,
+        environment_spinup_ticks: 64,
+        mass_conservation_epsilon: 0.001f32,
         ice_load_to_bedrock_coupling: 0.24f32,
         isostatic_adjustment_rate: 0.08f32,
     }

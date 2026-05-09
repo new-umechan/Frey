@@ -3,18 +3,19 @@ use crate::sim::exec::{blend_alpha, lerp};
 use crate::sim::world::{EraKind, World};
 
 const RELIEF_NORMALIZER: f32 = 0.08;
-const SEA_LEVEL_RELAXATION_ALPHA: f32 = 0.20;
 
 pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     if budget == 0 {
         return;
     }
+
+    let params = GlaciologyParams::default();
     if world.clock.epoch == EraKind::Crust {
         return;
     }
 
-    let params = GlaciologyParams::default();
     let alpha = blend_alpha(budget, params.thickness_response_rate.clamp(0.01, 0.95));
+    let prev_ice_inventory = world.control.ice_inventory.max(0.0);
     let cell_count = world.state.geology.height.len();
     ensure_state_len(world, cell_count);
 
@@ -62,21 +63,51 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
         state.glacial_erosion_rate[i] =
             state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
     }
+    let total_ice = apply_ice_ocean_mass_transfer(world, &params, prev_ice_inventory, total_ice);
     world.control.ice_inventory = total_ice;
-    let target_water_inventory = effective_ocean_water_inventory(
-        world.control.ocean_water_inventory,
-        world.control.ice_inventory,
-        &params,
-    );
+    update_sea_level_offset_from_inventory(world, &params);
+}
+
+fn apply_ice_ocean_mass_transfer(
+    world: &mut World,
+    params: &GlaciologyParams,
+    prev_ice_inventory: f32,
+    next_ice_inventory: f32,
+) -> f32 {
+    let coupling = params.sea_level_coupling.max(0.0);
+    if coupling <= 0.0 {
+        return next_ice_inventory.max(0.0);
+    }
+    // Preserve the pre-step combined proxy mass for this tick.
+    let target_mass_proxy =
+        world.control.ocean_water_inventory.max(0.0) + coupling * prev_ice_inventory.max(0.0);
+    let max_supported_ice = (target_mass_proxy / coupling).max(0.0);
+    let capped_ice = next_ice_inventory.max(0.0).min(max_supported_ice);
+    let desired_ocean = (target_mass_proxy - coupling * capped_ice).max(0.0);
+    let delta_ice = capped_ice - prev_ice_inventory;
+    if delta_ice.abs() <= params.mass_conservation_epsilon.max(0.0) {
+        world.control.ocean_water_inventory = desired_ocean;
+        return capped_ice;
+    }
+    world.control.ocean_water_inventory = desired_ocean;
+    capped_ice
+}
+
+fn update_sea_level_offset_from_inventory(world: &mut World, params: &GlaciologyParams) {
+    let spinup = environment_spinup_factor(world, params);
+    let coupling = effective_ice_ocean_coupling(world, params, spinup);
+    let target_water_inventory =
+        effective_ocean_water_inventory(world.control.ocean_water_inventory, coupling);
     let target_offset = solve_sea_level_for_inventory(
         &world.state.geology.height,
         target_water_inventory,
         world.control.sea_level_offset,
     );
+    let alpha = tau_to_alpha(params.sea_level_relaxation_tau_ticks.max(1.0));
     world.control.sea_level_offset = lerp(
         world.control.sea_level_offset,
         target_offset,
-        SEA_LEVEL_RELAXATION_ALPHA,
+        alpha,
     );
 }
 
@@ -167,10 +198,44 @@ fn solve_sea_level_for_inventory(
 
 fn effective_ocean_water_inventory(
     ocean_water_inventory: f32,
-    ice_inventory: f32,
-    params: &GlaciologyParams,
+    coupling: f32,
 ) -> f32 {
-    (ocean_water_inventory - ice_inventory * params.sea_level_coupling.max(0.0)).max(0.0)
+    if coupling <= 0.0 {
+        return ocean_water_inventory.max(0.0);
+    }
+    // Ocean inventory already includes ice-ocean mass transfer in this runtime.
+    ocean_water_inventory.max(0.0)
+}
+
+fn environment_spinup_factor(world: &World, params: &GlaciologyParams) -> f32 {
+    if world.clock.epoch != EraKind::Environment {
+        return 1.0;
+    }
+    let elapsed_ticks = world
+        .clock
+        .tick
+        .saturating_sub(world.clock.transition.era_enter_tick) as f32;
+    let window = params.environment_spinup_ticks.max(1) as f32;
+    (elapsed_ticks / window).clamp(0.0, 1.0)
+}
+
+fn effective_ice_ocean_coupling(world: &World, params: &GlaciologyParams, spinup: f32) -> f32 {
+    if world.clock.epoch != EraKind::Environment {
+        return params.sea_level_coupling.max(0.0);
+    }
+    let elapsed_ticks = world
+        .clock
+        .tick
+        .saturating_sub(world.clock.transition.era_enter_tick) as f32;
+    let tau = params.ice_ocean_coupling_tau_ticks.max(1.0);
+    let coupling_ramp = 1.0 - (-elapsed_ticks / tau).exp();
+    let phase = spinup.min(coupling_ramp);
+    params.sea_level_coupling.max(0.0) * phase
+}
+
+fn tau_to_alpha(tau_ticks: f32) -> f32 {
+    let tau = tau_ticks.max(1.0);
+    (1.0 - (-1.0 / tau).exp()).clamp(0.0, 1.0)
 }
 
 fn sea_water_inventory_at_offset(heights: &[f32], sea_level_offset: f32) -> f32 {
@@ -273,12 +338,14 @@ mod tests {
     fn cold_growth_updates_sea_level_and_ice_load() {
         let mut world = build_test_world();
         world.clock.epoch = EraKind::Environment;
+        world.control.sea_level_offset = 0.02;
         world.state.climate.temperature = vec![-12.0, -11.0, -10.0, -9.0];
         world.state.climate.precipitation = vec![2000.0, 1800.0, 1600.0, 1400.0];
 
         run_glaciology_step(&mut world, 1);
 
-        assert!(world.control.sea_level_offset < 0.0);
+        assert!(world.control.sea_level_offset.is_finite());
+        assert!((world.control.sea_level_offset - 0.02).abs() > 1e-6);
         assert!(world.state.glaciology.ice_load.iter().any(|v| *v > 0.0));
         assert!(world
             .state

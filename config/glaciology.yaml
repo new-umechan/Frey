@@ -28,6 +28,18 @@ glacial_erosion_coupling:
 sea_level_coupling:
   type: f32
   value: 0.18
+sea_level_relaxation_tau_ticks:
+  type: f32
+  value: 24.0
+ice_ocean_coupling_tau_ticks:
+  type: f32
+  value: 32.0
+environment_spinup_ticks:
+  type: u32
+  value: 64
+mass_conservation_epsilon:
+  type: f32
+  value: 0.001
 ice_load_to_bedrock_coupling:
   type: f32
   value: 0.24
