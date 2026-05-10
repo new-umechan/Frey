@@ -10,7 +10,6 @@ interface TerrainMaterialController {
     setViewMode: (mode: string) => void;
     setDebugEnabled: (enabled: boolean) => void;
     setCellMetric: (metric: string) => void;
-    setSeaLevelOffset: (offset: number) => void;
 }
 
 interface MetricPillarsLayerController {
@@ -75,7 +74,6 @@ export interface TerrainRenderer {
         debugEnabled: boolean,
         currentCellMetric: string,
     ) => void;
-    setSeaLevelOffset: (offset: number) => void;
 }
 
 export function createTerrainRenderer(options: TerrainRendererOptions): TerrainRenderer {
@@ -415,9 +413,6 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         applyCoreChanges,
         updateGeometryPositions,
         applyTerrainMaterialState,
-        setSeaLevelOffset(offset: number) {
-            terrainMaterial.setSeaLevelOffset(offset);
-        },
     };
 }
 
