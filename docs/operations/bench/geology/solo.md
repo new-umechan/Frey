@@ -40,9 +40,7 @@ generated terrain と reference terrain で land ratio / newly inundated ratio �
 
 代わりに、現実の tectonic setting を入力し、その setting に対する lithosphere / topography 応答だけを測る。
 
-## 想定入力
-
-`geology_solo` の v1 では、少なくとも次のどれかを input として読める構成を想定する。
+## 入力
 
 | 入力ID | 内容 | 主用途 |
 | --- | --- | --- |
@@ -51,35 +49,20 @@ generated terrain と reference terrain で land ratio / newly inundated ratio �
 | `plate_boundary_ref` | 現実のプレート境界種別と ridge / trench 軸 | 境界条件付き relief 応答検証 |
 | `continental_mask_ref` | 大陸地殻 / 海洋地殻の Earth 参照分類 | 条件付き hypsometry 分離検証 |
 
-最初の実装では、`terrain_ref` と `oceanic_crust_age_ref` を優先する。
-理由は次の通り。
-
-- `terrain_ref` は既存の `benches/data/terrain_ref.bin` を再利用しやすい
-- `oceanic_crust_age_ref` は `Geology` 単体性が高く、`Climate` / `Hydrology` をほぼ切れる
-- `plate_boundary_ref` は有望だが、前処理と truth 定義がやや重い
-
-v1 の推奨 dataset は次の通り。
+本 bench では次の dataset を使う。
 
 - `terrain_ref`
-    - 第一候補: 既存 `ETOPO 2022`
-    - oceanic age-depth 用の海底深度 truth を強める場合の補助候補: `GEBCO Grid`
+    - 既存 `ETOPO 2022`
 - `oceanic_crust_age_ref`
-    - 第一候補: `Seton et al. (2020)` present-day age grid
+    - `Seton et al. (2020)` present-day age grid
 - `plate_boundary_ref`
-    - ridge 距離のみ先行実装する第一候補: EarthByte `Global Spreading Ridge File`
-    - 境界種別まで含める拡張候補: `Bird (2003) PB2002`
+    - EarthByte `Global Spreading Ridge File`
 - `continental_mask_ref`
-    - 第一候補: EarthByte `Continental Polygons`
-    - 単純 land/ocean マスクの簡易候補: `Natural Earth land polygons`
+    - EarthByte `Continental Polygons`
 
-## v1 の主評価候補
-
-v1 の主評価は、次の 4 指標を候補とする。
-優先順位は上から順とする。
+## 主評価
 
 ### 1. `oceanic_age_depth_consistency`
-
-最優先候補。
 海洋地殻年齢を入力として与えたとき、海洋地殻が age とともに深くなるかをみる。
 
 - input:
@@ -217,19 +200,6 @@ v1 の主評価は、次の 4 指標を候補とする。
 本書 (`solo.md`) は Earth 実データ入力ベンチの
 実行方法・入出力・比較対象の定義だけを持つ。
 
-## 実装優先順
-
-最小の `geology_solo` を切るなら、次の順で進める。
-
-1. `terrain_ref.bin` を固定入力として読む
-2. `oceanic_crust_age_ref.bin` を追加する
-3. `oceanic_age_depth_consistency` を実装する
-4. `ridge_distance_depth_gradient` を実装する
-5. `crust_conditioned_hypsometry_separation` を実装する
-6. `plate_boundary_ref.bin` を追加し、`boundary_type_to_relief_consistency` を実装する
-
-この順なら、最初の 2 指標だけで `Geology` 単体 bench としてかなり成立する。
-
 ## 実行コマンド
 
 ```bash
@@ -246,14 +216,12 @@ JSONL 出力先:
 
 - `benches/results/geology_solo_main_scores.jsonl`
 
-v1 は `terrain_ref.bin` と `oceanic_crust_age_ref.bin` を同じセル集合で突き合わせ、
+`terrain_ref.bin` と `oceanic_crust_age_ref.bin` を同じセル集合で突き合わせ、
 海洋セルの age-depth 関係を主に読む。
 ただし `oceanic_age_depth_consistency` は若い海洋地殻帯を主に見るため、`100 Myr` 以内を主評価域とする。
 
 ## 関連
 
-- `docs/proposal/geology-benchmark-split-and-hydrology-sediment-ownership.md`
-- `docs/proposal/geology-erosion-deposition-earth-benchmark.md`
 - `docs/operations/bench/geology/data_acquisition.md`
 - `docs/operations/bench/geology/validation.md`
 - `docs/operations/bench/geology/validation_solo.md`

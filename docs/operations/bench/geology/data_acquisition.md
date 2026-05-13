@@ -3,33 +3,7 @@
 ## 目的
 
 `geology_solo` で使う実データの入手方法、保存先、前処理の流れを固定する。
-
-この文書は、Earth 比較ベンチの参照データを「どこから」「何を」「どの順で」集めるかを明文化する。
-主対象は `geology_solo` の tectonic / lithospheric 応答比較であり、Hydrology 主責務の侵食参照は補助扱いとする。
-
-## 方針
-
-- 既存の bench 資産は再利用する
-- 参照データは `geology_solo` の比較指標用にだけ使う
-- v1 は `terrain_ref` と `oceanic_crust_age_ref` を優先する
-- 参照データが無くてもベンチ本体は実行し、欠損指標は `null` または skipped として残す
-
-## v1 の推奨採用
-
-`geology_solo` v1 では、候補の中から次を推奨採用とする。
-
-| 入力 | 推奨採用 | 役割 | 採用理由 |
-| --- | --- | --- | --- |
-| `terrain_ref` | `ETOPO 2022` | 全球 relief の基準地形 | 既存 repo 資産と整合し、陸海をまたぐ全球地形として再利用しやすい |
-| `oceanic_crust_age_ref` | `Seton et al. (2020)` present-day age grid | 海洋 age-depth の主入力 | `Geology` 単体性が高く、confidence grid も併用できる |
-| `plate_boundary_ref` | EarthByte `Global Spreading Ridge File` | ridge 距離計算 | `ridge_distance_depth_gradient` に必要十分で、PB2002 より軽い |
-| `continental_mask_ref` | EarthByte `Continental Polygons` | 条件付き hypsometry の母集団分離 | tectonic 文脈に近い polygon をそのまま使える |
-
-拡張時の候補:
-
-- 海底深度 truth を強めたい場合は `GEBCO Grid` を追加する
-- 境界種別まで比較したい場合は `Bird (2003) PB2002` を追加する
-- 単純 land/ocean マスクだけで足りる段階では `Natural Earth land polygons` を使ってよい
+既存の bench 資産は再利用し、参照データは `geology_solo` の比較指標生成にだけ使う。
 
 ## 既存データとして使うもの
 
@@ -55,12 +29,6 @@
 - このファイルが既にあるなら再取得しなくてよい
 - `pnpm bench:dump-centroids` の後に `pnpm bench:resample:terrain` で `terrain_ref.bin` を作る
 
-補助候補:
-
-- `GEBCO Grid`
-- 用途: `oceanic_age_depth_consistency` の海底深度 truth を ETOPO より海洋寄りにしたい場合
-- 理由: 全球 15 arc-second の bathymetry grid と TID grid を持ち、海底の source confidence を扱いやすい
-
 ### 2. 既存キャッシュ
 
 `geology_solo` の v1 では主に `height` を使うため、次の既存キャッシュは共有資産として扱う。
@@ -82,15 +50,9 @@
 - 用途: `oceanic_age_depth_consistency` の主入力
 - 保存先: `benches/raw/geology/oceanic_crust_age/`
 
-推奨取得元:
+取得元:
 
-- EarthByte / GPlates Portal の `Seton et al. (2020)` present-day age grid
-
-採用理由:
-
-- present-day oceanic crust age を bench の主目的にそのまま使える
-- 6 / 2 / 1 arc-minute grid があり、CellStore 集約前の解像度選択がしやすい
-- confidence grid があり、低信頼域を補助診断で除外または downweight できる
+- EarthByte / GPlates Portal の present-day age grid
 
 取得対象:
 
@@ -106,23 +68,17 @@
 
 運用メモ:
 
-- bench 側では年齢の絶対値よりも、age bin ごとの深度単調性と age-depth 相関を主に使う
 - 陸域は欠損のままでよい
 - 元データが複数タイル・複数投影の場合は、前処理で全球緯度経度ラスタへそろえてから参照化する
-- 可能なら age 本体に加えて confidence grid も取得し、`oceanic_age_ref_confidence.bin` 相当を将来追加できる形にする
 
 ### 4. プレート境界
 
 - 用途: `ridge_distance_depth_gradient` と `boundary_type_to_relief_consistency`
 - 保存先: `benches/raw/geology/SpreadingRidges/`
 
-v1 推奨取得元:
+取得元:
 
 - EarthByte `Global Spreading Ridge File`
-
-拡張候補:
-
-- `Bird (2003) PB2002`
 
 取得対象:
 
@@ -139,24 +95,16 @@ v1 推奨取得元:
 
 運用メモ:
 
-- v1 では、まず ridge 軸だけ使えれば `ridge_distance_depth_gradient` は実装できる
-- trench / arc / backarc の評価までやる場合は、境界種別と極性の正規化が必要になる
 - feature ごとの属性名は配布元で揺れやすいので、前処理で repo 内 canonical schema へ落とす
-- `PB2002` は境界クラスと相対速度ベクトルを持つため有力だが、v1 の最小構成としては重い
 
 ### 5. 大陸 / 海洋マスク
 
 - 用途: `crust_conditioned_hypsometry_separation`
 - 保存先: `benches/raw/geology/continental_mask/`
 
-推奨取得元:
+取得元:
 
 - EarthByte `Continental Polygons`
-
-簡易候補:
-
-- Natural Earth の land polygons
-- ETOPO 由来の海陸マスク
 
 取得対象:
 
@@ -171,9 +119,7 @@ v1 推奨取得元:
 
 運用メモ:
 
-- v1 では厳密な crustal provenance ではなく、Earth 側の条件付き hypsometry の参照母集団を切る用途に限る
-- model 側の `crust_type` が `height` から再導出される段階では、この指標は参考値扱いに留める
-- `Natural Earth land` は取得が容易だが tectonic 意味づけは弱いため、主候補は EarthByte 側を優先する
+- Earth 側の条件付き hypsometry の参照母集団を切る用途で使う
 
 ### 6. GloSEM（補助）
 
@@ -271,10 +217,8 @@ benches/raw/geology/oceanic_crust_age/
 ## 手元で足りない場合
 
 - oceanic crust age と plate boundary は配布元ごとに属性名・形式が揺れやすい
-- もし dataset の選定や canonical schema の切り方を先に固めたいなら、取得候補ファイルを渡してもらえれば前処理仕様まで詰められる
 - GloSEM は補助用途なので、`geology_solo` v1 の着手条件にはしない
 
 関連:
 
 - `docs/operations/bench/geology/solo.md`
-- `docs/proposal/geology-erosion-deposition-earth-benchmark.md`

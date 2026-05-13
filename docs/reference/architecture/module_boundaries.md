@@ -131,7 +131,7 @@ Tier1までのモジュールについて、詳細を決定している。
 `Hydrology` 切り出し以前は流路・流量も担当していたが、v2では `Hydrology` に移管する。
 氷荷重起点の地盤上下動も `Geology` が `height` に最終反映する。
 また、`Hydrology` 由来の堆積は `Geology` 反映時に sediment budget 制約を受ける。
-初版では fluvial `deposition_rate` 総量を `erosion_rate` 総量以下へ制限し、
+fluvial `deposition_rate` 総量を `erosion_rate` 総量以下へ制限し、
 超過分は未解像の深海 export とみなす。
 glacial sediment は v1 では fluvial transport に接続せず、
 glacial erosion source の記録と export / `marine_sediment_mass` accounting に留める。
@@ -457,7 +457,7 @@ FeedbackQueue経由で渡してよい（target は `ModuleId::Domesticates`）�
 
 ### 書かないもの
 
-- `settlement_size`（列として持たない。Tier2の `Infrastructure` 有効化時に拡張ポイントとする）
+- `settlement_size`（列として持たない）
 - `migration_pressure`（Settlement内部で計算し、外部には公開しない）
 - `centrality`（列として持たない。首都・拠点都市の選定は `Polity` が `urbanization` を読んで行う）
 - `population_density`（`population` から導出）

@@ -72,10 +72,9 @@ runoff_effective = lerp(runoff_crust_proxy, runoff_climate + runoff_glacial, spi
 同じ `spinup` を fluvial erosion / deposition response にも適用し、
 Hydrology automaton が計算した形状変化候補を数 tick で段階的に地形反映へ渡す。
 
-v1 では glacial sediment は入力に含めない。
+glacial sediment は入力に含めない。
 氷河起源 sediment は `Glaciology` / `Geology` 側で source 記録と export accounting に留める。
-v1 の sediment accounting の集計キーは `sink_id` とし、
-`drainage basin` や `depression hierarchy` は将来拡張候補に留める。
+sediment accounting の集計キーは `sink_id` とする。
 
 Hydrology 単体ベンチの `hydrology_solo` は、`river_flow` / `is_lake` に加えて
 GloSEM 由来の `erosion_rate_spearman` と、`sediment_budget_ratio` / `coastal_deposition_share` /
@@ -191,7 +190,7 @@ x = a * slope + b
 侵食量と堆積量はHydrologyが計算してCellStoreに書く。
 標高への最終反映はGeologyが行う。
 
-初版の runtime では、`Geology` 反映時に fluvial `deposition_rate` 総量へ
+runtime では、`Geology` 反映時に fluvial `deposition_rate` 総量へ
 Exner 系の budget 制約を掛ける。
 
 - `Σdeposition <= Σerosion + mobile_sediment_budget` を満たすように `deposition_rate` を一様スケールする

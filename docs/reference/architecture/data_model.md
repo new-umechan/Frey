@@ -74,7 +74,7 @@ async erosion / fill-spill / river rebuild はこの値を参照し、
 - `TimelineArchive`
   checkpoint と intervention の保存
 - `TickUndoLog`
-  将来の巻き戻し用の tick 単位ログ
+  巻き戻し用の tick 単位ログ
   現状は `geology.height`、climate の連続値列、glaciology の連続値列、
   `hydrology.river_flow` / `river_next` / sink 系 selected fields /
   `erosion_rate` / `deposition_rate`、`ecology.biome` / `tree_cover` /
@@ -108,7 +108,7 @@ timeline query / rewind / seek は完了済み tick に対してのみ成立す�
 ## ID型定義
 
 すべてのIDはnewtypeパターンで定義する。異なるID型の混在はコンパイルエラーとなる。
-セル数は現在約4万だがu32を採用する（将来的な解像度向上に備える）。
+セル数は現在約4万だが u32 を採用する。
 
 ```rust
 struct CellId(u32);
@@ -468,12 +468,12 @@ v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を使
 
 ## Diagnostics と reservoir proxy
 
-mass-based reservoir への移行では、v1 では次の扱いを採る。
+mass-based reservoir では次の扱いを採る。
 
 - `solid_earth_mass` は `WorldState` のセル正本には置かず、`height`・密度 proxy・セル面積から導く全球 diagnostic proxy とする
-- `marine_sediment_mass` は export の受け皿として global / `sink` diagnostics に置き、v1 では非減少の一方向 sink として扱う
+- `marine_sediment_mass` は export の受け皿として global / `sink` diagnostics に置き、非減少の一方向 sink として扱う
 - fluvial sediment accounting の正本集計キーは `sink_id` とし、各 `sink` の inflow / temporary storage / export / marine transfer を記録する
-- `drainage_basin_id` や `depression_hierarchy_node_id` は v1 の公開 API に含めない
+- `drainage_basin_id` や `depression_hierarchy_node_id` は公開 API に含めない
 - glacial sediment は transport 状態を持たず、glacial erosion source と export / marine accounting の診断量として扱う
 
 これらの diagnostics は benchmark と長期 drift 監視のために公開してよいが、
@@ -638,36 +638,3 @@ struct ModuleDeclaration {
 - display group
 - tick boundary
 - execution kind
-
-## Tier 2 追加時の拡張予定
-
-Tier2モジュールが有効化された際にCellStoreへ追加されるComponent列。
-
-```rust
-// Language（Tier1では削除。住民の言語・民族帰属を表現する）
-language_group:       Vec<Option<LanguageGroupId>>,
-// Disease
-infection_rate:       Vec<f32>,
-mortality_modifier:   Vec<f32>,
-
-// Resources
-energy_deposit:       Vec<f32>,
-mineral_deposit:      Vec<f32>,
-extraction_rate:      Vec<f32>,
-
-// Trade
-trade_flow:           Vec<f32>,
-market_access:        Vec<f32>,
-
-// Technology
-ag_tools:             Vec<bool>,
-metallurgy:           Vec<bool>,
-navigation:           Vec<bool>,
-military_tech:        Vec<bool>,
-recording:            Vec<bool>,
-transport:            Vec<bool>,
-
-// Infrastructure
-road_cost_modifier:   Vec<f32>,
-irrigation:           Vec<f32>,
-```

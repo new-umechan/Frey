@@ -1,102 +1,29 @@
 # Test
 
-本書は運用文書である。日常開発で使うテスト運用とゲートの基準をまとめる。
-設計の正本は `docs/concepts/overview.md` と `docs/reference/architecture/data_model.md` を参照する。
-ベンチマーク設計は `docs/operations/benchmark.md` を参照する。
+本書は運用文書である。日常開発で使うテスト手順とゲート基準だけをまとめる。
+背景説明は `docs/concepts/overview.md`、採用済み仕様の正本は `docs/reference/` を参照する。
+重いベンチマーク運用は `docs/operations/benchmark.md` を参照する。
 
 ## 目的
 
-- 大きな変更のあとに「壊れていないか」を素早く確認する
-- seed固定の回帰確認を行う
-- 将来の `World` ベース回帰テストの指標を先に定義しておく
+- 日常変更のあとに破壊的な回帰がないかを素早く確認する
+- seed 固定の回帰を継続監視する
+- 常用ゲートと補助ゲートの役割を分ける
 
-## テストの層（運用）
+## 日常実行
 
-### 1. Rustユニットテスト（現在の主力）
+### Rust ユニットテスト
 
-- `cargo test` を実行する
-- 地形生成、河川、侵食の基礎ロジックの回帰を確認する
+- コマンド: `cargo test`
+- 使いどころ:
+    - 日常の変更確認
+    - リファクタ後の安全確認
+    - PR 前の最低限チェック
 
-使いどころ:
+### seed 回帰ゲート
 
-- 日常の変更確認
-- リファクタ後の安全確認
-- PR前の最低限チェック
-
-### 2. シミュレーション回帰テスト（段階導入）
-
-固定seedを複数用意し、指標を出力して前回結果と比較する。
-「完全一致」ではなく、許容変動幅つきで比較する運用を想定する。
-
-現時点では、手動スクリプトまたは補助コマンドでの実行を想定。
-将来的に `World` 実装後は自動化する。
-
-#### seed固定回帰CLIの運用ルール（2026-03-17）
-
-- 実行は `pnpm test:seed:regression -- ...` を基本とする
-- 常用経路は Rust native runner であり、WASM build を必須としない
-- WASM 経路で互換確認したい場合は `pnpm test:seed:regression:wasm:dev -- ...` を使う
-
-ゲート運用:
-
-1. 常時ゲート（毎回）
-2. 重ゲート（PR前）
-3. WASM補助ゲート（必要時のみ手動）
-
-採用している比較指標:
-
-- `land_cells`
-- `land_ratio`
-- `height_mean`
-- `height_std`
-- `max_river_flux`
-- `top10_river_flux_sum`
-
-許容誤差の決定手順:
-
-1. 条件を固定して実測する（12 seeds x 5 runs, 32 tick, level=6）
-2. run1をbaselineとし、run2-5の差分を集計する
-3. 各指標で `abs(current - baseline) / abs(baseline)` を計算する（baselineが0のときは絶対差）
-4. 各指標のP95に安全余白 `+0.005` を加算する
-5. 小数第4位で切り上げて最終閾値とする
-
-実測結果（2026-03-17, サンプル数48/指標）:
-
-- 全5指標で差分の `min=max=p95=0`
-- よって最終閾値は全指標 `0.005`
-
-仕様更新（2026-03-24, MFD導入後）:
-
-- `top10_river_flux_sum` は流路分配モデル変更（SFD -> MFD）に対して感度が高いため、ゲート閾値を個別に `0.01` へ緩和する
-- その他指標は `0.005` を維持する
-
-仕様更新（2026-05-01, Earth-like land ratio guard）:
-
-- `land_ratio` は baseline差分比較に加えて、absolute guard でも監視する
-- Earth-like seed の `Crust` 期 gate では次を使う
-- warning帯: `0.24 - 0.35`
-- fail帯: `0.20 - 0.40`
-- これは「現代 Earth の 0.292 に固定する」ためではなく、`5000万年` スケールでの
-  全海化 / 全陸化ドリフトを検出するための安定性帯として扱う
-
-仕様更新（2026-05-02, crust diagnostics / baseline refresh）:
-
-- 地形平滑化の過剰化を監視するため、seed regression 出力に次の tectonics 診断を追加した
-- `smoothing_limited_cells_ratio`, `mean_smoothing_factor`
-- `zero_mean_adjusted_cells_ratio`, `zero_mean_mean_abs_correction`, `zero_mean_std_delta`
-- `mean_thickness`, `std_thickness`, `mean_rigidity`, `std_rigidity`
-- `oceanic_cell_ratio`, `continental_cell_ratio`
-- `mean_thickness_oceanic`, `mean_thickness_continental`
-- `mean_rigidity_oceanic`, `mean_rigidity_continental`
-- 上記の仕様変更に合わせて `quick/heavy` の baseline を再生成した
-- 以後はこの baseline を正として gate を運用する
-
-仕様更新（2026-03-24, 時代遷移の固定tick化）:
-
-- 時代遷移は動的条件ではなく固定境界で決定する（`0, 800, 1300, 1395, 1445`）
-- 遷移仕様を変更した場合は、quick/heavy両baselineを同時更新する
-
-推奨コマンド例:
+- 常用経路は Rust native runner とし、WASM build を必須にしない
+- コマンド:
 
 ```sh
 pnpm test:seed:gate:quick
@@ -106,98 +33,30 @@ pnpm test:seed:gate:quick
 pnpm test:seed:gate:heavy
 ```
 
-実行オプション（現行）:
+- 役割:
+    - `test:seed:gate:quick`: 毎回回す軽量ゲート
+    - `test:seed:gate:heavy`: PR 前の重ゲート
 
-- 共通閾値: `--threshold 0.005`
-- 指標別上書き: `--threshold-top10-river-flux-sum 0.01`
-- 絶対ガード:
-  `--land-ratio-warn-min 0.24 --land-ratio-warn-max 0.35 --land-ratio-fail-min 0.20 --land-ratio-fail-max 0.40`
-- 並列実行数: `--jobs <n>`（デフォルト `1`）
-- `test:seed:gate:quick` / `test:seed:gate:heavy` は `--jobs 2` を使用する
+### 補助ゲート
 
-ゲート条件:
+- WASM 互換確認が必要なときだけ使う
+- コマンド:
 
-- `test:seed:gate:quick`: 4 seeds x 16 ticks x 1run
-- `test:seed:gate:heavy`: 8 seeds x 24 ticks x 1run
+```sh
+pnpm test:seed:gate:quick:wasm
+```
 
-baselineファイル:
+```sh
+pnpm test:seed:gate:heavy:wasm
+```
 
-- `tests/seed-regression/seed-regression-quick-baseline.json`
-- `tests/seed-regression/seed-regression-heavy-baseline.json`
+```sh
+pnpm test:gate:regression:wasm
+```
 
-実行経路:
+### perf ゲート
 
-- `pnpm test:seed:regression`
-    - Rust native runner。日常の回帰確認はこれを正本とする
-- `pnpm test:seed:regression:wasm:dev`
-    - WASM build を伴う互換確認用
-- `pnpm test:seed:gate:quick` / `pnpm test:seed:gate:heavy`
-    - native runner で deviation が出た場合は非0終了する
-- `pnpm test:seed:gate:quick:wasm` / `pnpm test:seed:gate:heavy:wasm`
-    - 旧来の WASM 経路を確認したいときに使う
-- `pnpm test:gate:regression:wasm`
-    - WASM quick gate を補助実行するエイリアス
-    - 通常の `test:gate` / CI 常時ゲートには含めない
-    - 手動実行用workflowは `.github/workflows/regression-wasm-support-gate.yaml`
-
-baseline誤用防止:
-
-- `--check`時に `meta.ticks` / `meta.level` / `meta.seeds`（順序無視の集合）がbaselineと一致しない場合は差分レポートへ記録する
-- あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` も一致しない場合は差分レポートへ記録する
-
-#### alpha snapshot bootstrap（dev 専用）
-
-- `seed=alpha` のみ対象。`seed!=alpha` は常に通常経路を使う
-- 有効化:
-    - native/Node: `FREY_DEV_SNAPSHOT_STAGE=environment|life|civilization|history`
-    - browser: `?devSnapshotStage=environment|life|civilization|history`
-- 事前生成:
-    - `alpha` を `Crust` から実行し、era 境界 tick の snapshot を生成する
-    - canonical: `./.cache/frey/alpha-snapshots/`
-    - mirror: `web/public/.dev-precomputed/alpha/`
-    - コマンド: `pnpm alpha:snapshot`
-    - 高速再生成（途中stageから再開）:
-        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-from environment`
-        - `--resume-from` は `environment|life|civilization|history` を受け付ける
-    - 部分再生成（指定stageで打ち切り）:
-- `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --until-stage environment`
-- `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-from environment --until-stage environment`
-- `--until-stage` は `environment|life|civilization|history` を受け付ける
-- alpha 系の snapshot restore は `.cache` / `web/public/.dev-precomputed` / `dist/.dev-precomputed`
-  を順に試し、壊れた snapshot があっても読める candidate が残っていれば継続する
-    - 任意 tick の診断 snapshot:
-        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --at-tick 780 --output-path .cache/frey/alpha-snapshots/diagnostic-780.bin`
-        - `--at-tick` は指定 tick まで進めて単発 snapshot を保存する
-    - 任意 snapshot からの再開:
-        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-path .cache/frey/alpha-snapshots/diagnostic-780.bin --at-tick 790 --output-path .cache/frey/alpha-snapshots/diagnostic-790.bin`
-        - `--resume-path` は stage 境界でない診断 snapshot からの再開にも使える
-- 無効化・再生成条件:
-    - format version 変更
-    - `GeologyParams` デフォルト変更
-    - era 境界変更
-    - snapshot に含める state schema 変更
-    - `alpha` 生成ロジック変更
-- fallback:
-    - snapshot 不在・破損・fingerprint 不一致時は warning のみ出し、通常計算を継続する
-    - ただし explicit snapshot path を使う bench は fallback しないため、`UnexpectedEnd` などの decode error が出た snapshot は再生成する
-    - snapshot / manifest / view は atomic write で保存する。途中中断で壊れた旧 snapshot が残っている場合は `pnpm alpha:snapshot` で更新する
-
-自動化:
-
-- 重ゲートは `.github/workflows/seed-regression-heavy-gate.yaml` で次の契機で自動実行する
-    - `pull_request`
-    - `push` to `main`
-    - `workflow_dispatch`（手動実行）
-
-#### perfベースラインゲート（2026-04-21）
-
-- `tests/perf/scripts/perf.ts` の `--baseline` / `--threshold` をCIで常時実行する
-- perf gate は `native + wasm + worker` の3レーンすべて必須とする
-- baselineファイル:
-    - `tests/perf/bench-baseline-native.json`
-    - `tests/perf/bench-baseline-wasm.json`
-    - `tests/perf/bench-baseline-worker.json`
-- `wasm` / `worker` レーンの `verification_mode` は `interactive` 固定で実行する
+- `native + wasm + worker` の 3 レーンを常設する
 - コマンド:
 
 ```sh
@@ -216,128 +75,113 @@ pnpm bench:perf:gate:wasm
 pnpm bench:perf:gate:worker
 ```
 
-自動化:
-
-- `.github/workflows/perf-gate.yaml` で次の契機で自動実行する
-    - `pull_request`
-    - `push` to `main`
-    - `workflow_dispatch`（手動実行）
-
-#### ScientificBenchmark artifact 保存（2026-04-21）
-
-- `ScientificBenchmark` サンプルは次の2経路で保持する
-    - CI artifact: workflow 実行時に `actions/upload-artifact` で保存
-    - リポジトリ内ファイル: `tests/scientific-benchmark/scientific-benchmark-samples.json`
-- コマンド:
+### ScientificBenchmark artifact 更新
 
 ```sh
 pnpm bench:scientific:samples
 ```
 
-自動化:
-
-- `.github/workflows/scientific-benchmark-artifact.yaml` で次の契機で自動実行する
-    - `schedule`（週次）
-    - `workflow_dispatch`（手動実行）
-
-#### wasm APIテスト（2026-03-17）
-
-- `tick/restore/fork` を含むwasm APIテストは `wasm-pack test --node` で実行する
-- コマンド:
+### wasm API テスト
 
 ```sh
 cd rust && wasm-pack test --node
 ```
 
-自動化:
+## seed 回帰ゲート基準
 
-- `.github/workflows/wasm-api-tests.yaml` で次の契機で自動実行する
-    - `pull_request`
-    - `push` to `main`
-    - `workflow_dispatch`（手動実行）
+### 比較指標
 
-### 3. 手動確認（UI/統合）
+- `land_cells`
+- `land_ratio`
+- `height_mean`
+- `height_std`
+- `max_river_flux`
+- `top10_river_flux_sum`
 
-- 表示崩れ
-- 時代切替UI
-- 再生/停止/巻き戻し（実装後）
-- 介入時の挙動（実装後）
+### 閾値
 
-## 現在すぐ測れる指標（地形・河川）
+- 共通閾値: `0.005`
+- `top10_river_flux_sum` のみ: `0.01`
+- `land_ratio` absolute guard:
+    - warning: `0.24 - 0.35`
+    - fail: `0.20 - 0.40`
 
-今の主対象は地形・河川。
+### 実行条件
 
-- 陸地セル数
-- 標高の平均・標準偏差
-- 陸地の最大連結成分サイズ（最大大陸の大きさの近似）
-- 大陸数（面積閾値以上の連結成分数）
-- 河川流量の最大値
-- 河川流量上位10本の合計
+- `test:seed:gate:quick`: 4 seeds x 16 ticks x 1 run
+- `test:seed:gate:heavy`: 8 seeds x 24 ticks x 1 run
+- `test:seed:gate:quick` / `test:seed:gate:heavy` は `--jobs 2` を使う
 
-補足:
-将来的には、河川オートマトンのステップ数を固定した状態で比較する。
+### baseline
 
-## 将来追加する指標（環境形成期以降）
+- `tests/seed-regression/seed-regression-quick-baseline.json`
+- `tests/seed-regression/seed-regression-heavy-baseline.json`
 
-### 環境形成期が安定してきたら
+### baseline 整合チェック
 
-- 主要河川の数（流量閾値以上）
-- 河川の総延長（セル数ベース）
-- 堆積量の総量（陸上 / 河口 / 浅海）
-- 河川流量変化量の移動平均
+- `--check` 時は `meta.ticks` / `meta.level` / `meta.seeds` が baseline と一致しない場合に差分レポートへ記録する
+- あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` の不一致も差分レポートへ記録する
 
-### 気候実装後
+## dev snapshot 運用
 
-- 気温場の平均・分散
-- 降水場の平均・分散
-- 可住域割合（暫定閾値）
+- 対象は `seed=alpha` のみ
+- 有効化:
+    - native / Node: `FREY_DEV_SNAPSHOT_STAGE=environment|life|civilization|history`
+    - browser: `?devSnapshotStage=environment|life|civilization|history`
+- 生成コマンド:
 
-### 文明実装後
-
-- 最初の定住発生tick
-- 文明数（国家数または政治単位数）
-- 総人口
-- 都市数
-
-## `World` ベース回帰テストの目標API（予定）
-
-`World` 実装後に、次のようなAPIで回帰テストを書ける状態を目標にする。
-
-```rust
-let mut world = World::new(seed, params);
-world.run(n_ticks);
-let metrics = world.metrics();
+```sh
+pnpm alpha:snapshot
 ```
 
-初版では、完全なAPIがなくてもよい。
-まずは `exec_world()` を一定回数回し、指標を取得できれば十分。
+- 保存先:
+    - canonical: `./.cache/frey/alpha-snapshots/`
+    - mirror: `web/public/.dev-precomputed/alpha/`
 
-## スナップショット運用（将来）
+- 再生成が必要な条件:
+    - format version 変更
+    - `GeologyParams` デフォルト変更
+    - era 境界変更
+    - snapshot に含める state schema 変更
+    - `alpha` 生成ロジック変更
 
-- JSONまたはバイナリで指標スナップショットを保存する
-- `git diff` で前回との差分を確認できる形にする
-- フル状態の保存ではなく、まずは指標スナップショットから始める
+- snapshot 不在・破損・fingerprint 不一致時は warning を出して通常計算へ fallback する
 
-## 実行タイミング（目安）
+## perf / benchmark artifact
 
-- 「壊れてないか心配なとき」
-- 大きな変更のあと
-- サブシステム接続（河川 -> 気候 -> 生態 -> 文明）の節目
-- 時代スケール制御の変更後
+### perf baseline
 
-## API受け入れ観点（History / Layer / Tick）
+- `tests/perf/bench-baseline-native.json`
+- `tests/perf/bench-baseline-wasm.json`
+- `tests/perf/bench-baseline-worker.json`
 
-実装時の受け入れ確認として、次を最低ラインにする。
+### ScientificBenchmark sample
 
-1. `list_history_ticks` が `interval=32` と保存済みtick一覧を返す
-2. `restore_world_to_tick` 実行後、tickとeraが復元時点へ戻る
-3. 不正tickで `restore_world_to_tick` を呼んだ場合、例外になる
-4. `get_field` は既知kindに対してFloat32Arrayを返す（`height`, `lake_depth` など）
-5. 未生成レイヤーkindと不正kindは例外になる
-6. `tick()` は `step(1)` ごとに単調増加する
-7. `tick()` は時代名ではなく累積管理Tickカウンタを返す
+- `tests/scientific-benchmark/scientific-benchmark-samples.json`
 
-## 地形非回帰の受け入れ観点（現行）
+## CI 自動実行
 
-1. 同一seedで生成した初期heightを保存し、十分なTick進行後のheightと比較して「初期値へ単調回帰」していないこと
-2. 長時間進行時の地形変化が、地形サブシステム増分更新と河川侵食オートマトンの合成として説明できること
+- heavy seed gate: `.github/workflows/seed-regression-heavy-gate.yaml`
+- perf gate: `.github/workflows/perf-gate.yaml`
+- ScientificBenchmark artifact: `.github/workflows/scientific-benchmark-artifact.yaml`
+- wasm API tests: `.github/workflows/wasm-api-tests.yaml`
+
+## 手動確認
+
+- 表示崩れ
+- 時代切替 UI
+- 再生 / 停止 / 巻き戻し
+- 介入時の挙動
+
+## 失敗時の見方
+
+- Rust unit test が落ちた場合:
+    - ロジック回帰を先に疑う
+- native seed gate だけ落ちた場合:
+    - シミュレーション更新か baseline の不整合を確認する
+- WASM 補助ゲートだけ落ちた場合:
+    - transport / wasm 経路の差分を確認する
+- perf gate が落ちた場合:
+    - どのレーンで落ちたかを切り分けて baseline と比較する
+- ScientificBenchmark が悪化した場合:
+    - 直ちにバグと断定せず、`docs/operations/benchmark.md` の基準でモデル変更か実装不具合かを切り分ける

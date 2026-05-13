@@ -4,24 +4,7 @@
 
 `domesticates_solo` ベンチで使う参照 raster と、
 `domesticates_ref.bin` 生成までの手順を固定する。
-
-この文書は `domesticates` benchmark の raw データ取得を、
-再取得可能な作業手順として残すための運用手順書である。
-
-## 方針
-
-`domesticates` の v1 benchmark は、
-文献ベースで起源帯マスクを手作業定義する方式をやめ、
-実際に配置できる現代分布 raster を参照正本にする。
-
-取得は半自動 curated 運用とし、完全自動 fetch は行わない。
-正本は `benches/raw/domesticates/manifest.json` である。
-
-初版の固定方針は次のとおり。
-
-- crops: EarthStat の harvested area raster
-- livestock: FAO GLW の density raster
-- `Yam` と `Camel` は `assertion_only` に残し、v1 の定量比較には入れない
+取得は半自動 curated 運用とし、正本は `benches/raw/domesticates/manifest.json` とする。
 
 ## 前提
 
@@ -141,13 +124,13 @@ benches/raw/domesticates/
 - `exclude_regions`
 - `known_hard`
 
-`mode` は v1 では次だけを使う。
+`mode` は次だけを使う。
 
 - `raster`
 - `assertion_only`
 
 `Yam` と `Camel` は `assertion_only` に残す。
-`domesticates-ref` の resample 実装は `mode=raster` の entry しか読まない。
+`domesticates-ref` の resample 実装は `mode=raster` の entry だけを読む。
 
 ## 手順
 
@@ -279,7 +262,7 @@ canonical 名:
 `benches/raw/domesticates/manifest.json` には、
 取得した raster の配置先と benchmark 閾値を記録する。
 
-初版の固定運用:
+固定運用:
 
 - crop `source_family`: `earthstat`
 - livestock `source_family`: `fao_glw`

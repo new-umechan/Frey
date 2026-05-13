@@ -1,4 +1,4 @@
-## Climate単体ベンチ（詳細仕様）
+## Climate単体ベンチ運用
 
 ### 概要
 
@@ -8,7 +8,7 @@
 `ocean_temperature` は信頼度が低いため、このベンチでは参考出力にとどめる。
 実行seedは `earth` 固定とし、参照実データと地形前提を一致させる。
 
-### 実行コマンド（現行）
+### 実行コマンド
 
 ```sh
 # repo root から pnpm wrapper で実行
@@ -374,7 +374,7 @@ benches/results/climate_tuning/
   runs/       # 各試行のJSONL
   baselines/  # 比較元スナップショット
   summaries/  # 変更点と差分の要約
-  notes/      # 採用/不採用理由と次仮説
+  notes/      # 試行メモ
 ```
 
 現行スクリプトのデフォルト出力先:

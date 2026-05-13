@@ -1,4 +1,4 @@
-# Hydrology単体ベンチ（詳細仕様）
+# Hydrology単体ベンチ運用
 
 ## 概要
 
@@ -10,12 +10,12 @@ Hydrology の堆積診断として同じ JSONL artifact に保存する。
 河口・デルタの堆積 hotspot と最終搬出先の厳密な検証は、なお Hydrology 側の downstream transport
 benchmark へ分離し、この文書では粗い診断値のみを扱う。
 
-Hydrologyモジュール単体の評価が目的であり、Climateの誤差を混入させないため
-`climate.runoff` はClimateモジュールの出力ではなくERA5-Landの実測値を直接入力する。
+Hydrology モジュール単体の評価を目的とし、Climate の誤差を混入させないため
+`climate.runoff` は Climate モジュール出力ではなく ERA5-Land の参照値を直接入力する。
 
 実行seedは `earth` 固定とし、参照実データと地形前提を一致させる。
 
-## 実行コマンド（予定）
+## 実行コマンド
 
 ```
 # repo root から実行
@@ -202,7 +202,7 @@ fn f1(pred: &[bool], truth: &[bool]) -> (f32, f32, f32) {
 `sediment_budget_ratio`・`coastal_deposition_share`・`low_slope_deposition_share` は
 モデル内部の収支・配分診断として記録し、PASS/FAIL は付けない。
 
-下流輸送と河口寄りの堆積検証は、本書末尾の「将来拡張: downstream sediment benchmark」で別管理する。
+下流輸送と河口寄りの堆積検証は別 bench 文書で管理する。
 
 ---
 
@@ -430,28 +430,8 @@ python benches/scripts/resample.py --module hydro-ref \
 
 - 内水面の季節変動（年平均のみ評価）
 - 地下水・湧水由来の流量（Hydrologyは地表流のみを扱う）
-- 人工ダム・取水による流量改変（FeedbackQueue経由の将来実装まで未考慮）
+- 人工ダム・取水による流量改変
 - チャド湖など面積が1,500 km²を下回る・または変動が大きい湖（フィルタで除外）
-
----
-
-## 将来拡張: downstream sediment benchmark
-
-### 目的
-
-`river_flow` / `is_lake` に加えて、Hydrology が「どこへ sediment を運び、どこで滞留または海へ抜くか」を
-Earth 条件で検証する。
-
-この拡張は Geology 単体ベンチの責務ではない。
-Geology は固定地形に対する侵食・堆積応答と mass balance を見る。
-一方で、主要河川の終端位置、デルタ周辺の hotspot、内陸 sink への滞留は
-流路ネットワークと downstream routing の妥当性に強く依存するため、Hydrology 側で扱う。
-
-### 参照データ方針
-
-- 主参照 1: GSED などの全球 suspended sediment / outlet 系データ
-- 主参照 2: Global Delta Change などのデルタ・河口 hotspot 参照
-- 補助参照: HydroLAKES / 既存 sink 診断
 
 `HydroRIVERS` は河道線の幾何参照としては有用だが、単体では
 「どの outlet へ sediment が届くか」「どこで堆積するか」の正解にはならないため、

@@ -251,8 +251,7 @@ stable continental と `PassiveMargin` の詳細診断履歴は、
 [legacy_hypsometry_handover.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/legacy_hypsometry_handover.md)
 へ移した。
 
-本書では、現在実装されている split diagnostics の存在だけを仕様として扱い、
-`vxx` ごとの数値比較や棄却履歴は `docs/operations/bench/geology/` 側を正本とする。
+本書では、現在実装されている split diagnostics の存在だけを仕様として扱う。
 isostatic target 側に残っていると判断する。
 
 その次の切り分けでは、`isostatic_applied` も内訳を持つ。
@@ -864,7 +863,7 @@ pub struct BoundaryDynamicsState {
 
 注意:
 
-- 初期分割は時間発展の初期条件であり、将来の境界再配置を妨げないよう、内部状態へ境界履歴を持てる構造にする。
+- 初期分割は時間発展の初期条件であり、内部状態は境界履歴を持てる構造にする。
 
 ### 6.4 プレート属性と初期運動状態
 
@@ -963,7 +962,7 @@ if crust_type[cell] == Oceanic {
 }
 ```
 
-`thermal_curve` は単調増加関数とし、初版では `sqrt(age_norm)` または同等の緩やかな曲線でよい。
+`thermal_curve` は単調増加関数とし、`sqrt(age_norm)` または同等の緩やかな曲線を使う。
 海洋地殻の密度更新はこの熱沈降項と整合するように設計するが、密度増加と沈降量を同一式に直結させない。
 
 ### 7.6 アイソスタシー調整
@@ -1001,7 +1000,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 
 これにより侵食後のリバウンドと堆積盆の沈降を表現する。
 ただし、河道・湖沼・デルタの形成判定と侵食量・堆積量の算出責務は引き続き `Hydrology` に置く。
-初版 runtime では、`Hydrology` が返す堆積量のうち fluvial 総量が侵食総量を超える場合、
+`Hydrology` が返す堆積量のうち fluvial 総量が侵食総量を超える場合、
 `Geology` 最終反映で一様スケールして budget を閉じる。
 
 ### 7.8 活動量メトリクス
@@ -1016,7 +1015,7 @@ thickness[cell] += deposited * deposition_thickness_coupling
 - 侵食量 / 堆積量
 - 河川網変更率
 
-定義メモ（初版）:
+定義:
 
 - `terrain_activity` は `sum(abs(delta_height)) / V` を基準に正規化する
 - `boundary_activity` は境界辺ごとの相対速度指標の平均または総和を正規化する

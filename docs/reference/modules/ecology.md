@@ -275,13 +275,6 @@ struct SoilFertilityFeedback {
 - `riparian_vegetation` は `Geology` の更新関数内で局所計算する派生値とする
 - `biome` は外部参照用ラベルであり、Ecology内部計算には使用しない
 
-## Tier2拡張予定
-
-```rust
-// shrub_cover: 0..1（低木層。Domesticatesの牧畜判定で必要になれば追加）
-// soil_moisture: 0..1（歴史展開期の灌漑・干ばつ表現で必要になれば追加）
-```
-
 ## 関連
 
 - `docs/reference/architecture/module_boundaries.md`

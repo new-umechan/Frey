@@ -1,4 +1,4 @@
-# Ecology単体ベンチ（詳細仕様）
+# Ecology単体ベンチ運用
 
 ## 概要
 
@@ -12,7 +12,7 @@ Ecologyモジュール単体の評価が目的であり、ClimateとHydrologyの
 
 実行seedは `earth` 固定とし、参照実データと地形前提を一致させる。
 
-## 実行コマンド（予定）
+## 実行コマンド
 
 ```sh
 # repo root から実行
@@ -40,8 +40,8 @@ Ecology単体ベンチ専用の評価キャッシュ `benches/data/ecology_ref.b
     - `natural_mask`
     - `open_canopy_mask`
 
-現時点では実装前提の仕様として、リポジトリルートで次の順に準備する。
-既存の benchmark 用データを極力使い回し、Ecology 固有の参照データだけを追加する方針とする。
+リポジトリルートで次の順に準備する。
+既存の benchmark 用データを極力使い回し、Ecology 固有の参照データだけを追加する。
 
 1. `pnpm bench:dump-centroids`（未実行の場合のみ）
 2. `pnpm bench:resample:terrain -- --height benches/raw/geology/ETOPO_2022_v1_60s_N90W180_surface.tif`（未実行の場合のみ）
@@ -80,8 +80,7 @@ Ecology 単体ベンチの入力のうち、次は既存データをそのまま
 | MODIS Land Use / LCCS layer   | `benches/raw/ecology/mcd12q1_lc_prop2.tif`      | 農地・都市の除外に使う               |
 | SoilGrids 0-30cm 入力群       | `benches/raw/ecology/soilgrids/`                | `soil_fertility` proxy 用            |
 
-初版では、Ecology benchmark 用の raw データ配置規約だけを固定し、取得コマンドの自動化は後段に回す。
-先にファイル名と入力契約を固定しておかないと、resample 実装の引数仕様も固まらないためである。
+Ecology benchmark 用の raw データ配置規約を固定し、ファイル名と入力契約を揃える。
 
 ### 実データソース
 
@@ -96,7 +95,7 @@ Ecology 単体ベンチの入力のうち、次は既存データをそのまま
 Ecology モジュールへの入力としては使わず、入力は従来どおり既存の climate / hydrology / terrain 参照を流用する。
 
 運用上は、各ソースの取得年を完全一致させるよりも、長期平均で整合した静的参照を固定することを優先する。
-初版では次の方針で固定する。
+参照データは次の条件で固定する。
 
 - 気候: 1970-2000 年平均
 - 水文: 複数年平均
