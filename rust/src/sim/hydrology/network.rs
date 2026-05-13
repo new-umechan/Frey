@@ -54,6 +54,7 @@ pub(super) fn build_river_network(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
     runoff: &[f32],
     params: &GeologyParams,
     state: Option<&crate::ErosionAutomatonState>,
@@ -71,14 +72,14 @@ pub(super) fn build_river_network(
     }
 
     let (spill_level, spill_steps, overflow_parent) =
-        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height);
+        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height, sea_level_offset);
 
     let prev_next = state.map(|s| s.prev_river_next.as_slice());
     let prev_heading = state.map(|s| s.flow_heading.as_slice());
 
     let mut routes = vec![Vec::<(u32, f32)>::new(); v_count];
     for i in 0..v_count {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             continue;
         }
 
@@ -258,6 +259,7 @@ pub(super) fn enforce_sink_overflow_routes(
 
 pub(super) struct RiverNetworkConstraintInput<'a> {
     pub height: &'a [f32],
+    pub sea_level_offset: f32,
     pub previous_flux: &'a [f32],
     pub accumulation_threshold: f32,
 }
@@ -275,6 +277,7 @@ pub(super) fn apply_river_network_constraints(
     buffers: &mut RiverNetworkConstraintBuffers<'_>,
 ) {
     let height = input.height;
+    let sea_level_offset = input.sea_level_offset;
     let previous_flux = input.previous_flux;
     let accumulation_threshold = input.accumulation_threshold;
     let flux = &mut *buffers.flux;
@@ -298,7 +301,7 @@ pub(super) fn apply_river_network_constraints(
             flux[i] = 0.0;
             primary_next[i] = -1;
         }
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             primary_next[i] = -1;
             flux[i] = 0.0;
         }
@@ -432,6 +435,7 @@ pub(super) fn compute_overflow_route_keys(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
 ) -> (Vec<f32>, Vec<u32>, Vec<i32>) {
     let v_count = positions.len();
     let mut spill_level = vec![f32::INFINITY; v_count];
@@ -440,7 +444,7 @@ pub(super) fn compute_overflow_route_keys(
     let mut heap = BinaryHeap::<FlowRouteState>::new();
 
     for i in 0..v_count {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             spill_level[i] = height[i];
             spill_steps[i] = 0;
             heap.push(FlowRouteState {

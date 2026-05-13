@@ -162,18 +162,23 @@ fn process_async_erosion_cell(
         1.0,
     );
     let h_i = state.height[i];
+    let sea_level = state.sea_level_offset;
+    let shallow_floor = shallow_sea_floor_height(sea_level, params);
     let source_is_coastal = is_coastal_cell(&state.nbr_offsets, &state.nbrs, &state.height, i);
     let openness = local_open_basin_factor(&state.nbr_offsets, &state.nbrs, &state.height, i);
-    let shallow_factor = if h_i <= 0.0 && h_i > params.shallow_sea_floor {
-        let shallow_range = (0.0 - params.shallow_sea_floor).max(1e-4);
-        let depth = clamp(-h_i, 0.0, shallow_range);
+    let shallow_factor = if is_marine_height(h_i, sea_level) && h_i > shallow_floor {
+        let shallow_range = (sea_level - shallow_floor).max(1e-4);
+        let depth = clamp(sea_level - h_i, 0.0, shallow_range);
         1.0 - depth / shallow_range
     } else {
         0.0
     };
-    let estuary_factor = if h_i > 0.0 && next_idx.is_some() && next_h <= 0.0 {
+    let estuary_factor = if is_land_height(h_i, sea_level)
+        && next_idx.is_some()
+        && is_marine_height(next_h, sea_level)
+    {
         1.0
-    } else if h_i <= 0.0 && source_is_coastal && state.sediment[i] > 0.0 {
+    } else if is_marine_height(h_i, sea_level) && source_is_coastal && state.sediment[i] > 0.0 {
         0.65
     } else {
         0.0
@@ -182,7 +187,7 @@ fn process_async_erosion_cell(
     let mut water = state.water[i];
     let mut sediment = state.sediment[i];
 
-    if water <= 1e-5 && sediment <= 1e-5 && h_i <= 0.0 {
+    if water <= 1e-5 && sediment <= 1e-5 && is_marine_height(h_i, sea_level) {
         result.downstream = next_idx;
         return result;
     }
@@ -197,7 +202,7 @@ fn process_async_erosion_cell(
     );
     let capacity = params.sediment_capacity_gain * flux_term * slope_term * transport_context;
 
-    if h_i > 0.0 {
+    if is_land_height(h_i, sea_level) {
         let competence = state.params.continent_erodibility_from_competence;
         let erodibility = lerp(1.0, 0.5, clamp(competence, 0.0, 1.0));
         let armor_factor = 1.0 - 0.60 * clamp(state.armor[i], 0.0, 1.0);
@@ -224,7 +229,7 @@ fn process_async_erosion_cell(
                 + 0.55 * openness
                 + 0.85 * estuary_factor
                 + 0.75 * shallow_factor
-                + if next_idx.is_none() && h_i > 0.0 {
+                + if next_idx.is_none() && is_land_height(h_i, sea_level) {
                     0.8
                 } else {
                     0.0
@@ -232,7 +237,7 @@ fn process_async_erosion_cell(
             0.3,
             4.0,
         );
-        let deposit_cap = if h_i <= 0.0 {
+        let deposit_cap = if is_marine_height(h_i, sea_level) {
             params.erosion_max_delta_per_iter * 1.25
         } else {
             params.erosion_max_delta_per_iter
@@ -249,6 +254,7 @@ fn process_async_erosion_cell(
                 height: &mut state.height,
                 armor: &mut state.armor,
                 params,
+                sea_level_offset: sea_level,
             };
             distribute_deposition_direct_by_context(
                 &mut deposition_buffer,
@@ -270,7 +276,7 @@ fn process_async_erosion_cell(
         }
     }
 
-    if h_i <= params.shallow_sea_floor && sediment > 0.0 {
+    if h_i <= shallow_floor && sediment > 0.0 {
         let loss = sediment * 0.35;
         sediment = (sediment - loss).max(0.0);
     }
@@ -308,7 +314,11 @@ fn process_async_erosion_cell(
     water = (water - outflow_water).max(0.0);
     sediment = (sediment - outflow_sediment).max(0.0);
 
-    let evap = if state.height[i] > 0.0 { 0.30 } else { 0.12 };
+    let evap = if is_land_height(state.height[i], sea_level) {
+        0.30
+    } else {
+        0.12
+    };
     water *= 1.0 - evap;
     if water < 1e-5 {
         water = 0.0;
@@ -346,7 +356,7 @@ pub(super) fn inject_async_rain(
     for _ in 0..count {
         let v = state.rain_cursor % v_count;
         state.rain_cursor = (state.rain_cursor + 1) % v_count;
-        if state.height[v] <= params_shallow_cutoff(&state.params) {
+        if state.height[v] <= params_shallow_cutoff(state.sea_level_offset, &state.params) {
             continue;
         }
         let rain_unit = state.rain[v].max(0.0);
@@ -359,8 +369,8 @@ pub(super) fn inject_async_rain(
     }
 }
 
-pub(super) fn params_shallow_cutoff(params: &GeologyParams) -> f32 {
-    (params.shallow_sea_floor * 0.5).min(0.0)
+pub(super) fn params_shallow_cutoff(sea_level_offset: f32, params: &GeologyParams) -> f32 {
+    sea_level_offset + (params.shallow_sea_floor * 0.5).min(0.0)
 }
 
 pub(super) fn pop_active_vertex(state: &mut crate::ErosionAutomatonState) -> Option<usize> {
@@ -569,6 +579,7 @@ pub(super) struct DirectDepositionBuffer<'a> {
     pub height: &'a mut [f32],
     pub armor: &'a mut [f32],
     pub params: &'a GeologyParams,
+    pub sea_level_offset: f32,
 }
 
 pub(super) fn distribute_deposition_direct_by_context(
@@ -582,6 +593,7 @@ pub(super) fn distribute_deposition_direct_by_context(
     let height = &mut *buffer.height;
     let armor = &mut *buffer.armor;
     let params = buffer.params;
+    let sea_level_offset = buffer.sea_level_offset;
     let flattening = context.flattening;
     let openness = context.openness;
     let estuary_factor = context.estuary_factor;
@@ -612,7 +624,8 @@ pub(super) fn distribute_deposition_direct_by_context(
     }
 
     let center_h = height[center];
-    let shallow_range = (0.0 - params.shallow_sea_floor).max(1e-4);
+    let shallow_floor = shallow_sea_floor_height(sea_level_offset, params);
+    let shallow_range = (sea_level_offset - shallow_floor).max(1e-4);
     let mut weights = Vec::with_capacity(end - start);
     let mut weight_sum = 0.0f32;
     for &n_u32 in &nbrs[start..end] {
@@ -620,11 +633,15 @@ pub(super) fn distribute_deposition_direct_by_context(
         let nh = height[n];
         let same_band = 1.0 - clamp((nh - center_h).abs() / 0.08, 0.0, 1.0);
         let lower_pref = if nh <= center_h { 1.0 } else { 0.30 };
-        let marine_pref = if nh <= 0.0 { 1.0 } else { 0.40 };
-        let shallow_pref = if nh <= 0.0 && nh > params.shallow_sea_floor {
-            let depth = clamp(-nh, 0.0, shallow_range);
+        let marine_pref = if is_marine_height(nh, sea_level_offset) {
+            1.0
+        } else {
+            0.40
+        };
+        let shallow_pref = if is_marine_height(nh, sea_level_offset) && nh > shallow_floor {
+            let depth = clamp(sea_level_offset - nh, 0.0, shallow_range);
             0.35 + 0.65 * (1.0 - depth / shallow_range)
-        } else if nh > 0.0 {
+        } else if is_land_height(nh, sea_level_offset) {
             0.25
         } else {
             0.10
@@ -649,22 +666,35 @@ pub(super) fn distribute_deposition_direct_by_context(
     }
 }
 
+fn is_land_height(height: f32, sea_level_offset: f32) -> bool {
+    height > sea_level_offset
+}
+
+fn is_marine_height(height: f32, sea_level_offset: f32) -> bool {
+    height <= sea_level_offset
+}
+
+fn shallow_sea_floor_height(sea_level_offset: f32, params: &GeologyParams) -> f32 {
+    sea_level_offset + params.shallow_sea_floor
+}
+
 pub(super) fn compute_river_flux_and_next(
     positions: &[[f32; 3]],
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
     river_rain_base: f32,
 ) -> (Vec<f32>, Vec<i32>) {
     let v_count = positions.len();
     let rain = build_precipitation_map(positions, nbr_offsets, nbrs, height, river_rain_base);
     let (spill_level, spill_steps, overflow_parent) =
-        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height);
+        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height, sea_level_offset);
     let mut river_next = vec![-1; v_count];
     let mut river_flux = vec![0.0; v_count];
 
     for i in 0..v_count {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             continue;
         }
 
@@ -802,6 +832,7 @@ pub(super) fn compute_overflow_route_keys(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
 ) -> (Vec<f32>, Vec<u32>, Vec<i32>) {
     let v_count = positions.len();
     let _ = positions;
@@ -811,7 +842,7 @@ pub(super) fn compute_overflow_route_keys(
     let mut heap = BinaryHeap::<FlowRouteState>::new();
 
     for i in 0..v_count {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             spill_level[i] = height[i];
             spill_steps[i] = 0;
             heap.push(FlowRouteState {
@@ -855,13 +886,14 @@ pub(super) fn compute_lake_depth_map(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
 ) -> Vec<f32> {
     let (spill_level, _spill_steps, _overflow_parent) =
-        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height);
+        compute_overflow_route_keys(positions, nbr_offsets, nbrs, height, sea_level_offset);
     let mut lake_depth = vec![0.0; height.len()];
 
     for i in 0..height.len() {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             continue;
         }
         let depth = (spill_level[i] - height[i]).max(0.0);
@@ -878,17 +910,25 @@ pub(super) fn generate_rivers(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     height: &[f32],
+    sea_level_offset: f32,
     river_rain_base: f32,
     river_accumulation_threshold: f32,
 ) -> (Vec<f32>, Vec<i32>) {
     let (mut river_flux, mut river_next) =
-        compute_river_flux_and_next(positions, nbr_offsets, nbrs, height, river_rain_base);
+        compute_river_flux_and_next(
+            positions,
+            nbr_offsets,
+            nbrs,
+            height,
+            sea_level_offset,
+            river_rain_base,
+        );
 
     for i in 0..positions.len() {
         if river_flux[i] < river_accumulation_threshold {
             river_flux[i] = 0.0;
         }
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             river_next[i] = -1;
         }
     }
@@ -1063,10 +1103,11 @@ pub(super) fn earth_preset(
         nbr_offsets,
         nbrs,
         &height,
+        0.0,
         river_rain_base,
         0.015,
     );
-    let lake_depth = compute_lake_depth_map(positions, nbr_offsets, nbrs, &height);
+    let lake_depth = compute_lake_depth_map(positions, nbr_offsets, nbrs, &height, 0.0);
     let plate_count = {
         let mut unique = std::collections::HashSet::with_capacity(plate_id.len());
         for &pid in &plate_id {

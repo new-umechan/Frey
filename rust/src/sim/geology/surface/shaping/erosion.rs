@@ -27,6 +27,7 @@ pub(in crate::sim::geology) fn apply_hydraulic_erosion(
             nbr_offsets,
             nbrs,
             height,
+            0.0,
             params.river_rain_base,
         );
 

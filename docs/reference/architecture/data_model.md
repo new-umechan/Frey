@@ -63,6 +63,12 @@ snapshot 不在・破損・fingerprint 不一致時は warning を出し、通�
 - 現在 world の進行状態
 - transport 用の `TimelineViewCache`（view delta 返却用 shadow）
 
+`hydrology_dynamics` が保持する `ErosionAutomatonState` は、`height` や `river_next` に加えて
+その tick の `sea_level_offset` も保持する。
+async erosion / fill-spill / river rebuild はこの値を参照し、
+`height > sea_level_offset` を land 判定、
+`height <= sea_level_offset + shallow_sea_floor` を深い海成帯の判定に使う。
+
 時間軸専用の正本は `TimelineRuntime` に置く。
 
 - `TimelineArchive`
@@ -118,6 +124,8 @@ struct PlateId(u32);
 各 State は SoA 構造を持ち、セル index がそのまま `CellId` になる。
 v1 の reservoir 分離では、すべての在庫量をただちにセル列へ落とし込まない。
 `solid_earth_mass` のように状態正本ではなく全球 diagnostics として定義する量もある。
+また、海陸判定に使う `surface_elevation` は正本の独立列ではなく、
+`bedrock height + ice_thickness - sea_level_offset` から導出する。
 
 ### GeologyState
 
@@ -178,6 +186,9 @@ struct GeologyState {
     deposition_rate:      Vec<f32>,
     is_lake:              Vec<bool>,      // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
 
+    // Environment 期の入口では erosion_rate / deposition_rate を raw 変化量のまま公開せず、
+    // hydrology spinup を掛けた applied rate を公開する。
+
     // --- Ecology（公開）---
     biome:                Vec<Biome>,
     tree_cover:           Vec<f32>,   // 0..1
@@ -220,6 +231,14 @@ struct GeologyState {
     occupier_id:          Vec<Option<PolityId>>,  // 実効支配国。主権(polity_id)とは独立して保持
 }
 ```
+
+`surface_elevation` は次の導出量として扱う。
+
+```text
+surface_elevation = geology.height + glaciology.ice_thickness - control.sea_level_offset
+```
+
+海陸判定は `surface_elevation > 0` を正本とし、`height > 0` の旧来判定は使わない。
 
 `latitude` / `distance_from_ocean` / `coast_side` / `is_coastal` のような terrain 系の派生列は
 `WorldState` には置かず、`WorldProjectionState` に分ける。

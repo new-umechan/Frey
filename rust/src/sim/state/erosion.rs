@@ -22,6 +22,8 @@ pub struct ErosionAutomatonState {
     pub rain_cursor: usize,
     pub tick: u64,
     #[serde(default)]
+    pub sea_level_offset: f32,
+    #[serde(default)]
     pub last_rebuild_tick: u64,
     #[serde(default)]
     pub last_sink_full_rebuild_tick: u64,

@@ -43,7 +43,7 @@ pub(crate) fn update_subsistence(world: &mut World, budget: u32) {
     let alpha = 0.2_f32;
     let n = world.state.geology.height.len();
     for i in 0..n {
-        if world.state.geology.height[i] <= 0.0 {
+        if !world.is_land_cell(i) {
             world.state.subsistence.subsistence_mix[i] = SubsistenceMix::default();
             world.state.subsistence.food_energy_mean[i] = 0.0;
             world.state.subsistence.food_energy_variance[i] = 1.0;

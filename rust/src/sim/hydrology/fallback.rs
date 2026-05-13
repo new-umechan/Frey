@@ -21,6 +21,7 @@ pub(super) fn run_river_fallback(
     rebuild_fill_spill_state(
         &mut world.state.hydrology,
         &world.state.geology.height,
+        world.control.sea_level_offset,
         &mesh_nbr_offsets,
         &mesh_nbrs,
         params,
@@ -37,6 +38,7 @@ pub(super) fn run_river_fallback(
         &world.mesh().nbr_offsets,
         &world.mesh().nbrs,
         &world.state.geology.height,
+        world.control.sea_level_offset,
         runoff,
         params,
         network_state,
@@ -60,6 +62,7 @@ pub(super) fn run_river_fallback(
     apply_river_network_constraints(
         RiverNetworkConstraintInput {
             height: &world.state.geology.height,
+            sea_level_offset: world.control.sea_level_offset,
             previous_flux: &previous_flux,
             accumulation_threshold: params.river_accumulation_threshold,
         },
@@ -78,6 +81,7 @@ pub(super) fn run_river_fallback(
     update_public_lake_flags(
         &mut world.state.hydrology,
         &world.state.geology.height,
+        world.control.sea_level_offset,
         params,
     );
     if let Some(state) = state {

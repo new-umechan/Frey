@@ -112,6 +112,7 @@ pub fn build_hydrology_state_for_bench(
         in_queue: vec![1; cell_count],
         rain_cursor: 0,
         tick: world.clock.tick,
+        sea_level_offset: world.control.sea_level_offset,
         last_rebuild_tick: world.clock.tick.saturating_sub(1),
         last_sink_full_rebuild_tick: world
             .clock

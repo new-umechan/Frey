@@ -77,6 +77,102 @@ heat_release_rate: プルーム発生時の放熱率
 9. アイソスタシー調整
 10. 活動量メトリクス更新
 
+### 2.7 Environment 期の地質時定数
+
+`Environment` 期では、Crust 期と同じ tectonic / smoothing / isostatic 応答を
+そのまま回さない。
+
+- tectonic forcing
+- marine / terrestrial diffusion
+- isostatic adjustment
+- thickness recovery
+- rigidity recovery
+
+は、era 進入直後の ramp 係数で一括して低速化する。
+
+目的は、Crust 期の造山スケールを `Environment` 期へ持ち越して
+海面近傍の低 freeboard 地形を 1 tick で潰してしまうことを防ぐためである。
+これは個別項への場当たり的な clamp ではなく、
+固体地球 reservoir の有効時定数を era ごとに切り替える近似である。
+
+`cached_metrics` には attribution 用に次も残す。
+
+- `activity_scale`
+- `runtime_rebuild_applied`
+- `mean_abs_surface_write_delta`
+- `mean_abs_surface_raw_delta`
+- `mean_abs_surface_step_delta`
+- `mean_abs_surface_step_clamp_delta`
+- `mean_abs_surface_pre_isostatic_delta`
+- `mean_abs_surface_output_delta`
+- `debug_surface_max_delta_*`
+
+`Geology` phase 全体の高さ変化と `mean_abs_surface_write_delta` が一致しない場合、
+崩壊点は surface dynamics 以外の phase 内処理にあると読む。
+逆に `mean_abs_surface_pre_zero_mean_delta` は大きいが
+`mean_abs_surface_zero_mean_delta` が 0 に近い場合は、
+zero-mean 補正ではなく `surface loop` 本体の delta 生成を疑う。
+このとき `mean_abs_surface_step_delta` と
+`mean_abs_surface_pre_isostatic_delta` が一致しなければ、
+計測値の取り違えか phase 内の別書き換えを疑う。
+さらに `mean_abs_surface_output_delta` だけが大きい場合は、
+`apply_stress_and_surface_update` の自己集計ではなく wrapper 側の実差分を優先する。
+それでも `raw delta` だけが 0 の場合は、
+`debug_surface_max_delta_raw_delta` と `debug_surface_max_delta_step_delta` を比較する。
+
+また、bedrock の許容レンジは Geology / Glaciology / Hydrology で共通とし、
+surface dynamics だけが別レンジで clamp しない。
+同一 reservoir に対して phase ごとに異なる高さ domain を持たせないためである。
+
+Environment 初回 tick の hidden delta 切り分けでは、`debug_surface_max_delta_*`
+も使う。最低でも次を同じセルで読む。
+
+- `debug_surface_max_delta_raw_delta`
+- `debug_surface_max_delta_step_delta`
+- `debug_surface_max_delta_thermal_subsidence`
+- `debug_surface_max_delta_diffusive`
+- `debug_surface_max_delta_uplift`
+- `debug_surface_max_delta_tectonic_subsidence`
+- `debug_surface_max_delta_tensile`
+- `debug_surface_max_delta_stress`
+
+`debug_surface_max_delta_stress` と
+`debug_surface_max_delta_tectonic_subsidence` だけが巨大で、
+`diffusive` と `thermal_subsidence` が正常なら、
+原因は Crust 由来の応力記憶持ち越しである。
+
+Crust 期の freeboard 保全は 2 段で考える。
+
+- `sea-level recenter`: target land ratio を維持するための global shift
+- `freeboard inflation`: `target_p50` 未満の低 freeboard セルだけを
+  sign-preserving な単調写像で再拡張し、shoreline 近傍への過密を緩める補助
+- `shoreline remap`: global inflation 後も `coastal_band_ratio` が高い場合に限り、
+  `|height| <= shoreline_range` の非ゼロセルを単調写像で `coastal_band` の外へ押し出す。
+  sign は変えず、zero-level 周辺の sub-grid relief を近似的に補うことで
+  benchmark 上の coastal crowding を追加で下げる。
+
+### 2.5 相対海面との整合
+
+`Environment` 期以降の async erosion は `height > 0` を海陸境界に使わない。
+正本は `sea_level_offset` であり、Geology 側の侵食・堆積補助状態も tick ごとにこの値を受け取る。
+
+- land 判定: `height > sea_level_offset`
+- marine 判定: `height <= sea_level_offset`
+- shallow marine 判定: `sea_level_offset + shallow_sea_floor < height <= sea_level_offset`
+
+これにより、Glaciology が更新する海面変動と Geology の coastal / estuary / shallow-sea 分岐が一致する。
+
+### 2.6 初期 hypsometry の校正
+
+Crust 生成の `postprocess_height` は、単純な全体スケーリングで海面を切った後に沿岸低地を追加圧縮しない。
+代わりに、sea-ratio を決める quantile で海面基準を置いた上で、海陸を別々に hypsometric remap する。
+
+- land 側: `freeboard` の `p50` / `p90` を `hypsometry_land_p50` / `hypsometry_land_p90` へ合わせる
+- ocean 側: `depth` の `p50` / `p90` を `hypsometry_ocean_p50` / `hypsometry_ocean_p90` へ合わせる
+
+目的は、海面近傍へ過剰にセルが集中する hypsometry cliff を抑え、`Environment` 期の
+`surface_elevation` が初期時点から極端な coastal-band 集中を起こさないようにすることにある。
+
 ### 2.4 起伏保持の平滑化リミタ
 
 地形起伏（`height_std`）が急速に縮退する主因は、拡散項とアイソスタシー調整が
@@ -97,6 +193,109 @@ heat_release_rate: プルーム発生時の放熱率
 
 - `smoothing_limited_cells_ratio`: その tick で limiter が発火したセル比率
 - `mean_smoothing_factor`: 拡散項・アイソスタシー項に掛かった平均係数
+- `mean_abs_tectonic_uplift` / `mean_abs_volcanic_uplift`: 内生 uplift 項の平均絶対寄与
+- `mean_abs_tectonic_subsidence` / `mean_abs_thermal_subsidence`: subsidence 項の平均絶対寄与
+- `mean_abs_thickness_equilibrium_gap`: `equilibrium_thickness` への回復圧の大きさ
+- `mean_abs_isostatic_equilibrium_gap`: `h_eq - height` の平衡ずれ
+- `mean_density_ratio`: `density / mantle_density` の平均
+- `mean_abs_diffusive_raw` / `mean_abs_diffusive_applied`: limiter 前後の拡散項寄与
+- `mean_abs_isostatic_raw` / `mean_abs_isostatic_applied`: limiter 前後のアイソスタシー寄与
+
+`h_eq` は絶対厚さから直接出さず、Airy 型の reference column を使う。
+
+- oceanic: 年齢に応じた `reference_thickness` と負の `reference_freeboard`
+- continental: regime に応じた `reference_thickness` と正の `reference_freeboard`
+- anomaly: `(thickness - reference_thickness) * (1 - density_ratio)`
+
+最終的な平衡標高は `reference_freeboard + anomaly` とする。
+
+`isostatic_adjustment_rate` は一定ではなく、`rigidity`、`mantle heat`、`thickness` で局所変調する。
+硬く厚い地殻ほど遅く、熱い地殻ほど速い緩和とし、最終的な適用率は指数緩和
+`1 - exp(-driver)` で求める。
+
+`thickness_recovery` も一定ではなく、`boundary activity`、`stress`、`mantle heat`、`crust type`
+で局所変調する。受動縁辺や低応力セルではほぼ 0 に近づけ、ridge / collision の高活動セルでのみ速くする。
+
+`equilibrium_thickness` は `height` を直接見ない。target thickness は
+`reference_isostatic_column` と同じ `crust_type`、`age`、`boundary regime`、`plume`
+から導き、厚さ回復が freeboard の絶対値をそのまま追わないようにする。
+これにより、thickness recovery と isostatic adjustment が同じ標高偏差へ同時に引く正帰還を避ける。
+
+これらは `GeologyStepMetrics` として runtime state に保持し、Crust 末期の hypsometry 圧縮が
+どの項で支配されているかを benchmark artifact から読めるようにする。
+
+特に `mean_abs_isostatic_reference_freeboard` と
+`mean_abs_isostatic_compensated_anomaly` は、
+`h_eq = reference_freeboard + compensated_anomaly` のどちらが
+raw isostatic term を支配しているかの切り分けに使う。
+
+runtime の adjustment では、この 2 項を同じ rate で追わない。
+単純な rate 分離は過大 freeboard を再導入したため採用していない。
+現時点では `reference_freeboard` 自体が支配項なので、
+次段の対象は `reference_isostatic_column` における基準面設計である。
+
+ここでの `reference_freeboard` は、強い絶対標高 target ではなく弱い baseline offset とする。
+oceanic / continental の regime 差は残すが、relief の主成分は `compensated_anomaly` と
+tectonic forcing に持たせる。
+
+`coastal_band_ratio` / `land_freeboard_p90` gate は通過基準として固定しつつ、
+runtime artifact では `reference_freeboard` と `compensated_anomaly` の相対寄与を継続監視する。
+signed applied term は少なくとも次の split まで持つ。
+
+- oceanic / continental
+- continental orogenic / stable
+- stable passive margin / transform
+- passive margin raw / applied
+
+stable continental と `PassiveMargin` の詳細診断履歴は、
+[legacy_hypsometry_handover.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/legacy_hypsometry_handover.md)
+へ移した。
+
+本書では、現在実装されている split diagnostics の存在だけを仕様として扱い、
+`vxx` ごとの数値比較や棄却履歴は `docs/operations/bench/geology/` 側を正本とする。
+isostatic target 側に残っていると判断する。
+
+その次の切り分けでは、`isostatic_applied` も内訳を持つ。
+
+- `mean_abs_isostatic_reference_freeboard_applied`
+- `mean_abs_isostatic_compensated_anomaly_applied`
+
+raw だけでなく applied ベースでも `reference_freeboard` が支配項かを確認し、
+late Crust の freeboard collapse が target 面の押し付けなのか、
+厚さ anomaly の補正なのかを分けて読む。
+
+さらに absolute 値だけでは uplift / subsidence の向きが読めないため、
+`reference_freeboard_applied` は地殻タイプ別の signed mean も持つ。
+
+- `mean_signed_isostatic_reference_freeboard_applied_oceanic`
+- `mean_signed_isostatic_reference_freeboard_applied_continental`
+
+これにより、late Crust で oceanic target が海盆を持ち上げているのか、
+continental target が陸地を押し下げているのかを区別できる。
+
+現行診断では、`tick=100` では oceanic signed term は負で stabilizing だが、
+`tick=300` では正へ反転する。すなわち、後半では ocean basin が target より深くなりすぎ、
+`reference_freeboard` が basin infill として働く。
+
+このため oceanic の正向き `reference_freeboard` 適用だけは、
+diffusion と同様に shoreline-aware に減衰させる。
+浅海・沿岸では相対的に許し、深海盆では遅くする。
+
+この変更後、`tick=300` の oceanic signed term は再び負に戻った。
+以後の主支配項は `land_down diffusion` である。
+そのため次の局所保護は `low-freeboard coastal land` に対して掛ける。
+海隣接率が高く、freeboard が低い陸セルの下向き diffusion だけを弱め、
+内陸高地の hillslope diffusion はそのまま残す。
+
+zero-mean mass-centering は、全セルへ一様に補正を配らない。
+補正対象は `endogenous_forcing` を持つ active cell に限り、補正量も activity-weighted に配る。
+これにより、tectonically quiet な interior を毎 tick 一緒に上下させて freeboard を削ることを避ける。
+
+平滑化 limiter は shoreline freeboard も見る。
+単純な shoreline CFL 制約は過大 freeboard を再導入したため採用していない。
+次段の切り分けでは `h_eq` の内訳、すなわち `reference_freeboard` と
+`compensated_thickness_anomaly` を runtime artifact へ露出させる。
+
 
 ## 3. 具体的な仕様
 

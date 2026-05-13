@@ -66,6 +66,9 @@ impl World {
         if cells.is_empty() {
             return WorldMetrics::default();
         }
+        let surface_elevation = (0..cell_count)
+            .map(|index| self.surface_elevation(index).unwrap_or(-self.sea_level_offset()))
+            .collect::<Vec<_>>();
 
         let mut land_cells = 0usize;
         let mut min_height = f32::INFINITY;
@@ -79,7 +82,7 @@ impl World {
 
         for (i, &h) in cells.height.iter().enumerate().take(cell_count) {
             let flux = cells.river_flow.get(i).copied().unwrap_or(0.0).max(0.0);
-            if cells.is_land_cell(i, self.sea_level_offset()) {
+            if surface_elevation.get(i).copied().unwrap_or(-1.0) > 0.0 {
                 land_cells += 1;
             }
             min_height = min_height.min(h);
@@ -96,7 +99,7 @@ impl World {
         let variance = (sum_height_sq / cell_count_f32) - (mean_height * mean_height);
         let height_std_dev = variance.max(0.0).sqrt();
 
-        let (continent_count, largest_continent_cells) = continent_stats(self);
+        let (continent_count, largest_continent_cells) = continent_stats(self, &surface_elevation);
         let top10_river_flux_sum = top_fluxes.iter().take(top_fluxes_len).sum::<f32>();
         let (
             river_active_cells,
@@ -105,7 +108,7 @@ impl World {
             river_mainstem_persistence,
             river_flux_concentration,
         ) = river_network_metrics(
-            cells.height,
+            &surface_elevation,
             cells.river_flow,
             cells.river_next,
             top10_river_flux_sum,
@@ -347,7 +350,7 @@ fn push_top_flux(top_fluxes: &mut [f32; 10], len: &mut usize, value: f32) {
     }
 }
 
-fn continent_stats(world: &World) -> (usize, usize) {
+fn continent_stats(world: &World, surface_elevation: &[f32]) -> (usize, usize) {
     let cells = world.cell_store();
     let cell_count = cells.len();
     if cells.is_empty() {
@@ -360,7 +363,7 @@ fn continent_stats(world: &World) -> (usize, usize) {
     let mut largest_continent_cells = 0usize;
 
     for start_index in 0..cell_count {
-        if visited[start_index] || !cells.is_land_cell(start_index, world.sea_level_offset()) {
+        if visited[start_index] || surface_elevation.get(start_index).copied().unwrap_or(-1.0) <= 0.0 {
             continue;
         }
         visited[start_index] = true;
@@ -374,7 +377,7 @@ fn continent_stats(world: &World) -> (usize, usize) {
                 let neighbor_index = neighbor as usize;
                 if neighbor_index >= cell_count
                     || visited[neighbor_index]
-                    || !cells.is_land_cell(neighbor_index, world.sea_level_offset())
+                    || surface_elevation.get(neighbor_index).copied().unwrap_or(-1.0) <= 0.0
                 {
                     continue;
                 }
@@ -393,14 +396,14 @@ fn continent_stats(world: &World) -> (usize, usize) {
 }
 
 fn river_network_metrics(
-    height: &[f32],
+    surface_elevation: &[f32],
     flux: &[f32],
     river_next: &[i32],
     top10_river_flux_sum: f32,
     sum_flux: f32,
     max_flux: f32,
 ) -> (u32, f32, f32, f32, f32) {
-    let cell_count = height.len();
+    let cell_count = surface_elevation.len();
     if cell_count == 0 || river_next.len() != cell_count {
         return (0, 0.0, 0.0, 0.0, 0.0);
     }
@@ -409,7 +412,7 @@ fn river_network_metrics(
     let mut active = vec![false; cell_count];
     let mut active_cells = 0usize;
     for i in 0..cell_count {
-        if height[i] > 0.0 && flux.get(i).copied().unwrap_or(0.0) >= active_threshold {
+        if surface_elevation[i] > 0.0 && flux.get(i).copied().unwrap_or(0.0) >= active_threshold {
             active[i] = true;
             active_cells += 1;
         }
@@ -447,7 +450,7 @@ fn river_network_metrics(
     let mut reaches_ocean_count = 0usize;
     let mut path = Vec::<usize>::new();
     let mut trace_context = RiverTraceContext {
-        height,
+        surface_elevation,
         river_next,
         active: &active,
         memo: &mut memo,
@@ -516,7 +519,7 @@ fn trace_active_to_ocean(start: usize, context: &mut RiverTraceContext<'_>) -> b
     let mut cur = start;
     let mut result = false;
 
-    for _ in 0..context.height.len() {
+    for _ in 0..context.surface_elevation.len() {
         if context.memo[cur] == 2 {
             result = true;
             break;
@@ -538,11 +541,11 @@ fn trace_active_to_ocean(start: usize, context: &mut RiverTraceContext<'_>) -> b
             break;
         }
         let n = next as usize;
-        if n >= context.height.len() {
+        if n >= context.surface_elevation.len() {
             result = false;
             break;
         }
-        if context.height[n] <= 0.0 {
+        if context.surface_elevation[n] <= 0.0 {
             result = true;
             break;
         }
@@ -557,7 +560,7 @@ fn trace_active_to_ocean(start: usize, context: &mut RiverTraceContext<'_>) -> b
 }
 
 struct RiverTraceContext<'a> {
-    height: &'a [f32],
+    surface_elevation: &'a [f32],
     river_next: &'a [i32],
     active: &'a [bool],
     memo: &'a mut [u8],

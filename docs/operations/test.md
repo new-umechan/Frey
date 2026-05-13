@@ -159,6 +159,18 @@ baseline誤用防止:
     - 高速再生成（途中stageから再開）:
         - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-from environment`
         - `--resume-from` は `environment|life|civilization|history` を受け付ける
+    - 部分再生成（指定stageで打ち切り）:
+- `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --until-stage environment`
+- `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-from environment --until-stage environment`
+- `--until-stage` は `environment|life|civilization|history` を受け付ける
+- alpha 系の snapshot restore は `.cache` / `web/public/.dev-precomputed` / `dist/.dev-precomputed`
+  を順に試し、壊れた snapshot があっても読める candidate が残っていれば継続する
+    - 任意 tick の診断 snapshot:
+        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --at-tick 780 --output-path .cache/frey/alpha-snapshots/diagnostic-780.bin`
+        - `--at-tick` は指定 tick まで進めて単発 snapshot を保存する
+    - 任意 snapshot からの再開:
+        - `cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- --resume-path .cache/frey/alpha-snapshots/diagnostic-780.bin --at-tick 790 --output-path .cache/frey/alpha-snapshots/diagnostic-790.bin`
+        - `--resume-path` は stage 境界でない診断 snapshot からの再開にも使える
 - 無効化・再生成条件:
     - format version 変更
     - `GeologyParams` デフォルト変更
@@ -167,6 +179,8 @@ baseline誤用防止:
     - `alpha` 生成ロジック変更
 - fallback:
     - snapshot 不在・破損・fingerprint 不一致時は warning のみ出し、通常計算を継続する
+    - ただし explicit snapshot path を使う bench は fallback しないため、`UnexpectedEnd` などの decode error が出た snapshot は再生成する
+    - snapshot / manifest / view は atomic write で保存する。途中中断で壊れた旧 snapshot が残っている場合は `pnpm alpha:snapshot` で更新する
 
 自動化:
 

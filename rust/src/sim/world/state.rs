@@ -905,11 +905,21 @@ impl World {
         self.control.sea_level_offset
     }
 
-    pub fn is_land_cell(&self, index: usize) -> bool {
-        self.heights()
+    pub fn surface_elevation(&self, index: usize) -> Option<f32> {
+        let height = self.heights().get(index).copied()?;
+        let ice = self
+            .state
+            .glaciology
+            .ice_thickness
             .get(index)
             .copied()
-            .map(|height| height > self.sea_level_offset())
+            .unwrap_or(0.0);
+        Some(height + ice - self.sea_level_offset())
+    }
+
+    pub fn is_land_cell(&self, index: usize) -> bool {
+        self.surface_elevation(index)
+            .map(|surface_elevation| surface_elevation > 0.0)
             .unwrap_or(false)
     }
 
@@ -1121,6 +1131,31 @@ pub struct BoundaryDynamicsState {
 pub struct GeologyStepMetrics {
     pub geology_activity: f32,
     pub boundary_activity: f32,
+    pub activity_scale: f32,
+    pub runtime_rebuild_applied: f32,
+    pub mean_abs_surface_write_delta: f32,
+    pub mean_signed_surface_write_delta: f32,
+    pub min_surface_write_delta: f32,
+    pub max_surface_write_delta: f32,
+    pub mean_abs_surface_range_clamp_delta: f32,
+    pub mean_abs_surface_raw_delta: f32,
+    pub mean_abs_surface_step_delta: f32,
+    pub mean_abs_surface_step_clamp_delta: f32,
+    pub mean_abs_surface_pre_isostatic_delta: f32,
+    pub mean_abs_surface_output_delta: f32,
+    pub mean_abs_surface_pre_zero_mean_delta: f32,
+    pub mean_abs_surface_zero_mean_delta: f32,
+    pub debug_surface_max_delta_index: f32,
+    pub debug_surface_max_delta_raw_delta: f32,
+    pub debug_surface_max_delta_step_delta: f32,
+    pub debug_surface_max_delta_thermal_subsidence: f32,
+    pub debug_surface_max_delta_diffusive: f32,
+    pub debug_surface_max_delta_uplift: f32,
+    pub debug_surface_max_delta_tectonic_subsidence: f32,
+    pub debug_surface_max_delta_tensile: f32,
+    pub debug_surface_max_delta_stress: f32,
+    pub debug_surface_max_delta_height_before: f32,
+    pub debug_surface_max_delta_height_after_pre_isostatic: f32,
     pub uplift_rate: f32,
     pub subsidence_rate: f32,
     pub smoothing_limited_cells_ratio: f32,
@@ -1130,8 +1165,49 @@ pub struct GeologyStepMetrics {
     pub zero_mean_std_delta: f32,
     pub mean_compressive: f32,
     pub mean_tensile: f32,
+    pub mean_abs_tectonic_uplift: f32,
+    pub mean_abs_volcanic_uplift: f32,
+    pub mean_abs_tectonic_subsidence: f32,
+    pub mean_abs_thermal_subsidence: f32,
+    pub mean_abs_thickness_equilibrium_gap: f32,
+    pub mean_abs_isostatic_equilibrium_gap: f32,
+    pub mean_abs_isostatic_reference_freeboard: f32,
+    pub mean_abs_isostatic_compensated_anomaly: f32,
+    pub mean_density_ratio: f32,
     pub mean_abs_diffusive_raw: f32,
+    pub mean_abs_diffusive_applied: f32,
+    pub mean_abs_diffusive_land_down_raw: f32,
+    pub mean_abs_diffusive_land_up_raw: f32,
+    pub mean_abs_diffusive_ocean_down_raw: f32,
+    pub mean_abs_diffusive_ocean_up_raw: f32,
+    pub mean_abs_diffusive_ocean_up_applied: f32,
     pub mean_abs_isostatic_raw: f32,
+    pub mean_abs_isostatic_applied: f32,
+    pub mean_abs_isostatic_reference_freeboard_applied: f32,
+    pub mean_abs_isostatic_compensated_anomaly_applied: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_oceanic: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_orogenic: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_rift: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_transform:
+        f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_margin:
+        f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_transform: f32,
+    pub mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin: f32,
+    pub mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform: f32,
+    pub passive_margin_continental_cell_ratio: f32,
+    pub mean_passive_margin_isostatic_adjustment_rate: f32,
+    pub mean_passive_margin_smoothing_factor: f32,
+    pub passive_margin_reference_freeboard_effective_applied_factor: f32,
+    pub crust_recentering_shift: f32,
+    pub crust_recentering_pre_band_ratio: f32,
+    pub crust_recentering_post_band_ratio: f32,
+    pub bedrock_zero_level_coastal_band_ratio: f32,
+    pub bedrock_freeboard_p10: f32,
+    pub bedrock_freeboard_p50: f32,
+    pub bedrock_freeboard_p90: f32,
 }
 
 fn default_thickness() -> f32 {

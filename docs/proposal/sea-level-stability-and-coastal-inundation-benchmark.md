@@ -22,6 +22,9 @@ Accepted
 
 - `seed_regression` / `WorldMetrics` に `sea_level_offset` を追加し、海面オフセットの長期ドリフトを回帰監視対象にする。
 - `Crust` 期は海面固定で進め、`Environment` 期突入時に `ocean_water_inventory` を再基準化する。
+- `Environment` 期の氷床質量収支は PDD 系へ統一し、固体降水率を 0-2C の線形遷移で与える。
+- 氷海交換は保存則 `Ocean + coupling*Ice` を保持しつつ、
+  `ice_ocean_coupling_tau_ticks` に基づく交換上限で1tick変化量を制限する。
 - `Crust` 期では氷床成長・融解・侵食は実行しない。
 - `Hydrology` の fluvial erosion / deposition による標高更新も `Crust` 期では地形へ反映しない。
   `Crust` 期の主因は tectonics とし、表面侵食は `Environment` 期以降へ移す。
@@ -70,3 +73,16 @@ Accepted
 - `Environment` 境界再基準化後の海面ドリフト許容幅をどの程度 gate 化するか
 - Earth 浸水応答を diagnostics 止まりではなく将来 gate 化するか
 - `sea_level_offset` の絶対値に対して、許容上限をメートル換算で持つか
+
+## 追記（2026-05-11）
+
+- 本提案の局所対策だけでは、`t=850` 近傍の全陸化ジャンプ再発を十分に防げないことを確認した。
+- 以後の主提案は [scientific-reservoir-coupled-sea-land-redesign.md](/Users/umehararyu/prog/100days/Frey/docs/proposal/scientific-reservoir-coupled-sea-land-redesign.md) へ移行する。
+
+## 追記（2026-05-12）
+
+- `crust_hypsometry_guard` により、初期 Crust 生成時点の hypsometry は許容範囲であることを確認した。
+- 一方で `alpha_transition_guard` の `tick=780` では、すでに `bedrock_coastal_band_ratio` が高く、問題は `Environment` 遷移ではなく Crust runtime 中に入っている。
+- `geology` / `hydrology` / `geology+climate+hydrology` の軽量 series だけでは本番軌道を十分に再現できないため、
+  次段では `exec_world_with_feedback_and_hydrology` をそのまま使う薄い統合 series benchmark を追加し、
+  feedback queue と era bookkeeping を含む実際の Crust pipeline で悪化開始 tick を特定する。

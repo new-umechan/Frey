@@ -55,20 +55,19 @@ tick内の実行順は次のとおり。
 ただし runtime では `Crust` 期に glaciology 更新を走らせず、`sea_level_offset` の capacity closure も行わない。
 氷床・海面の動的更新は `Environment` 期以降で扱う。
 
-### 質量収支
+### 質量収支（PDD系）
 
-各セルで温度と降水から氷河の収支を計算する。
+各セルで温度と降水から氷河収支を計算する。  
+積雪は「固体降水率」を温度から線形近似して求める。
 
 ```text
-cold_excess = max(accum_temp_threshold_c - temperature, 0)
-warm_excess = max(temperature - ablation_temp_threshold_c, 0)
+solid_frac = 1                      (T <= 0C)
+solid_frac = 0                      (T >= 2C)
+solid_frac = linear interpolation   (0C < T < 2C)
 
-accumulation =
-  precipitation * accumulation_gain
-  * (1 + cold_excess * accumulation_temp_sensitivity)
+accumulation = precipitation * accumulation_gain * solid_frac
 
-ablation =
-  warm_excess * ablation_gain * (1 + local_relief * relief_weight)
+ablation = max(T - ablation_temp_threshold_c, 0) * ablation_gain
 ```
 
 `local_relief` は近傍セル標高差から導く地形起伏proxyとする。
@@ -102,10 +101,28 @@ v1 の `sea_level_offset` は `capacity closure` で扱う。
 
 海面式に直接入る water inventory は `Ocean + Ice` のみとし、
 湖・河川・土壌水・地下水などの陸上一時貯留水は diagnostics に留める。
-`Environment` 期への遷移直後はスピンアップ窓を持ち、`ice -> ocean` coupling を段階的に有効化する。
-また `sea_level_offset` 自体は即時更新せず、`sea_level_relaxation_tau_ticks` で指数緩和する。
-さらに氷量増減に応じて `ocean_water_inventory` を逆符号で更新し、
-`Ocean + (sea_level_coupling * Ice)` の全球 proxy が保存されるようにする。
+`Environment` 期への遷移直後はスピンアップ窓を持ち、`ice -> ocean` coupling を段階的に有効化する。  
+加えて、cryosphere reservoir 自体も通常運転へ即時遷移させない。
+`environment_spinup_ticks` の間は次を段階的に有効化する。
+
+- accumulation / ablation の source term
+- 氷厚更新の response alpha
+- ice-ocean exchange
+- isostatic adjustment response
+
+これにより `Environment` 初回 tick で `ice_inventory` が急増し、
+`surface_elevation` が一気に沈む shock を防ぐ。
+
+`sea_level_offset` は inventory residual を `A_eff(η)=dV/dη` で割った
+半陰的 step とし、`sea_level_relaxation_tau_ticks` の指数緩和で追従する。  
+ここで `A_eff(η)` は海盆 hypsometry から導く有効海盆面積であり、
+離散実装では current/target の submerged cell count の平均で近似する。  
+さらに semi-implicit target は `current η` と root solve した `η_eq` の bracket に clamp し、
+hypsometry の非線形で Newton-like step が overshoot しないようにする。  
+`A_eff` が小さい帯では `dη/dV` が大きくなるため、
+実効緩和時間は `tau_eff = tau_base / sqrt(A_eff_fraction)` として伸ばす。  
+`Ocean + (sea_level_coupling * Ice)` をtick内保存対象にし、氷海交換量は
+`ice_ocean_coupling_tau_ticks` 由来の交換上限で制限する。
 
 ### 氷河侵食率
 

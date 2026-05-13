@@ -3,6 +3,7 @@ import { type AppState, type WorldState } from "../state/app-state";
 import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type SyncWorldResult } from "../sim/sync/types";
+import { DEFAULT_CELL_METRIC, DEFAULT_VIEW_MODE } from "../../shared/constants";
 
 export interface TerrainGenerationController {
     updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
@@ -34,6 +35,7 @@ export interface TerrainGenerationControllerOptions {
     setCurrentEraMetrics: (metrics: EraMetrics) => void;
     setPlaybackRunning: (isPlaying: boolean) => void;
     appendPlaybackEvent: (type: string, label: string, detail?: string) => void;
+    onViewStateReset?: () => void;
     onWorldInitialized?: (worldId: string) => Promise<void>;
     onInitWorldStart?: () => Promise<void>;
     onInitWorldEnd?: () => void;
@@ -61,6 +63,7 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
         setCurrentEraMetrics,
         setPlaybackRunning,
         appendPlaybackEvent,
+        onViewStateReset = () => {},
         onWorldInitialized = async () => {},
         onInitWorldStart = () => {},
         onInitWorldEnd = () => {},
@@ -104,9 +107,12 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             setActiveWorldId(worldId);
             setCurrentState({
                 currentSeed: nextSeed,
+                currentViewMode: DEFAULT_VIEW_MODE,
+                currentCellMetric: DEFAULT_CELL_METRIC,
             });
             setCurrentEraMetrics(currentEraMetrics);
             await onWorldInitialized(worldId);
+            onViewStateReset();
 
             setPlaybackRunning(true);
             await syncWorldFromActiveController();

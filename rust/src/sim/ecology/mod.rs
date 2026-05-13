@@ -45,7 +45,7 @@ pub(crate) fn run_ecology_step(world: &mut World, budget: u32) {
     let cell_count = world.state.geology.height.len();
     for i in 0..cell_count {
         let height = world.state.geology.height[i];
-        if height <= 0.0 {
+        if !world.is_land_cell(i) {
             world.state.ecology.tree_cover[i] = 0.0;
             world.state.ecology.ground_cover[i] = 0.0;
             world.state.ecology.disturbance[i] = 0.0;

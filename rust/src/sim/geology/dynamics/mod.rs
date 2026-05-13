@@ -5,7 +5,7 @@ mod surface_dynamics;
 
 use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, GeologyDynamicsState, GeologyStepMetrics,
+    BoundaryDynamicsState, BoundaryType, EraKind, GeologyDynamicsState, GeologyStepMetrics,
     PlateKinematicsState, VertexCrustState, World,
 };
 
@@ -15,6 +15,9 @@ use boundary_dynamics::{
     ReclassifyBoundariesInput,
 };
 use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
+
+const ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET: f32 = 0.02;
+const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
 
 #[inline]
 fn debug_assert_finite_non_negative(value: f32, label: &str, index: usize) {
@@ -66,7 +69,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     }
 
     let cell_count = world.state.geology.height.len();
-    ensure_geology_dynamics(world, geology_state);
+    let rebuilt_runtime_state = ensure_geology_dynamics(world, geology_state);
     if should_run_debug_validation() {
         debug_validate_geology_state_with_state(
             world,
@@ -113,6 +116,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     let nbrs = &mesh.nbrs;
     let heights = &world.state.geology.height;
     let plate_id = &world.state.geology.plate_id;
+    let activity_scale = geology_activity_scale(world);
 
     let plume_force = update_mantle_heat_and_plumes(
         &mut dynamics.mantle_heat,
@@ -193,7 +197,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         next_volcanism: &mut next_volcanism,
         next_vertex_buoyancy: &mut next_vertex_buoyancy,
     };
-    let metrics = apply_stress_and_surface_update(
+    let mut metrics = apply_stress_and_surface_update(
         SurfaceUpdateInput {
             nbr_offsets,
             nbrs,
@@ -202,10 +206,15 @@ pub(crate) fn run_geology_dynamics_step_with_state(
             boundary_state: &dynamics.boundary_state,
             mantle_heat: &dynamics.mantle_heat,
             plume_force: &plume_force,
+            activity_scale,
             params: &world.control.geology_params,
         },
         &mut surface_output,
     );
+    metrics.mean_abs_surface_output_delta =
+        mean_abs_height_delta(heights, &next_height);
+    metrics.runtime_rebuild_applied = if rebuilt_runtime_state { 1.0 } else { 0.0 };
+    metrics.activity_scale = activity_scale;
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
@@ -244,10 +253,39 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     }
 }
 
+fn mean_abs_height_delta(before: &[f32], after: &[f32]) -> f32 {
+    let count = before.len().min(after.len());
+    if count == 0 {
+        return 0.0;
+    }
+    before
+        .iter()
+        .zip(after.iter())
+        .take(count)
+        .map(|(before, after)| (after - before).abs())
+        .sum::<f32>()
+        / count as f32
+}
+
+fn geology_activity_scale(world: &World) -> f32 {
+    match world.clock.epoch {
+        EraKind::Crust => 1.0,
+        EraKind::Environment => {
+            let elapsed = world
+                .clock
+                .tick
+                .saturating_sub(world.clock.transition.era_enter_tick) as f32;
+            let ramp = (elapsed / ENVIRONMENT_GEOLOGY_SPINUP_TICKS).clamp(0.0, 1.0);
+            ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET * ramp
+        }
+        _ => 1.0,
+    }
+}
+
 fn ensure_geology_dynamics(
     world: &mut World,
     geology_state: &mut crate::sim::exec::GeologyExecState,
-) {
+) -> bool {
     let cell_count = world.state.geology.height.len();
     let plate_count = world
         .state
@@ -267,7 +305,7 @@ fn ensure_geology_dynamics(
         None => true,
     };
     if !needs_rebuild {
-        return;
+        return false;
     }
 
     let plate_states = build_plate_states(&world.state.geology.plate_id);
@@ -352,6 +390,7 @@ fn ensure_geology_dynamics(
             &dynamics.vertex_states,
         );
     }
+    true
 }
 
 fn debug_validate_geology_state_with_state(

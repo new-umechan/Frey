@@ -3,6 +3,8 @@ use crate::sim::exec::{blend_alpha, lerp};
 use crate::sim::world::{EraKind, World};
 
 const RELIEF_NORMALIZER: f32 = 0.08;
+const SOLID_PRECIP_ALL_SNOW_C: f32 = 0.0;
+const SOLID_PRECIP_ALL_RAIN_C: f32 = 2.0;
 
 pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     if budget == 0 {
@@ -14,7 +16,11 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
         return;
     }
 
-    let alpha = blend_alpha(budget, params.thickness_response_rate.clamp(0.01, 0.95));
+    let spinup = environment_spinup_factor(world, &params);
+    let alpha = blend_alpha(
+        budget,
+        (params.thickness_response_rate * spinup).clamp(0.0, 0.95),
+    );
     let prev_ice_inventory = world.control.ice_inventory.max(0.0);
     let cell_count = world.state.geology.height.len();
     ensure_state_len(world, cell_count);
@@ -24,47 +30,90 @@ pub(crate) fn run_glaciology_step(world: &mut World, budget: u32) {
     let precipitation = world.state.climate.precipitation.clone();
     let nbr_offsets = world.mesh().nbr_offsets.clone();
     let nbrs = world.mesh().nbrs.clone();
-
-    let state = &mut world.state.glaciology;
-    let mut total_ice = 0.0f32;
+    let prev_ice_thickness = world.state.glaciology.ice_thickness.clone();
+    let prev_isostatic_adjustment = world.state.glaciology.isostatic_adjustment.clone();
+    let mut accumulation_potential = vec![0.0f32; cell_count];
+    let mut ablation_potential = vec![0.0f32; cell_count];
+    let mut ice_candidate = vec![0.0f32; cell_count];
+    let mut isostatic_candidate = vec![0.0f32; cell_count];
+    let mut glacial_erosion_candidate = vec![0.0f32; cell_count];
+    let mut total_ice_candidate = 0.0f32;
+    let mut total_accum_potential = 0.0f32;
+    let mut total_ablation_potential = 0.0f32;
     for i in 0..cell_count {
         let temp_c = temperatures.get(i).copied().unwrap_or(0.0);
         let precip_mm = precipitation.get(i).copied().unwrap_or(0.0).max(0.0);
-        let prev_ice = state.ice_thickness[i].max(0.0);
+        let prev_ice = prev_ice_thickness.get(i).copied().unwrap_or(0.0).max(0.0);
         let relief = local_relief(i, &heights, &nbr_offsets, &nbrs);
 
-        let cold_excess = (params.accum_temp_threshold_c - temp_c).max(0.0);
-        let warm_excess = (temp_c - params.ablation_temp_threshold_c).max(0.0);
+        // PDD系: solid precipitation fraction (0C..2Cで線形遷移)。
+        let solid_frac = if temp_c <= SOLID_PRECIP_ALL_SNOW_C {
+            1.0
+        } else if temp_c >= SOLID_PRECIP_ALL_RAIN_C {
+            0.0
+        } else {
+            (SOLID_PRECIP_ALL_RAIN_C - temp_c)
+                / (SOLID_PRECIP_ALL_RAIN_C - SOLID_PRECIP_ALL_SNOW_C)
+        };
+        let accumulation_target =
+            precip_mm * params.accumulation_gain.max(0.0) * solid_frac * spinup;
+        let pdd = (temp_c - params.ablation_temp_threshold_c).max(0.0);
+        let ablation_target = pdd * params.ablation_gain.max(0.0) * spinup;
+        accumulation_potential[i] = accumulation_target.max(0.0);
+        ablation_potential[i] = ablation_target.max(0.0);
+        total_accum_potential += accumulation_potential[i];
+        total_ablation_potential += ablation_potential[i];
 
-        let accumulation_target = precip_mm
-            * params.accumulation_gain.max(0.0)
-            * (1.0 + cold_excess * params.accumulation_temp_sensitivity.max(0.0));
-        let ablation_target = warm_excess * params.ablation_gain.max(0.0) * (1.0 + relief * 0.35);
+        let next_raw = (prev_ice + accumulation_potential[i] - ablation_potential[i]).max(0.0);
+        let candidate = lerp(prev_ice, next_raw, alpha).max(0.0);
+        ice_candidate[i] = candidate;
+        total_ice_candidate += candidate;
 
-        state.accumulation[i] = accumulation_target.max(0.0);
-        state.ablation[i] = ablation_target.max(0.0);
-
-        let next_raw = (prev_ice + state.accumulation[i] - state.ablation[i]).max(0.0);
-        state.ice_thickness[i] = lerp(prev_ice, next_raw, alpha).max(0.0);
-        state.ice_load[i] = state.ice_thickness[i];
         let target_isostatic_adjustment =
-            -state.ice_load[i] * params.ice_load_to_bedrock_coupling.max(0.0);
+            -candidate * params.ice_load_to_bedrock_coupling.max(0.0);
         let isostatic_alpha =
-            blend_alpha(budget, params.isostatic_adjustment_rate.clamp(0.01, 0.95));
-        state.isostatic_adjustment[i] = lerp(
-            state.isostatic_adjustment[i],
+            blend_alpha(budget, (params.isostatic_adjustment_rate * spinup).clamp(0.0, 0.95));
+        isostatic_candidate[i] = lerp(
+            prev_isostatic_adjustment.get(i).copied().unwrap_or(0.0),
             target_isostatic_adjustment,
             isostatic_alpha,
         );
-        total_ice += state.ice_thickness[i];
-
-        let melt_source = (state.ablation[i] - state.accumulation[i]).max(0.0);
-        state.glacial_melt_runoff[i] = melt_source * params.melt_runoff_gain.max(0.0);
-        state.glacial_erosion_rate[i] =
-            state.ice_thickness[i] * relief * params.erosion_gain.max(0.0);
+        glacial_erosion_candidate[i] = candidate * relief * params.erosion_gain.max(0.0);
     }
-    let total_ice = apply_ice_ocean_mass_transfer(world, &params, prev_ice_inventory, total_ice);
-    world.control.ice_inventory = total_ice;
+
+    let exchange_alpha = tau_to_alpha(params.ice_ocean_coupling_tau_ticks.max(1.0)) * spinup;
+    let target_ice_inventory = apply_ice_ocean_mass_transfer(
+        world,
+        &params,
+        prev_ice_inventory,
+        total_ice_candidate,
+        exchange_alpha,
+    );
+    let scale = if total_ice_candidate > 1e-6 {
+        target_ice_inventory / total_ice_candidate
+    } else {
+        0.0
+    };
+    let state = &mut world.state.glaciology;
+    for i in 0..cell_count {
+        state.ice_thickness[i] = ice_candidate[i] * scale;
+        state.ice_load[i] = state.ice_thickness[i];
+        state.isostatic_adjustment[i] = isostatic_candidate[i];
+        state.glacial_erosion_rate[i] = glacial_erosion_candidate[i] * scale;
+        state.accumulation[i] = if total_accum_potential > 1e-6 {
+            accumulation_potential[i] * ((target_ice_inventory - prev_ice_inventory).max(0.0) / total_accum_potential).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        state.ablation[i] = if total_ablation_potential > 1e-6 {
+            ablation_potential[i] * ((prev_ice_inventory - target_ice_inventory).max(0.0) / total_ablation_potential).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let melt_source = state.ablation[i].max(0.0);
+        state.glacial_melt_runoff[i] = melt_source * params.melt_runoff_gain.max(0.0);
+    }
+    world.control.ice_inventory = target_ice_inventory;
     update_sea_level_offset_from_inventory(world, &params);
 }
 
@@ -73,6 +122,7 @@ fn apply_ice_ocean_mass_transfer(
     params: &GlaciologyParams,
     prev_ice_inventory: f32,
     next_ice_inventory: f32,
+    exchange_alpha: f32,
 ) -> f32 {
     let coupling = params.sea_level_coupling.max(0.0);
     if coupling <= 0.0 {
@@ -81,8 +131,14 @@ fn apply_ice_ocean_mass_transfer(
     // Preserve the pre-step combined proxy mass for this tick.
     let target_mass_proxy =
         world.control.ocean_water_inventory.max(0.0) + coupling * prev_ice_inventory.max(0.0);
+    let available_ocean_ice_equiv = (world.control.ocean_water_inventory.max(0.0) / coupling).max(0.0);
+    let max_growth = available_ocean_ice_equiv * exchange_alpha;
+    let max_melt = prev_ice_inventory.max(0.0) * exchange_alpha;
+    let raw_delta = next_ice_inventory.max(0.0) - prev_ice_inventory.max(0.0);
+    let limited_delta = raw_delta.clamp(-max_melt, max_growth);
+    let desired_ice = (prev_ice_inventory.max(0.0) + limited_delta).max(0.0);
     let max_supported_ice = (target_mass_proxy / coupling).max(0.0);
-    let capped_ice = next_ice_inventory.max(0.0).min(max_supported_ice);
+    let capped_ice = desired_ice.min(max_supported_ice);
     let desired_ocean = (target_mass_proxy - coupling * capped_ice).max(0.0);
     let delta_ice = capped_ice - prev_ice_inventory;
     if delta_ice.abs() <= params.mass_conservation_epsilon.max(0.0) {
@@ -98,15 +154,33 @@ fn update_sea_level_offset_from_inventory(world: &mut World, params: &Glaciology
     let coupling = effective_ice_ocean_coupling(world, params, spinup);
     let target_water_inventory =
         effective_ocean_water_inventory(world.control.ocean_water_inventory, coupling);
+    let current_offset = world.control.sea_level_offset;
+    let current_inventory = sea_water_inventory_at_offset(&world.state.geology.height, current_offset);
     let target_offset = solve_sea_level_for_inventory(
         &world.state.geology.height,
         target_water_inventory,
-        world.control.sea_level_offset,
+        current_offset,
     );
-    let alpha = tau_to_alpha(params.sea_level_relaxation_tau_ticks.max(1.0));
-    world.control.sea_level_offset = lerp(
-        world.control.sea_level_offset,
+    let effective_basin_area = mean_basin_area_between_offsets(
+        &world.state.geology.height,
+        current_offset,
         target_offset,
+    )
+    .max(1.0);
+    let inventory_residual = target_water_inventory - current_inventory;
+    let semi_implicit_target = current_offset + inventory_residual / effective_basin_area;
+    let lower = current_offset.min(target_offset);
+    let upper = current_offset.max(target_offset);
+    let bounded_target = semi_implicit_target.clamp(lower, upper);
+    let tau = effective_sea_level_tau_ticks(
+        params.sea_level_relaxation_tau_ticks,
+        effective_basin_area,
+        world.state.geology.height.len(),
+    );
+    let alpha = tau_to_alpha(tau);
+    world.control.sea_level_offset = lerp(
+        current_offset,
+        bounded_target,
         alpha,
     );
 }
@@ -238,12 +312,44 @@ fn tau_to_alpha(tau_ticks: f32) -> f32 {
     (1.0 - (-1.0 / tau).exp()).clamp(0.0, 1.0)
 }
 
+fn effective_sea_level_tau_ticks(
+    base_tau_ticks: f32,
+    effective_basin_area: f32,
+    cell_count: usize,
+) -> f32 {
+    let base_tau = base_tau_ticks.max(1.0);
+    if cell_count == 0 {
+        return base_tau;
+    }
+    let area_fraction = (effective_basin_area / cell_count as f32)
+        .clamp(1.0 / cell_count as f32, 1.0);
+    base_tau / area_fraction.sqrt()
+}
+
 fn sea_water_inventory_at_offset(heights: &[f32], sea_level_offset: f32) -> f32 {
     heights
         .iter()
         .copied()
         .map(|h| (sea_level_offset - h).max(0.0))
         .sum()
+}
+
+fn sea_basin_area_at_offset(heights: &[f32], sea_level_offset: f32) -> f32 {
+    heights
+        .iter()
+        .copied()
+        .filter(|h| *h < sea_level_offset)
+        .count() as f32
+}
+
+fn mean_basin_area_between_offsets(
+    heights: &[f32],
+    current_offset: f32,
+    target_offset: f32,
+) -> f32 {
+    let current_area = sea_basin_area_at_offset(heights, current_offset);
+    let target_area = sea_basin_area_at_offset(heights, target_offset);
+    0.5 * (current_area + target_area)
 }
 
 #[cfg(test)]
@@ -302,6 +408,7 @@ mod tests {
         let mut world = build_test_world();
         world.clock.epoch = EraKind::Environment;
         world.state.glaciology.ice_thickness = vec![12.0, 8.0, 5.0, 3.0];
+        world.control.ice_inventory = 28.0;
         world.state.climate.temperature = vec![5.0, 7.0, 6.0, 4.0];
         world.state.climate.precipitation = vec![400.0, 300.0, 200.0, 150.0];
 
@@ -353,5 +460,16 @@ mod tests {
             .isostatic_adjustment
             .iter()
             .any(|v| *v < 0.0));
+    }
+
+    #[test]
+    fn sea_basin_area_grows_monotonically_with_offset() {
+        let heights = vec![-0.3, -0.1, 0.05, 0.2];
+        let low = sea_basin_area_at_offset(&heights, -0.2);
+        let mid = sea_basin_area_at_offset(&heights, 0.0);
+        let high = sea_basin_area_at_offset(&heights, 0.3);
+
+        assert!(low <= mid);
+        assert!(mid <= high);
     }
 }

@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -115,7 +117,8 @@ pub struct PrecomputedWorldSnapshotView {
     pub plate_relation_count: usize,
 }
 
-pub const SNAPSHOT_FORMAT_VERSION: u32 = 1;
+// Bump when snapshot semantics change (e.g. era-transition hydrology/glaciology coupling).
+pub const SNAPSHOT_FORMAT_VERSION: u32 = 3;
 
 pub fn canonical_cache_dir() -> PathBuf {
     PathBuf::from(".cache/frey/alpha-snapshots")
@@ -153,7 +156,7 @@ pub fn save_snapshot(
             )
         })?;
     }
-    fs::write(path, bytes)
+    atomic_write(path, &bytes)
         .map_err(|err| format!("failed to write snapshot {}: {err}", path.display()))
 }
 
@@ -188,7 +191,7 @@ pub fn save_snapshot_view(
             )
         })?;
     }
-    fs::write(path, json)
+    atomic_write(path, json.as_bytes())
         .map_err(|err| format!("failed to write snapshot view {}: {err}", path.display()))
 }
 
@@ -215,8 +218,36 @@ pub fn save_manifest(
             )
         })?;
     }
-    fs::write(path, json)
+    atomic_write(path, json.as_bytes())
         .map_err(|err| format!("failed to write manifest {}: {err}", path.display()))
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("missing parent directory for {}", path.display()))?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| format!("invalid file name for {}", path.display()))?;
+    let tmp_path = parent.join(format!(".{file_name}.tmp"));
+
+    let result = (|| -> Result<(), String> {
+        let mut file = File::create(&tmp_path)
+            .map_err(|err| format!("create {}: {err}", tmp_path.display()))?;
+        file.write_all(bytes)
+            .map_err(|err| format!("write {}: {err}", tmp_path.display()))?;
+        file.sync_all()
+            .map_err(|err| format!("sync {}: {err}", tmp_path.display()))?;
+        drop(file);
+        fs::rename(&tmp_path, path)
+            .map_err(|err| format!("rename {} -> {}: {err}", tmp_path.display(), path.display()))
+    })();
+
+    if result.is_err() && tmp_path.exists() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+    result
 }
 
 pub fn restore_world_from_snapshot(

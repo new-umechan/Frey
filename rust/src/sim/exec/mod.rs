@@ -40,6 +40,8 @@ pub use profiling_exec::{
 use super::world::EraKind;
 
 pub(crate) const MAX_HEIGHT_DELTA_PER_STEP: f32 = 0.020;
+pub(crate) const GEOLOGY_HEIGHT_MIN: f32 = -1.2;
+pub(crate) const GEOLOGY_HEIGHT_MAX: f32 = 1.2;
 pub(crate) const DEFAULT_DIFFUSION_WEIGHT: f32 = 0.06;
 pub(crate) const CONVERGENT_THRESHOLD: f32 = 0.010;
 pub(crate) const DIVERGENT_THRESHOLD: f32 = 0.010;

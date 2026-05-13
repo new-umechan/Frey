@@ -107,6 +107,7 @@ mod cases {
             &plate_id,
             &attributes,
             super::clamp(params.ocean_plate_ratio + 0.04, 0.55, 0.78),
+            params,
         );
         super::apply_hotspot_island_chains(
             &positions,
@@ -123,10 +124,11 @@ mod cases {
             &nbr_offsets,
             &nbrs,
             &height,
+            0.0,
             params.river_rain_base,
             params.river_accumulation_threshold,
         );
-        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
+        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height, 0.0);
         let vertex_weight = vertex_lithosphere
             .iter()
             .map(|lith| lith.weight)
@@ -270,8 +272,8 @@ mod cases {
         let height = vec![0.30, 0.50, 0.40, -0.10];
 
         let (_river_flux, river_next) =
-            super::compute_river_flux_and_next(&positions, &nbr_offsets, &nbrs, &height, 0.5);
-        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height);
+            super::compute_river_flux_and_next(&positions, &nbr_offsets, &nbrs, &height, 0.0, 0.5);
+        let lake_depth = compute_lake_depth_map(&positions, &nbr_offsets, &nbrs, &height, 0.0);
 
         assert_eq!(river_next[0], 1);
         assert_eq!(river_next[1], 2);

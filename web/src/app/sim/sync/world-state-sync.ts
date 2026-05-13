@@ -63,6 +63,7 @@ export async function syncWorldFromController(options: SyncOptions): Promise<Syn
         metrics,
     });
 
+    terrainRenderer.setSeaLevelOffset(world.engineView.seaLevelOffset);
     terrainRenderer.initializeTerrain(core, currentSurfaceMode);
 
     return {
@@ -101,6 +102,7 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
     const deltaView = (worldDelta ?? {}) as {
         tick?: unknown;
         era?: unknown;
+        sea_level_offset?: unknown;
         budgets?: {
             geology?: unknown;
             climate?: unknown;
@@ -120,6 +122,12 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
         ecology: sanitizeBudget(deltaView.budgets?.ecology),
         civilization: sanitizeBudget(deltaView.budgets?.civilization),
     };
+    if (typeof deltaView.sea_level_offset === "number") {
+        const seaLevelOffset = Number(deltaView.sea_level_offset);
+        if (Number.isFinite(seaLevelOffset)) {
+            world.engineView.seaLevelOffset = seaLevelOffset;
+        }
+    }
     const deltaResult = applyWorldDeltaToCore(core, deltaView as { deltas?: FieldDelta[] });
     const { changes, dirtyCells } = deltaResult;
     world.engineView.deltaRevision += 1;
@@ -133,9 +141,13 @@ export async function syncWorldDeltaFromController(options: SyncDeltaOptions): P
             const era = String(metrics.era ?? world.era);
             eraMetrics = buildEraMetricsFromRuntime(era, metrics);
             setEraScale(era);
+            if (Number.isFinite(metrics.sea_level_offset)) {
+                world.engineView.seaLevelOffset = Number(metrics.sea_level_offset);
+            }
         }
     }
 
+    terrainRenderer.setSeaLevelOffset(world.engineView.seaLevelOffset);
     terrainRenderer.applyCoreChanges(core, deltaResult, currentSurfaceMode, world.tick, perfRecorder);
 
     return {

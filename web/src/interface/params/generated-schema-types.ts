@@ -283,6 +283,10 @@ export interface TerrainSchemaParams {
     subduction_age_coupling: number;
     subduction_initiation_threshold: number;
     subduction_density_threshold: number;
+    hypsometry_land_p50: number;
+    hypsometry_land_p90: number;
+    hypsometry_ocean_p50: number;
+    hypsometry_ocean_p90: number;
     mantle_heat_input: number;
     mantle_heat_loss: number;
     mantle_diffusion_rate: number;
@@ -381,6 +385,10 @@ export const TerrainSchemaParamsKeys = [
     "subduction_age_coupling",
     "subduction_initiation_threshold",
     "subduction_density_threshold",
+    "hypsometry_land_p50",
+    "hypsometry_land_p90",
+    "hypsometry_ocean_p50",
+    "hypsometry_ocean_p90",
     "mantle_heat_input",
     "mantle_heat_loss",
     "mantle_diffusion_rate",

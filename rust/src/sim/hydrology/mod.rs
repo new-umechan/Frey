@@ -29,7 +29,10 @@ use network::{
     smooth_and_normalize_flux, RiverNetworkConstraintBuffers, RiverNetworkConstraintInput,
 };
 use profiling::{profile_elapsed_ms, profile_now};
-use routing::{apply_baseflow_storage, build_runoff_for_routing, should_rebuild_network};
+use routing::{
+    apply_baseflow_storage, build_runoff_for_routing, environment_hydrology_spinup_factor,
+    should_rebuild_network,
+};
 pub(crate) use sync::sync_erosion_height;
 use sync::{erosion_state_matches_world, sync_erosion_rain};
 
@@ -110,6 +113,7 @@ pub fn apply_hydrology_state_view(
     rebuild_fill_spill_state(
         &mut world.state.hydrology,
         &world.state.geology.height,
+        world.control.sea_level_offset,
         &mesh_nbr_offsets,
         &mesh_nbrs,
         &world.control.geology_params,
@@ -120,6 +124,7 @@ pub fn apply_hydrology_state_view(
     update_public_lake_flags(
         &mut world.state.hydrology,
         &world.state.geology.height,
+        world.control.sea_level_offset,
         &world.control.geology_params,
     );
     Ok(())
@@ -136,6 +141,7 @@ pub fn sync_hydrology_state_for_headless_runner(
         return;
     }
     state.tick = world.clock.tick;
+    state.sea_level_offset = world.control.sea_level_offset;
     state.last_river_driver = 1.0;
     state.params = params.clone();
     state.recent_changed.clear();
@@ -203,6 +209,7 @@ fn run_river_step_with_erosion_state(
     detail: &mut HydrologyStepDetailBreakdown,
 ) -> bool {
     let tick = world.clock.tick;
+    let response_scale = environment_hydrology_spinup_factor(world);
     let geology = &mut world.state.geology;
     let hydrology = &mut world.state.hydrology;
     let expected_height = geology.height.len();
@@ -229,6 +236,7 @@ fn run_river_step_with_erosion_state(
         &mut state.groundwater_storage,
         &state.params,
         &geology.height,
+        world.control.sea_level_offset,
         &state.nbr_offsets,
         &state.nbrs,
         runoff,
@@ -263,11 +271,12 @@ fn run_river_step_with_erosion_state(
             rebuild_fill_spill_state(
                 hydrology,
                 &state.height,
+                world.control.sea_level_offset,
                 &state.nbr_offsets,
                 &state.nbrs,
                 &state.params,
-                Some(&state.water),
-                Some(&state.sediment),
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
             );
             state.last_sink_full_rebuild_tick = state.tick;
             let elapsed = profile_elapsed_ms(phase_start);
@@ -300,8 +309,9 @@ fn run_river_step_with_erosion_state(
             refresh_fill_spill_storage_and_lakes(
                 hydrology,
                 &state.height,
-                Some(&state.water),
-                Some(&state.sediment),
+                world.control.sea_level_offset,
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
                 &state.params,
             );
         }
@@ -309,8 +319,9 @@ fn run_river_step_with_erosion_state(
             refresh_fill_spill_storage_and_lakes(
                 hydrology,
                 &state.height,
-                Some(&state.water),
-                Some(&state.sediment),
+                world.control.sea_level_offset,
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
                 &state.params,
             );
             detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
@@ -325,6 +336,7 @@ fn run_river_step_with_erosion_state(
             &state.nbr_offsets,
             &state.nbrs,
             &state.height,
+            world.control.sea_level_offset,
             effective_runoff.as_slice(),
             &state.params,
             Some(&*state),
@@ -348,6 +360,7 @@ fn run_river_step_with_erosion_state(
         apply_river_network_constraints(
             RiverNetworkConstraintInput {
                 height: &state.height,
+                sea_level_offset: world.control.sea_level_offset,
                 previous_flux: &state.river_flux,
                 accumulation_threshold: state.params.river_accumulation_threshold,
             },
@@ -384,14 +397,24 @@ fn run_river_step_with_erosion_state(
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
-    update_erosion_and_deposition_rates(geology, hydrology, &state.height);
+    update_erosion_and_deposition_rates(
+        geology,
+        hydrology,
+        &state.height,
+        response_scale,
+    );
     // raw_river_flux（正規化前）を river_flow として使用
     hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
     if hydrology.river_downstream.len() != hydrology.river_next.len() {
         rebuild_mfd_from_primary(hydrology);
     }
-    update_public_lake_flags(hydrology, &state.height, &state.params);
+    update_public_lake_flags(
+        hydrology,
+        &state.height,
+        world.control.sea_level_offset,
+        &state.params,
+    );
     for i in 0..hydrology.river_transport_cost.len() {
         hydrology.river_transport_cost[i] = 1.0 / (1.0 + hydrology.river_flow[i].sqrt());
     }
@@ -426,11 +449,12 @@ fn run_river_flow_only_with_state(
             rebuild_fill_spill_state(
                 hydrology,
                 &state.height,
+                world.control.sea_level_offset,
                 &state.nbr_offsets,
                 &state.nbrs,
                 &state.params,
-                Some(&state.water),
-                Some(&state.sediment),
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
             );
             state.last_sink_full_rebuild_tick = state.tick;
             detail.sink_full_rebuild_ms += profile_elapsed_ms(phase_start);
@@ -459,8 +483,9 @@ fn run_river_flow_only_with_state(
             refresh_fill_spill_storage_and_lakes(
                 hydrology,
                 &state.height,
-                Some(&state.water),
-                Some(&state.sediment),
+                world.control.sea_level_offset,
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
                 &state.params,
             );
         }
@@ -468,8 +493,9 @@ fn run_river_flow_only_with_state(
             refresh_fill_spill_storage_and_lakes(
                 hydrology,
                 &state.height,
-                Some(&state.water),
-                Some(&state.sediment),
+                world.control.sea_level_offset,
+                Some(state.water.as_slice()),
+                Some(state.sediment.as_slice()),
                 &state.params,
             );
             detail.sink_rebuild_skipped_count = detail.sink_rebuild_skipped_count.saturating_add(1);
@@ -483,6 +509,7 @@ fn run_river_flow_only_with_state(
         &mut state.groundwater_storage,
         &state.params,
         &geology.height,
+        world.control.sea_level_offset,
         &state.nbr_offsets,
         &state.nbrs,
         runoff,
@@ -498,6 +525,7 @@ fn run_river_flow_only_with_state(
     }
     let raw_flux = flow_flux_on_downstream_network(
         &geology.height,
+        world.control.sea_level_offset,
         hydrology.river_downstream.as_slice(),
         &effective_runoff,
     );
@@ -519,6 +547,7 @@ fn run_river_flow_only_with_state(
     refresh_fill_spill_storage_and_lakes(
         hydrology,
         &state.height,
+        world.control.sea_level_offset,
         Some(&state.water),
         Some(&state.sediment),
         &state.params,
@@ -530,7 +559,12 @@ fn run_river_flow_only_with_state(
     if hydrology.river_downstream.len() != hydrology.river_next.len() {
         rebuild_mfd_from_primary(hydrology);
     }
-    update_public_lake_flags(hydrology, &state.height, &state.params);
+    update_public_lake_flags(
+        hydrology,
+        &state.height,
+        world.control.sea_level_offset,
+        &state.params,
+    );
     hydrology.erosion_rate.fill(0.0);
     hydrology.deposition_rate.fill(0.0);
     for i in 0..hydrology.river_transport_cost.len() {
@@ -543,6 +577,7 @@ fn run_river_flow_only_with_state(
 
 fn flow_flux_on_downstream_network(
     height: &[f32],
+    sea_level_offset: f32,
     river_downstream: &[SmallVec<[(u32, f32); 4]>],
     runoff: &[f32],
 ) -> Vec<f32> {
@@ -556,12 +591,12 @@ fn flow_flux_on_downstream_network(
 
     let mut flux = vec![0.0; count];
     for i in 0..count {
-        if height[i] > 0.0 {
+        if height[i] > sea_level_offset {
             flux[i] = runoff[i].max(0.0);
         }
     }
     for &i in &order {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             flux[i] = 0.0;
             continue;
         }
@@ -582,6 +617,7 @@ fn update_erosion_and_deposition_rates(
     geology: &crate::sim::world::GeologyState,
     hydrology: &mut crate::sim::world::HydrologyState,
     next_height: &[f32],
+    response_scale: f32,
 ) {
     let count = geology
         .height
@@ -592,7 +628,7 @@ fn update_erosion_and_deposition_rates(
     hydrology.erosion_rate.fill(0.0);
     hydrology.deposition_rate.fill(0.0);
     for (i, &next_h) in next_height.iter().enumerate().take(count) {
-        let delta = next_h - geology.height[i];
+        let delta = (next_h - geology.height[i]) * response_scale.clamp(0.0, 1.0);
         if delta >= 0.0 {
             hydrology.deposition_rate[i] = delta;
         } else {
@@ -770,5 +806,40 @@ mod tests {
                 .unwrap_or(-1);
             assert_eq!(max_weight_target, next, "cell {cell} target mismatch");
         }
+    }
+
+    #[test]
+    fn environment_spinup_factor_ramps_from_zero_to_one() {
+        let mut world = build_test_world();
+        world.clock.epoch = EraKind::Environment;
+        world.clock.transition.era_enter_tick = 800;
+
+        world.clock.tick = 800;
+        assert_eq!(routing::environment_hydrology_spinup_factor(&world), 0.0);
+
+        world.clock.tick = 801;
+        let expected = 1.0 / crate::sim::glaciology::types::GlaciologyParams::default()
+            .environment_spinup_ticks as f32;
+        assert!(
+            (routing::environment_hydrology_spinup_factor(&world) - expected).abs() < 1e-6
+        );
+
+        world.clock.tick = 900;
+        assert_eq!(routing::environment_hydrology_spinup_factor(&world), 1.0);
+    }
+
+    #[test]
+    fn erosion_and_deposition_rates_respect_response_scale() {
+        let world = build_test_world();
+        let geology = &world.state.geology;
+        let mut hydrology = world.state.hydrology.clone();
+        let next_height = vec![1.1, 0.95, 0.4, -0.1];
+
+        update_erosion_and_deposition_rates(geology, &mut hydrology, &next_height, 0.25);
+
+        assert!((hydrology.erosion_rate[0] - 0.025).abs() < 1e-6);
+        assert!((hydrology.deposition_rate[1] - 0.0125).abs() < 1e-6);
+        assert!((hydrology.erosion_rate[2] - 0.05).abs() < 1e-6);
+        assert!((hydrology.deposition_rate[3] - 0.025).abs() < 1e-6);
     }
 }

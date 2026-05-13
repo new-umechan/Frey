@@ -37,6 +37,7 @@ pub(crate) fn build_erosion_state(
         in_queue: vec![1; cell_count],
         rain_cursor: 0,
         tick: world.clock.tick,
+        sea_level_offset: world.control.sea_level_offset,
         last_rebuild_tick: world.clock.tick.saturating_sub(1),
         last_sink_full_rebuild_tick: world
             .clock
@@ -91,6 +92,7 @@ pub(crate) fn sync_erosion_state_full(managed: &mut ManagedWorld) {
         *rain = (runoff.max(0.0) / EROSION_RAIN_SCALE_MM).clamp(0.0, 1.0);
     }
     state.tick = world.clock.tick;
+    state.sea_level_offset = world.control.sea_level_offset;
     state.last_river_driver = 1.0;
     state.params = params;
     state.recent_changed.clear();
@@ -113,6 +115,7 @@ pub(crate) fn post_step_sync_light(managed: &mut ManagedWorld) {
         return;
     }
     state.tick = world.clock.tick;
+    state.sea_level_offset = world.control.sea_level_offset;
     state.last_river_driver = 1.0;
     state.params = params;
     state.recent_changed.clear();

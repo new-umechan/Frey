@@ -247,6 +247,18 @@ subduction_initiation_threshold:
 subduction_density_threshold:
   type: f32
   value: 0.62
+hypsometry_land_p50:
+  type: f32
+  value: 0.06
+hypsometry_land_p90:
+  type: f32
+  value: 0.20
+hypsometry_ocean_p50:
+  type: f32
+  value: 0.12
+hypsometry_ocean_p90:
+  type: f32
+  value: 0.32
 mantle_heat_input:
   type: f32
   value: 0.010

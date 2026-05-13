@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::glaciology::types::GlaciologyParams;
 
 /// mm/yr を m³/s に変換する係数
 /// 計算：cell_area_m2 / (1000 * seconds_per_year)
@@ -7,8 +8,7 @@ const RUNOFF_MM_YR_TO_M3S: f32 = 0.395;
 
 pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
     if world.clock.epoch != EraKind::Crust {
-        // runoff (mm/yr) を m³/s に変換
-        return world
+        let climate_runoff = world
             .state
             .climate
             .runoff
@@ -25,15 +25,34 @@ pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
                 (runoff_mm_yr + melt_mm_yr).max(0.0)
             })
             .map(|runoff_mm_yr| runoff_mm_yr * RUNOFF_MM_YR_TO_M3S)
+            .collect::<Vec<_>>();
+        if world.clock.epoch != EraKind::Environment {
+            return climate_runoff;
+        }
+
+        let spinup = environment_hydrology_spinup_factor(world);
+        if spinup >= 1.0 {
+            return climate_runoff;
+        }
+
+        let crust_proxy = crust_proxy_runoff(world);
+        return climate_runoff
+            .into_iter()
+            .zip(crust_proxy)
+            .map(|(climate, crust)| crust + (climate - crust) * spinup)
             .collect();
     }
+    crust_proxy_runoff(world)
+}
+
+fn crust_proxy_runoff(world: &World) -> Vec<f32> {
     world
         .state
         .geology
         .height
         .iter()
         .map(|&h| {
-            if h > 0.0 {
+            if h > world.control.sea_level_offset {
                 CRUST_RAIN_LAND
             } else {
                 CRUST_RAIN_SEA
@@ -42,10 +61,24 @@ pub(super) fn build_runoff_for_routing(world: &World) -> Vec<f32> {
         .collect()
 }
 
+pub(super) fn environment_hydrology_spinup_factor(world: &World) -> f32 {
+    if world.clock.epoch != EraKind::Environment {
+        return 1.0;
+    }
+    let params = GlaciologyParams::default();
+    let elapsed_ticks = world
+        .clock
+        .tick
+        .saturating_sub(world.clock.transition.era_enter_tick) as f32;
+    let window = params.environment_spinup_ticks.max(1) as f32;
+    (elapsed_ticks / window).clamp(0.0, 1.0)
+}
+
 pub(super) fn apply_baseflow_storage(
     groundwater_storage: &mut Vec<f32>,
     params: &GeologyParams,
     height: &[f32],
+    sea_level_offset: f32,
     nbr_offsets: &[u32],
     nbrs: &[u32],
     runoff: &[f32],
@@ -65,7 +98,7 @@ pub(super) fn apply_baseflow_storage(
 
     for i in 0..v_count {
         let rain = runoff[i].max(0.0);
-        if height.get(i).copied().unwrap_or(-1.0) <= 0.0 {
+        if height.get(i).copied().unwrap_or(sea_level_offset - 1.0) <= sea_level_offset {
             groundwater_storage[i] = 0.0;
             effective[i] = rain;
             continue;

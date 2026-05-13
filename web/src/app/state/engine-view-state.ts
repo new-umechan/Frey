@@ -2,6 +2,7 @@ export interface RenderState {
     tick: number;
     era: string;
     budgets: Record<string, number>;
+    seaLevelOffset: number;
     deltaRevision: number;
 }
 
@@ -17,6 +18,7 @@ export function createInitialEngineViewState(): EngineViewState {
             ecology: 0,
             civilization: 0,
         },
+        seaLevelOffset: 0,
         deltaRevision: 0,
     };
 }

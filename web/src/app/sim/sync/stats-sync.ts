@@ -37,6 +37,9 @@ export async function refreshWorldStatsFromController(options: {
         ecology: Math.max(0, Math.floor(metrics.budgets.ecology)),
         civilization: Math.max(0, Math.floor(metrics.budgets.civilization)),
     };
+    world.engineView.seaLevelOffset = Number.isFinite(metrics.sea_level_offset)
+        ? Number(metrics.sea_level_offset)
+        : world.engineView.seaLevelOffset;
     statFields.level.textContent = `L${level}`;
     statFields.seed.textContent = currentSeed;
     statFields.plates.textContent = `${metrics.plate_count ?? 0}P`;

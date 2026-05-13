@@ -590,6 +590,7 @@ fn river_network_persists_without_early_collapse() {
         in_queue: vec![1; world.cell_count()],
         rain_cursor: 0,
         tick: 0,
+        sea_level_offset: world.control.sea_level_offset,
         last_rebuild_tick: 0,
         last_sink_full_rebuild_tick: 0,
         flux_scale_ema: 1.0,

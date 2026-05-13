@@ -176,6 +176,7 @@ function createTerrainGenerationRuntime(
     context: RuntimeContext,
     playbackControllerRef: PlaybackRef,
     syncWorldFromActiveController: () => Promise<SyncWorldResult | null>,
+    onViewStateReset: () => void,
 ) {
     return createTerrainGenerationController({
         seedForm: context.dom.seedForm,
@@ -202,6 +203,7 @@ function createTerrainGenerationRuntime(
         appendPlaybackEvent: (type: string, label: string, detail?: string) => {
             playbackControllerRef.current?.appendPlaybackEvent(type, label, detail);
         },
+        onViewStateReset,
         onInitWorldStart: async () => {
             context.scene.loadingOverlayController.setWorldInitializing(true);
             context.scene.loadingOverlayController.render();
@@ -299,6 +301,9 @@ export function createRuntimeControllers(context: RuntimeContext) {
         context,
         playbackControllerRef,
         syncWorldFromActiveController,
+        () => {
+            setViewMode("normal");
+        },
     );
 
     const playbackController = createPlaybackRuntime(

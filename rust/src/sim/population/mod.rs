@@ -17,7 +17,7 @@ pub(crate) fn update_population(
     }
     let n = world.state.geology.height.len();
     for i in 0..n {
-        if world.state.geology.height[i] <= 0.0 {
+        if !world.is_land_cell(i) {
             world.state.population.population[i] *= 0.98;
             world.state.population.birth_rate[i] = 0.0;
             world.state.population.death_rate[i] = 0.03;

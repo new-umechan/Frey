@@ -337,7 +337,7 @@ pub(crate) fn run_climate_step(world: &mut World, budget: u32) {
             + hotspot_boost * tropical_transition
             - 70.0 * circulation_subsidence * subtropical_dry;
         precipitation_raw[i] = combined;
-        if world.state.geology.height[i] <= 0.0 {
+        if !world.is_land_cell(i) {
             precipitation_target[i] =
                 combined.clamp(climate_params.precip_min_mm, climate_params.precip_max_mm);
             continue;
@@ -754,7 +754,8 @@ fn orographic_signal(
         .get(index)
         .copied()
         .unwrap_or(0.0);
-    if height_here <= 0.0 {
+    let sea_level = world.control.sea_level_offset;
+    if height_here <= sea_level {
         return OrographicSignal::default();
     }
 
@@ -781,7 +782,7 @@ fn orographic_signal(
         let h_next = world.state.geology.height.get(next).copied().unwrap_or(0.0);
         rise_m += ((h_current - h_next).max(0.0)) * params.height_to_meters / 1_000.0;
         samples += 1.0;
-        if h_next <= 0.0 {
+        if h_next <= sea_level {
             ocean_hits += 1.0;
         }
         current = next;
@@ -820,7 +821,15 @@ fn upwind_ocean_fraction(
             break;
         }
         samples += 1.0;
-        if world.state.geology.height.get(next).copied().unwrap_or(0.0) <= 0.0 {
+        if world
+            .state
+            .geology
+            .height
+            .get(next)
+            .copied()
+            .unwrap_or(0.0)
+            <= world.control.sea_level_offset
+        {
             ocean_hits += 1.0;
         }
         current = next;
@@ -1234,7 +1243,7 @@ fn build_neighbor_lookup(world: &World) -> NeighborLookup {
                 index: n,
                 dir,
                 edge_km,
-                is_land: world.state.geology.height[n] > 0.0,
+                is_land: world.is_land_cell(n),
             });
         }
         offsets.push(entries.len());

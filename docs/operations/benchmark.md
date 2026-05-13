@@ -25,6 +25,11 @@ docs には比較指標、更新手順、結果の読み方だけを置き、期
 Geology は次の 2 系統で検証する。
 
 - tectonics / runtime 診断ベンチ（`geology_validation_solo`）
+- crust hypsometry guard（`crust_hypsometry_guard`）
+- crust runtime hypsometry series（`crust_runtime_hypsometry_series`）
+- crust hydrology hypsometry series（`crust_hydrology_hypsometry_series`）
+- crust coupled hypsometry series（`crust_coupled_hypsometry_series`）
+- crust exec pipeline hypsometry series（`crust_exec_pipeline_hypsometry_series`）
 - 長期 tectonics 検証（`validation.md`）
 
 現行の単体 bench は `geology_validation_solo` であり、Earth preset 上で tectonics の runtime / 構造診断を記録する validation bench とする。
@@ -41,6 +46,80 @@ tectonics runtime / 構造診断は `docs/operations/bench/geology/validation_so
 長期のウィルソンサイクルと plate 構造の妥当性は `docs/operations/bench/geology/validation.md` で別管理する。
 また、沿岸低地と大陸棚の応答をみるため、`geology_solo` は `+1m/+5m/+10m/+20m/+50m` の海面上昇に対する
 land ratio / newly inundated ratio の差分診断も記録する。
+
+`crust_hypsometry_guard` は `alpha` seed の Crust 生成直後だけを評価する軽量ベンチである。
+`bedrock_coastal_band_ratio`、`land_freeboard_p10/p50/p90`、hypsometry bins を見て、
+海面近傍への過剰圧縮が初期地形に焼き込まれていないかを確認する。
+`alpha_transition_guard` の `tick=780` より前の切り分けは、まずこの bench を優先する。
+
+`crust_runtime_hypsometry_series` は Geology runtime だけを単独で進めて、
+`tick 0..N` の `coastal_band_ratio` と `geology_runtime_bedrock_band_ratio` を記録する軽量 series bench である。
+初期 Crust が健全でも `tick=780` 時点で圧縮されている場合は、この bench で悪化開始 tick を先に絞る。
+
+`crust_hydrology_hypsometry_series` は Hydrology / erosion 反映だけを単独で進めて、
+`tick 0..N` の `coastal_band_ratio` と freeboard を記録する軽量 series bench である。
+Geology 単独では問題が再現しない場合、侵食・堆積の反映で海面近傍への圧縮が入っていないかをこの bench で確認する。
+
+`crust_coupled_hypsometry_series` は `geology + climate + hydrology` だけを回して、
+Crust 中の主要結合で `coastal_band_ratio` がどう変わるかを見る軽量 series bench である。
+Geology 単独・Hydrology 単独で再現しない場合の次の切り分けとして使う。
+
+`crust_exec_pipeline_hypsometry_series` は `exec_world_with_feedback_and_hydrology` をそのまま使い、
+feedback queue・era bookkeeping・shared state 更新順を含む本番寄りの Crust runtime を薄く記録する series bench である。
+軽量 series が本番軌道を再現しない場合、最後の切り分けとしてこの bench を使う。
+`alpha_transition_guard` より軽く、`tick 0..N` の `coastal_band_ratio`、`sea_level_offset`、runtime bedrock 診断、
+`feedback_queue_len` を artifact に残す。
+加えて、`geology_runtime_mean_abs_*` を見れば、tectonic uplift / volcanic uplift / tectonic subsidence /
+thermal subsidence / diffusive smoothing / isostatic adjustment のどの項が freeboard を潰しているかを tick ごとに追える。
+また `geology_runtime_crust_recentering_*` を見れば、Crust 期の `preserve_crust_freeboard` が
+どれだけ sea-level quantile をシフトし、適用前後で沿岸帯比率をどう変えたかを追える。
+Marine diffusion の切り分けでは、
+`geology_runtime_mean_abs_diffusive_ocean_up_raw` と
+`geology_runtime_mean_abs_diffusive_ocean_up_applied` を比較する。
+raw が大きく applied が小さければ、shoreline-limited attenuation が
+深海側の basin infill を抑えていると読める。
+それでも `coastal_band_ratio` が落ちない場合は、
+`geology_runtime_mean_abs_isostatic_reference_freeboard_applied` と
+`geology_runtime_mean_abs_isostatic_compensated_anomaly_applied` を見る。
+applied ベースでも前者が支配なら、late Crust の collapse は
+isostatic target 面の押し付けが主因である。
+そのうえで向きを見るには、
+`geology_runtime_mean_signed_isostatic_reference_freeboard_applied_oceanic` と
+`geology_runtime_mean_signed_isostatic_reference_freeboard_applied_continental` を使う。
+continental 側をさらに詰める段階では、
+`geology_runtime_mean_signed_isostatic_reference_freeboard_applied_continental_orogenic` と
+`geology_runtime_mean_signed_isostatic_reference_freeboard_applied_continental_stable`
+まで見る。
+stable continental / `PassiveMargin` 診断の詳細ログと棄却仮説は、
+[legacy_hypsometry_handover.md](/Users/umehararyu/prog/100days/Frey/docs/operations/bench/geology/legacy_hypsometry_handover.md)
+を正本とする。
+
+本書では、読むべき diagnostics の種類だけを保持し、
+`vxx` ごとの artifact 比較や棄却履歴は `docs/operations/bench/geology/` 側へ分離する。
+
+Environment 期入口の切り分けでは、少なくとも次を読む。
+
+- stage attribution:
+  `geology_stage_mean_abs_height_delta`、
+  `glaciology_stage_mean_abs_height_delta`、
+  `hydrology_stage_mean_abs_height_delta`
+- runtime rebuild / era ramp:
+  `geology_runtime_activity_scale`、
+  `geology_runtime_rebuild_applied`
+- surface delta 分解:
+  `geology_runtime_mean_abs_surface_write_delta`、
+  `geology_runtime_mean_abs_surface_raw_delta`、
+  `geology_runtime_mean_abs_surface_step_delta`、
+  `geology_runtime_mean_abs_surface_step_clamp_delta`、
+  `geology_runtime_mean_abs_surface_pre_isostatic_delta`、
+  `geology_runtime_mean_abs_surface_output_delta`
+- stress carry-over 診断:
+  `geology_runtime_mean_compressive`、
+  `geology_runtime_mean_tensile`、
+  `debug_surface_max_delta_*`
+
+これらで `Environment` 初回 tick の異常が、
+surface dynamics、runtime rebuild、phase 境界書き戻しのどこにあるかを判定する。
 
 ---
 
@@ -213,6 +292,132 @@ Climate+Ecology・フルパイプラインのベンチでは、収束条件を�
 - hypsometry / relief / river flux / basin occupancy などの比較用サンプルと回帰基準は `benches/results/` を正本とする
 - `docs/operations/bench/` 配下の文書は、生成方法・更新条件・判定基準のみを書く
 - reservoir diagnostics を追加した場合も、継続比較に使う数値出力は `benches/results/` に保存する
+
+## alpha era遷移 guard（統合）
+
+`alpha_transition_guard` は era 遷移（`Crust -> Environment`）の海陸安定性をみる統合ベンチとする。
+
+`seed=alpha` かつ記録窓が stage 境界以降だけを対象にする場合、bench は対応する dev snapshot
+（`environment` / `life` / `civilization` / `history`）から自動再開してよい。
+これは計算量削減のための実行最適化であり、artifact 上には `resume_from_snapshot_stage` と
+`resume_from_snapshot_tick` を残して、どの状態から再開したかを追跡可能にする。
+ただし `transition_pre_end_tick` をまたぐ連続性検証が必要な run では cold start を維持する。
+`ALPHA_TRANSITION_SNAPSHOT_PATH` を与えた場合は、その explicit snapshot から再開してよい。
+これは `tick=780` など stage 境界以外の診断 window を短時間で反復するための開発用経路である。
+
+この bench は warning ではなく violation gate を持つ。少なくとも次を満たさない run は失敗扱いにする。
+
+- `land_ratio` が許容帯内にある
+- tick 間の `land_ratio_jump` / `sea_level_jump` / `largest_continent_ratio_jump` が閾値以下
+- 描画整合用の `render_land_ratio_diff` が閾値以下
+- `coastal_band_ratio` が閾値以下
+- `land_freeboard_p90` が過大 freeboard の上限以下
+- `water_mass_closure_drift` が絶対値・比率の両方で閾値以下
+
+`ocean_water_inventory_drift` は raw 診断値としては残すが、単独では gate に使わない。
+氷床成長や融解で ocean inventory は正当に変化するため、保存則の確認は
+`ocean + coupling * ice` の closure から導出する `water_mass_closure_drift` で行う。
+
+`alpha_transition_guard` artifact には、runtime geology の項別寄与として以下も残す。
+
+- `geology_runtime_mean_abs_tectonic_uplift`
+- `geology_runtime_mean_abs_volcanic_uplift`
+- `geology_runtime_mean_abs_tectonic_subsidence`
+- `geology_runtime_mean_abs_thermal_subsidence`
+- `geology_runtime_mean_abs_thickness_equilibrium_gap`
+- `geology_runtime_mean_abs_isostatic_equilibrium_gap`
+- `geology_runtime_mean_abs_isostatic_reference_freeboard`
+- `geology_runtime_mean_abs_isostatic_compensated_anomaly`
+- `geology_runtime_mean_density_ratio`
+- `geology_runtime_mean_abs_diffusive_raw`
+- `geology_runtime_mean_abs_diffusive_applied`
+- `geology_runtime_mean_abs_diffusive_land_down_raw`
+- `geology_runtime_mean_abs_diffusive_land_up_raw`
+- `geology_runtime_mean_abs_diffusive_ocean_down_raw`
+- `geology_runtime_mean_abs_diffusive_ocean_up_raw`
+- `geology_runtime_mean_abs_isostatic_raw`
+- `geology_runtime_mean_abs_isostatic_applied`
+- `geology_runtime_smoothing_limited_cells_ratio`
+- `geology_runtime_mean_smoothing_factor`
+- `geology_runtime_zero_mean_adjusted_cells_ratio`
+- `geology_runtime_zero_mean_mean_abs_correction`
+- `geology_runtime_zero_mean_std_delta`
+- `geology_runtime_crust_recentering_shift`
+- `geology_runtime_crust_recentering_pre_band_ratio`
+- `geology_runtime_crust_recentering_post_band_ratio`
+
+ここで `raw` は limiter 前、`applied` は limiter 後に実際に標高更新へ入った寄与を表す。
+`thickness_equilibrium_gap` は `equilibrium_thickness` への回復圧、
+`isostatic_equilibrium_gap` は `h_eq - height` の平衡ずれを表す。
+`isostatic_reference_freeboard` と `isostatic_compensated_anomaly` は、
+`h_eq = reference_freeboard + compensated_anomaly` のどちらが raw isostatic term を支配しているかを見るための診断である。
+`diffusive_*_raw` は diffusion の向きと相を分けた診断であり、
+land を削る下向き smoothing と ocean を埋める上向き smoothing のどちらが支配かを読むために使う。
+`zero_mean_*` は zero-mean mass-centering がどれだけのセルにどれだけの補正を入れたかを表し、
+`mean_smoothing_factor` は diffusive / isostatic smoothing が limiter でどこまで削られたかを表す。
+`coastal_band_ratio` は `surface_elevation` が海面近傍帯に集中していないかを見る hypsometry gate であり、
+「数値上は land ratio を満たすが、実質的に海面ぎりぎりの低地へ圧縮されて見える」状態を捕捉する。
+`land_freeboard_p90` はその逆側、すなわち freeboard 保全補助が過剰に効いて
+内陸 relief まで不自然に引き上げていないかを見る上側 gate である。
+原因切り分け用に、artifact には次の診断値も残す。
+
+- `bedrock_land_ratio`
+- `bedrock_coastal_band_ratio`
+- `land_freeboard_p10/p50/p90`
+- `bedrock_freeboard_p10/p50/p90`
+- `geology_runtime_bedrock_band_ratio`
+- `geology_runtime_bedrock_p10/p50/p90`
+- `geology_runtime_activity_scale`
+- `geology_runtime_rebuild_applied`
+- `geology_runtime_mean_abs_surface_write_delta`
+- `geology_runtime_mean_compressive`
+- `geology_runtime_mean_tensile`
+- `geology_runtime_mean_signed_surface_write_delta`
+- `geology_runtime_min_surface_write_delta`
+- `geology_runtime_max_surface_write_delta`
+- `geology_runtime_mean_abs_surface_range_clamp_delta`
+- `geology_runtime_mean_abs_surface_raw_delta`
+- `geology_runtime_mean_abs_surface_step_delta`
+- `geology_runtime_mean_abs_surface_step_clamp_delta`
+- `geology_runtime_mean_abs_surface_pre_isostatic_delta`
+- `geology_runtime_mean_abs_surface_output_delta`
+- `geology_runtime_mean_abs_surface_pre_zero_mean_delta`
+- `geology_runtime_mean_abs_surface_zero_mean_delta`
+- `geology_runtime_debug_surface_max_delta_index`
+- `geology_runtime_debug_surface_max_delta_raw_delta`
+- `geology_runtime_debug_surface_max_delta_step_delta`
+- `geology_runtime_debug_surface_max_delta_thermal_subsidence`
+- `geology_runtime_debug_surface_max_delta_diffusive`
+- `geology_runtime_debug_surface_max_delta_height_before`
+- `geology_runtime_debug_surface_max_delta_height_after_pre_isostatic`
+
+`coastal_band_ratio` が高いときに `bedrock_coastal_band_ratio` も高ければ、問題は主に地形分布
+（bedrock hypsometry）側にあると読む。`coastal_band_ratio` のみが高く `bedrock` 側が高くない場合は、
+氷床厚や海面更新の coupling が自由表面を海面近傍へ圧縮している可能性を優先して調べる。
+`geology_runtime_*` は Geology runtime の `cached_metrics` 由来で、`Crust` 末期から `Environment`
+遷移直前までに zero-level 圧縮がいつ発生したかを切り分けるために使う。
+
+- artifact: `benches/results/alpha_transition_guard/alpha_transition_guard.jsonl`
+- 主要評価窓: `tick=780..900`
+- explicit `ALPHA_TRANSITION_SNAPSHOT_PATH` が stale でも bench は panic で止めず、
+  warning を残して cold start へ fallback する。
+- `tick=800` の environment snapshot から Geology phase 1 回だけを観測したいときは、
+  `cargo run --manifest-path rust/Cargo.toml --bin environment_geology_probe`
+  を使う。これは `surface_dynamics` 単体の hidden delta 切り分け用で、
+  `mean_abs_surface_write_delta` と `mean_abs_surface_range_clamp_delta` を即座に返す。
+- ただし environment snapshot candidate がすべて壊れている場合、
+  probe は cold start から `tick=800` まで自動で進めて同じ観測を返す。
+- gate（violation）:
+    - `land_ratio` の範囲逸脱
+    - `land_ratio` ジャンプ
+    - `sea_level_offset` ジャンプ/傾き過大
+    - `mass_proxy` drift 超過
+    - `render_land_ratio_diff` 超過
+    - `largest_continent_ratio` ジャンプ
+- 診断出力:
+    - `continent_count`, `largest_continent_ratio`
+    - `sea_level_slope`, `land_ratio_slope`
+    - `coastal_band_ratio`
 
 ---
 

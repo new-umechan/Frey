@@ -247,6 +247,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 &state.plate_id,
                 &state.attributes,
                 clamp(state.params.ocean_plate_ratio + 0.04, 0.55, 0.78),
+                &state.params,
             );
             state.phase = CrustUpdatePhase::ApplyHotspots;
         }
@@ -268,6 +269,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 &state.nbr_offsets,
                 &state.nbrs,
                 &state.height,
+                0.0,
                 state.params.river_rain_base,
                 state.params.river_accumulation_threshold,
             );
@@ -276,6 +278,7 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
                 &state.nbr_offsets,
                 &state.nbrs,
                 &state.height,
+                0.0,
             );
             state.river_flux = river_flux;
             state.river_next = river_next;
@@ -442,6 +445,22 @@ pub(super) fn sanitize_params(params: &mut GeologyParams) {
             .max(params.uplift_saturation_soft + 1e-3),
         0.0,
         1.0,
+    );
+    params.hypsometry_land_p50 = clamp(params.hypsometry_land_p50, 0.01, 0.40);
+    params.hypsometry_land_p90 = clamp(
+        params
+            .hypsometry_land_p90
+            .max(params.hypsometry_land_p50 + 0.01),
+        0.05,
+        0.80,
+    );
+    params.hypsometry_ocean_p50 = clamp(params.hypsometry_ocean_p50, 0.01, 0.50);
+    params.hypsometry_ocean_p90 = clamp(
+        params
+            .hypsometry_ocean_p90
+            .max(params.hypsometry_ocean_p50 + 0.01),
+        0.05,
+        0.90,
     );
     params.isostatic_adjustment_rate = params.isostatic_adjustment_rate.max(0.0);
     params.age_advection_gain = params.age_advection_gain.max(0.0);

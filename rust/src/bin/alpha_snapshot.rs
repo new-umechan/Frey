@@ -19,6 +19,10 @@ struct Args {
     cache_dir: PathBuf,
     mirror_dir: PathBuf,
     resume_from: Option<AlphaSnapshotStage>,
+    resume_path: Option<PathBuf>,
+    until_stage: Option<AlphaSnapshotStage>,
+    at_tick: Option<u64>,
+    output_path: Option<PathBuf>,
 }
 
 fn parse_args(argv: &[String]) -> Result<Args, String> {
@@ -26,6 +30,10 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
     let mut cache_dir = canonical_cache_dir();
     let mut mirror_dir = mirror_dir();
     let mut resume_from = None;
+    let mut resume_path = None;
+    let mut until_stage = None;
+    let mut at_tick = None;
+    let mut output_path = None;
     let mut i = 0usize;
     while i < argv.len() {
         match argv[i].as_str() {
@@ -59,12 +67,47 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
                 resume_from = Some(raw.parse::<AlphaSnapshotStage>()?);
                 i += 2;
             }
+            "--resume-path" => {
+                let raw = argv
+                    .get(i + 1)
+                    .ok_or_else(|| "--resume-path requires value".to_string())?;
+                resume_path = Some(PathBuf::from(raw));
+                i += 2;
+            }
+            "--until-stage" => {
+                let raw = argv
+                    .get(i + 1)
+                    .ok_or_else(|| "--until-stage requires value".to_string())?;
+                until_stage = Some(raw.parse::<AlphaSnapshotStage>()?);
+                i += 2;
+            }
+            "--at-tick" => {
+                let raw = argv
+                    .get(i + 1)
+                    .ok_or_else(|| "--at-tick requires value".to_string())?;
+                at_tick = Some(
+                    raw.parse::<u64>()
+                        .map_err(|_| "--at-tick must be integer".to_string())?,
+                );
+                i += 2;
+            }
+            "--output-path" => {
+                let raw = argv
+                    .get(i + 1)
+                    .ok_or_else(|| "--output-path requires value".to_string())?;
+                output_path = Some(PathBuf::from(raw));
+                i += 2;
+            }
             "--help" => {
                 eprintln!("Usage: cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot -- [options]");
                 eprintln!("  --level <n>");
                 eprintln!("  --cache-dir <path>");
                 eprintln!("  --mirror-dir <path>");
                 eprintln!("  --resume-from <environment|life|civilization|history>");
+                eprintln!("  --resume-path <path>");
+                eprintln!("  --until-stage <environment|life|civilization|history>");
+                eprintln!("  --at-tick <n>");
+                eprintln!("  --output-path <path>");
                 std::process::exit(0);
             }
             other => return Err(format!("unknown argument: {other}")),
@@ -75,6 +118,10 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         cache_dir,
         mirror_dir,
         resume_from,
+        resume_path,
+        until_stage,
+        at_tick,
+        output_path,
     })
 }
 
@@ -91,14 +138,27 @@ fn run() -> Result<(), String> {
     let level = args.level;
     let cache_dir = args.cache_dir;
     let mirror_dir = args.mirror_dir;
+    let resume_path = args.resume_path;
+    let until_stage = args.until_stage;
+    let at_tick = args.at_tick;
+    let output_path = args.output_path;
     let geology_params = GeologyParams {
         level,
         ..GeologyParams::default()
     };
     let geology_fp = geology_fingerprint(&geology_params)?;
 
-    let (mut world, base_erosion_state) =
-        sim::headless::init_world_for_headless_runner(SEED, level, geology_params.clone())?;
+    let (mut world, base_erosion_state) = if let Some(path) = resume_path.as_ref() {
+        sim::headless::init_world_for_headless_runner_from_snapshot_path(
+            SEED,
+            level,
+            geology_params.clone(),
+            path,
+            None,
+        )?
+    } else {
+        sim::headless::init_world_for_headless_runner(SEED, level, geology_params.clone())?
+    };
     let mut hydrology_state = Some(base_erosion_state);
     if let Some(stage) = args.resume_from {
         let snapshot_path = cache_dir.join(stage_filename(stage));
@@ -129,6 +189,53 @@ fn run() -> Result<(), String> {
     }
     let mut feedback = FeedbackQueue::new(world.cell_count());
 
+    if let Some(target_tick) = at_tick {
+        while world.clock.tick < target_tick {
+            sim::exec_world_with_feedback_and_hydrology(
+                &mut world,
+                &mut feedback,
+                &mut hydrology_state,
+            );
+            if let Some(state) = hydrology_state.as_mut() {
+                sim::hydrology::sync_hydrology_state_for_headless_runner(
+                    &mut world,
+                    state,
+                    &geology_params,
+                );
+            }
+        }
+        let hydrology_state_value = hydrology_state
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "hydrology state is missing".to_string())?;
+        let stage = stage_for_tick(world.clock.tick);
+        let envelope = PrecomputedWorldSnapshotEnvelope {
+            format_version: SNAPSHOT_FORMAT_VERSION,
+            seed: SEED.to_string(),
+            mesh_level: level,
+            stage,
+            tick: world.clock.tick,
+            era: world.clock.epoch.as_key().to_string(),
+            geology_fingerprint: geology_fp,
+            applied_intervention_seq: 0,
+            world_core: world.core_owned(),
+            hydrology_state: hydrology_state_value,
+            geology_dynamics_state: world.exec_scratch.geology_dynamics.clone(),
+        };
+        let output_path = output_path
+            .unwrap_or_else(|| cache_dir.join(format!("diagnostic-{}.bin", target_tick)));
+        save_snapshot(&output_path, &envelope)?;
+        let view_path = output_path.with_extension("json");
+        save_snapshot_view(&view_path, &envelope)?;
+        eprintln!(
+            "alpha snapshot generated: path={} tick={} era={}",
+            output_path.display(),
+            envelope.tick,
+            envelope.era
+        );
+        return Ok(());
+    }
+
     let stages = [
         AlphaSnapshotStage::Environment,
         AlphaSnapshotStage::Life,
@@ -138,6 +245,11 @@ fn run() -> Result<(), String> {
 
     let mut manifest_entries = Vec::new();
     for stage in stages {
+        if let Some(limit_stage) = until_stage {
+            if stage.target_tick() > limit_stage.target_tick() {
+                break;
+            }
+        }
         if world.clock.tick > stage.target_tick() {
             continue;
         }
@@ -221,12 +333,31 @@ fn run() -> Result<(), String> {
     }
     save_manifest(&mirror_dir.join("manifest.json"), &manifest)?;
     eprintln!(
-        "alpha snapshots generated: cache={} mirror={} resume_from={}",
+        "alpha snapshots generated: cache={} mirror={} resume_from={} resume_path={} until_stage={}",
         cache_dir.display(),
         mirror_dir.display(),
         args.resume_from
             .map(|stage| stage.as_str().to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        resume_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        until_stage
+            .map(|stage| stage.as_str().to_string())
             .unwrap_or_else(|| "none".to_string())
     );
     Ok(())
+}
+
+fn stage_for_tick(tick: u64) -> AlphaSnapshotStage {
+    if tick >= AlphaSnapshotStage::History.target_tick() {
+        AlphaSnapshotStage::History
+    } else if tick >= AlphaSnapshotStage::Civilization.target_tick() {
+        AlphaSnapshotStage::Civilization
+    } else if tick >= AlphaSnapshotStage::Life.target_tick() {
+        AlphaSnapshotStage::Life
+    } else {
+        AlphaSnapshotStage::Environment
+    }
 }

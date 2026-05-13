@@ -8,6 +8,7 @@ pub(in crate::sim::geology) fn postprocess_height(
     plate_id: &[PlateId],
     attributes: &[PlateAttr],
     target_sea_ratio: f32,
+    params: &GeologyParams,
 ) {
     let mut adjusted = Vec::with_capacity(height.len());
     for v in 0..height.len() {
@@ -26,9 +27,43 @@ pub(in crate::sim::geology) fn postprocess_height(
     let sea_idx = sea_idx.min(sorted.len().saturating_sub(1));
     let sea_level = sorted[sea_idx];
 
+    let mut land_freeboard = adjusted
+        .iter()
+        .map(|value| *value - sea_level)
+        .filter(|value| *value > 0.0)
+        .collect::<Vec<_>>();
+    let mut ocean_depth = adjusted
+        .iter()
+        .map(|value| sea_level - *value)
+        .filter(|value| *value > 0.0)
+        .collect::<Vec<_>>();
+    let land_p50 = percentile(&mut land_freeboard, 0.50);
+    let land_p90 = percentile(&mut land_freeboard, 0.90).max(land_p50 + 1e-4);
+    let ocean_p50 = percentile(&mut ocean_depth, 0.50);
+    let ocean_p90 = percentile(&mut ocean_depth, 0.90).max(ocean_p50 + 1e-4);
+
     for v in 0..height.len() {
-        let normalized = (adjusted[v] - sea_level) * 0.58;
-        height[v] = clamp(normalized, -1.0, 1.0);
+        let relative = adjusted[v] - sea_level;
+        let remapped = if relative > 0.0 {
+            remap_positive_quantiles(
+                relative,
+                land_p50,
+                land_p90,
+                params.hypsometry_land_p50,
+                params.hypsometry_land_p90,
+            )
+        } else if relative < 0.0 {
+            -remap_positive_quantiles(
+                -relative,
+                ocean_p50,
+                ocean_p90,
+                params.hypsometry_ocean_p50,
+                params.hypsometry_ocean_p90,
+            )
+        } else {
+            0.0
+        };
+        height[v] = clamp(remapped, -1.0, 1.0);
     }
 
     let mut coast = vec![false; height.len()];
@@ -46,16 +81,53 @@ pub(in crate::sim::geology) fn postprocess_height(
 
     for v in 0..height.len() {
         if coast[v] && height[v] > 0.0 {
-            height[v] *= 0.62;
+            height[v] = height[v].max(params.hypsometry_land_p50 * 0.45);
         }
-        if height[v] > 0.0 && height[v] < 0.15 {
-            height[v] *= 0.78;
-        }
-        if height[v] < 0.0 && height[v] > -0.10 {
-            height[v] *= 0.80;
+        if coast[v] && height[v] < 0.0 {
+            height[v] = height[v].min(-params.hypsometry_ocean_p50 * 0.30);
         }
         height[v] = clamp(height[v], -1.0, 1.0);
     }
+}
+
+fn remap_positive_quantiles(
+    value: f32,
+    source_p50: f32,
+    source_p90: f32,
+    target_p50: f32,
+    target_p90: f32,
+) -> f32 {
+    let safe_source_p50 = source_p50.max(1e-4);
+    let safe_source_p90 = source_p90.max(safe_source_p50 + 1e-4);
+    let safe_target_p50 = target_p50.max(1e-4);
+    let safe_target_p90 = target_p90.max(safe_target_p50 + 1e-4);
+    if value <= safe_source_p50 {
+        return value * (safe_target_p50 / safe_source_p50);
+    }
+    if value <= safe_source_p90 {
+        let t = (value - safe_source_p50) / (safe_source_p90 - safe_source_p50);
+        return lerp(safe_target_p50, safe_target_p90, t);
+    }
+    safe_target_p90 + (value - safe_source_p90) * (safe_target_p90 / safe_source_p90)
+}
+
+fn percentile(values: &mut [f32], quantile: f32) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    if values.len() == 1 {
+        return values[0];
+    }
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let q = quantile.clamp(0.0, 1.0);
+    let position = q * (values.len() - 1) as f32;
+    let lower = position.floor() as usize;
+    let upper = position.ceil() as usize;
+    if lower == upper {
+        return values[lower];
+    }
+    let weight = position - lower as f32;
+    values[lower] * (1.0 - weight) + values[upper] * weight
 }
 
 pub(in crate::sim::geology) fn apply_hotspot_island_chains(

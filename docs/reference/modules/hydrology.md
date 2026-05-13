@@ -31,6 +31,10 @@ GeologyはCellStoreに標高を書くだけであり、フラグ管理はしな�
 また runtime では `Crust` 期に hydrology の fluvial erosion / deposition を `Geology` へ反映しない。
 `Crust` 期の標高進化は tectonics を主因とし、surface denudation は `Environment` 期以降で反映する。
 また `Crust` 期の海陸比は `Geology` 側の freeboard recentering で初期 land ratio を弱く維持する。
+`Environment` 期へ入る最初の数 tick では、runoff と fluvial erosion / deposition response も即時に full へ切り替えない。
+`Crust` proxy runoff から climate runoff へ `spinup` で段階遷移させると同時に、
+`next_height - geology.height` から導く `erosion_rate` / `deposition_rate` も同係数で縮退させ、
+初回 tick の hydrology shock を避ける。
 
 `HydrologyMFDSystem` の sink 再構築は次の3モードで運用する。
 
@@ -53,9 +57,20 @@ GeologyはCellStoreに標高を書くだけであり、フラグ管理はしな�
 Hydrologyが読む主な値は次のとおり。
 
 - `geology.height`
+- `control.sea_level_offset`
 - `climate.runoff`
 - `glaciology.glacial_melt_runoff`
 - FeedbackQueue（`Subsistence`・`Settlement` による取水・ダム）
+
+`Environment` 期の入口では、runoff 入力を次のように混合する。
+
+```text
+runoff_effective = lerp(runoff_crust_proxy, runoff_climate + runoff_glacial, spinup)
+```
+
+ここで `spinup` は era 進入後 tick 数から求める 0..1 の係数である。
+同じ `spinup` を fluvial erosion / deposition response にも適用し、
+Hydrology automaton が計算した形状変化候補を数 tick で段階的に地形反映へ渡す。
 
 v1 では glacial sediment は入力に含めない。
 氷河起源 sediment は `Glaciology` / `Geology` 側で source 記録と export accounting に留める。
@@ -98,6 +113,10 @@ sink_spill_level: Vec<f32>,
 
 現行ランタイムでは `river_downstream` を流路正本として保持する。
 `river_next` は互換用途の代表流下先（最大重み edge）として派生保持する。
+
+海陸判定は `height > 0` の固定基準ではなく、`height > sea_level_offset` を使う。
+流路再構築、sink 判定、湖フラグ更新、fallback 流量伝播はすべてこの基準に合わせる。
+これにより、Glaciology が更新する海面変動と Hydrology の流路判定が整合する。
 
 一方で sink / lake / spill の正本は HydrologyState に持つ。
 Erosion はその fill-spill 状態を参照して堆積・溢流を進める。

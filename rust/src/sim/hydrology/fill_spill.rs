@@ -49,6 +49,7 @@ impl Eq for RouteState {}
 pub(crate) fn rebuild_fill_spill_state(
     hydrology: &mut HydrologyState,
     height: &[f32],
+    sea_level_offset: f32,
     nbr_offsets: &[u32],
     nbrs: &[u32],
     params: &GeologyParams,
@@ -67,13 +68,18 @@ pub(crate) fn rebuild_fill_spill_state(
     hydrology.sink_route_next.fill(-1);
 
     let old_state = snapshot_sink_state(hydrology);
-    let downhill = compute_downhill_links(height, nbr_offsets, nbrs);
+    let downhill = compute_downhill_links(height, sea_level_offset, nbr_offsets, nbrs);
     let mut terminal = vec![-2_i32; v_count];
     for i in 0..v_count {
-        terminal[i] = trace_terminal(i, height, &downhill, &mut terminal);
+        terminal[i] = trace_terminal(i, height, sea_level_offset, &downhill, &mut terminal);
     }
 
-    let sink_members = build_sink_members(height, &terminal, &mut hydrology.sink_id);
+    let sink_members = build_sink_members(
+        height,
+        sea_level_offset,
+        &terminal,
+        &mut hydrology.sink_id,
+    );
     let sink_count = sink_members.len();
     resize_sink_state_arrays(hydrology, sink_count);
     rebuild_membership_csr(hydrology, &sink_members);
@@ -215,13 +221,14 @@ pub(crate) fn rebuild_fill_spill_state_incremental(
 pub(crate) fn refresh_fill_spill_storage_and_lakes(
     hydrology: &mut HydrologyState,
     height: &[f32],
+    sea_level_offset: f32,
     water: Option<&[f32]>,
     sediment: Option<&[f32]>,
     params: &GeologyParams,
 ) {
     recompute_sink_storage_water(hydrology, height, water, params);
     recompute_sink_storage_sediment(hydrology, height, sediment, params);
-    update_public_lake_flags(hydrology, height, params);
+    update_public_lake_flags(hydrology, height, sea_level_offset, params);
 }
 
 pub(crate) fn sync_fill_spill_to_erosion(
@@ -337,6 +344,7 @@ pub(crate) fn sync_fill_spill_from_erosion(
 pub(crate) fn update_public_lake_flags(
     hydrology: &mut HydrologyState,
     height: &[f32],
+    sea_level_offset: f32,
     params: &GeologyParams,
 ) {
     let cell_count = height.len();
@@ -349,7 +357,7 @@ pub(crate) fn update_public_lake_flags(
     let hysteresis = params.sink_overflow_hysteresis.max(0.0);
     #[allow(clippy::needless_range_loop)]
     for cell in 0..cell_count {
-        if height[cell] <= 0.0 {
+        if height[cell] <= sea_level_offset {
             continue;
         }
         let sid_raw = hydrology.sink_id.get(cell).copied().unwrap_or(-1);
@@ -525,10 +533,15 @@ fn rebuild_membership_csr(hydrology: &mut HydrologyState, sink_members: &[Vec<us
     }
 }
 
-fn compute_downhill_links(height: &[f32], nbr_offsets: &[u32], nbrs: &[u32]) -> Vec<i32> {
+fn compute_downhill_links(
+    height: &[f32],
+    sea_level_offset: f32,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+) -> Vec<i32> {
     let mut downhill = vec![-1; height.len()];
     for i in 0..height.len() {
-        if height[i] <= 0.0 {
+        if height[i] <= sea_level_offset {
             continue;
         }
         let start = nbr_offsets[i] as usize;
@@ -548,11 +561,17 @@ fn compute_downhill_links(height: &[f32], nbr_offsets: &[u32], nbrs: &[u32]) -> 
     downhill
 }
 
-fn trace_terminal(i: usize, height: &[f32], downhill: &[i32], terminal: &mut [i32]) -> i32 {
+fn trace_terminal(
+    i: usize,
+    height: &[f32],
+    sea_level_offset: f32,
+    downhill: &[i32],
+    terminal: &mut [i32],
+) -> i32 {
     if i >= downhill.len() {
         return -1;
     }
-    if height[i] <= 0.0 {
+    if height[i] <= sea_level_offset {
         terminal[i] = -1;
         return -1;
     }
@@ -569,7 +588,7 @@ fn trace_terminal(i: usize, height: &[f32], downhill: &[i32], terminal: &mut [i3
         if n >= downhill.len() {
             -1
         } else {
-            let traced = trace_terminal(n, height, downhill, terminal);
+            let traced = trace_terminal(n, height, sea_level_offset, downhill, terminal);
             if traced == -3 {
                 i as i32
             } else {
@@ -581,7 +600,12 @@ fn trace_terminal(i: usize, height: &[f32], downhill: &[i32], terminal: &mut [i3
     out
 }
 
-fn build_sink_members(height: &[f32], terminal: &[i32], sink_id: &mut [i32]) -> Vec<Vec<usize>> {
+fn build_sink_members(
+    height: &[f32],
+    sea_level_offset: f32,
+    terminal: &[i32],
+    sink_id: &mut [i32],
+) -> Vec<Vec<usize>> {
     let mut root_to_sink = HashMap::<usize, usize>::new();
     let mut sink_members = Vec::<Vec<usize>>::new();
     for (cell, &root) in terminal.iter().enumerate() {
@@ -589,7 +613,7 @@ fn build_sink_members(height: &[f32], terminal: &[i32], sink_id: &mut [i32]) -> 
             continue;
         }
         let root_index = root as usize;
-        if height.get(root_index).copied().unwrap_or(0.0) <= 0.0 {
+        if height.get(root_index).copied().unwrap_or(0.0) <= sea_level_offset {
             continue;
         }
         let sid = *root_to_sink.entry(root_index).or_insert_with(|| {
@@ -974,6 +998,7 @@ mod tests {
         rebuild_fill_spill_state(
             &mut hydrology,
             &height,
+            0.0,
             &nbr_offsets,
             &nbrs,
             &params,
@@ -1001,17 +1026,18 @@ mod tests {
         rebuild_fill_spill_state(
             &mut hydrology,
             &height,
+            0.0,
             &nbr_offsets,
             &nbrs,
             &params,
             None,
             None,
         );
-        update_public_lake_flags(&mut hydrology, &height, &params);
+        update_public_lake_flags(&mut hydrology, &height, 0.0, &params);
         assert_eq!(hydrology.is_lake, vec![false, true, false, false, false]);
 
         hydrology.sink_overflow_active[0] = 1;
-        update_public_lake_flags(&mut hydrology, &height, &params);
+        update_public_lake_flags(&mut hydrology, &height, 0.0, &params);
         assert_eq!(hydrology.is_lake, vec![false; 5]);
     }
 }
