@@ -38,4 +38,3 @@ Procedural Tectonic Planets: `docs/research/procedural_tctonic_planets.md`
 プレートがどのように動くと、どのような地形を侵食作用まで
 
 ## プレートの分裂、合体
-

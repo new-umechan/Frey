@@ -33,14 +33,14 @@
 ### `reference_freeboard` 総量を一律に下げれば改善する
 
 - `v27` では stable continental baseline を一律に下げると
-  `mean_abs_isostatic_reference_freeboard` は低下した一方、
-  `signed_continental_stable` は悪化した
+    `mean_abs_isostatic_reference_freeboard` は低下した一方、
+    `signed_continental_stable` は悪化した
 - よって stable 側 baseline の一括引き下げは採用しない
 
 ### `PassiveMargin` baseline だけを下げれば改善する
 
 - `v29` では `Transform/PassiveMargin` の baseline を下げても
-  `stable_passive_transform` は悪化した
+    `stable_passive_transform` は悪化した
 - `v30` で `Transform = 0`、`PassiveMargin > 0` を確認
 - よって `PassiveMargin` 単独 baseline の単純な引き下げも採用しない
 
@@ -49,46 +49,46 @@
 ### baseline 採用版
 
 - `v31`
-  - `PassiveMargin raw = 0.003739131`
-  - `PassiveMargin applied = 0.0024369606`
-  - `Transform raw/applied = 0.0`
+    - `PassiveMargin raw = 0.003739131`
+    - `PassiveMargin applied = 0.0024369606`
+    - `Transform raw/applied = 0.0`
 
 - `v33`
-  - `PassiveMargin cell ratio = 0.31160587`
-  - `PassiveMargin mean isostatic_adjustment_rate = 0.009243147`
+    - `PassiveMargin cell ratio = 0.31160587`
+    - `PassiveMargin mean isostatic_adjustment_rate = 0.009243147`
 
 - `v35`
-  - `PassiveMargin mean_smoothing_factor = 0.9996455`
-  - `PassiveMargin effective_applied_factor = 0.6517452`
+    - `PassiveMargin mean_smoothing_factor = 0.9996455`
+    - `PassiveMargin effective_applied_factor = 0.6517452`
 
 ### 実験版（`PassiveMargin` baseline 引き下げ）
 
 - `v32`
-  - `raw = 0.0031162854`
-  - `applied = 0.002655808`
+    - `raw = 0.0031162854`
+    - `applied = 0.002655808`
 
 - `v34`
-  - `cell ratio = 0.31160587`
-  - `mean isostatic_adjustment_rate = 0.00924312`
+    - `cell ratio = 0.31160587`
+    - `mean isostatic_adjustment_rate = 0.00924312`
 
 ## 読み
 
 - `raw` が減って `applied` が増えたため、悪化の主因は raw target 総量ではない
 - `cell ratio` と pre-smoothing の `mean isostatic_adjustment_rate` はほぼ不変だった
 - よって旧系で最後まで疑うべきだったのは、`PassiveMargin` における
-  `raw -> applied` の実効変換過程である
+    `raw -> applied` の実効変換過程である
 
 ## 新 Geology へ持ち越す知見
 
 - Environment 入口崩壊は stress memory carry-over を別問題として扱う
 - late Crust hypsometry の支配項は、旧系では `PassiveMargin` の isostatic `reference_freeboard`
-  applied 化に局在していた
+    applied 化に局在していた
 - shoreline 補助の存在は「旧系を延命するための近似」であり、新 Geology の中核仕様にしない
 - 旧系で追加した diagnostics は、新系でも再利用価値が高い
-  - signed reference-freeboard split
-  - raw/applied split
-  - phase attribution
-  - debug max-delta sample
+    - signed reference-freeboard split
+    - raw/applied split
+    - phase attribution
+    - debug max-delta sample
 
 ## 関連 artifact
 

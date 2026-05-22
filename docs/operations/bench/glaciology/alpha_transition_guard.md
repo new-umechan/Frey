@@ -20,11 +20,11 @@ pnpm bench:alpha:transition:strict
 ## 出力
 
 - JSONL artifact:
-  - `benches/results/alpha_transition_guard/alpha_transition_guard.jsonl`
+    - `benches/results/alpha_transition_guard/alpha_transition_guard.jsonl`
 - 1行が1 run で、以下を含む:
-  - run metadata
-  - `tick=record_start..record_end` の時系列サンプル
-  - violation 一覧
+    - run metadata
+    - `tick=record_start..record_end` の時系列サンプル
+    - violation 一覧
 
 ## 既定パラメータ
 
@@ -49,13 +49,13 @@ pnpm bench:alpha:transition:strict
 ## FAIL 条件
 
 - hard fail:
-  - `|mass_proxy_drift|` が `MAX_MASS_PROXY_DRIFT_ABS` かつ
-    `|mass_proxy_drift| / |mass_proxy_baseline|` が `MAX_MASS_PROXY_DRIFT_RATIO` 超過
+    - `|mass_proxy_drift|` が `MAX_MASS_PROXY_DRIFT_ABS` かつ
+        `|mass_proxy_drift| / |mass_proxy_baseline|` が `MAX_MASS_PROXY_DRIFT_RATIO` 超過
 - warning（artifactには記録するがfailさせない）:
-  - `land_ratio` が `[min, max]` 範囲外
-  - `|Δland_ratio|` が `MAX_LAND_RATIO_JUMP` 超過
-  - `|Δsea_level_offset|` が `MAX_SEA_LEVEL_JUMP` 超過
-  - 遷移前後窓の `median(land_ratio)` 差が `MAX_TRANSITION_LAND_RATIO_MEDIAN_SHIFT` 超過
-  - 遷移前後窓の `median(sea_level_offset)` 差が `MAX_TRANSITION_SEA_LEVEL_MEDIAN_SHIFT` 超過
+    - `land_ratio` が `[min, max]` 範囲外
+    - `|Δland_ratio|` が `MAX_LAND_RATIO_JUMP` 超過
+    - `|Δsea_level_offset|` が `MAX_SEA_LEVEL_JUMP` 超過
+    - 遷移前後窓の `median(land_ratio)` 差が `MAX_TRANSITION_LAND_RATIO_MEDIAN_SHIFT` 超過
+    - 遷移前後窓の `median(sea_level_offset)` 差が `MAX_TRANSITION_SEA_LEVEL_MEDIAN_SHIFT` 超過
 
 hard fail 発生時のみ benchmark は非0終了する。

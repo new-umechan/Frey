@@ -20,22 +20,22 @@ Accepted
 - `rust/src/bin/alpha_transition_guard.rs` を追加する。
 - 既定で `tick=0..900` を実行し、`780..900` の各 tick を JSONL に出力する。
 - 記録指標:
-  - `land_cells`
-  - `land_ratio`
-  - `sea_level_offset`
-  - `ocean_water_inventory_drift`
-  - `ice_inventory`
+    - `land_cells`
+    - `land_ratio`
+    - `sea_level_offset`
+    - `ocean_water_inventory_drift`
+    - `ice_inventory`
 - 異常判定（既定値。env で上書き可能）を二段階化する:
-  - hard fail:
-    - `|mass_proxy_drift|` 超過（`mass_proxy = ocean_water_inventory + sea_level_coupling * ice_inventory`）
+    - hard fail:
+        - `|mass_proxy_drift|` 超過（`mass_proxy = ocean_water_inventory + sea_level_coupling * ice_inventory`）
     - 非有限値（`NaN`/`Inf`）
-  - warning:
-  - `land_ratio` が `[0.15, 0.85]` を外れる
-  - `|Δland_ratio| > 0.03 / tick`
-  - `|Δsea_level_offset| > 0.08 / tick`
-  - `|ocean_water_inventory_drift| > 1e-4`
-  - 遷移前窓（`tick<=799`）と遷移後窓（`800..840`）での `median(land_ratio)` 差が `0.04` 超過
-  - 遷移前窓（`tick<=799`）と遷移後窓（`800..840`）での `median(sea_level_offset)` 差が `0.10` 超過
+    - warning:
+    - `land_ratio` が `[0.15, 0.85]` を外れる
+    - `|Δland_ratio| > 0.03 / tick`
+    - `|Δsea_level_offset| > 0.08 / tick`
+    - `|ocean_water_inventory_drift| > 1e-4`
+    - 遷移前窓（`tick<=799`）と遷移後窓（`800..840`）での `median(land_ratio)` 差が `0.04` 超過
+    - 遷移前窓（`tick<=799`）と遷移後窓（`800..840`）での `median(sea_level_offset)` 差が `0.10` 超過
 - hard fail 条件で benchmark を失敗終了し、warning は artifact のみ記録する。
 
 ## スコープ
