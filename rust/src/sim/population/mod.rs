@@ -4,7 +4,7 @@ pub mod types;
 pub use crate::sim::population::types::*;
 
 use crate::sim::world::{
-    CellId, FeedbackEntry, FeedbackPayload, FeedbackQueue, ModuleId, TargetRef, World,
+    CellFieldId, CellId, FeedbackEntry, FeedbackPayload, FeedbackQueue, ModuleId, TargetRef, World,
 };
 
 pub(crate) fn update_population(
@@ -56,9 +56,10 @@ pub(crate) fn update_population(
                     target_module: ModuleId::Domesticates,
                     target_ref: TargetRef::Cell(CellId(i as u32)),
                     enqueued_tick: world.clock.tick,
-                    payload: FeedbackPayload::DomesticatesPopulationPressure {
+                    payload: FeedbackPayload::DeltaF32 {
+                        field: CellFieldId::DomesticatesIntensificationBonus,
                         cell: CellId(i as u32),
-                        intensification_bonus: pressure,
+                        delta: pressure,
                     },
                 });
             }

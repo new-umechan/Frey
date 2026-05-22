@@ -425,10 +425,21 @@ fn domesticates_feedback_payload_updates_internal_pressure() {
         target_module: ModuleId::Domesticates,
         target_ref: TargetRef::Cell(CellId(0)),
         enqueued_tick: 4,
-        payload: FeedbackPayload::DomesticatesSpread {
+        payload: FeedbackPayload::DeltaF32 {
+            field: CellFieldId::DomesticatesRoutedCropFeedback(0),
             cell: CellId(0),
-            crop_delta: [0.03; crate::sim::world::N_CROPS],
-            livestock_delta: [0.02; crate::sim::world::N_LIVESTOCK],
+            delta: 0.03,
+        },
+    });
+    feedback.push(FeedbackEntry {
+        source: ModuleId::Settlement,
+        target_module: ModuleId::Domesticates,
+        target_ref: TargetRef::Cell(CellId(0)),
+        enqueued_tick: 4,
+        payload: FeedbackPayload::DeltaF32 {
+            field: CellFieldId::DomesticatesRoutedLivestockFeedback(0),
+            cell: CellId(0),
+            delta: 0.02,
         },
     });
     feedback.push(FeedbackEntry {
@@ -436,9 +447,10 @@ fn domesticates_feedback_payload_updates_internal_pressure() {
         target_module: ModuleId::Domesticates,
         target_ref: TargetRef::Cell(CellId(0)),
         enqueued_tick: 4,
-        payload: FeedbackPayload::DomesticatesPopulationPressure {
+        payload: FeedbackPayload::DeltaF32 {
+            field: CellFieldId::DomesticatesIntensificationBonus,
             cell: CellId(0),
-            intensification_bonus: 0.4,
+            delta: 0.4,
         },
     });
 
@@ -482,7 +494,10 @@ fn population_stage_enqueues_domesticates_population_pressure() {
     assert!(feedback.entries.iter().any(|entry| {
         matches!(
             entry.payload,
-            FeedbackPayload::DomesticatesPopulationPressure { .. }
+            FeedbackPayload::DeltaF32 {
+                field: CellFieldId::DomesticatesIntensificationBonus,
+                ..
+            }
         ) && entry.target_module == ModuleId::Domesticates
             && entry.source == ModuleId::Population
     }));
@@ -502,8 +517,14 @@ fn settlement_stage_enqueues_domesticates_spread_feedback() {
     super::pipeline::run_settlement_stage(&mut world, &mut feedback);
 
     assert!(feedback.entries.iter().any(|entry| {
-        matches!(entry.payload, FeedbackPayload::DomesticatesSpread { .. })
-            && entry.target_module == ModuleId::Domesticates
+        matches!(
+            entry.payload,
+            FeedbackPayload::DeltaF32 {
+                field: CellFieldId::DomesticatesRoutedCropFeedback(_)
+                    | CellFieldId::DomesticatesRoutedLivestockFeedback(_),
+                ..
+            }
+        ) && entry.target_module == ModuleId::Domesticates
             && entry.source == ModuleId::Settlement
     }));
 }
@@ -527,7 +548,13 @@ fn settlement_stage_limits_domesticates_spread_to_neighboring_settlements() {
         .entries
         .iter()
         .filter_map(|entry| match entry.payload {
-            FeedbackPayload::DomesticatesSpread { cell, .. } => Some(cell.as_usize()),
+            FeedbackPayload::DeltaF32 {
+                field:
+                    CellFieldId::DomesticatesRoutedCropFeedback(_)
+                    | CellFieldId::DomesticatesRoutedLivestockFeedback(_),
+                cell,
+                ..
+            } => Some(cell.as_usize()),
             _ => None,
         })
         .collect::<Vec<_>>();

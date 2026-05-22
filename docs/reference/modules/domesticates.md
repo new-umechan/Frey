@@ -312,22 +312,33 @@ feedback の責務は次で固定する。
 概念例:
 
 ```rust
-// Settlement からの拡散圧
+// Settlement からの作物拡散圧
 FeedbackEntry {
     target_module: ModuleId::Domesticates,
-    kind: FeedbackKind::DomesticatesSpread {
+    payload: FeedbackPayload::DeltaF32 {
+        field: CellFieldId::DomesticatesRoutedCropFeedback(crop_id),
         cell: target_cell,
-        crop_delta: [f32; N_CROPS],
-        livestock_delta: [f32; N_LIVESTOCK],
+        delta: crop_delta,
+    },
+}
+
+// Settlement からの家畜拡散圧
+FeedbackEntry {
+    target_module: ModuleId::Domesticates,
+    payload: FeedbackPayload::DeltaF32 {
+        field: CellFieldId::DomesticatesRoutedLivestockFeedback(livestock_id),
+        cell: target_cell,
+        delta: livestock_delta,
     },
 }
 
 // Population からの人口密度圧
 FeedbackEntry {
     target_module: ModuleId::Domesticates,
-    kind: FeedbackKind::DomesticatesPopulationPressure {
+    payload: FeedbackPayload::DeltaF32 {
+        field: CellFieldId::DomesticatesIntensificationBonus,
         cell: target_cell,
-        intensification_bonus: f32,    // population_pressure_bonus に使う
+        delta: intensification_bonus,    // population_pressure_bonus に加算する
     },
 }
 ```

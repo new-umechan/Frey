@@ -20,13 +20,21 @@
 
 ```rust
 struct World {
-    mesh:             WorldMesh,
-    state:            WorldState,            // 次 tick の計算に必要な SoA 正本
-    projections:      WorldProjectionState,  // terrain などの派生 view
-    entities:         EntityState,           // 疎な Entity の正本
-    clock:            ClockState,
-    control:          WorldControlState,     // simulation control / tunables
-    exec_scratch:     ExecScratchState,      // exec 中だけ使う scratch
+    metadata:      WorldMetadata,          // mesh などの世界メタデータ
+    state:         WorldState,             // 次 tick の計算に必要な SoA 正本
+    projections:   WorldProjectionState,   // terrain などの派生 view
+    entities:      EntityState,            // 疎な Entity の正本
+    clock:         ClockState,
+    control:       WorldControlState,      // simulation control / tunables
+    exec_scratch:  ExecScratchState,       // exec 中だけ使う scratch
+    relations:     WorldRelations,
+}
+
+struct WorldMetadata {
+    mesh: WorldMesh,
+}
+
+struct WorldRelations {
     polity_relations: HashMap<(PolityId, PolityId), PolityRelation>,
     polity_groups:    Vec<PolityGroup>,
     plate_relations:  HashMap<(PlateId, PlateId), PlateRelation>,
@@ -127,110 +135,141 @@ v1 の reservoir 分離では、すべての在庫量をただちにセル列へ
 また、海陸判定に使う `surface_elevation` は正本の独立列ではなく、
 `bedrock height + ice_thickness - sea_level_offset` から導出する。
 
-### GeologyState
+### WorldState と module state
 
-全セルのComponentをSoA（Structure of Arrays）で保持する。
-セルは常に全数存在し、全Componentを保持する。
-インデックスがそのままCellIdになる。
+全セルのComponentは module ごとの State に分割し、各 State は SoA（Structure of Arrays）で保持する。
+セルは常に全数存在し、各 `Vec` の index がそのまま `CellId` になる。
 
 ```rust
+struct WorldState {
+    geology:      GeologyState,
+    climate:      ClimateState,
+    glaciology:   GlaciologyState,
+    hydrology:    HydrologyState,
+    ecology:      EcologyState,
+    domesticates: DomesticatesState,
+    subsistence:  SubsistenceState,
+    population:   PopulationState,
+    settlement:   SettlementState,
+    polity:       PolityState,
+    conflict:     ConflictState,
+}
+
 struct GeologyState {
-    // --- Geology ---
     height:               Vec<f32>,
+    lake_depth:           Vec<f32>,
     plate_id:             Vec<PlateId>,
     volcanism:            Vec<f32>,
     vertex_buoyancy:      Vec<f32>,
-    lake_depth:           Vec<f32>,       // 湖の深さ。窪地を湖として扱う
-
     geology_internal:     Vec<GeologyInternal>,
+    boundary_condition:   Vec<f32>,
 
-    // --- Geology (debug/intermediate) ---
-    // 以下のフィールドはデバッグ用途または内部中間状態。公開 API (GeologyOutput) からのみ参照可能。
-    plate_is_ocean:       Vec<u8>,        // プレートが海洋か大陸か (0: 大陸，1: 海洋)
-    plate_base_height:    Vec<f32>,       // プレート基準高さ (デバッグ用)
-    plate_base_weight:    Vec<f32>,       // プレート基準重み (デバッグ用)
-    vertex_age_norm:      Vec<f32>,       // 頂点年齢正規化 (デバッグ用)
-    vertex_weight:        Vec<f32>,       // 頂点重み (デバッグ用)
-    debug_trench_strength: Vec<f32>,      // 海溝強度 (デバッグ用)
-    debug_arc_strength:    Vec<f32>,      // アーク強度 (デバッグ用)
-    debug_backarc_strength: Vec<f32>,     // バックアーク強度 (デバッグ用)
-    debug_ocean_ocean_arc_strength: Vec<f32>, // 海洋 - 海洋アーク強度 (デバッグ用)
+    // smoothing / zero-mean diagnostics
+    smoothing_limited_cells_ratio: f32,
+    mean_smoothing_factor:        f32,
+    zero_mean_adjusted_cells_ratio: f32,
+    zero_mean_mean_abs_correction: f32,
+    zero_mean_std_delta:          f32,
+}
 
-    // --- Climate ---
+struct ClimateState {
     temperature:          Vec<f32>,
     precipitation:        Vec<f32>,
     evapotranspiration:   Vec<f32>,
     runoff:               Vec<f32>,
     aridity:              Vec<f32>,
     ocean_temperature:    Vec<f32>,
+    precipitable_water:   Vec<f32>,
+    cloud_water:          Vec<f32>,
     wind_u:               Vec<f32>,
     wind_v:               Vec<f32>,
     moisture_flux_u:      Vec<f32>,
     moisture_flux_v:      Vec<f32>,
+}
 
-    // --- Glaciology ---
+struct GlaciologyState {
     ice_thickness:         Vec<f32>,
     ice_load:              Vec<f32>,           // 氷荷重。Geology が地盤応答計算に使用
     accumulation:          Vec<f32>,
     ablation:              Vec<f32>,
     isostatic_adjustment:  Vec<f32>,           // 地盤応答目標量。Geology が height に反映
+    applied_isostatic_adjustment: Vec<f32>,
     glacial_erosion_rate:  Vec<f32>,
     glacial_melt_runoff:   Vec<f32>,           // 氷河融解流出量。Hydrology の流出入力へ加算
+}
 
-    // --- Hydrology ---
-    river_downstream:     Vec<SmallVec<[(CellId, f32); 4]>>,
+struct HydrologyState {
+    river_downstream:     Vec<SmallVec<[(u32, f32); 4]>>,
+    river_next:           Vec<i32>,
     river_flow:           Vec<f32>,
     river_transport_cost: Vec<f32>,      // 河川輸送コスト (0..1)。1.0 / (1.0 + river_flow.sqrt()) で計算。Trade/Route 計画で使用
     surface_water_access: Vec<f32>,      // 表流水アクセス (0..1)。Population・Settlement・Subsistence が読む
     erosion_rate:         Vec<f32>,
     deposition_rate:      Vec<f32>,
     is_lake:              Vec<bool>,      // 窪地を湖として扱うフラグ。湖セルは流量を吸収し鞍部から溢れる
+    sink_id:              Vec<i32>,
+    sink_route_next:      Vec<i32>,
+    sink_member_offsets:  Vec<u32>,
+    sink_member_cells:    Vec<u32>,
+    sink_spill_cell:      Vec<i32>,
+    sink_spill_to:        Vec<i32>,
+    sink_spill_level:     Vec<f32>,
+    sink_capacity_total:  Vec<f32>,
+    sink_capacity_remaining: Vec<f32>,
+    sink_storage_water:   Vec<f32>,
+    sink_storage_sediment: Vec<f32>,
+    sink_overflow_active: Vec<u8>,
+}
 
-    // Environment 期の入口では erosion_rate / deposition_rate を raw 変化量のまま公開せず、
-    // hydrology spinup を掛けた applied rate を公開する。
-
-    // --- Ecology（公開）---
+struct EcologyState {
     biome:                Vec<Biome>,
     tree_cover:           Vec<f32>,   // 0..1
     ground_cover:         Vec<f32>,   // 0..1
     disturbance:          Vec<f32>,   // 0..1
     soil_fertility:       Vec<f32>,   // 0..1
-
-    // --- Ecology（内部状態）---
-    // EcologySystem以外は読まない
     ecology_internal:     Vec<EcologyInternal>,
+}
 
-    // --- Domesticates（公開）---
+struct DomesticatesState {
     // crop_available / livestock_available は環境適性判定結果。adoption更新は Domesticates が書くが、デバッグ・可視化で確認可能な公開値として扱う。Subsistence は読まない。
     crop_available:       Vec<CropBitmap>,
     crop_adoption:        Vec<[f32; N_CROPS]>,       // 0.0〜1.0の普及度。Subsistenceが読む
     livestock_available:  Vec<LivestockBitmap>,
     livestock_adoption:   Vec<[f32; N_LIVESTOCK]>,   // 0.0〜1.0の普及度。Subsistenceが読む
+    domesticates_internal: Vec<DomesticatesInternal>,
+}
 
-    // --- Subsistence ---
+struct SubsistenceState {
     subsistence_mix:      Vec<SubsistenceMix>,
     food_energy_mean:     Vec<f32>,
     food_energy_variance: Vec<f32>,
     buffer_capacity:      Vec<f32>,
     mobility_capacity:    Vec<f32>,
     land_use_intensity:   Vec<f32>,
+}
 
-    // --- Population ---
+struct PopulationState {
     population:           Vec<f32>, // f32でも、数百万人のうち下位1桁しか変わらないため許容
     birth_rate:           Vec<f32>, // Subsistenceからの飢餓圧力を受ける
     death_rate:           Vec<f32>, // ConflictがFeedbackQueue経由で干渉する
+}
 
-    // --- Settlement ---
+struct SettlementState {
     urbanization:         Vec<f32>,
+}
 
-    // --- Polity ---
+struct PolityState {
     polity_id:            Vec<Option<PolityId>>,
+}
 
-    // --- Conflict ---
+struct ConflictState {
     conflict_intensity:   Vec<f32>,            // 0..1、戦線からの距離減衰込みの戦闘強度。毎tick上書き
     occupier_id:          Vec<Option<PolityId>>,  // 実効支配国。主権(polity_id)とは独立して保持
 }
 ```
+
+Environment 期の入口では erosion_rate / deposition_rate を raw 変化量のまま公開せず、
+hydrology spinup を掛けた applied rate を公開する。
 
 `surface_elevation` は次の導出量として扱う。
 
@@ -283,6 +322,10 @@ struct BoundaryEdgeInternal {
 }
 
 struct BoundaryDynamicsState {
+    reclassify_interval_ticks: u32,
+    steps_since_reclassify: u32,
+    dominant_type: Vec<BoundaryType>,
+    activity: Vec<f32>,
     edge_pairs: Vec<[u32; 2]>,
     edge_pairs_plate_hash: u64,
     edge_internal: Vec<BoundaryEdgeInternal>,
@@ -298,7 +341,9 @@ struct BoundaryDynamicsState {
 `BoundaryDynamicsState` で管理する。
 `edge_pairs_plate_hash` は `plate_id` 変化有無を判定するためのキャッシュで、
 未変化tickでは境界edge再構築を省略する。
-境界タイプ自体はedge単位では永続保持せず、必要時に再計算する。
+`dominant_type` と `activity` は reclassify 間隔中に使う境界分類 cache として保持する。
+境界分類の正本入力は `plate_id` / plate dynamics / edge geometry であり、
+`dominant_type` は分類更新時に再計算可能な派生 cache として扱う。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。
 `age`・`thickness`・`density` は連続属性として移流する。
@@ -351,7 +396,7 @@ struct RegionComponent {
 ```
 
 `SettlementComponent.cell` を集落位置の正本とする。
-居住地分布は `GeologyState` の `urbanization` などの公開列から導出して扱う。
+居住地分布は `SettlementState.urbanization` などの公開列から導出して扱う。
 
 ---
 
@@ -410,9 +455,12 @@ tick進行・時代・予算を管理する。「世界の状態」ではなく�
 
 ```rust
 struct ClockState {
-    tick:    Tick,
-    epoch:   EraKind,
-    budgets: SubsystemBudgets,
+    tick:                u64,
+    epoch:               EraKind,
+    real_years_per_tick: f32,
+    runtime_tick_ms:     u32,
+    budgets:             SubsystemBudgets,
+    transition:          TransitionState,
 }
 ```
 
@@ -448,15 +496,21 @@ tick 計算に必要だが、セル単位の SoA ではない control / paramete
 ```rust
 struct WorldControlState {
     geology_params:                GeologyParams,
-    target_sea_ratio:              f32,
     sea_level_offset:              f32,
     erosion_thickness_coupling:    f32,
     deposition_thickness_coupling: f32,
+    ocean_water_inventory:         f32,
+    ocean_water_inventory_baseline: f32,
+    ice_inventory:                 f32,
+    marine_sediment_mass:          f32,
+    global_sediment_export:        f32,
+    solid_earth_mass_proxy:        f32,
+    solid_earth_mass_proxy_baseline: f32,
 }
 ```
 
-`target_sea_ratio` や `sea_level_offset` は projection/derived state ではなく、
-次 tick の計算に効く control 値として `WorldControlState` に置く。
+`sea_level_offset` は projection/derived state ではなく、次 tick の計算に効く control 値として
+`WorldControlState` に置く。
 v1 の `sea_level_offset` は `ocean_water_inventory` と `ice_inventory` を使う
 `capacity closure` で決める海面変数として扱い、
 `ocean basin capacity` は現地形から毎 tick 近似再計算する。
@@ -528,13 +582,10 @@ struct SubsistenceMix {
 }
 
 enum CellFieldId {
-    // 基本フィールド
-    // ...
-    // Domesticates
     CropAdoption(CropId),
     LivestockAdoption(LivestockId),
-    // Domesticates feedback staging（Population -> Domesticates）
-    DomesticatesNeighborPopulationDensity,
+    DomesticatesRoutedCropFeedback(CropId),
+    DomesticatesRoutedLivestockFeedback(LivestockId),
     DomesticatesIntensificationBonus,
 }
 
@@ -553,15 +604,15 @@ enum FeedbackPayload {
 }
 ```
 
-`docs/reference/modules/` で `FeedbackKind::DomesticatesSpread` / `FeedbackKind::DomesticatesPopulationPressure`
+`docs/reference/modules/` で `DomesticatesSpread` / `DomesticatesPopulationPressure`
 のようなドメイン語を使う場合でも、transport 層の正本は上記 `FeedbackPayload` である。
 実装時は次の写像で統一する。
 
 - `DomesticatesSpread`
-  `DeltaF32 { field: CropAdoption(_)/LivestockAdoption(_), ... }` の組で表現する
+  `DeltaF32 { field: DomesticatesRoutedCropFeedback(_)/DomesticatesRoutedLivestockFeedback(_), ... }`
+  の組で表現する
 - `DomesticatesPopulationPressure`
-  `SetValue { field: DomesticatesNeighborPopulationDensity, ... }` と
-  `SetValue { field: DomesticatesIntensificationBonus, ... }` の組で表現する
+  `DeltaF32 { field: DomesticatesIntensificationBonus, ... }` で表現する
 
 `FeedbackEntry.source` と `FeedbackEntry.target_module` は、どの `Module` 境界から出た影響か、
 どの `Module` 境界へ渡す影響かを示す。

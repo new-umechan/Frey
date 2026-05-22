@@ -5,8 +5,8 @@ pub use crate::sim::settlement::types::*;
 
 use crate::sim::exec::lerp;
 use crate::sim::world::{
-    CellId, FeedbackEntry, FeedbackPayload, FeedbackQueue, ModuleId, SettlementComponent,
-    SettlementId, TargetRef, World, N_CROPS, N_LIVESTOCK,
+    CellFieldId, CellId, FeedbackEntry, FeedbackPayload, FeedbackQueue, ModuleId,
+    SettlementComponent, SettlementId, TargetRef, World,
 };
 
 pub(crate) fn update_settlement(
@@ -77,34 +77,48 @@ pub(crate) fn update_settlement(
                     continue;
                 }
 
-                let mut crop_delta = [0.0; N_CROPS];
-                for (idx, value) in crop_delta.iter_mut().enumerate() {
-                    *value = (world.state.domesticates.crop_adoption[src][idx] * network_strength)
-                        .clamp(0.0, 0.06);
+                for (idx, adoption) in world.state.domesticates.crop_adoption[src]
+                    .iter()
+                    .copied()
+                    .enumerate()
+                {
+                    let delta = (adoption * network_strength).clamp(0.0, 0.06);
+                    if delta <= 0.0 {
+                        continue;
+                    }
+                    queue.push(FeedbackEntry {
+                        source: ModuleId::Settlement,
+                        target_module: ModuleId::Domesticates,
+                        target_ref: TargetRef::Cell(CellId(dst as u32)),
+                        enqueued_tick: world.clock.tick,
+                        payload: FeedbackPayload::DeltaF32 {
+                            field: CellFieldId::DomesticatesRoutedCropFeedback(idx as u8),
+                            cell: CellId(dst as u32),
+                            delta,
+                        },
+                    });
                 }
-                let mut livestock_delta = [0.0; N_LIVESTOCK];
-                for (idx, value) in livestock_delta.iter_mut().enumerate() {
-                    *value = (world.state.domesticates.livestock_adoption[src][idx]
-                        * network_strength)
-                        .clamp(0.0, 0.06);
+                for (idx, adoption) in world.state.domesticates.livestock_adoption[src]
+                    .iter()
+                    .copied()
+                    .enumerate()
+                {
+                    let delta = (adoption * network_strength).clamp(0.0, 0.06);
+                    if delta <= 0.0 {
+                        continue;
+                    }
+                    queue.push(FeedbackEntry {
+                        source: ModuleId::Settlement,
+                        target_module: ModuleId::Domesticates,
+                        target_ref: TargetRef::Cell(CellId(dst as u32)),
+                        enqueued_tick: world.clock.tick,
+                        payload: FeedbackPayload::DeltaF32 {
+                            field: CellFieldId::DomesticatesRoutedLivestockFeedback(idx as u8),
+                            cell: CellId(dst as u32),
+                            delta,
+                        },
+                    });
                 }
-                let has_crop_pressure = crop_delta.iter().any(|&value| value > 0.0);
-                let has_livestock_pressure = livestock_delta.iter().any(|&value| value > 0.0);
-                if !has_crop_pressure && !has_livestock_pressure {
-                    continue;
-                }
-
-                queue.push(FeedbackEntry {
-                    source: ModuleId::Settlement,
-                    target_module: ModuleId::Domesticates,
-                    target_ref: TargetRef::Cell(CellId(dst as u32)),
-                    enqueued_tick: world.clock.tick,
-                    payload: FeedbackPayload::DomesticatesSpread {
-                        cell: CellId(dst as u32),
-                        crop_delta,
-                        livestock_delta,
-                    },
-                });
             }
         }
     }
