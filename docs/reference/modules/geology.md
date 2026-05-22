@@ -295,7 +295,6 @@ zero-mean mass-centering は、全セルへ一様に補正を配らない。
 次段の切り分けでは `h_eq` の内訳、すなわち `reference_freeboard` と
 `compensated_thickness_anomaly` を runtime artifact へ露出させる。
 
-
 ## 3. 具体的な仕様
 
 ### 3.0 プレートの動き

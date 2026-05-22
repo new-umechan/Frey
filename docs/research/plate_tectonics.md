@@ -18,7 +18,6 @@
 ナビエ・ストークス方程式を解きたくない
 初期状態の生成はどう行うか？
 
-
 ## マントルからプレートのかたちを生成する
 
 既存研究がなさそうなため、MVPとして
@@ -32,8 +31,6 @@
 
 ## マントルからプレートの動き
 
-
-
 ## プレートの動きから地形の出力
 
 Procedural Tectonic Planets: `docs/research/procedural_tctonic_planets.md`
@@ -41,5 +38,4 @@ Procedural Tectonic Planets: `docs/research/procedural_tctonic_planets.md`
 プレートがどのように動くと、どのような地形を侵食作用まで
 
 ## プレートの分裂、合体
-
 
