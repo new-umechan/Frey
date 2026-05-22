@@ -64,8 +64,7 @@ fn load_config() -> BenchConfig {
         .unwrap_or_else(|| DEFAULT_SEED.to_string());
     let level = env_u32("CRUST_COUPLED_SERIES_LEVEL").unwrap_or(DEFAULT_LEVEL);
     let ticks = env_u64("CRUST_COUPLED_SERIES_TICKS").unwrap_or(DEFAULT_TICKS);
-    let record_every =
-        env_u64("CRUST_COUPLED_SERIES_RECORD_EVERY").unwrap_or(DEFAULT_RECORD_EVERY);
+    let record_every = env_u64("CRUST_COUPLED_SERIES_RECORD_EVERY").unwrap_or(DEFAULT_RECORD_EVERY);
     let out_path = env::var("CRUST_COUPLED_SERIES_BENCH_OUT")
         .ok()
         .filter(|v| !v.trim().is_empty())
@@ -101,11 +100,7 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
     samples.push(sample_world(&world, 0));
     for tick in 1..=config.ticks {
         let budgets = world.clock.epoch.budgets();
-        sim::run_geology_step_with_state_for_bench(
-            &mut world,
-            &mut geology_state,
-            budgets.geology,
-        );
+        sim::run_geology_step_with_state_for_bench(&mut world, &mut geology_state, budgets.geology);
         sim::run_climate_step_for_bench(&mut world, budgets.climate);
         sim::run_hydrology_step_with_state_for_bench(
             &mut world,

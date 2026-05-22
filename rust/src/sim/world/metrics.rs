@@ -67,7 +67,10 @@ impl World {
             return WorldMetrics::default();
         }
         let surface_elevation = (0..cell_count)
-            .map(|index| self.surface_elevation(index).unwrap_or(-self.sea_level_offset()))
+            .map(|index| {
+                self.surface_elevation(index)
+                    .unwrap_or(-self.sea_level_offset())
+            })
             .collect::<Vec<_>>();
 
         let mut land_cells = 0usize;
@@ -363,7 +366,9 @@ fn continent_stats(world: &World, surface_elevation: &[f32]) -> (usize, usize) {
     let mut largest_continent_cells = 0usize;
 
     for start_index in 0..cell_count {
-        if visited[start_index] || surface_elevation.get(start_index).copied().unwrap_or(-1.0) <= 0.0 {
+        if visited[start_index]
+            || surface_elevation.get(start_index).copied().unwrap_or(-1.0) <= 0.0
+        {
             continue;
         }
         visited[start_index] = true;
@@ -377,7 +382,11 @@ fn continent_stats(world: &World, surface_elevation: &[f32]) -> (usize, usize) {
                 let neighbor_index = neighbor as usize;
                 if neighbor_index >= cell_count
                     || visited[neighbor_index]
-                    || surface_elevation.get(neighbor_index).copied().unwrap_or(-1.0) <= 0.0
+                    || surface_elevation
+                        .get(neighbor_index)
+                        .copied()
+                        .unwrap_or(-1.0)
+                        <= 0.0
                 {
                     continue;
                 }

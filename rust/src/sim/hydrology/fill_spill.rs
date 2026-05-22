@@ -74,12 +74,8 @@ pub(crate) fn rebuild_fill_spill_state(
         terminal[i] = trace_terminal(i, height, sea_level_offset, &downhill, &mut terminal);
     }
 
-    let sink_members = build_sink_members(
-        height,
-        sea_level_offset,
-        &terminal,
-        &mut hydrology.sink_id,
-    );
+    let sink_members =
+        build_sink_members(height, sea_level_offset, &terminal, &mut hydrology.sink_id);
     let sink_count = sink_members.len();
     resize_sink_state_arrays(hydrology, sink_count);
     rebuild_membership_csr(hydrology, &sink_members);

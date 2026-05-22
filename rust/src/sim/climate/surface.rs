@@ -821,13 +821,7 @@ fn upwind_ocean_fraction(
             break;
         }
         samples += 1.0;
-        if world
-            .state
-            .geology
-            .height
-            .get(next)
-            .copied()
-            .unwrap_or(0.0)
+        if world.state.geology.height.get(next).copied().unwrap_or(0.0)
             <= world.control.sea_level_offset
         {
             ocean_hits += 1.0;

@@ -96,8 +96,7 @@ pub(super) fn apply_stress_and_surface_update(
     let mut isostatic_reference_freeboard_applied_continental_orogenic_sum = 0.0f32;
     let mut isostatic_reference_freeboard_applied_continental_stable_sum = 0.0f32;
     let mut isostatic_reference_freeboard_applied_continental_stable_rift_sum = 0.0f32;
-    let mut isostatic_reference_freeboard_applied_continental_stable_passive_transform_sum =
-        0.0f32;
+    let mut isostatic_reference_freeboard_applied_continental_stable_passive_transform_sum = 0.0f32;
     let mut isostatic_reference_freeboard_applied_continental_stable_passive_margin_sum = 0.0f32;
     let mut isostatic_reference_freeboard_applied_continental_stable_transform_sum = 0.0f32;
     let mut isostatic_reference_freeboard_raw_continental_stable_passive_margin_sum = 0.0f32;
@@ -133,9 +132,9 @@ pub(super) fn apply_stress_and_surface_update(
             .get(i)
             .copied()
             .unwrap_or(BoundaryType::PassiveMargin);
-        let boundary_activity = finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0)
-            .clamp(0.0, 1.0)
-            * activity_scale;
+        let boundary_activity =
+            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0)
+                * activity_scale;
 
         let mut tensor = boundary_tensor(boundary_type, boundary_activity);
 
@@ -322,11 +321,8 @@ pub(super) fn apply_stress_and_surface_update(
             land_neighbor_count as f32 / nbr_count as f32
         };
         let coastal_ocean_fraction = 1.0 - coastal_land_fraction;
-        let diffusive_raw = apply_marine_uphill_diffusion_limit(
-            diffusive_raw,
-            height_i,
-            coastal_land_fraction,
-        );
+        let diffusive_raw =
+            apply_marine_uphill_diffusion_limit(diffusive_raw, height_i, coastal_land_fraction);
         let diffusive_raw = apply_coastal_land_down_diffusion_limit(
             diffusive_raw,
             height_i,
@@ -479,15 +475,12 @@ pub(super) fn apply_stress_and_surface_update(
             isostatic_reference_freeboard_applied *=
                 marine_shoreline_attenuation(next_h, coastal_land_fraction);
         }
-        let isostatic_compensated_anomaly_applied =
-            compensated_anomaly * isostatic_adjustment_rate;
+        let isostatic_compensated_anomaly_applied = compensated_anomaly * isostatic_adjustment_rate;
         let isostatic_applied =
             isostatic_reference_freeboard_applied + isostatic_compensated_anomaly_applied;
         isostatic_applied_sum += isostatic_applied.abs();
-        isostatic_reference_freeboard_applied_sum +=
-            isostatic_reference_freeboard_applied.abs();
-        isostatic_compensated_anomaly_applied_sum +=
-            isostatic_compensated_anomaly_applied.abs();
+        isostatic_reference_freeboard_applied_sum += isostatic_reference_freeboard_applied.abs();
+        isostatic_compensated_anomaly_applied_sum += isostatic_compensated_anomaly_applied.abs();
         match state.crust_type {
             CrustType::Oceanic => {
                 isostatic_reference_freeboard_applied_oceanic_sum +=
@@ -496,7 +489,10 @@ pub(super) fn apply_stress_and_surface_update(
             CrustType::Continental => {
                 isostatic_reference_freeboard_applied_continental_sum +=
                     isostatic_reference_freeboard_applied;
-                if matches!(boundary_type, BoundaryType::Collision | BoundaryType::Subduction) {
+                if matches!(
+                    boundary_type,
+                    BoundaryType::Collision | BoundaryType::Subduction
+                ) {
                     isostatic_reference_freeboard_applied_continental_orogenic_sum +=
                         isostatic_reference_freeboard_applied;
                 } else {
@@ -577,8 +573,7 @@ pub(super) fn apply_stress_and_surface_update(
         }
         next_vertex_buoyancy[i] = finite_or(isostatic_equilibrium[i] - next_height[i], 0.0);
     }
-    let bedrock_zero_level_coastal_band_ratio =
-        zero_level_coastal_band_ratio(next_height, 0.02);
+    let bedrock_zero_level_coastal_band_ratio = zero_level_coastal_band_ratio(next_height, 0.02);
     let (bedrock_freeboard_p10, bedrock_freeboard_p50, bedrock_freeboard_p90) =
         positive_height_percentiles(next_height);
 
@@ -601,7 +596,10 @@ pub(super) fn apply_stress_and_surface_update(
             0.0,
         ),
         mean_abs_surface_output_delta: 0.0,
-        mean_abs_surface_pre_zero_mean_delta: finite_or(surface_pre_zero_mean_delta_sum / denom, 0.0),
+        mean_abs_surface_pre_zero_mean_delta: finite_or(
+            surface_pre_zero_mean_delta_sum / denom,
+            0.0,
+        ),
         mean_abs_surface_zero_mean_delta: finite_or(surface_zero_mean_delta_sum / denom, 0.0),
         debug_surface_max_delta_index: debug_surface_max_delta_index as f32,
         debug_surface_max_delta_raw_delta: finite_or(debug_surface_max_delta_raw_delta, 0.0),
@@ -618,7 +616,10 @@ pub(super) fn apply_stress_and_surface_update(
         ),
         debug_surface_max_delta_tensile: finite_or(debug_surface_max_delta_tensile, 0.0),
         debug_surface_max_delta_stress: finite_or(debug_surface_max_delta_stress, 0.0),
-        debug_surface_max_delta_height_before: finite_or(debug_surface_max_delta_height_before, 0.0),
+        debug_surface_max_delta_height_before: finite_or(
+            debug_surface_max_delta_height_before,
+            0.0,
+        ),
         debug_surface_max_delta_height_after_pre_isostatic: finite_or(
             debug_surface_max_delta_height_after_pre_isostatic,
             0.0,
@@ -692,19 +693,17 @@ pub(super) fn apply_stress_and_surface_update(
             ),
         mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_margin:
             finite_or(
-                isostatic_reference_freeboard_applied_continental_stable_passive_margin_sum
-                    / denom,
+                isostatic_reference_freeboard_applied_continental_stable_passive_margin_sum / denom,
                 0.0,
             ),
         mean_signed_isostatic_reference_freeboard_applied_continental_stable_transform: finite_or(
             isostatic_reference_freeboard_applied_continental_stable_transform_sum / denom,
             0.0,
         ),
-        mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin:
-            finite_or(
-                isostatic_reference_freeboard_raw_continental_stable_passive_margin_sum / denom,
-                0.0,
-            ),
+        mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin: finite_or(
+            isostatic_reference_freeboard_raw_continental_stable_passive_margin_sum / denom,
+            0.0,
+        ),
         mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform: finite_or(
             isostatic_reference_freeboard_raw_continental_stable_transform_sum / denom,
             0.0,
@@ -719,7 +718,8 @@ pub(super) fn apply_stress_and_surface_update(
             0.0,
         ),
         mean_passive_margin_smoothing_factor: finite_or(
-            passive_margin_smoothing_factor_sum / (passive_margin_continental_cells as f32).max(1.0),
+            passive_margin_smoothing_factor_sum
+                / (passive_margin_continental_cells as f32).max(1.0),
             0.0,
         ),
         passive_margin_reference_freeboard_effective_applied_factor: finite_or(
@@ -833,9 +833,7 @@ fn apply_coastal_land_down_diffusion_limit(
     let freeboard_norm = (height / COASTAL_LAND_FREEBOARD_BAND).clamp(0.0, 1.0);
     let shoreline_exposure = coastal_ocean_fraction.clamp(0.0, 1.0).sqrt();
     let attenuation = 1.0
-        - (1.0 - COASTAL_LAND_DOWN_DIFFUSION_FLOOR)
-            * (1.0 - freeboard_norm)
-            * shoreline_exposure;
+        - (1.0 - COASTAL_LAND_DOWN_DIFFUSION_FLOOR) * (1.0 - freeboard_norm) * shoreline_exposure;
     diffusive_raw * attenuation.clamp(0.0, 1.0)
 }
 
@@ -864,8 +862,10 @@ fn isostatic_components(
     let age_norm = (age / age_ref.max(1e-4)).clamp(0.0, 1.0);
     let (reference_thickness, reference_freeboard) =
         reference_isostatic_column(crust_type, age_norm, boundary_type, plume);
-    let compensated_anomaly =
-        finite_or((thickness - reference_thickness) * (1.0 - density_ratio), 0.0);
+    let compensated_anomaly = finite_or(
+        (thickness - reference_thickness) * (1.0 - density_ratio),
+        0.0,
+    );
     (reference_freeboard, compensated_anomaly)
 }
 
@@ -888,7 +888,10 @@ fn reference_isostatic_column(
             let reference_thickness = 0.30 + age_norm.sqrt() * 0.08 + plume_bonus * 0.5;
             let reference_freeboard =
                 -0.08 - age_norm.sqrt() * 0.04 + ridge_bonus + plume_bonus * 0.5;
-            (reference_thickness.clamp(0.22, 0.55), reference_freeboard.clamp(-0.18, 0.01))
+            (
+                reference_thickness.clamp(0.22, 0.55),
+                reference_freeboard.clamp(-0.18, 0.01),
+            )
         }
         CrustType::Continental => {
             let collision_bonus = match boundary_type {
@@ -903,7 +906,10 @@ fn reference_isostatic_column(
                 BoundaryType::Transform | BoundaryType::PassiveMargin => 0.012,
             };
             let reference_freeboard = stable_base + collision_bonus * 0.25 + plume_bonus * 0.35;
-            (reference_thickness.clamp(0.48, 0.95), reference_freeboard.clamp(0.005, 0.08))
+            (
+                reference_thickness.clamp(0.48, 0.95),
+                reference_freeboard.clamp(0.005, 0.08),
+            )
         }
     }
 }
@@ -916,8 +922,8 @@ fn local_isostatic_relaxation_rate(
     crust_type: CrustType,
 ) -> f32 {
     let (rigidity_min, rigidity_max) = crust_rigidity_bounds(crust_type);
-    let rigidity_norm = ((rigidity - rigidity_min) / (rigidity_max - rigidity_min).max(1e-4))
-        .clamp(0.0, 1.0);
+    let rigidity_norm =
+        ((rigidity - rigidity_min) / (rigidity_max - rigidity_min).max(1e-4)).clamp(0.0, 1.0);
     let thermal_softening = 0.45 + 0.55 * mantle_heat.clamp(0.0, 1.0);
     let thickness_drag = 1.0 + (thickness - 0.35).max(0.0) * 0.8;
     let mobility = thermal_softening * (1.05 - 0.55 * rigidity_norm) / thickness_drag.max(0.25);
@@ -946,13 +952,10 @@ fn local_thickness_recovery_rate(
     let thermal_drive = 0.35 + 0.65 * mantle_heat.clamp(0.0, 1.0);
     let stress_drive = 1.0 - (-stress.abs() * 6.0).exp();
     let activity_drive = boundary_drive * boundary_activity.clamp(0.0, 1.0);
-    let driver = base_rate
-        * crust_mobility
-        * thermal_drive
-        * (0.60 * activity_drive + 0.40 * stress_drive);
+    let driver =
+        base_rate * crust_mobility * thermal_drive * (0.60 * activity_drive + 0.40 * stress_drive);
     1.0 - (-driver).exp()
 }
-
 
 fn equilibrium_rigidity(
     crust_type: CrustType,
@@ -1139,11 +1142,9 @@ mod tests {
         apply_stress_and_surface_update, enforce_zero_mean_endogenous_height_change,
         smoothing_limiter, SurfaceUpdateInput, SurfaceUpdateOutput,
     };
-    use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
     use crate::sim::exec::{GEOLOGY_HEIGHT_MAX, GEOLOGY_HEIGHT_MIN};
-    use crate::sim::world::{
-        BoundaryDynamicsState, BoundaryType, VertexCrustState,
-    };
+    use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
+    use crate::sim::world::{BoundaryDynamicsState, BoundaryType, VertexCrustState};
     use crate::GeologyParams;
 
     #[test]

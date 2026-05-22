@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frey_wasm::sim;
-use frey_wasm::sim::precomputed::AlphaSnapshotStage;
 use frey_wasm::sim::erosion::ErosionAutomatonState;
 use frey_wasm::sim::glaciology::types::GlaciologyParams as BenchGlaciologyParams;
+use frey_wasm::sim::precomputed::AlphaSnapshotStage;
 use frey_wasm::sim::world::FeedbackQueue;
 use frey_wasm::sim::world::World;
 use frey_wasm::sim::ExecWorldPhase;
@@ -158,8 +158,7 @@ struct TickRecord {
         f32,
     geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin:
         f32,
-    geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform:
-        f32,
+    geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform: f32,
     geology_runtime_passive_margin_continental_cell_ratio: f32,
     geology_runtime_mean_passive_margin_isostatic_adjustment_rate: f32,
     geology_runtime_mean_passive_margin_smoothing_factor: f32,
@@ -267,8 +266,10 @@ fn load_config() -> BenchConfig {
         .ok()
         .filter(|v| !v.trim().is_empty())
         .map(PathBuf::from);
-    let land_ratio_min = env_f32("ALPHA_TRANSITION_LAND_RATIO_MIN").unwrap_or(DEFAULT_LAND_RATIO_MIN);
-    let land_ratio_max = env_f32("ALPHA_TRANSITION_LAND_RATIO_MAX").unwrap_or(DEFAULT_LAND_RATIO_MAX);
+    let land_ratio_min =
+        env_f32("ALPHA_TRANSITION_LAND_RATIO_MIN").unwrap_or(DEFAULT_LAND_RATIO_MIN);
+    let land_ratio_max =
+        env_f32("ALPHA_TRANSITION_LAND_RATIO_MAX").unwrap_or(DEFAULT_LAND_RATIO_MAX);
     let max_land_ratio_jump =
         env_f32("ALPHA_TRANSITION_MAX_LAND_RATIO_JUMP").unwrap_or(DEFAULT_MAX_LAND_RATIO_JUMP);
     let max_sea_level_jump =
@@ -277,8 +278,8 @@ fn load_config() -> BenchConfig {
         env_f32("ALPHA_TRANSITION_MAX_OCEAN_DRIFT_ABS").unwrap_or(DEFAULT_MAX_OCEAN_DRIFT_ABS);
     let transition_pre_end_tick =
         env_u64("ALPHA_TRANSITION_PRE_END_TICK").unwrap_or(DEFAULT_TRANSITION_PRE_END_TICK);
-    let transition_post_start_tick = env_u64("ALPHA_TRANSITION_POST_START_TICK")
-        .unwrap_or(DEFAULT_TRANSITION_POST_START_TICK);
+    let transition_post_start_tick =
+        env_u64("ALPHA_TRANSITION_POST_START_TICK").unwrap_or(DEFAULT_TRANSITION_POST_START_TICK);
     let transition_post_end_tick =
         env_u64("ALPHA_TRANSITION_POST_END_TICK").unwrap_or(DEFAULT_TRANSITION_POST_END_TICK);
     let max_transition_land_ratio_median_shift =
@@ -291,20 +292,17 @@ fn load_config() -> BenchConfig {
         .unwrap_or(DEFAULT_MAX_MASS_PROXY_DRIFT_ABS);
     let max_mass_proxy_drift_ratio = env_f32("ALPHA_TRANSITION_MAX_MASS_PROXY_DRIFT_RATIO")
         .unwrap_or(DEFAULT_MAX_MASS_PROXY_DRIFT_RATIO);
-    let max_render_land_ratio_diff =
-        env_f32("ALPHA_TRANSITION_MAX_RENDER_LAND_RATIO_DIFF")
-            .unwrap_or(DEFAULT_MAX_RENDER_LAND_RATIO_DIFF);
-    let max_sea_level_slope = env_f32("ALPHA_TRANSITION_MAX_SEA_LEVEL_SLOPE")
-        .unwrap_or(DEFAULT_MAX_SEA_LEVEL_SLOPE);
+    let max_render_land_ratio_diff = env_f32("ALPHA_TRANSITION_MAX_RENDER_LAND_RATIO_DIFF")
+        .unwrap_or(DEFAULT_MAX_RENDER_LAND_RATIO_DIFF);
+    let max_sea_level_slope =
+        env_f32("ALPHA_TRANSITION_MAX_SEA_LEVEL_SLOPE").unwrap_or(DEFAULT_MAX_SEA_LEVEL_SLOPE);
     let max_largest_continent_ratio_jump =
         env_f32("ALPHA_TRANSITION_MAX_LARGEST_CONTINENT_RATIO_JUMP")
             .unwrap_or(DEFAULT_MAX_LARGEST_CONTINENT_RATIO_JUMP);
-    let max_coastal_band_ratio =
-        env_f32("ALPHA_TRANSITION_MAX_COASTAL_BAND_RATIO")
-            .unwrap_or(DEFAULT_MAX_COASTAL_BAND_RATIO);
-    let max_land_freeboard_p90 =
-        env_f32("ALPHA_TRANSITION_MAX_LAND_FREEBOARD_P90")
-            .unwrap_or(DEFAULT_MAX_LAND_FREEBOARD_P90);
+    let max_coastal_band_ratio = env_f32("ALPHA_TRANSITION_MAX_COASTAL_BAND_RATIO")
+        .unwrap_or(DEFAULT_MAX_COASTAL_BAND_RATIO);
+    let max_land_freeboard_p90 = env_f32("ALPHA_TRANSITION_MAX_LAND_FREEBOARD_P90")
+        .unwrap_or(DEFAULT_MAX_LAND_FREEBOARD_P90);
     BenchConfig {
         seed,
         level,
@@ -344,51 +342,25 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
         select_resume_snapshot_stage(config)
     };
     let mut warnings = Vec::new();
-    let (mut world, erosion_state, resumed_from_snapshot) =
-        if let Some(snapshot_path) = config.snapshot_path.as_ref() {
-            match sim::headless::init_world_for_headless_runner_from_snapshot_path(
-                &config.seed,
-                config.level,
-                geology_params.clone(),
-                snapshot_path,
-                None,
-            ) {
-                Ok((world, erosion_state)) => (world, erosion_state, None),
-                Err(err) => {
-                    warnings.push(ViolationRecord {
-                        tick: 0,
-                        kind: "explicit_snapshot_fallback".to_string(),
-                        detail: format!(
-                            "path={} resume failed; falling back to cold start: {}",
-                            snapshot_path.display(),
-                            err
-                        ),
-                    });
-                    let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
-                        &config.seed,
-                        config.level,
-                        geology_params.clone(),
-                    )
-                    .unwrap_or_else(|cold_err| panic!("failed to init world: {cold_err}"));
-                    (world, erosion_state, None)
-                }
-            }
-        } else {
-            match resume_stage {
-        Some(stage) => match sim::headless::init_world_for_headless_runner_from_alpha_snapshot(
+    let (mut world, erosion_state, resumed_from_snapshot) = if let Some(snapshot_path) =
+        config.snapshot_path.as_ref()
+    {
+        match sim::headless::init_world_for_headless_runner_from_snapshot_path(
             &config.seed,
             config.level,
             geology_params.clone(),
-            stage,
+            snapshot_path,
+            None,
         ) {
-            Ok((world, erosion_state)) => (world, erosion_state, Some(stage)),
+            Ok((world, erosion_state)) => (world, erosion_state, None),
             Err(err) => {
                 warnings.push(ViolationRecord {
-                    tick: stage.target_tick(),
-                    kind: "snapshot_resume_fallback".to_string(),
+                    tick: 0,
+                    kind: "explicit_snapshot_fallback".to_string(),
                     detail: format!(
-                        "stage={} resume failed; falling back to cold start: {}",
-                        stage, err
+                        "path={} resume failed; falling back to cold start: {}",
+                        snapshot_path.display(),
+                        err
                     ),
                 });
                 let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
@@ -399,18 +371,45 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
                 .unwrap_or_else(|cold_err| panic!("failed to init world: {cold_err}"));
                 (world, erosion_state, None)
             }
-        },
-        None => {
-            let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
+        }
+    } else {
+        match resume_stage {
+            Some(stage) => match sim::headless::init_world_for_headless_runner_from_alpha_snapshot(
                 &config.seed,
                 config.level,
                 geology_params.clone(),
-            )
-            .unwrap_or_else(|err| panic!("failed to init world: {err}"));
-            (world, erosion_state, None)
-        }
+                stage,
+            ) {
+                Ok((world, erosion_state)) => (world, erosion_state, Some(stage)),
+                Err(err) => {
+                    warnings.push(ViolationRecord {
+                        tick: stage.target_tick(),
+                        kind: "snapshot_resume_fallback".to_string(),
+                        detail: format!(
+                            "stage={} resume failed; falling back to cold start: {}",
+                            stage, err
+                        ),
+                    });
+                    let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
+                        &config.seed,
+                        config.level,
+                        geology_params.clone(),
+                    )
+                    .unwrap_or_else(|cold_err| panic!("failed to init world: {cold_err}"));
+                    (world, erosion_state, None)
+                }
+            },
+            None => {
+                let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
+                    &config.seed,
+                    config.level,
+                    geology_params.clone(),
+                )
+                .unwrap_or_else(|err| panic!("failed to init world: {err}"));
+                (world, erosion_state, None)
             }
-        };
+        }
+    };
     let resume_tick = resumed_from_snapshot.map(AlphaSnapshotStage::target_tick);
     let mut hydrology_state = Some(erosion_state);
     let mut feedback = FeedbackQueue::new(world.cell_count());
@@ -519,7 +518,13 @@ fn maybe_record_sample(
         config,
         stage_diagnostics,
     );
-    evaluate_sample(config, &sample, prev_sample.as_ref(), mass_proxy_baseline, violations);
+    evaluate_sample(
+        config,
+        &sample,
+        prev_sample.as_ref(),
+        mass_proxy_baseline,
+        violations,
+    );
     *prev_sample = Some(sample.clone());
     samples.push(sample);
 }
@@ -557,7 +562,8 @@ fn build_tick_record(
     };
 
     let bedrock_land_ratio = bedrock_land_ratio(world);
-    let bedrock_band_ratio = bedrock_coastal_band_ratio(world, world.control.sea_level_offset, 0.02);
+    let bedrock_band_ratio =
+        bedrock_coastal_band_ratio(world, world.control.sea_level_offset, 0.02);
     let (land_freeboard_p10, land_freeboard_p50, land_freeboard_p90) =
         land_freeboard_percentiles(world);
     let (bedrock_freeboard_p10, bedrock_freeboard_p50, bedrock_freeboard_p90) =
@@ -739,7 +745,8 @@ fn exec_tick_with_stage_diagnostics(
     while world.clock.tick == starting_tick {
         let before_height = world.state.geology.height.clone();
         let current_phase = phase;
-        let result = sim::exec_world_slice_with_hydrology(world, feedback, hydrology_state, phase, 1);
+        let result =
+            sim::exec_world_slice_with_hydrology(world, feedback, hydrology_state, phase, 1);
         let delta = mean_abs_height_delta(&before_height, &world.state.geology.height);
         match current_phase {
             ExecWorldPhase::Geology => {
@@ -832,8 +839,7 @@ fn evaluate_sample(
             kind: "coastal_band_ratio".to_string(),
             detail: format!(
                 "ratio={} threshold={}",
-                sample.coastal_band_ratio,
-                config.max_coastal_band_ratio
+                sample.coastal_band_ratio, config.max_coastal_band_ratio
             ),
         });
     }
@@ -843,8 +849,7 @@ fn evaluate_sample(
             kind: "land_freeboard_p90".to_string(),
             detail: format!(
                 "p90={} threshold={}",
-                sample.land_freeboard_p90,
-                config.max_land_freeboard_p90
+                sample.land_freeboard_p90, config.max_land_freeboard_p90
             ),
         });
     }
@@ -867,7 +872,10 @@ fn evaluate_sample(
                 kind: "sea_level_jump".to_string(),
                 detail: format!(
                     "delta={} threshold={} (prev={}, current={})",
-                    sea_jump, config.max_sea_level_jump, prev.sea_level_offset, sample.sea_level_offset
+                    sea_jump,
+                    config.max_sea_level_jump,
+                    prev.sea_level_offset,
+                    sample.sea_level_offset
                 ),
             });
         }
@@ -1153,9 +1161,8 @@ fn post_step_sync_light(
 
 fn append_jsonl(path: &PathBuf, record: &BenchRecord) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!("failed to create directory {}: {err}", parent.display())
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("failed to create directory {}: {err}", parent.display()))?;
     }
     let mut file = OpenOptions::new()
         .create(true)

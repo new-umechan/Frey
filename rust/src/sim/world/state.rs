@@ -1190,10 +1190,8 @@ pub struct GeologyStepMetrics {
     pub mean_signed_isostatic_reference_freeboard_applied_continental_orogenic: f32,
     pub mean_signed_isostatic_reference_freeboard_applied_continental_stable: f32,
     pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_rift: f32,
-    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_transform:
-        f32,
-    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_margin:
-        f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_transform: f32,
+    pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_passive_margin: f32,
     pub mean_signed_isostatic_reference_freeboard_applied_continental_stable_transform: f32,
     pub mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin: f32,
     pub mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform: f32,

@@ -397,12 +397,7 @@ fn run_river_step_with_erosion_state(
     state.scratch_effective_runoff = effective_runoff;
 
     let phase_start = profile_now();
-    update_erosion_and_deposition_rates(
-        geology,
-        hydrology,
-        &state.height,
-        response_scale,
-    );
+    update_erosion_and_deposition_rates(geology, hydrology, &state.height, response_scale);
     // raw_river_flux（正規化前）を river_flow として使用
     hydrology.river_flow.clone_from(&state.raw_river_flux);
     hydrology.river_next.clone_from(&state.river_next);
@@ -818,11 +813,10 @@ mod tests {
         assert_eq!(routing::environment_hydrology_spinup_factor(&world), 0.0);
 
         world.clock.tick = 801;
-        let expected = 1.0 / crate::sim::glaciology::types::GlaciologyParams::default()
-            .environment_spinup_ticks as f32;
-        assert!(
-            (routing::environment_hydrology_spinup_factor(&world) - expected).abs() < 1e-6
-        );
+        let expected = 1.0
+            / crate::sim::glaciology::types::GlaciologyParams::default().environment_spinup_ticks
+                as f32;
+        assert!((routing::environment_hydrology_spinup_factor(&world) - expected).abs() < 1e-6);
 
         world.clock.tick = 900;
         assert_eq!(routing::environment_hydrology_spinup_factor(&world), 1.0);

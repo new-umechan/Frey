@@ -92,23 +92,16 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
         level: config.level,
         ..GeologyParams::default()
     };
-    let (mut world, _) = sim::headless::init_world_for_headless_runner(
-        &config.seed,
-        config.level,
-        geology_params,
-    )
-    .unwrap_or_else(|err| panic!("failed to init world: {err}"));
+    let (mut world, _) =
+        sim::headless::init_world_for_headless_runner(&config.seed, config.level, geology_params)
+            .unwrap_or_else(|err| panic!("failed to init world: {err}"));
     let mut geology_state: GeologyExecState = None;
     let mut samples = Vec::new();
 
     samples.push(sample_world(&world, 0));
     for tick in 1..=config.ticks {
         let budgets = world.clock.epoch.budgets();
-        sim::run_geology_step_with_state_for_bench(
-            &mut world,
-            &mut geology_state,
-            budgets.geology,
-        );
+        sim::run_geology_step_with_state_for_bench(&mut world, &mut geology_state, budgets.geology);
         world.clock.tick = tick;
         if tick % config.record_every == 0 {
             samples.push(sample_world(&world, tick));

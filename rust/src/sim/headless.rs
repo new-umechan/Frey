@@ -1,8 +1,8 @@
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::GeologyInternal;
 use crate::sim::precomputed::{
-    canonical_cache_dir, load_snapshot, mirror_dir, restore_world_from_snapshot,
-    stage_filename, AlphaSnapshotStage,
+    canonical_cache_dir, load_snapshot, mirror_dir, restore_world_from_snapshot, stage_filename,
+    AlphaSnapshotStage,
 };
 use crate::sim::world::{self, EraKind, World};
 use crate::GeologyParams;
@@ -124,8 +124,7 @@ pub fn init_world_for_headless_runner_from_snapshot_path(
         if envelope.stage != stage {
             return Err(format!(
                 "snapshot stage mismatch: expected={}, actual={}",
-                stage,
-                envelope.stage
+                stage, envelope.stage
             ));
         }
     }

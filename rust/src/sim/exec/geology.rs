@@ -116,8 +116,7 @@ fn expand_shoreline_freeboard(heights: &mut [f32]) {
 fn remap_shoreline_freeboard(abs_height: f32) -> f32 {
     let normalized = (abs_height / CRUST_SHORELINE_EXPANSION_RANGE).clamp(0.0, 1.0);
     let pushed = normalized.sqrt();
-    CRUST_COASTAL_BAND
-        + (CRUST_SHORELINE_EXPANSION_RANGE - CRUST_COASTAL_BAND) * pushed
+    CRUST_COASTAL_BAND + (CRUST_SHORELINE_EXPANSION_RANGE - CRUST_COASTAL_BAND) * pushed
 }
 
 fn remap_low_freeboard(abs_height: f32, target: f32) -> f32 {
@@ -129,7 +128,13 @@ fn signed_abs_percentile(heights: &[f32], positive: bool, quantile: f32) -> f32 
     let mut values = heights
         .iter()
         .copied()
-        .filter(|height| if positive { *height > 0.0 } else { *height < 0.0 })
+        .filter(|height| {
+            if positive {
+                *height > 0.0
+            } else {
+                *height < 0.0
+            }
+        })
         .map(|height| height.abs())
         .collect::<Vec<_>>();
     if values.is_empty() {
@@ -179,13 +184,17 @@ mod tests {
             0.0018, 0.0022, 0.003, 0.060,
         ];
         let preserved_large_relief = [heights[0], heights[heights.len() - 1]];
-        let original_signs = heights.iter().map(|value| (*value).signum()).collect::<Vec<_>>();
+        let original_signs = heights
+            .iter()
+            .map(|value| (*value).signum())
+            .collect::<Vec<_>>();
         let mut before_land = heights
             .iter()
             .copied()
             .filter(|value| *value > 0.0)
             .collect::<Vec<_>>();
-        before_land.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        before_land
+            .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         let before_land_p50 = percentile_sorted(&before_land, 0.50);
 
         inflate_crust_freeboard(&mut heights);
@@ -195,9 +204,13 @@ mod tests {
             .copied()
             .filter(|value| *value > 0.0)
             .collect::<Vec<_>>();
-        after_land.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        after_land
+            .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         let after_land_p50 = percentile_sorted(&after_land, 0.50);
-        let after_signs = heights.iter().map(|value| (*value).signum()).collect::<Vec<_>>();
+        let after_signs = heights
+            .iter()
+            .map(|value| (*value).signum())
+            .collect::<Vec<_>>();
         assert!(after_land_p50 > before_land_p50);
         assert_eq!(original_signs, after_signs);
         assert_eq!(heights[0], preserved_large_relief[0]);
@@ -209,19 +222,23 @@ mod tests {
         let mut heights: Vec<f32> = vec![
             -0.019, -0.015, -0.010, -0.006, -0.003, 0.002, 0.004, 0.007, 0.011, 0.016, 0.019,
         ];
-        let original_signs = heights.iter().map(|value| (*value).signum()).collect::<Vec<_>>();
+        let original_signs = heights
+            .iter()
+            .map(|value| (*value).signum())
+            .collect::<Vec<_>>();
         let before = coastal_band_ratio(&heights, CRUST_COASTAL_BAND);
 
         expand_shoreline_freeboard(&mut heights);
 
         let after = coastal_band_ratio(&heights, CRUST_COASTAL_BAND);
-        let after_signs = heights.iter().map(|value| (*value).signum()).collect::<Vec<_>>();
+        let after_signs = heights
+            .iter()
+            .map(|value| (*value).signum())
+            .collect::<Vec<_>>();
         assert!(after < before);
-        assert!(
-            heights
-                .iter()
-                .all(|value| value.abs() <= f32::EPSILON || value.abs() > CRUST_COASTAL_BAND)
-        );
+        assert!(heights
+            .iter()
+            .all(|value| value.abs() <= f32::EPSILON || value.abs() > CRUST_COASTAL_BAND));
         assert_eq!(original_signs, after_signs);
     }
 }

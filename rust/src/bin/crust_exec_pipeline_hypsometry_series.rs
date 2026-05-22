@@ -80,8 +80,7 @@ struct TickRecord {
         f32,
     geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_passive_margin:
         f32,
-    geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform:
-        f32,
+    geology_runtime_mean_signed_isostatic_reference_freeboard_raw_continental_stable_transform: f32,
     geology_runtime_passive_margin_continental_cell_ratio: f32,
     geology_runtime_mean_passive_margin_isostatic_adjustment_rate: f32,
     geology_runtime_mean_passive_margin_smoothing_factor: f32,
@@ -143,12 +142,9 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
         level: config.level,
         ..GeologyParams::default()
     };
-    let (mut world, erosion_state) = sim::headless::init_world_for_headless_runner(
-        &config.seed,
-        config.level,
-        geology_params,
-    )
-    .unwrap_or_else(|err| panic!("failed to init world: {err}"));
+    let (mut world, erosion_state) =
+        sim::headless::init_world_for_headless_runner(&config.seed, config.level, geology_params)
+            .unwrap_or_else(|err| panic!("failed to init world: {err}"));
     let mut hydrology_state = Some(erosion_state);
     let mut feedback = FeedbackQueue::new(world.cell_count());
     let mut samples = Vec::new();
@@ -175,10 +171,7 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
     }
 }
 
-fn sample_world(
-    world: &frey_wasm::sim::world::World,
-    feedback: &FeedbackQueue,
-) -> TickRecord {
+fn sample_world(world: &frey_wasm::sim::world::World, feedback: &FeedbackQueue) -> TickRecord {
     let land_ratio = world.metrics().land_ratio;
     let coastal_band_ratio = coastal_band_ratio(&world.state.geology.height, 0.02);
     let (land_freeboard_p10, land_freeboard_p50, land_freeboard_p90) =

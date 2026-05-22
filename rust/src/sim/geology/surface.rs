@@ -914,15 +914,14 @@ pub(super) fn generate_rivers(
     river_rain_base: f32,
     river_accumulation_threshold: f32,
 ) -> (Vec<f32>, Vec<i32>) {
-    let (mut river_flux, mut river_next) =
-        compute_river_flux_and_next(
-            positions,
-            nbr_offsets,
-            nbrs,
-            height,
-            sea_level_offset,
-            river_rain_base,
-        );
+    let (mut river_flux, mut river_next) = compute_river_flux_and_next(
+        positions,
+        nbr_offsets,
+        nbrs,
+        height,
+        sea_level_offset,
+        river_rain_base,
+    );
 
     for i in 0..positions.len() {
         if river_flux[i] < river_accumulation_threshold {

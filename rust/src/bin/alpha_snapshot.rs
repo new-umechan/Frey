@@ -3,10 +3,11 @@ use std::path::PathBuf;
 
 use frey_wasm::sim;
 use frey_wasm::sim::precomputed::{
-    canonical_cache_dir, geology_fingerprint, load_snapshot, mirror_dir, restore_world_from_snapshot,
-    save_manifest, save_snapshot, save_snapshot_view, stage_filename, stage_view_filename,
-    AlphaSnapshotStage, PrecomputedWorldSnapshotEnvelope, PrecomputedWorldSnapshotManifest,
-    PrecomputedWorldSnapshotManifestEntry, SNAPSHOT_FORMAT_VERSION,
+    canonical_cache_dir, geology_fingerprint, load_snapshot, mirror_dir,
+    restore_world_from_snapshot, save_manifest, save_snapshot, save_snapshot_view, stage_filename,
+    stage_view_filename, AlphaSnapshotStage, PrecomputedWorldSnapshotEnvelope,
+    PrecomputedWorldSnapshotManifest, PrecomputedWorldSnapshotManifestEntry,
+    SNAPSHOT_FORMAT_VERSION,
 };
 use frey_wasm::sim::world::FeedbackQueue;
 use frey_wasm::GeologyParams;

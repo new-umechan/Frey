@@ -211,8 +211,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         },
         &mut surface_output,
     );
-    metrics.mean_abs_surface_output_delta =
-        mean_abs_height_delta(heights, &next_height);
+    metrics.mean_abs_surface_output_delta = mean_abs_height_delta(heights, &next_height);
     metrics.runtime_rebuild_applied = if rebuilt_runtime_state { 1.0 } else { 0.0 };
     metrics.activity_scale = activity_scale;
 
@@ -274,7 +273,8 @@ fn geology_activity_scale(world: &World) -> f32 {
             let elapsed = world
                 .clock
                 .tick
-                .saturating_sub(world.clock.transition.era_enter_tick) as f32;
+                .saturating_sub(world.clock.transition.era_enter_tick)
+                as f32;
             let ramp = (elapsed / ENVIRONMENT_GEOLOGY_SPINUP_TICKS).clamp(0.0, 1.0);
             ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET * ramp
         }
