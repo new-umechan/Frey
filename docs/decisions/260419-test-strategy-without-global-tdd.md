@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Frey は Docs-first を前提に、仕様の正本を `docs/reference/` と `docs/proposal/` で管理している。
+Frey は Docs-first を前提に、仕様の正本を `docs/reference/`、重要判断と検討状態を `docs/decisions/` で管理している。
 設計の主眼は、実装前に責務境界、公開 state、運用手順、近似の前提を文書として固定することにある。
 
 一方で本プロジェクトは、科学シミュレーションとして次の性質を持つ。

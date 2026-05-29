@@ -60,7 +60,7 @@ Accepted
 
 ## Follow-up
 
-- `docs/proposal/subsistence-module.md` をこの判断に合わせて採用状態へ更新する
+- 本文書の判断に合わせて `docs/reference/` の Subsistence 仕様を更新する
 - `docs/reference/architecture/data_model.md` を新 state に合わせて更新する
 - `docs/reference/architecture/module_boundaries.md` を新 read/write 境界に合わせて更新する
 - `docs/reference/modules/subsistence.md` を再記述する

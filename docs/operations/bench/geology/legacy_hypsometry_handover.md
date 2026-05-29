@@ -2,7 +2,7 @@
 
 本書は、Geology 旧系の Crust / Environment 診断で確定した事実、棄却した仮説、再利用するべき bench 読みをまとめた退避文書である。
 
-`scientific-reservoir-coupled-sea-land-redesign` 系 proposal / decision / reference から切り出した内部検証ログの正本として扱う。
+`scientific-reservoir-coupled-sea-land-redesign` 系 decision / reference から切り出した内部検証ログの正本として扱う。
 
 ## 位置づけ
 
@@ -109,4 +109,4 @@
 
 1. docs から `vxx` 履歴を本書へ集約する
 2. 旧系の dirty state を `WIP` で固定する
-3. `docs/research/procedural_tctonic_planets.md` を入力に、新 Geology の proposal を別起票する
+3. `docs/research/procedural_tctonic_planets.md` を入力に、新 Geology の Draft decision を別起票する

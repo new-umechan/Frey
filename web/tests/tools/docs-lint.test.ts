@@ -29,9 +29,8 @@ describe("docs-lint", () => {
 
         writeFile(repoRoot, "README.md", "see docs/README.md\n");
         writeFile(repoRoot, "docs/README.md", "# docs\n");
-        writeFile(repoRoot, "docs/proposal/idea.md", "# Proposal\n\n## Status\n\nDraft\n");
         writeFile(repoRoot, "docs/reference/spec.md", "# Reference\n");
-        writeFile(repoRoot, "docs/decisions/260417-docs-structure.md", "# ADR\n");
+        writeFile(repoRoot, "docs/decisions/260417-docs-structure.md", "# ADR\n\n## Status\n\nDraft\n");
 
         expect(lintRepo(repoRoot)).toEqual([]);
     });
@@ -52,18 +51,18 @@ describe("docs-lint", () => {
         ]);
     });
 
-    it("requires a valid Status section for proposal docs", () => {
+    it("requires a valid Status section for decision docs", () => {
         const repoRoot = makeTempRepo();
         tempDirs.push(repoRoot);
 
         writeFile(repoRoot, "README.md", "# root\n");
-        writeFile(repoRoot, "docs/proposal/idea.md", "# Proposal\n\n## Status\n\nPending\n");
+        writeFile(repoRoot, "docs/decisions/260529-idea.md", "# Decision\n\n## Status\n\nPending\n");
 
         expect(lintRepo(repoRoot)).toEqual([
             expect.objectContaining({
-                path: "docs/proposal/idea.md",
+                path: "docs/decisions/260529-idea.md",
                 line: 3,
-                ruleId: "proposal-status-required",
+                ruleId: "decision-status-required",
             }),
         ]);
     });
@@ -91,13 +90,18 @@ describe("docs-lint", () => {
         writeFile(repoRoot, "README.md", "# root\n");
         writeFile(repoRoot, "docs/decisions/adr-1-docs.md", "# ADR\n");
 
-        expect(lintRepo(repoRoot)).toEqual([
+        expect(lintRepo(repoRoot)).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 path: "docs/decisions/adr-1-docs.md",
                 line: 1,
                 ruleId: "decision-filename-format",
             }),
-        ]);
+            expect.objectContaining({
+                path: "docs/decisions/adr-1-docs.md",
+                line: 1,
+                ruleId: "decision-status-required",
+            }),
+        ]));
     });
 
     it("returns exit code 1 and prints plain text violations", () => {

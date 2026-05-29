@@ -48,4 +48,4 @@ Accepted
 ## Notes
 
 今回の decision は命名の固定であり、`TickUndoLog` や `TimelineRuntime` の完全実装を意味しない。
-それらは別 proposal / decision で扱う。
+それらは別 decision で扱う。

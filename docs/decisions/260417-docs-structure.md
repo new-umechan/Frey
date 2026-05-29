@@ -12,7 +12,7 @@ Accepted
 
 - 全体像や設計思想
 - 現在の採用済み仕様
-- 未実装・未確定の設計案
+- 未実装・未確定の設計判断
 - 外部文献や比較検討の材料
 - 日常開発や検証の運用手順
 
@@ -26,21 +26,19 @@ Accepted
   背景説明、全体像、設計思想
 - `reference/`
   採用済み仕様の正本
-- `proposal/`
-  未実装、未確定、再設計中の案
 - `operations/`
   現在の開発・テスト・ベンチ運用
 - `research/`
   文献、比較、探索ログ
 - `decisions/`
-  採用済みの重要判断
+  採用・却下・保留中の重要判断
 
 運用原則は次の通りとする。
 
 - `reference/` に未採用案を置かない
-- `proposal/` にある文書は正本として扱わない
-- proposal 採用後は `reference/` に反映する
-- proposal が不採用でも原則削除せず、状態を残す
+- `decisions/` の `Draft` は正本として扱わない
+- decision 採用後は必要に応じて `reference/` に反映する
+- decision が不採用でも原則削除せず、状態を残す
 - `research/` は根拠や材料の置き場であり、採用済み仕様の正本にしない
 - `operations/` には現在有効な手順だけを書く
 
@@ -55,9 +53,9 @@ Accepted
 コスト:
 
 - 文書を移動・昇格させる運用が必要になる
-- proposal と reference の境界判断を都度行う必要がある
+- Draft decision と reference の境界判断を都度行う必要がある
 
 ## Notes
 
-`proposal/` の各文書は少なくとも `Status` を持つ。
+`decisions/` の各文書は少なくとも `Status` を持つ。
 使用する値は `Draft`, `Accepted`, `Rejected`, `Superseded` とする。

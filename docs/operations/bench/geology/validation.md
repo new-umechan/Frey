@@ -1,7 +1,7 @@
 # Geology 検証運用
 
 本書は `geology` の長期検証 bench をどう実行し、何を読んで、どこまでを pass/fail の判断材料にするかをまとめる運用文書である。
-Geology の実装仕様は `docs/reference/`、設計変更の意図は `docs/proposal/` と `docs/decisions/` を参照する。
+Geology の実装仕様は `docs/reference/`、設計変更の意図と検討状態は `docs/decisions/` を参照する。
 Earth 実データ比較ベンチは `docs/operations/bench/geology/solo.md` を参照する。
 
 ## 目的

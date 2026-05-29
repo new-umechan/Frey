@@ -16,7 +16,7 @@ Accepted
 - build 失敗と simulation 回帰失敗の切り分けが弱い
 - `simulation verification` と `interface verification` の責務が混ざる
 
-検証実行系再設計 proposal では、まず `simulation verification` を Rust native に寄せる段階導入を行う。
+検証実行系再設計の Draft decision では、まず `simulation verification` を Rust native に寄せる段階導入を行う。
 
 ## Decision
 

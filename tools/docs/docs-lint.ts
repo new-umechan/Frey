@@ -9,7 +9,7 @@ export interface Violation {
     message: string;
 }
 
-const VALID_PROPOSAL_STATUSES = new Set([
+const VALID_DECISION_STATUSES = new Set([
     "Draft",
     "Accepted",
     "Rejected",
@@ -61,8 +61,8 @@ function lintDocsPathExists(repoRoot: string, relativePath: string, text: string
     return violations;
 }
 
-function lintProposalStatus(relativePath: string, text: string): Violation[] {
-    if (!relativePath.startsWith("docs/proposal/")) {
+function lintDecisionStatus(relativePath: string, text: string): Violation[] {
+    if (!relativePath.startsWith("docs/decisions/")) {
         return [];
     }
 
@@ -71,7 +71,7 @@ function lintProposalStatus(relativePath: string, text: string): Violation[] {
         return [{
             path: relativePath,
             line: 1,
-            ruleId: "proposal-status-required",
+            ruleId: "decision-status-required",
             message: "missing `## Status` section",
         }];
     }
@@ -80,11 +80,11 @@ function lintProposalStatus(relativePath: string, text: string): Violation[] {
     const lines = text.split("\n");
     const nextNonEmptyLine = findNextNonEmptyLine(lines, headingLine);
 
-    if (!nextNonEmptyLine || !VALID_PROPOSAL_STATUSES.has(nextNonEmptyLine.line)) {
+    if (!nextNonEmptyLine || !VALID_DECISION_STATUSES.has(nextNonEmptyLine.line)) {
         return [{
             path: relativePath,
             line: headingLine,
-            ruleId: "proposal-status-required",
+            ruleId: "decision-status-required",
             message: "invalid Status value; expected one of Draft, Accepted, Rejected, Superseded",
         }];
     }
@@ -145,7 +145,7 @@ export function lintRepo(repoRoot: string = DEFAULT_REPO_ROOT): Violation[] {
         const text = fs.readFileSync(filePath, "utf8");
 
         violations.push(...lintDocsPathExists(repoRoot, repoRelativePath, text));
-        violations.push(...lintProposalStatus(repoRelativePath, text));
+        violations.push(...lintDecisionStatus(repoRelativePath, text));
         violations.push(...lintReferenceStatus(repoRelativePath, text));
     }
 
