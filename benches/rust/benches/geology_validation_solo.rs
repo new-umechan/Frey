@@ -69,6 +69,11 @@ fn main() {
         vertex_buoyancy: terrain.vertex_buoyancy,
         geology_internal: vec![GeologyInternal::default(); cell_count],
         boundary_condition: vec![0.0; cell_count],
+        smoothing_limited_cells_ratio: 0.0,
+        mean_smoothing_factor: 1.0,
+        zero_mean_adjusted_cells_ratio: 0.0,
+        zero_mean_mean_abs_correction: 0.0,
+        zero_mean_std_delta: 0.0,
     };
     let mesh = world::WorldMesh {
         positions,

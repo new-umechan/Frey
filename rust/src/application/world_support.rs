@@ -3,7 +3,9 @@
 use crate::application::world_runtime::ManagedWorld;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::geology_types::{GeologyParams, PlateId};
-use crate::sim::hydrology::{rebuild_mfd_from_primary, sync_fill_spill_to_erosion};
+use crate::sim::hydrology::{
+    ensure_sink_buffers, rebuild_mfd_from_primary, sync_fill_spill_to_erosion,
+};
 use crate::sim::world;
 
 const EROSION_RAIN_SCALE_MM: f32 = 1_200.0;
@@ -141,37 +143,6 @@ fn erosion_state_shape_matches(state: &ErosionAutomatonState, expected: usize) -
         && state.groundwater_storage.len() == expected
         && state.scratch_effective_runoff.len() == expected
         && state.scratch_changed_mark.len() == expected
-}
-
-pub(crate) fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
-    if state.sink_id.len() != expected {
-        state.sink_id = vec![-1; expected];
-    }
-    if state.sink_route_next.len() != expected {
-        state.sink_route_next = vec![-1; expected];
-    }
-    if state.sink_dirty.len() != expected {
-        state.sink_dirty = vec![1; expected];
-    } else {
-        state.sink_dirty.fill(1);
-    }
-    if state.flow_heading.len() != expected {
-        state.flow_heading = vec![[0.0, 0.0, 0.0]; expected];
-    }
-    if state.groundwater_storage.len() != expected {
-        state.groundwater_storage = vec![0.0; expected];
-    }
-    if state.scratch_effective_runoff.len() != expected {
-        state.scratch_effective_runoff = vec![0.0; expected];
-    }
-    if state.scratch_changed_mark.len() != expected {
-        state.scratch_changed_mark = vec![0; expected];
-    }
-    if state.scratch_flux_samples.capacity() < expected / 2 {
-        state
-            .scratch_flux_samples
-            .reserve((expected / 2).saturating_sub(state.scratch_flux_samples.capacity()));
-    }
 }
 
 pub(crate) fn sampled_len(total_len: usize, stride: u32) -> u32 {

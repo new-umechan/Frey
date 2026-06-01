@@ -2,7 +2,6 @@ use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::application::world_support::ensure_sink_buffers;
 use crate::sim;
 use crate::sim::erosion::ErosionAutomatonState;
 use crate::sim::world::{EraKind, World};
@@ -154,6 +153,37 @@ fn ensure_hydrology_mfd_for_headless_runner(hydrology: &mut crate::sim::world::H
     let expected = hydrology.river_next.len();
     if hydrology.river_downstream.len() != expected {
         rebuild_mfd_from_primary(hydrology);
+    }
+}
+
+pub(crate) fn ensure_sink_buffers(state: &mut ErosionAutomatonState, expected: usize) {
+    if state.sink_id.len() != expected {
+        state.sink_id = vec![-1; expected];
+    }
+    if state.sink_route_next.len() != expected {
+        state.sink_route_next = vec![-1; expected];
+    }
+    if state.sink_dirty.len() != expected {
+        state.sink_dirty = vec![1; expected];
+    } else {
+        state.sink_dirty.fill(1);
+    }
+    if state.flow_heading.len() != expected {
+        state.flow_heading = vec![[0.0, 0.0, 0.0]; expected];
+    }
+    if state.groundwater_storage.len() != expected {
+        state.groundwater_storage = vec![0.0; expected];
+    }
+    if state.scratch_effective_runoff.len() != expected {
+        state.scratch_effective_runoff = vec![0.0; expected];
+    }
+    if state.scratch_changed_mark.len() != expected {
+        state.scratch_changed_mark = vec![0; expected];
+    }
+    if state.scratch_flux_samples.capacity() < expected / 2 {
+        state
+            .scratch_flux_samples
+            .reserve((expected / 2).saturating_sub(state.scratch_flux_samples.capacity()));
     }
 }
 
