@@ -166,9 +166,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     });
     const loadingOverlayController = createLoadingOverlayController({
         loadingOverlayCanvas,
-        viewportPanel,
-        sphere,
-        getCamera: () => cameraController.getCamera(),
     });
 
     function renderFrame() {
