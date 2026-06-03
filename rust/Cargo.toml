@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = ["wasm_transport"]
 wasm_transport = ["dep:js-sys", "dep:serde-wasm-bindgen", "dep:wasm-bindgen"]
+precompute_server = ["wasm_transport", "dep:axum", "dep:tokio", "dep:tower-http", "dep:zstd"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -20,6 +21,10 @@ js-sys = { version = "0.3", optional = true }
 smallvec = { version = "1.13", features = ["serde"] }
 slotmap = "1.0"
 verification_runtime = { path = "crates/verification_runtime" }
+axum = { version = "0.7", optional = true }
+tokio = { version = "1.42", features = ["macros", "rt-multi-thread", "net"], optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

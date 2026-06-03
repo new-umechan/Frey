@@ -104,6 +104,8 @@
         "bench:perf:baseline:hydrology": "pnpm run bench:run:hydrology-series -- --runs 5 --write-baseline tests/perf/hydrology-bench-baseline.json",
         "bench:perf:gate:hydrology": "pnpm run bench:run:hydrology-series -- --runs 5 && pnpm run bench:check:hydrology-runtime -- --baseline tests/perf/hydrology-bench-baseline.json --threshold 0.15 && pnpm run bench:check:hydrology-quality -- --baseline tests/perf/hydrology-bench-baseline.json --window 5 --threshold-runtime 0.15 --max-flow-rho-drop 0.05 --max-lake-f1-drop 0.05",
         "alpha:snapshot": "cargo run --manifest-path rust/Cargo.toml --bin alpha_snapshot --",
+        "server:precompute": "cargo run --manifest-path rust/Cargo.toml --features precompute_server --bin precompute_server",
+        "precompute:world": "cargo run --manifest-path rust/Cargo.toml --features precompute_server --bin precompute_world",
         "bench:perf:baseline:domesticates": "pnpm bench --suite domesticates_solo && pnpm run bench:compare:domesticates -- --write-baseline tests/perf/domesticates-bench-baseline.json",
         "bench:perf:gate:domesticates": "pnpm bench --suite domesticates_solo && pnpm run bench:check:domesticates-quality -- --baseline tests/perf/domesticates-bench-baseline.json --threshold-runtime 0.20 --max-metric-drop 0.03 --max-regional-coverage-drop 0.05",
         "test:api-contract": "pnpm wasm:build:dev:no-sync && pnpm exec tsx tests/api-contract/scripts/check-wasm-api-contract.ts",

@@ -1,9 +1,7 @@
 import type {
+  EngineClient,
   ExecModuleDocRecord,
   ExecModuleGraphRecord,
-} from "../../transport/wasm/frey-wasm-module";
-import type {
-  EngineClient,
   InitWorldResult,
   MeshGenerationResult,
   ExecWorldSliceResult,

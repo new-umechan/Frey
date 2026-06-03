@@ -49,7 +49,7 @@ pub(crate) struct InitWorldOutput {
     pub cell_count: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FieldResponse {
     pub field_kind: String,
     pub stride: u32,
@@ -60,7 +60,7 @@ pub(crate) struct FieldResponse {
     pub i32_data: Option<Vec<i32>>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct BudgetSummary {
     pub geology: u32,
     pub climate: u32,
@@ -68,7 +68,7 @@ pub(crate) struct BudgetSummary {
     pub civilization: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct MetricsResponse {
     pub world_id: String,
     pub tick: f64,
@@ -164,7 +164,7 @@ pub(crate) struct PlateStatsResponse {
     pub stats: Vec<PlateStat>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct CheckpointTicksResponse {
     pub world_id: String,
     pub interval: u32,
@@ -192,13 +192,13 @@ pub(crate) struct RewindWorldResult {
     pub rewound_ticks: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct DeltaRange {
     pub start: u32,
     pub end: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ViewDeltaFieldResponse {
     pub field_kind: String,
     pub mode: String,
@@ -212,7 +212,7 @@ pub(crate) struct ViewDeltaFieldResponse {
 #[allow(dead_code)]
 pub(crate) type FieldDeltaResponse = ViewDeltaFieldResponse;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ViewDeltaResponse {
     pub world_id: String,
     pub tick: f64,
@@ -279,7 +279,7 @@ pub(crate) struct StepWorldProfiledDetailResponse {
     pub sink_validation_fail_count: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ExecWorldSliceResponse {
     pub world_id: String,
     pub processed_ticks: u32,
@@ -290,7 +290,7 @@ pub(crate) struct ExecWorldSliceResponse {
     pub tick_boundary: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct TimelineAdvanceResult {
     pub world_id: String,
     pub tick: f64,
@@ -298,7 +298,7 @@ pub(crate) struct TimelineAdvanceResult {
     pub advanced_ticks: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct TimelineStateResponse {
     pub world_id: String,
     pub current_tick: f64,

@@ -11,8 +11,11 @@ import {
 import { advanceWorldLoop } from "./sim/world-loop";
 import { createMeshBuffers } from "./state/app-state";
 import { bootstrapAppRuntime } from "./bootstrap/app-bootstrap";
-import { createEngineWorkerClient } from "./engine/engine-worker-client";
-import { initializeFreyWasm } from "../transport/wasm/frey-wasm-module";
+import {
+    closeEngineClient,
+    createDefaultEngineClient,
+    prepareDefaultEngineRuntime,
+} from "./engine/default-engine-client";
 
 interface SidebarControllerOptions {
     appShell: HTMLElement;
@@ -66,11 +69,11 @@ export async function createApp() {
         setSidebarOpen(true);
     }
     seedInput.value = DEFAULT_TERRAIN_SEED;
-    await initializeFreyWasm();
+    await prepareDefaultEngineRuntime();
     setStatus("Preparing mesh...");
-    const bootstrapEngine = createEngineWorkerClient();
+    const bootstrapEngine = await createDefaultEngineClient();
     const mesh = await bootstrapEngine.generate_mesh(LEVEL);
-    bootstrapEngine.close();
+    closeEngineClient(bootstrapEngine);
     const { basePositions, indices, metricCellOverlayMesh } = createMeshBuffers(mesh);
     const runtime = await bootstrapAppRuntime({
         elements,

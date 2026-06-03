@@ -13,8 +13,8 @@ import {
     describeExecModuleGraph,
     getDefaultExecDisplayPhase,
 } from "../../runtime/state";
-import { createEngineWorkerClient } from "../../engine/engine-worker-client";
 import { type EngineClient } from "../../engine/engine-client";
+import { createDefaultEngineClient } from "../../engine/default-engine-client";
 import { type RuntimeStore } from "../runtime-store";
 import { type SceneRuntime } from "../scene-runtime";
 import { type PlaybackController } from "../../playback/playback-controller";
@@ -125,7 +125,7 @@ function shouldAdvanceWorld(context: RuntimeContext) {
 
 export async function createControllerRuntime(options: ControllerDeps) {
     const context = createRuntimeContext(options);
-    context.engineClient = createEngineWorkerClient();
+    context.engineClient = await createDefaultEngineClient();
     context.store.worldState.execModules = [];
     context.store.worldState.execModuleGraph = null;
     context.store.worldState.slicePhase = getDefaultExecDisplayPhase(context.store.worldState);

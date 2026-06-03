@@ -1,7 +1,8 @@
-import type {
-  ExecModuleDocRecord,
-  ExecModuleGraphRecord,
-} from "../../transport/wasm/frey-wasm-module";
+export type ExecModuleDocRecord = Record<string, unknown>;
+export type ExecModuleGraphRecord = {
+  modules: unknown[];
+  edges: unknown[];
+};
 
 export interface MeshGenerationResult {
   positions: number[] | Float32Array;

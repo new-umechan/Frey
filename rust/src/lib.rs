@@ -4,6 +4,8 @@ pub mod application;
 mod climate_params_defaults;
 mod common;
 pub mod core_api;
+#[cfg(feature = "precompute_server")]
+pub mod precompute_server;
 #[path = "generated/domesticates_params_defaults.rs"]
 mod domesticates_params_defaults;
 #[path = "generated/glaciology_params_defaults.rs"]

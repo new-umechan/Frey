@@ -4,6 +4,7 @@ import { type RuntimeState } from "../runtime/state";
 import { type EraMetrics, type EraScaleConfig } from "../state/era-presets";
 import { type SyncWorldResult } from "../sim/sync/types";
 import { DEFAULT_CELL_METRIC, DEFAULT_VIEW_MODE } from "../../shared/constants";
+import { PrecomputePendingError } from "../engine/http-precomputed-engine-client";
 
 export interface TerrainGenerationController {
     updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
@@ -85,7 +86,18 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
                 geology_params: terrainParams,
             }, {
                 devSnapshotStage: requestedStage,
+            }).catch((error) => {
+                if (error instanceof PrecomputePendingError) {
+                    const requestDetail = error.requestId ? ` request=${error.requestId}` : "";
+                    setStatus(`Precompute queued for "${nextSeed}".${requestDetail}`);
+                    appendPlaybackEvent("precompute-queued", "事前計算待ち", `seed=${nextSeed}${requestDetail}`);
+                    return null;
+                }
+                throw error;
             });
+            if (!initResult) {
+                return;
+            }
             const worldId = (() => {
                 const value = (initResult as { world_id?: unknown; worldId?: unknown }).world_id
                     ?? (initResult as { world_id?: unknown; worldId?: unknown }).worldId;

@@ -26,6 +26,7 @@ tests/perf/history/
 .git/info/exclude
 /.cache/frey/
 /web/public/.dev-precomputed/
+data/precomputed/
 
 # TypeScript build cache
 tsconfig.tsbuildinfo
