@@ -19,3 +19,10 @@ Status: Adopted
 - ブラウザ側の simulation WASM は HTTP モードでは不要になる。
 - keyframe + delta replay により seek 性能と保存容量のバランスを取れる。
 - seed のオンデマンド生成 worker と queue 永続化は後続設計で詰める。
+
+## Deferred Optimizations
+
+- `auto play` と event jump は 1 tick 精度を必要とするため、260603時点では delta を毎 tick 保存する。
+- delta 間引きは client または server の補完計算を必要とする。client 補完は simulation WASM を再導入し、server 補完は同時接続時の計算負荷と cache 設計を必要とするため、計算モデルが固まるまでは採用しない。
+- Hashlife/Merkle chunk、表示専用 DTO、chunk 単位 delta などの容量削減は有望だが、store 形式と state 表現を複雑にする。現時点では早すぎる最適化になってしまうため保留する。
+- 生成速度は開発速度に直結するため、容量削減より優先して改善する。まず release profile での生成コマンドと precompute 専用の短い retention policy を採用し、必要なら seed 単位の並列生成、module/phase 単位の並列化、keyframe/delta 書き込みの非同期化、生成済み tick の再利用を後続候補にする。

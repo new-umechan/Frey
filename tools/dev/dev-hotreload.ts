@@ -17,7 +17,11 @@ let shutdownRequested = false;
 let debounceTimer: NodeJS.Timeout | null = null;
 let syncConfigDebounceTimer: NodeJS.Timeout | null = null;
 
-function runCommand(command: string, args: string[], options: Record<string, unknown> = {}): Promise<{ code: number | null; signal: string | null }> {
+function runCommand(
+    command: string,
+    args: string[],
+    options: Record<string, unknown> = {},
+): Promise<{ code: number | null; signal: string | null }> {
     return new Promise((resolve) => {
         const child = spawn(command, args, {
             cwd: rootDir,
@@ -40,10 +44,16 @@ async function buildWasm() {
 
     buildRunning = true;
     console.log("[dev] rebuilding wasm...");
-    const result = await runCommand("pnpm", ["run", "wasm:build:dev:no-sync"]);
+    const result = await runCommand("corepack", [
+        "pnpm",
+        "run",
+        "wasm:build:dev:no-sync",
+    ]);
 
     if (result.code !== 0) {
-        console.error(`[dev] wasm build failed (code: ${result.code ?? "null"})`);
+        console.error(
+            `[dev] wasm build failed (code: ${result.code ?? "null"})`,
+        );
     } else {
         console.log("[dev] wasm rebuild complete");
     }
@@ -64,10 +74,12 @@ async function syncConfig() {
 
     syncConfigRunning = true;
     console.log("[dev] syncing config...");
-    const result = await runCommand("pnpm", ["run", "config:sync"]);
+    const result = await runCommand("corepack", ["pnpm", "run", "config:sync"]);
 
     if (result.code !== 0) {
-        console.error(`[dev] config sync failed (code: ${result.code ?? "null"})`);
+        console.error(
+            `[dev] config sync failed (code: ${result.code ?? "null"})`,
+        );
     } else {
         console.log("[dev] config sync complete");
     }
@@ -81,11 +93,15 @@ async function syncConfig() {
 }
 
 function startVite() {
-    viteProcess = spawn("pnpm", ["exec", "vite", "--config", "web/vite.config.ts"], {
-        cwd: rootDir,
-        stdio: "inherit",
-        shell: process.platform === "win32",
-    });
+    viteProcess = spawn(
+        "corepack",
+        ["pnpm", "exec", "vite", "--config", "web/vite.config.ts"],
+        {
+            cwd: rootDir,
+            stdio: "inherit",
+            shell: process.platform === "win32",
+        },
+    );
 
     viteProcess.on("exit", (code) => {
         if (!shutdownRequested) {
@@ -137,11 +153,15 @@ function scheduleConfigSync(filename: string) {
 }
 
 function startRustWatcher() {
-    const watcher = watch(rustDir, { recursive: true }, (_eventType, filename) => {
-        if (typeof filename === "string") {
-            scheduleBuild(filename);
-        }
-    });
+    const watcher = watch(
+        rustDir,
+        { recursive: true },
+        (_eventType, filename) => {
+            if (typeof filename === "string") {
+                scheduleBuild(filename);
+            }
+        },
+    );
 
     watcher.on("error", (error: Error) => {
         console.error("[dev] rust watcher error:", error);
@@ -151,11 +171,15 @@ function startRustWatcher() {
 }
 
 function startConfigWatcher() {
-    const watcher = watch(configDir, { recursive: true }, (_eventType, filename) => {
-        if (typeof filename === "string") {
-            scheduleConfigSync(filename);
-        }
-    });
+    const watcher = watch(
+        configDir,
+        { recursive: true },
+        (_eventType, filename) => {
+            if (typeof filename === "string") {
+                scheduleConfigSync(filename);
+            }
+        },
+    );
 
     watcher.on("error", (error: Error) => {
         console.error("[dev] config watcher error:", error);
@@ -173,12 +197,20 @@ function stopChild(child: ChildProcess | null) {
 }
 
 async function main() {
-    const syncInitial = await runCommand("pnpm", ["run", "config:sync"]);
+    const syncInitial = await runCommand("corepack", [
+        "pnpm",
+        "run",
+        "config:sync",
+    ]);
     if (syncInitial.code !== 0) {
         process.exit(syncInitial.code ?? 1);
     }
 
-    const initial = await runCommand("pnpm", ["run", "wasm:build:dev:no-sync"]);
+    const initial = await runCommand("corepack", [
+        "pnpm",
+        "run",
+        "wasm:build:dev:no-sync",
+    ]);
     if (initial.code !== 0) {
         process.exit(initial.code ?? 1);
     }

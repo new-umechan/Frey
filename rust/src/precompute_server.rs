@@ -7,6 +7,7 @@ use std::io::{Cursor, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
@@ -31,6 +32,7 @@ const STORE_FORMAT_VERSION: u32 = 1;
 const DEFAULT_STORE_DIR: &str = "data/precomputed/worlds";
 const DEFAULT_MAX_TICK: u32 = 1600;
 const DEFAULT_KEYFRAME_INTERVAL: u32 = 64;
+const DEFAULT_PRECOMPUTE_RETENTION_TICKS: usize = 2;
 const DEFAULT_FRAME_COMPRESSION: FrameCompression = FrameCompression::Zstd;
 const ZSTD_LEVEL: i32 = 3;
 
@@ -218,6 +220,7 @@ struct MaterializedFrame {
 }
 
 struct PrecomputedStore {
+    root_dir: PathBuf,
     seeds: BTreeMap<String, SeedStore>,
 }
 
@@ -277,6 +280,56 @@ struct PrecomputeArgs {
     out_dir: PathBuf,
     keyframe_interval: u32,
     compression: FrameCompression,
+    retention_ticks: usize,
+}
+
+#[derive(Default)]
+struct PrecomputeTiming {
+    init: Duration,
+    initial_keyframe: Duration,
+    advance: Duration,
+    delta_query: Duration,
+    delta_write: Duration,
+    keyframe_write: Duration,
+    manifest_write: Duration,
+}
+
+impl PrecomputeTiming {
+    fn print(&self, ticks: u32) {
+        let total = self.init
+            + self.initial_keyframe
+            + self.advance
+            + self.delta_query
+            + self.delta_write
+            + self.keyframe_write
+            + self.manifest_write;
+        let tick_count = ticks.max(1) as f64;
+        eprintln!(
+            concat!(
+                "precompute timing ticks={} total_ms={:.3} ",
+                "init_ms={:.3} initial_keyframe_ms={:.3} ",
+                "advance_ms={:.3} delta_query_ms={:.3} delta_write_ms={:.3} ",
+                "keyframe_write_ms={:.3} manifest_write_ms={:.3} ",
+                "advance_ms_per_tick={:.3} delta_query_ms_per_tick={:.3} delta_write_ms_per_tick={:.3}"
+            ),
+            ticks,
+            duration_ms(total),
+            duration_ms(self.init),
+            duration_ms(self.initial_keyframe),
+            duration_ms(self.advance),
+            duration_ms(self.delta_query),
+            duration_ms(self.delta_write),
+            duration_ms(self.keyframe_write),
+            duration_ms(self.manifest_write),
+            duration_ms(self.advance) / tick_count,
+            duration_ms(self.delta_query) / tick_count,
+            duration_ms(self.delta_write) / tick_count,
+        );
+    }
+}
+
+fn duration_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
 }
 
 impl PrecomputeArgs {
@@ -287,6 +340,7 @@ impl PrecomputeArgs {
         let mut out_dir = PathBuf::from(DEFAULT_STORE_DIR);
         let mut keyframe_interval = DEFAULT_KEYFRAME_INTERVAL;
         let mut compression = DEFAULT_FRAME_COMPRESSION;
+        let mut retention_ticks = DEFAULT_PRECOMPUTE_RETENTION_TICKS;
         let mut i = 0usize;
         while i < argv.len() {
             match argv[i].as_str() {
@@ -314,6 +368,10 @@ impl PrecomputeArgs {
                     compression = parse_frame_compression_arg(argv, i, "--compression")?;
                     i += 2;
                 }
+                "--retention-ticks" => {
+                    retention_ticks = parse_usize_arg(argv, i, "--retention-ticks")?;
+                    i += 2;
+                }
                 "--help" => {
                     eprintln!("Usage: cargo run --manifest-path rust/Cargo.toml --features precompute_server --bin precompute_world -- [options]");
                     eprintln!("  --seed <seed>");
@@ -322,6 +380,7 @@ impl PrecomputeArgs {
                     eprintln!("  --out-dir <path>");
                     eprintln!("  --keyframe-interval <n>");
                     eprintln!("  --compression <none|zstd>");
+                    eprintln!("  --retention-ticks <n>");
                     std::process::exit(0);
                 }
                 other => return Err(format!("unknown argument: {other}")),
@@ -337,6 +396,7 @@ impl PrecomputeArgs {
             out_dir,
             keyframe_interval,
             compression,
+            retention_ticks,
         })
     }
 }
@@ -350,6 +410,12 @@ fn required_arg(argv: &[String], i: usize, name: &str) -> Result<String, String>
 fn parse_u32_arg(argv: &[String], i: usize, name: &str) -> Result<u32, String> {
     required_arg(argv, i, name)?
         .parse::<u32>()
+        .map_err(|_| format!("{name} must be an unsigned integer"))
+}
+
+fn parse_usize_arg(argv: &[String], i: usize, name: &str) -> Result<usize, String> {
+    required_arg(argv, i, name)?
+        .parse::<usize>()
         .map_err(|_| format!("{name} must be an unsigned integer"))
 }
 
@@ -426,12 +492,23 @@ impl ServerState {
         record
     }
 
-    fn init_session(&mut self, seed: String, mesh_level: u32) -> Result<String, GenerationRequestRecord> {
+    fn reload_store(&mut self) -> Result<(), String> {
+        let root_dir = self.store.root_dir.clone();
+        self.store = PrecomputedStore::load(&root_dir)?;
+        self.sessions.clear();
+        self.seed_worlds.clear();
+        Ok(())
+    }
+
+    fn init_session(&mut self, seed: String, mesh_level: u32) -> Result<String, InitSessionError> {
+        self.reload_store().map_err(InitSessionError::Store)?;
         let Some(seed_store) = self.store.seeds.get(&seed) else {
-            return Err(self.create_request(seed, mesh_level));
+            let record = self.create_request(seed, mesh_level);
+            return Err(InitSessionError::Pending(record));
         };
         if seed_store.manifest.mesh_level != mesh_level {
-            return Err(self.create_request(seed, mesh_level));
+            let record = self.create_request(seed, mesh_level);
+            return Err(InitSessionError::Pending(record));
         }
         if let Some(world_id) = self.seed_worlds.get(&seed) {
             return Ok(world_id.clone());
@@ -441,7 +518,7 @@ impl ServerState {
         let mut frame = self
             .store
             .materialize(&seed, 0)
-            .unwrap_or_else(|err| panic!("failed to materialize precomputed seed {seed}: {err}"));
+            .map_err(InitSessionError::Store)?;
         frame.world_id = world_id.clone();
         frame.metrics.world_id = world_id.clone();
         frame.timeline.world_id = world_id.clone();
@@ -467,6 +544,11 @@ impl ServerState {
             .get_mut(world_id)
             .ok_or_else(|| format!("world not found: {world_id}"))
     }
+}
+
+enum InitSessionError {
+    Pending(GenerationRequestRecord),
+    Store(String),
 }
 
 impl PrecomputedStore {
@@ -522,6 +604,7 @@ impl PrecomputedStore {
             }
         }
         Ok(Self {
+            root_dir: root_dir.to_path_buf(),
             seeds,
         })
     }
@@ -717,7 +800,12 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
+    let mut timing = PrecomputeTiming::default();
     let seed_dir = args.out_dir.join(&args.seed);
+    if seed_dir.exists() {
+        fs::remove_dir_all(&seed_dir)
+            .map_err(|err| format!("failed to remove existing seed dir {}: {err}", seed_dir.display()))?;
+    }
     fs::create_dir_all(seed_dir.join("keyframes"))
         .map_err(|err| format!("failed to create keyframe dir: {err}"))?;
     fs::create_dir_all(seed_dir.join("deltas"))
@@ -729,6 +817,7 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
     };
     let geology_fp = geology_fingerprint(&geology_params)?;
     let mut service = WorldService::new();
+    let start = Instant::now();
     let init = world_use_cases::init_world(
         &mut service,
         args.seed.clone(),
@@ -739,16 +828,18 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
             verification_mode: None,
             timeline: Some(TimelineConfig {
                 checkpoint_interval: Some(1),
-                checkpoint_limit: Some(args.ticks as usize + 2),
-                undo_log_limit: Some(args.ticks as usize + 2),
+                checkpoint_limit: Some(args.retention_ticks),
+                undo_log_limit: Some(args.retention_ticks),
                 undo_future_prune_grace_ticks: None,
                 max_estimated_bytes: None,
             }),
         },
     )?;
+    timing.init += start.elapsed();
     let world_id = init.world_id;
     let mut frames = Vec::new();
 
+    let start = Instant::now();
     save_current_keyframe(
         &service,
         &world_id,
@@ -760,15 +851,21 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
         args.compression,
         &mut frames,
     )?;
+    timing.initial_keyframe += start.elapsed();
 
     for tick in 1..=args.ticks {
+        let start = Instant::now();
         world_use_cases::advance_timeline(&mut service, world_id.clone(), 1)?;
+        timing.advance += start.elapsed();
+        let start = Instant::now();
         let delta = world_query_use_cases::get_view_delta(
             &mut service,
             world_id.clone(),
             Some(default_field_kinds().into_iter().collect()),
         )?;
+        timing.delta_query += start.elapsed();
         let filename = frame_filename("deltas", tick, args.compression);
+        let start = Instant::now();
         save_delta(
             &seed_dir.join(&filename),
             args.compression,
@@ -781,12 +878,14 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
                 delta,
             },
         )?;
+        timing.delta_write += start.elapsed();
         frames.push(FrameManifestEntry {
             tick,
             kind: FrameKind::Delta,
             filename,
         });
         if tick % args.keyframe_interval == 0 || tick == args.ticks {
+            let start = Instant::now();
             save_current_keyframe(
                 &service,
                 &world_id,
@@ -798,6 +897,7 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
                 args.compression,
                 &mut frames,
             )?;
+            timing.keyframe_write += start.elapsed();
         }
     }
 
@@ -812,13 +912,16 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
         field_kinds: default_field_kinds(),
         frames,
     };
+    let start = Instant::now();
     save_manifest(&seed_dir.join("manifest.json"), &manifest)?;
+    timing.manifest_write += start.elapsed();
     eprintln!(
         "precomputed seed={} ticks={} out={}",
         manifest.seed,
         manifest.max_tick,
         seed_dir.display()
     );
+    timing.print(manifest.max_tick);
     Ok(())
 }
 
@@ -1024,7 +1127,7 @@ async fn init_world(
                 })),
             ))
         }
-        Err(record) => Ok((
+        Err(InitSessionError::Pending(record)) => Ok((
             StatusCode::ACCEPTED,
             Json(serde_json::json!({
                 "request_id": record.request_id,
@@ -1034,6 +1137,7 @@ async fn init_world(
                 "message": "precompute requested"
             })),
         )),
+        Err(InitSessionError::Store(err)) => Err(error_response(StatusCode::INTERNAL_SERVER_ERROR, err)),
     }
 }
 

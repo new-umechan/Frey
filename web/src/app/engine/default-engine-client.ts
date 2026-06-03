@@ -21,7 +21,11 @@ export function getConfiguredEngineMode(): "http" | "wasm" {
 }
 
 export function getConfiguredApiBase(): string {
-    return readViteEnv("VITE_FREY_API_BASE").trim() || "http://127.0.0.1:8787";
+    const configured = readViteEnv("VITE_FREY_API_BASE").trim();
+    if (configured.length > 0) {
+        return configured;
+    }
+    return getConfiguredEngineMode() === "http" ? "" : "http://127.0.0.1:8787";
 }
 
 export async function prepareDefaultEngineRuntime(): Promise<void> {
