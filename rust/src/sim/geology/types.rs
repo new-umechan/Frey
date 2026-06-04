@@ -68,24 +68,6 @@ pub(super) struct BoundaryDistState {
     pub(super) source_edge: usize,
 }
 
-#[derive(Clone, Copy)]
-pub(super) struct QueueState {
-    pub(super) cost: f32,
-    pub(super) vertex: usize,
-    pub(super) plate: usize,
-}
-
-pub(super) struct PlateGrowthProfile {
-    pub(super) spread: f32,
-    pub(super) preferred_axis: [f32; 3],
-    pub(super) secondary_axis: [f32; 3],
-    pub(super) axis_blend_axis: [f32; 3],
-    pub(super) anisotropy: f32,
-    pub(super) roughness: f32,
-    pub(super) warp_weights: [f32; 3],
-    pub(super) warp_gain: f32,
-}
-
 pub(super) struct BoundaryVertices {
     pub(super) mask: Vec<bool>,
     pub(super) indices: Vec<usize>,
@@ -105,29 +87,6 @@ impl BoundaryVertices {
         }
         self.mask[v] = true;
         self.indices.push(v);
-    }
-}
-
-impl Ord for QueueState {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .cost
-            .partial_cmp(&self.cost)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for QueueState {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Eq for QueueState {}
-
-impl PartialEq for QueueState {
-    fn eq(&self, other: &Self) -> bool {
-        self.vertex == other.vertex && self.plate == other.plate && self.cost == other.cost
     }
 }
 
@@ -171,6 +130,7 @@ pub(super) enum CrustUpdatePhase {
 
 pub(crate) struct CrustTerrainUpdateState {
     pub(super) phase: CrustUpdatePhase,
+    pub(super) world_seed: String,
     pub(super) params: GeologyParams,
     pub(super) rng: DeterministicRng,
     pub(super) positions: Vec<[f32; 3]>,

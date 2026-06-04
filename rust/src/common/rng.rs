@@ -120,6 +120,17 @@ pub(crate) fn rng_from_seed(seed: &str, geology_params: &GeologyParams) -> Deter
     DeterministicRng::from_seed_bytes(seed16)
 }
 
+pub(crate) fn rng_from_seed_label(seed: &str, label: &str) -> DeterministicRng {
+    let mut source = Vec::new();
+    source.extend_from_slice(seed.as_bytes());
+    source.extend_from_slice(label.as_bytes());
+    let digest = pseudo_sha256(&source);
+
+    let mut seed16 = [0u8; 16];
+    seed16.copy_from_slice(&digest[..16]);
+    DeterministicRng::from_seed_bytes(seed16)
+}
+
 fn pseudo_sha256(input: &[u8]) -> [u8; 32] {
     let mut out = [0u8; 32];
     for i in 0..4u64 {

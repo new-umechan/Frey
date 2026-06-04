@@ -30,6 +30,7 @@ pub(super) fn init_crust_update_state(
 ) -> CrustTerrainUpdateState {
     CrustTerrainUpdateState {
         phase: CrustUpdatePhase::InitMeshAndNoise,
+        world_seed: seed.to_string(),
         rng: rng_from_seed(seed, &params),
         params,
         positions: Vec::new(),
@@ -78,41 +79,27 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
             state.phase = CrustUpdatePhase::BuildPlateField;
         }
         CrustUpdatePhase::BuildPlateField => {
-            let plate_count = choose_plate_count(
+            let (plate_count_min, plate_count_max) = effective_plate_count_bounds(
                 state.params.plate_count_min,
                 state.params.plate_count_max,
-                &mut state.rng,
-            );
-            let seeds = pick_plate_seeds(
-                &state.phi,
-                &state.positions,
-                &state.nbr_offsets,
-                &state.nbrs,
-                plate_count,
-                &mut state.rng,
-            );
-            let growth_profiles = build_plate_growth_profiles(plate_count, &mut state.rng);
-            let plate_cost_warp_basis = generate_plate_cost_warp_basis(
                 state.positions.len(),
-                &state.nbr_offsets,
-                &state.nbrs,
-                &mut state.rng,
             );
-            let mut plate_id = partition_plates(
+            let mut plate_count_rng = rng_from_seed_label(&state.world_seed, "plate-count");
+            let plate_count =
+                choose_plate_count(plate_count_min, plate_count_max, &mut plate_count_rng);
+            let seeds = pick_plate_seeds(&state.positions, plate_count);
+            let mut plate_weight_rng =
+                rng_from_seed_label(&state.world_seed, "plate-power-weights");
+            let plate_weights = generate_plate_power_weights(plate_count, &mut plate_weight_rng);
+            let plate_id = partition_plates(
                 PlatePartitionInput {
                     positions: &state.positions,
-                    phi: &state.phi,
-                    plate_cost_warp_basis: &plate_cost_warp_basis,
-                    nbr_offsets: &state.nbr_offsets,
-                    nbrs: &state.nbrs,
-                    boundary_band: state.params.boundary_band,
+                    weights: &plate_weights,
                 },
                 &seeds,
-                &growth_profiles,
             );
-            plate_id = compact_plate_ids(plate_id, plate_count);
-            cleanup_plate_components(&state.nbr_offsets, &state.nbrs, &mut plate_id, plate_count);
-            plate_id = compact_plate_ids(plate_id, plate_count);
+            validate_plate_partition(&state.nbr_offsets, &state.nbrs, &plate_id, plate_count)
+                .unwrap_or_else(|err| panic!("plate partition generation failed: {err}"));
 
             let attributes = assign_plate_attributes(
                 &plate_id,

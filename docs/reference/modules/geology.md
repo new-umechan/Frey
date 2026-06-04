@@ -12,6 +12,37 @@
 - 時代スケール制御により、地形更新の頻度と内部反復数を変えられるようにする
 - 地形の状態名（大地溝帯）などは保持せず、ルールから地形が発生するようにする
 
+### 2.8 初期プレート分割
+
+初期プレート分割は、球面上の additively weighted Voronoi として定義する。
+各セル位置を単位球面上の点 `x`、プレート seed 位置を `s_i`、
+プレート重みを `w_i` とし、セルの `plate_id` は次の最小化で決める。
+
+```text
+plate_id(x) = argmin_i (d_sphere(x, s_i)^2 - w_i)
+d_sphere(x, s_i) = acos(clamp(dot(x, s_i), -1, 1))
+```
+
+同点時は小さい `plate_id` を採用する。
+
+`plate_count` は `plate_count_min` / `plate_count_max` から決める。
+低解像度メッシュでは、非空・連結の初期 plate を作れるように、
+生成前にメッシュセル数から有効上限をかける。
+seed は `phi` の局所極値ではなく farthest-point sampling で選ぶ。
+開始 seed は固定方向 `[1, 0, 0]` に最も近いセルとし、
+以後は既存 seed への最小球面距離が最大のセルを追加する。
+同距離の場合は cell index が小さい候補を採用する。
+
+プレート重み `w_i` は決定的な乱数列から bounded uniform で生成し、平均 0 に正規化する。
+単位は `d_sphere^2` と同じ radian^2 とする。
+標準偏差が `0.20 * target_angle^2` になるようにし、
+`target_angle = sqrt(4π / plate_count)` とする。
+
+分割時にはメッシュ辺の経路コスト、anisotropy、warp basis、edge noise、
+boundary band penalty を使わない。
+空 plate または非連結 plate が生成された場合は補正せず、生成失敗として扱う。
+`phi` は初期 seed 配置や分割境界には使わず、プレート属性や初期標高骨格の入力として扱う。
+
 ### 2.1 採用モデル
 
 連続体力学を元にすると重いため、応力伝播モデルを用いて作る。
@@ -842,23 +873,25 @@ pub struct BoundaryDynamicsState {
 
 ### 6.2 マントル場 φ の構築
 
-従来と同様に球面調和ベースで `phi` を生成し、z-score正規化する。
+球面調和ベースで `phi` を生成し、z-score正規化する。
 
 役割:
 
-- プレートseed抽出
-- 初期プレート形状の歪み
+- プレート属性の割り当て
 - 初期標高の大局的骨格
+
+`phi` は初期プレート seed 抽出や初期分割境界の入力には使わない。
 
 ### 6.3 プレートseed抽出と初期分割
 
-従来仕様のアルゴリズムを基本維持する。
+初期分割は 2.8 の球面べき乗ボロノイで決める。
 
-- 局所極大/極小からseed候補を抽出
-- 最小距離制約つきで採用
-- farthest-point補完
-- 多源伝播で `plate_id` を決定
-- 連結性の後処理
+- `plate_count` は params の範囲を基準にしつつ、低解像度メッシュでは有効上限をかける
+- seed は固定方向から始める farthest-point sampling で抽出
+- 重みは world seed から派生した専用乱数列で生成
+- 各セルで `d_sphere(x, s_i)^2 - w_i` を直接評価して `plate_id` を決定
+- メッシュ辺の経路コストや境界帯 penalty は使わない
+- 空 plate または非連結 plate は生成後に補正せず、生成失敗として扱う
 
 注意:
 

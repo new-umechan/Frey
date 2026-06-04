@@ -4,7 +4,7 @@ use super::*;
 mod cases {
     use super::{
         compute_lake_depth_map, generate_icosphere, generate_rivers, normalize_zscore,
-        rng_from_seed,
+        rng_from_seed, rng_from_seed_label,
     };
     use crate::{GeologyOutput, GeologyParams};
 
@@ -21,28 +21,26 @@ mod cases {
             &mut rng,
         );
         normalize_zscore(&mut phi);
+        let (plate_count_min, plate_count_max) = super::effective_plate_count_bounds(
+            params.plate_count_min,
+            params.plate_count_max,
+            positions.len(),
+        );
+        let mut plate_count_rng = rng_from_seed_label(seed, "plate-count");
         let plate_count =
-            super::choose_plate_count(params.plate_count_min, params.plate_count_max, &mut rng);
-        let seeds =
-            super::pick_plate_seeds(&phi, &positions, &nbr_offsets, &nbrs, plate_count, &mut rng);
-        let growth_profiles = super::build_plate_growth_profiles(plate_count, &mut rng);
-        let plate_cost_warp_basis =
-            super::generate_plate_cost_warp_basis(positions.len(), &nbr_offsets, &nbrs, &mut rng);
-        let mut plate_id = super::partition_plates(
+            super::choose_plate_count(plate_count_min, plate_count_max, &mut plate_count_rng);
+        let seeds = super::pick_plate_seeds(&positions, plate_count);
+        let mut plate_weight_rng = rng_from_seed_label(seed, "plate-power-weights");
+        let plate_weights = super::generate_plate_power_weights(plate_count, &mut plate_weight_rng);
+        let plate_id = super::partition_plates(
             super::PlatePartitionInput {
                 positions: &positions,
-                phi: &phi,
-                plate_cost_warp_basis: &plate_cost_warp_basis,
-                nbr_offsets: &nbr_offsets,
-                nbrs: &nbrs,
-                boundary_band: params.boundary_band,
+                weights: &plate_weights,
             },
             &seeds,
-            &growth_profiles,
         );
-        plate_id = super::compact_plate_ids(plate_id, plate_count);
-        super::cleanup_plate_components(&nbr_offsets, &nbrs, &mut plate_id, plate_count);
-        plate_id = super::compact_plate_ids(plate_id, plate_count);
+        super::validate_plate_partition(&nbr_offsets, &nbrs, &plate_id, plate_count)
+            .expect("valid spherical power Voronoi plate partition");
 
         let attributes = super::assign_plate_attributes(
             &plate_id,
@@ -214,6 +212,43 @@ mod cases {
         assert_eq!(output.river_next.len(), v);
         assert_eq!(output.lake_depth.len(), v);
         assert!(output.height.iter().all(|h| *h >= -1.0 && *h <= 1.0));
+    }
+
+    #[test]
+    fn level_zero_generation_caps_plate_count_to_cell_count() {
+        let params = GeologyParams {
+            level: 0,
+            ..GeologyParams::default()
+        };
+        let output = generate_for_test("level-zero-plate-cap", &params);
+
+        assert_eq!(output.height.len(), 12);
+        assert!(output.plate_count <= output.height.len() as u32);
+        assert!(output
+            .plate_id
+            .iter()
+            .all(|pid| pid.as_u32() < output.plate_count));
+    }
+
+    #[test]
+    fn initial_plate_partition_ignores_boundary_and_erosion_params() {
+        let base = GeologyParams {
+            level: 2,
+            ..GeologyParams::default()
+        };
+        let changed = GeologyParams {
+            boundary_band: base.boundary_band * 2.0,
+            boundary_anisotropy: 1.0 - base.boundary_anisotropy,
+            erosion_iterations: base.erosion_iterations + 3,
+            hydraulic_erosion_rate: base.hydraulic_erosion_rate * 0.5,
+            ..base.clone()
+        };
+
+        let a = generate_for_test("plate-param-independence", &base);
+        let b = generate_for_test("plate-param-independence", &changed);
+
+        assert_eq!(a.plate_count, b.plate_count);
+        assert_eq!(a.plate_id, b.plate_id);
     }
 
     #[test]

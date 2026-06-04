@@ -1,6 +1,8 @@
 # サーバー事前計算 world 表示
 
-Status: Adopted
+## Status
+
+Accepted
 
 ## Context
 

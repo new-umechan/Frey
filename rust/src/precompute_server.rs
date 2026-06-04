@@ -22,8 +22,8 @@ use crate::application::world_dto::{
     MetricsResponse, TimelineConfig, TimelineStateResponse, ViewDeltaFieldResponse, ViewDeltaQuery,
     ViewDeltaResponse,
 };
-use crate::application::{world_query_use_cases, world_use_cases};
 use crate::application::world_service::WorldService;
+use crate::application::{world_query_use_cases, world_use_cases};
 use crate::sim::precomputed::geology_fingerprint;
 use crate::sim::{module_doc_records, module_graph_record};
 use crate::{generate_mesh_core, GeologyParams};
@@ -244,8 +244,8 @@ fn default_lod() -> u32 {
 }
 
 pub async fn run_from_env() -> Result<(), String> {
-    let bind = std::env::var("FREY_PRECOMPUTE_BIND")
-        .unwrap_or_else(|_| "127.0.0.1:8787".to_string());
+    let bind =
+        std::env::var("FREY_PRECOMPUTE_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
     let addr = bind
         .parse::<SocketAddr>()
         .map_err(|err| format!("invalid FREY_PRECOMPUTE_BIND={bind}: {err}"))?;
@@ -453,10 +453,16 @@ fn router(state: AppState) -> Router {
         .route("/api/worlds/:world_id/metrics", get(get_metrics))
         .route("/api/worlds/:world_id/timeline", get(get_timeline_state))
         .route("/api/worlds/:world_id/field/:field_kind", get(get_field))
-        .route("/api/worlds/:world_id/checkpoints", get(list_checkpoint_ticks))
+        .route(
+            "/api/worlds/:world_id/checkpoints",
+            get(list_checkpoint_ticks),
+        )
         .route("/api/worlds/:world_id/seek", post(seek_world))
         .route("/api/worlds/:world_id/rewind", post(rewind_world))
-        .route("/api/worlds/:world_id/simulation-rate", post(set_simulation_rate))
+        .route(
+            "/api/worlds/:world_id/simulation-rate",
+            post(set_simulation_rate),
+        )
         .route("/api/worlds/:world_id/profiled", post(exec_world_profiled))
         .route("/api/exec-modules", get(get_exec_modules))
         .route("/api/exec-module-graph", get(get_exec_module_graph))
@@ -721,11 +727,7 @@ fn save_delta(
     atomic_write(path, &bytes)
 }
 
-fn load_envelope<T>(
-    path: &Path,
-    compression: FrameCompression,
-    label: &str,
-) -> Result<T, String>
+fn load_envelope<T>(path: &Path, compression: FrameCompression, label: &str) -> Result<T, String>
 where
     T: DeserializeOwned,
 {
@@ -803,8 +805,12 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
     let mut timing = PrecomputeTiming::default();
     let seed_dir = args.out_dir.join(&args.seed);
     if seed_dir.exists() {
-        fs::remove_dir_all(&seed_dir)
-            .map_err(|err| format!("failed to remove existing seed dir {}: {err}", seed_dir.display()))?;
+        fs::remove_dir_all(&seed_dir).map_err(|err| {
+            format!(
+                "failed to remove existing seed dir {}: {err}",
+                seed_dir.display()
+            )
+        })?;
     }
     fs::create_dir_all(seed_dir.join("keyframes"))
         .map_err(|err| format!("failed to create keyframe dir: {err}"))?;
@@ -998,8 +1004,8 @@ mod tests {
             label: "compressed".to_string(),
             values: (0..256).collect(),
         };
-        let bytes = encode_envelope(&envelope, FrameCompression::Zstd, "sample")
-            .expect("encode with zstd");
+        let bytes =
+            encode_envelope(&envelope, FrameCompression::Zstd, "sample").expect("encode with zstd");
         let decoded: SampleEnvelope = decode_envelope_bytes(
             bytes,
             FrameCompression::Zstd,
@@ -1047,8 +1053,16 @@ fn lock_state(
     })
 }
 
-fn error_response(status: StatusCode, error: impl Into<String>) -> (StatusCode, Json<ErrorResponse>) {
-    (status, Json(ErrorResponse { error: error.into() }))
+fn error_response(
+    status: StatusCode,
+    error: impl Into<String>,
+) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        status,
+        Json(ErrorResponse {
+            error: error.into(),
+        }),
+    )
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -1094,7 +1108,8 @@ async fn create_generation_request(
 async fn generate_mesh(
     AxumPath(level): AxumPath<u32>,
 ) -> Result<Json<MeshResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let mesh = generate_mesh_core(level).map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+    let mesh =
+        generate_mesh_core(level).map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
     Ok(Json(MeshResponse {
         positions: mesh.positions,
         indices: mesh.indices,
@@ -1137,7 +1152,9 @@ async fn init_world(
                 "message": "precompute requested"
             })),
         )),
-        Err(InitSessionError::Store(err)) => Err(error_response(StatusCode::INTERNAL_SERVER_ERROR, err)),
+        Err(InitSessionError::Store(err)) => {
+            Err(error_response(StatusCode::INTERNAL_SERVER_ERROR, err))
+        }
     }
 }
 
@@ -1184,7 +1201,11 @@ async fn advance_slice_and_delta(
         let session = state
             .session(&world_id)
             .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
-        (session.seed.clone(), session.frame.tick, session.frame.head_tick)
+        (
+            session.seed.clone(),
+            session.frame.tick,
+            session.frame.head_tick,
+        )
     };
     let target = current.saturating_add(1).min(head_tick);
     if target == current {
@@ -1275,7 +1296,12 @@ async fn get_field(
         .fields
         .get(&field_kind)
         .cloned()
-        .ok_or_else(|| error_response(StatusCode::BAD_REQUEST, format!("unknown field: {field_kind}")))?;
+        .ok_or_else(|| {
+            error_response(
+                StatusCode::BAD_REQUEST,
+                format!("unknown field: {field_kind}"),
+            )
+        })?;
     Ok(Json(sample_field(field, query.lod)))
 }
 
@@ -1290,7 +1316,9 @@ async fn list_checkpoint_ticks(
     Ok(Json(CheckpointTicksResponse {
         world_id,
         interval: 1,
-        ticks: (0..=session.frame.head_tick).map(|tick| tick as f64).collect(),
+        ticks: (0..=session.frame.head_tick)
+            .map(|tick| tick as f64)
+            .collect(),
     }))
 }
 
@@ -1386,9 +1414,10 @@ async fn get_exec_modules() -> Json<serde_json::Value> {
 }
 
 async fn get_exec_module_graph() -> Json<serde_json::Value> {
-    Json(serde_json::to_value(module_graph_record()).unwrap_or_else(|_| {
-        serde_json::json!({ "modules": [], "edges": [] })
-    }))
+    Json(
+        serde_json::to_value(module_graph_record())
+            .unwrap_or_else(|_| serde_json::json!({ "modules": [], "edges": [] })),
+    )
 }
 
 fn with_world_id(mut frame: MaterializedFrame, world_id: &str) -> MaterializedFrame {
