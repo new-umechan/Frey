@@ -25,6 +25,12 @@ MINISFORUM MS-A2 Ryzen 9 9955HXのメモリ96GBをサーバーとして使える
 
 物理的なレイヤーに加えて、描画用にトレーサー粒子をくわえる
 
+> マントル対流がプレート運動と単純に対応しているとは考えられていません
+
+https://www-old.eps.s.u-tokyo.ac.jp/epphys/solid/mantle.htmlより
+
+マントルの対流の仕組み自体よくわかっていなさそう
+
 ## マントルからプレートのかたちを生成する
 
 既存研究がなさそうなため、MVPとして
@@ -34,6 +40,10 @@ lid regimeの区別について:
 [Dissecting the puzzle of tectonic lid regimes in terrestrial planets](https://www.nature.com/articles/s41467-025-65943-1)
 
 一旦さかのぼれる体験を作れることを優先し、正確性は棚上げしておく。
+
+(260605追記)
+自己生成するプレートのモデルはあった:
+[プレート生成についての既存研究のまとめ](https://earth.yale.edu/sites/default/files/2024-08/Bercovici%20doc%202.pdf)
 
 ## dynamic topography
 
@@ -47,6 +57,13 @@ lid regimeの区別について:
 最初は、マントル由来の力の場を作り、プレートを剛体として動かすところから始まる？
 力のモーメントの釣り合いから
 
+### 初期化
+
+初期化について
+subduction initiation model
+
+沈み込み開始からプレート運動を作るモデル
+
 ## プレートの動きから地形の出力
 
 Procedural Tectonic Planets: `docs/research/procedural_tctonic_planets.md`
@@ -57,6 +74,13 @@ goSPL : `docs/research/gospl.md`
 地形の出力を目指していたりもする
 
 ## プレートの分裂、合体
+
+## プレートをMVPとしてどう実装するか？
+
+完璧なものを作ろうとすれば、それは研究レベルになってしまう。
+しかし、MVPとして実装するのも恣意性が高い
+260605時点でできているところから、うまくいっていないところをパッチ的に修正していく対応しか、
+結局できないのかもしれない
 
 ## 河川による侵食
 
