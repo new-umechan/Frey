@@ -990,19 +990,16 @@ fn crust_rigidity_bounds(crust_type: CrustType) -> (f32, f32) {
 fn enforce_zero_mean_endogenous_height_change(
     prev_height: &[f32],
     next_height: &mut [f32],
-    weights: &[f32],
+    _weights: &[f32],
 ) -> ZeroMeanCorrectionStats {
-    if prev_height.len() != next_height.len()
-        || next_height.is_empty()
-        || weights.len() != next_height.len()
-    {
+    if prev_height.len() != next_height.len() || next_height.is_empty() {
         return ZeroMeanCorrectionStats::default();
     }
 
     let std_before = height_std_dev(next_height);
     let mut adjusted = vec![false; next_height.len()];
     let mut total_abs_correction = 0.0f32;
-    let mut residual = next_height
+    let residual = next_height
         .iter()
         .zip(prev_height.iter())
         .map(|(next, prev)| next - prev)
@@ -1011,68 +1008,31 @@ fn enforce_zero_mean_endogenous_height_change(
         return ZeroMeanCorrectionStats::default();
     }
 
-    for _ in 0..8 {
-        let lowering = residual > 0.0;
-        let active = next_height
-            .iter()
-            .enumerate()
-            .filter(|(index, value)| {
-                let weight = weights[*index];
-                if !weight.is_finite() || weight <= 1e-6 {
-                    return false;
-                }
-                if lowering {
-                    **value > GEOLOGY_HEIGHT_MIN + 1e-6
-                } else {
-                    **value < GEOLOGY_HEIGHT_MAX - 1e-6
-                }
-            })
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>();
-        if active.is_empty() {
-            break;
-        }
+    let target_sign = residual.signum();
+    let same_sign_delta_sum = next_height
+        .iter()
+        .zip(prev_height.iter())
+        .map(|(next, prev)| next - prev)
+        .filter(|delta| delta.is_finite() && delta.signum() == target_sign)
+        .map(f32::abs)
+        .sum::<f32>();
+    if !same_sign_delta_sum.is_finite() || same_sign_delta_sum <= 1e-6 {
+        return ZeroMeanCorrectionStats::default();
+    }
 
-        let total_weight = active
-            .iter()
-            .map(|index| weights[*index].max(0.0))
-            .sum::<f32>();
-        if !total_weight.is_finite() || total_weight <= 1e-6 {
-            break;
+    let correction_fraction = (residual.abs() / same_sign_delta_sum).clamp(0.0, 1.0);
+    for (index, (next, prev)) in next_height.iter_mut().zip(prev_height.iter()).enumerate() {
+        let delta = *next - *prev;
+        if !delta.is_finite() || delta.signum() != target_sign {
+            continue;
         }
-
-        let correction_per_weight = residual / total_weight;
-        let mut applied = 0.0f32;
-        for index in active {
-            let weight = weights[index].max(0.0);
-            if weight <= 0.0 {
-                continue;
-            }
-            let room = if lowering {
-                next_height[index] - GEOLOGY_HEIGHT_MIN
-            } else {
-                GEOLOGY_HEIGHT_MAX - next_height[index]
-            };
-            let target_delta = (correction_per_weight * weight).abs();
-            let delta = target_delta.min(room.max(0.0));
-            if delta <= 0.0 {
-                continue;
-            }
-            if lowering {
-                next_height[index] -= delta;
-                applied += delta;
-            } else {
-                next_height[index] += delta;
-                applied -= delta;
-            }
-            adjusted[index] = true;
-            total_abs_correction += delta;
+        let correction = delta.abs() * correction_fraction;
+        if correction <= 0.0 {
+            continue;
         }
-
-        residual -= applied;
-        if residual.abs() <= 1e-6 {
-            break;
-        }
+        *next -= target_sign * correction;
+        adjusted[index] = true;
+        total_abs_correction += correction;
     }
 
     let adjusted_cells = adjusted.into_iter().filter(|value| *value).count() as f32;
@@ -1185,6 +1145,29 @@ mod tests {
             / prev.len() as f32;
         assert!(mean_delta.abs() <= 1e-6);
         assert!(stats.mean_abs_correction >= 0.0);
+    }
+
+    #[test]
+    fn endogenous_height_change_damps_same_sign_delta_instead_of_creating_boundary_uplift() {
+        let prev = vec![0.0, 0.0, 0.0, 0.0];
+        let mut next = vec![-0.12, -0.06, 0.03, 0.03];
+        let boundary_focused_weights = vec![0.0, 0.0, 0.0, 100.0];
+
+        let stats =
+            enforce_zero_mean_endogenous_height_change(&prev, &mut next, &boundary_focused_weights);
+
+        let mean_delta = next
+            .iter()
+            .zip(prev.iter())
+            .map(|(next, prev)| next - prev)
+            .sum::<f32>()
+            / prev.len() as f32;
+        assert!(mean_delta.abs() <= 1e-6);
+        assert!(next[0] > -0.12);
+        assert!(next[1] > -0.06);
+        assert!((next[2] - 0.03).abs() <= 1e-6);
+        assert!((next[3] - 0.03).abs() <= 1e-6);
+        assert!(stats.adjusted_cells_ratio > 0.0);
     }
 
     #[test]
