@@ -46,39 +46,6 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&format!("failed to serialize init result: {err}")))
     }
 
-    #[wasm_bindgen(js_name = init_world_from_snapshot)]
-    pub fn init_world_from_snapshot_js(
-        &mut self,
-        seed: String,
-        mesh_level: u32,
-        config_js: JsValue,
-        snapshot_bytes: Vec<u8>,
-    ) -> Result<JsValue, JsValue> {
-        let config = if config_js.is_undefined() || config_js.is_null() {
-            InitWorldConfig {
-                geology_params: None,
-                simulation_rate: None,
-                verification_mode: None,
-                timeline: None,
-            }
-        } else {
-            serde_wasm_bindgen::from_value::<InitWorldConfig>(config_js)
-                .map_err(|err| JsValue::from_str(&format!("invalid init config: {err}")))?
-        };
-
-        let output = world_use_cases::init_world_from_snapshot_bytes(
-            &mut self.service,
-            seed,
-            mesh_level,
-            config,
-            &snapshot_bytes,
-        )
-        .map_err(|err| JsValue::from_str(&err))?;
-        serde_wasm_bindgen::to_value(&output).map_err(|err| {
-            JsValue::from_str(&format!("failed to serialize init snapshot result: {err}"))
-        })
-    }
-
     #[wasm_bindgen(js_name = exec_world)]
     pub fn exec_world_js(&mut self, world_id: String, tick_count: u32) -> Result<(), JsValue> {
         world_use_cases::exec_world(&mut self.service, &world_id, tick_count)

@@ -34,14 +34,8 @@ function createSidebarController(options: SidebarControllerOptions) {
     return { setSidebarOpen };
 }
 
-function isLocalhostRuntime() {
-    const hostname = globalThis.location?.hostname ?? "";
-    return hostname === "localhost" || hostname === "127.0.0.1";
-}
-
 export async function createApp() {
     const isPerfEnabled = isPerfFeatureEnabled();
-    const isDevCheckpointEnabled = isLocalhostRuntime();
     const elements: AppElements = collectAppElements({ perfEnabled: isPerfEnabled });
     const {
         appShell,
@@ -51,9 +45,6 @@ export async function createApp() {
         statusEraLabel,
         eraScaleTickLabel,
         perfPanel,
-        devSnapshotPanel,
-        devSnapshotStageSelect,
-        devSnapshotJumpButton,
     } = elements;
     const { setSidebarOpen } = createSidebarController({ appShell, sidebarToggle });
     elements.setSidebarOpen = setSidebarOpen;
@@ -61,10 +52,6 @@ export async function createApp() {
     const { setStatus } = createStatusController(statusMessage, statusRows);
 
     setPerfPanelVisibility(perfPanel, isPerfEnabled);
-    if (devSnapshotPanel) {
-        devSnapshotPanel.hidden = !isDevCheckpointEnabled;
-        devSnapshotPanel.setAttribute("aria-hidden", String(!isDevCheckpointEnabled));
-    }
     if (sidebarToggle) {
         setSidebarOpen(true);
     }
@@ -84,31 +71,6 @@ export async function createApp() {
         metricCellOverlayMesh,
     });
     await runtime.runInitialSync();
-    if (isDevCheckpointEnabled && devSnapshotStageSelect && devSnapshotJumpButton) {
-        let pending = false;
-        devSnapshotJumpButton.addEventListener("click", () => {
-            if (pending) {
-                return;
-            }
-            const stage = devSnapshotStageSelect.value;
-            if (!["environment", "life", "civilization", "history"].includes(stage)) {
-                setStatus(`Invalid checkpoint stage: ${stage}`);
-                return;
-            }
-            pending = true;
-            devSnapshotJumpButton.disabled = true;
-            seedInput.value = "alpha";
-            void runtime.updateTerrain("alpha", { devSnapshotStage: stage })
-                .catch((error) => {
-                    setStatus(`Dev checkpoint jump failed: ${String(error)}`);
-                    console.error(error);
-                })
-                .finally(() => {
-                    pending = false;
-                    devSnapshotJumpButton.disabled = false;
-                });
-        });
-    }
 
     return {
         tick(nowMs: number) {

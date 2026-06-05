@@ -220,7 +220,7 @@ function createPlaybackRuntime(
     context: RuntimeContext,
     syncWorldFromActiveController: () => Promise<SyncWorldResult | null>,
     stepWorldTick: (perfRecorder?: TickPerfRecorder | null) => Promise<boolean>,
-    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>,
+    updateTerrain: (seed: string) => Promise<void>,
 ) {
     return createPlaybackController({
         playbackControls: context.dom.playbackControls,

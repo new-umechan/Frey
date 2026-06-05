@@ -6,10 +6,6 @@ use std::process::{Command, Stdio};
 
 use frey_wasm::sim;
 use frey_wasm::sim::erosion::ErosionAutomatonState;
-use frey_wasm::sim::precomputed::{
-    canonical_cache_dir, geology_fingerprint, load_snapshot, restore_world_from_snapshot,
-    stage_filename, AlphaSnapshotStage, SNAPSHOT_FORMAT_VERSION,
-};
 use frey_wasm::sim::world::{FeedbackQueue, World, WorldMetrics};
 use frey_wasm::GeologyParams;
 use serde::{Deserialize, Serialize};
@@ -898,60 +894,7 @@ fn init_world_with_optional_snapshot(
     level: u32,
     geology_params: &GeologyParams,
 ) -> Result<(World, ErosionAutomatonState), String> {
-    let default_init = || {
-        frey_wasm::sim::headless::init_world_for_headless_runner(
-            seed,
-            level,
-            geology_params.clone(),
-        )
-    };
-    if seed != "alpha" {
-        return default_init();
-    }
-    let Ok(stage_raw) = env::var("FREY_DEV_SNAPSHOT_STAGE") else {
-        return default_init();
-    };
-    let Ok(stage) = stage_raw.parse::<AlphaSnapshotStage>() else {
-        eprintln!(
-            "[seed_regression] warning: invalid FREY_DEV_SNAPSHOT_STAGE={stage_raw}; fallback to crust init"
-        );
-        return default_init();
-    };
-    let snapshot_path = canonical_cache_dir().join(stage_filename(stage));
-    let expected_fingerprint = match geology_fingerprint(geology_params) {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!("[seed_regression] warning: {err}; fallback to crust init");
-            return default_init();
-        }
-    };
-    let envelope = match load_snapshot(&snapshot_path) {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!("[seed_regression] warning: {err}; fallback to crust init");
-            return default_init();
-        }
-    };
-    if envelope.format_version != SNAPSHOT_FORMAT_VERSION
-        || envelope.seed != "alpha"
-        || envelope.mesh_level != level
-        || envelope.stage != stage
-        || envelope.geology_fingerprint != expected_fingerprint
-    {
-        eprintln!(
-            "[seed_regression] warning: snapshot fingerprint or metadata mismatch ({}) ; fallback to crust init",
-            snapshot_path.display()
-        );
-        return default_init();
-    }
-    let (base_world, _) = default_init()?;
-    match restore_world_from_snapshot(base_world, &envelope) {
-        Ok(restored) => Ok(restored),
-        Err(err) => {
-            eprintln!("[seed_regression] warning: {err}; fallback to crust init");
-            default_init()
-        }
-    }
+    frey_wasm::sim::headless::init_world_for_headless_runner(seed, level, geology_params.clone())
 }
 
 fn post_step_sync_light(

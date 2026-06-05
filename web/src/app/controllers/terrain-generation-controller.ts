@@ -7,7 +7,7 @@ import { DEFAULT_CELL_METRIC, DEFAULT_VIEW_MODE } from "../../shared/constants";
 import { PrecomputePendingError } from "../engine/http-precomputed-engine-client";
 
 export interface TerrainGenerationController {
-    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
+    updateTerrain: (seed: string) => Promise<void>;
 }
 
 export interface TerrainGenerationControllerOptions {
@@ -71,10 +71,9 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
     } = options;
 
     let generationToken = 0;
-    const updateTerrain = async (seed: string, options?: { devSnapshotStage?: string }) => {
+    const updateTerrain = async (seed: string) => {
         const token = ++generationToken;
         const nextSeed = seed.trim() || getCurrentSeed();
-        const requestedStage = options?.devSnapshotStage;
 
         setStatus(`Generating terrain for "${nextSeed}"...`);
         seedForm.querySelector("button")?.setAttribute("disabled", "disabled");
@@ -84,8 +83,6 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             await onInitWorldStart();
             const initResult = await engineClient.init_world(nextSeed, level, {
                 geology_params: terrainParams,
-            }, {
-                devSnapshotStage: requestedStage,
             }).catch((error) => {
                 if (error instanceof PrecomputePendingError) {
                     const requestDetail = error.requestId ? ` request=${error.requestId}` : "";
@@ -129,17 +126,6 @@ export function createTerrainGenerationController(options: TerrainGenerationCont
             setPlaybackRunning(true);
             await syncWorldFromActiveController();
             appendPlaybackEvent("world-generated", "地形生成", `seed=${nextSeed}`);
-            const snapshotStatus = (initResult as { dev_snapshot_restore_status?: unknown }).dev_snapshot_restore_status;
-            const snapshotStage = (initResult as { dev_snapshot_stage?: unknown }).dev_snapshot_stage;
-            const snapshotReason = (initResult as { dev_snapshot_reason?: unknown }).dev_snapshot_reason;
-            if (snapshotStatus === "used" && typeof snapshotStage === "string" && snapshotStage.length > 0) {
-                appendPlaybackEvent("dev-snapshot-used", "Dev Jump", `snapshot=${snapshotStage}`);
-            } else if (snapshotStatus === "fallback" && typeof snapshotStage === "string" && snapshotStage.length > 0) {
-                const reason = typeof snapshotReason === "string" && snapshotReason.length > 0
-                    ? snapshotReason
-                    : "unknown";
-                appendPlaybackEvent("dev-snapshot-fallback", "Dev Jump", `fallback (${snapshotStage}): ${reason}`);
-            }
 
             const eraPreset = getEraScalePreset(getCurrentEraScale());
             setStatus(`Ready (${nextSeed}) | ${eraPreset.label} / 1Tick=${currentEraMetrics.tickLabel}`);

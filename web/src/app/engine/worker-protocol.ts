@@ -11,7 +11,6 @@ export type EngineWorkerRequest =
         seed: string;
         meshLevel: number;
         config: unknown;
-        devSnapshotStage?: string;
       };
     }
   | {

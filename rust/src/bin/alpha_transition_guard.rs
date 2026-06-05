@@ -7,7 +7,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use frey_wasm::sim;
 use frey_wasm::sim::erosion::ErosionAutomatonState;
 use frey_wasm::sim::glaciology::types::GlaciologyParams as BenchGlaciologyParams;
-use frey_wasm::sim::precomputed::AlphaSnapshotStage;
 use frey_wasm::sim::world::FeedbackQueue;
 use frey_wasm::sim::world::World;
 use frey_wasm::sim::ExecWorldPhase;
@@ -45,7 +44,6 @@ struct BenchConfig {
     record_start_tick: u64,
     record_end_tick: u64,
     out_path: PathBuf,
-    snapshot_path: Option<PathBuf>,
     land_ratio_min: f32,
     land_ratio_max: f32,
     max_land_ratio_jump: f32,
@@ -262,10 +260,6 @@ fn load_config() -> BenchConfig {
         .unwrap_or_else(|| {
             PathBuf::from("benches/results/alpha_transition_guard/alpha_transition_guard.jsonl")
         });
-    let snapshot_path = env::var("ALPHA_TRANSITION_SNAPSHOT_PATH")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .map(PathBuf::from);
     let land_ratio_min =
         env_f32("ALPHA_TRANSITION_LAND_RATIO_MIN").unwrap_or(DEFAULT_LAND_RATIO_MIN);
     let land_ratio_max =
@@ -310,7 +304,6 @@ fn load_config() -> BenchConfig {
         record_start_tick,
         record_end_tick,
         out_path,
-        snapshot_path,
         land_ratio_min,
         land_ratio_max,
         max_land_ratio_jump,
@@ -336,81 +329,13 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
         level: config.level,
         ..GeologyParams::default()
     };
-    let resume_stage = if config.snapshot_path.is_some() {
-        None
-    } else {
-        select_resume_snapshot_stage(config)
-    };
     let mut warnings = Vec::new();
-    let (mut world, erosion_state, resumed_from_snapshot) = if let Some(snapshot_path) =
-        config.snapshot_path.as_ref()
-    {
-        match sim::headless::init_world_for_headless_runner_from_snapshot_path(
-            &config.seed,
-            config.level,
-            geology_params.clone(),
-            snapshot_path,
-            None,
-        ) {
-            Ok((world, erosion_state)) => (world, erosion_state, None),
-            Err(err) => {
-                warnings.push(ViolationRecord {
-                    tick: 0,
-                    kind: "explicit_snapshot_fallback".to_string(),
-                    detail: format!(
-                        "path={} resume failed; falling back to cold start: {}",
-                        snapshot_path.display(),
-                        err
-                    ),
-                });
-                let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
-                    &config.seed,
-                    config.level,
-                    geology_params.clone(),
-                )
-                .unwrap_or_else(|cold_err| panic!("failed to init world: {cold_err}"));
-                (world, erosion_state, None)
-            }
-        }
-    } else {
-        match resume_stage {
-            Some(stage) => match sim::headless::init_world_for_headless_runner_from_alpha_snapshot(
-                &config.seed,
-                config.level,
-                geology_params.clone(),
-                stage,
-            ) {
-                Ok((world, erosion_state)) => (world, erosion_state, Some(stage)),
-                Err(err) => {
-                    warnings.push(ViolationRecord {
-                        tick: stage.target_tick(),
-                        kind: "snapshot_resume_fallback".to_string(),
-                        detail: format!(
-                            "stage={} resume failed; falling back to cold start: {}",
-                            stage, err
-                        ),
-                    });
-                    let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
-                        &config.seed,
-                        config.level,
-                        geology_params.clone(),
-                    )
-                    .unwrap_or_else(|cold_err| panic!("failed to init world: {cold_err}"));
-                    (world, erosion_state, None)
-                }
-            },
-            None => {
-                let (world, erosion_state) = sim::headless::init_world_for_headless_runner(
-                    &config.seed,
-                    config.level,
-                    geology_params.clone(),
-                )
-                .unwrap_or_else(|err| panic!("failed to init world: {err}"));
-                (world, erosion_state, None)
-            }
-        }
-    };
-    let resume_tick = resumed_from_snapshot.map(AlphaSnapshotStage::target_tick);
+    let (mut world, erosion_state) = sim::headless::init_world_for_headless_runner(
+        &config.seed,
+        config.level,
+        geology_params.clone(),
+    )
+    .unwrap_or_else(|err| panic!("failed to init world: {err}"));
     let mut hydrology_state = Some(erosion_state);
     let mut feedback = FeedbackQueue::new(world.cell_count());
 
@@ -472,30 +397,12 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
         max_largest_continent_ratio_jump: config.max_largest_continent_ratio_jump,
         max_coastal_band_ratio: config.max_coastal_band_ratio,
         max_land_freeboard_p90: config.max_land_freeboard_p90,
-        resume_from_snapshot_stage: resumed_from_snapshot.map(|stage| stage.as_str().to_string()),
-        resume_from_snapshot_tick: resume_tick,
+        resume_from_snapshot_stage: None,
+        resume_from_snapshot_tick: None,
         samples,
         violations,
         warnings,
     }
-}
-
-fn select_resume_snapshot_stage(config: &BenchConfig) -> Option<AlphaSnapshotStage> {
-    if config.seed != DEFAULT_SEED {
-        return None;
-    }
-    let candidates = [
-        AlphaSnapshotStage::History,
-        AlphaSnapshotStage::Civilization,
-        AlphaSnapshotStage::Life,
-        AlphaSnapshotStage::Environment,
-    ];
-    candidates.into_iter().find(|stage| {
-        let stage_tick = stage.target_tick();
-        config.record_start_tick >= stage_tick
-            && config.transition_pre_end_tick < stage_tick
-            && config.run_ticks >= stage_tick
-    })
 }
 
 fn maybe_record_sample(

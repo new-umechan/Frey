@@ -12,12 +12,8 @@ use crate::application::world_service::WorldService;
 use crate::application::world_support::{
     build_erosion_state, post_step_sync_light, sync_erosion_state,
 };
-use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim;
 use crate::sim::geology_types::GeologyInternal;
-use crate::sim::precomputed::{
-    geology_fingerprint, PrecomputedWorldSnapshotEnvelope, SNAPSHOT_FORMAT_VERSION,
-};
 use crate::sim::{
     display_group_key, exec_world_profiled_detailed_with_feedback_and_states,
     exec_world_slice_with_states, exec_world_with_feedback_and_states, first_phase,
@@ -298,109 +294,6 @@ pub(crate) fn init_world(
         applied_intervention_seq: 0,
     };
     let mut managed = managed;
-    managed.refresh_reduced_metrics();
-
-    let mut timeline = TimelineRuntime::new(TimelineRetentionPolicy::from_config(
-        config.timeline.as_ref(),
-    ));
-    timeline
-        .archive_mut()
-        .insert_checkpoint(managed.world.clock.tick, managed.checkpoint_snapshot());
-    timeline.observe_tick(managed.world.clock.tick);
-
-    let tick = managed.world.clock.tick as f64;
-    let era = managed.world.clock.epoch.as_key().to_string();
-    let cell_count = managed.world.state.geology.height.len() as u32;
-    let world_id = service.insert_world(managed, timeline);
-
-    Ok(InitWorldOutput {
-        world_id,
-        tick,
-        head_tick: tick,
-        era,
-        cell_count,
-    })
-}
-
-pub(crate) fn init_world_from_snapshot_bytes(
-    service: &mut WorldService,
-    seed: String,
-    mesh_level: u32,
-    config: InitWorldConfig,
-    snapshot_bytes: &[u8],
-) -> Result<InitWorldOutput, String> {
-    if mesh_level > 8 {
-        return Err("mesh_level must be between 0 and 8".to_string());
-    }
-
-    let (envelope, _): (PrecomputedWorldSnapshotEnvelope, usize) =
-        bincode::serde::decode_from_slice(snapshot_bytes, bincode::config::standard())
-            .map_err(|err| format!("failed to decode snapshot bytes: {err}"))?;
-    if envelope.format_version != SNAPSHOT_FORMAT_VERSION {
-        return Err(format!(
-            "snapshot format mismatch: expected={}, actual={}",
-            SNAPSHOT_FORMAT_VERSION, envelope.format_version
-        ));
-    }
-    if envelope.seed != seed {
-        return Err(format!(
-            "snapshot seed mismatch: expected={}, actual={}",
-            seed, envelope.seed
-        ));
-    }
-    if envelope.mesh_level != mesh_level {
-        return Err(format!(
-            "snapshot mesh level mismatch: expected={}, actual={}",
-            mesh_level, envelope.mesh_level
-        ));
-    }
-
-    let mut geology_params = config.geology_params.unwrap_or_default();
-    geology_params.level = mesh_level;
-    let fingerprint = geology_fingerprint(&geology_params)?;
-    if envelope.geology_fingerprint != fingerprint {
-        return Err("snapshot geology fingerprint mismatch".to_string());
-    }
-
-    let (positions, indices) = generate_icosphere(mesh_level);
-    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
-    let mesh = world::WorldMesh {
-        positions,
-        nbr_offsets,
-        nbrs,
-    };
-    let geology = envelope.world_core.cells.geology.clone();
-    let mut sim_world = world::World::new(mesh, geology);
-    sim_world.apply_core(envelope.world_core);
-    sim_world.exec_scratch.geology_dynamics = envelope.geology_dynamics_state.clone();
-    sim_world.control.geology_params = geology_params.clone();
-    sim_world.control.erosion_thickness_coupling = geology_params.erosion_thickness_coupling;
-    sim_world.control.deposition_thickness_coupling = geology_params.deposition_thickness_coupling;
-    let transport_cache =
-        TimelineViewCache::from_world(&sim_world, sim_world.exec_scratch.geology_dynamics.as_ref());
-
-    let cell_count = sim_world.cell_count();
-    let mut managed = ManagedWorld {
-        world: sim_world,
-        hydrology_dynamics: Some(envelope.hydrology_state),
-        geology_dynamics: envelope.geology_dynamics_state,
-        feedback: world::FeedbackQueue::new(cell_count),
-        simulation_rate: config.simulation_rate.unwrap_or(1.0).clamp(0.1, 32.0),
-        verification_mode: config
-            .verification_mode
-            .unwrap_or(VerificationMode::Interactive),
-        reduced_metrics: None,
-        scientific_benchmark_samples: Vec::new(),
-        geology_params,
-        transport_cache,
-        exec_state: ManagedWorldExecState::default(),
-        applied_intervention_seq: envelope.applied_intervention_seq,
-    };
-    if let Some(hydrology_state) = managed.hydrology_dynamics.as_ref() {
-        crate::sim::hydrology::apply_hydrology_state_view(&mut managed.world, hydrology_state)?;
-    }
-    managed.transport_cache =
-        TimelineViewCache::from_world(&managed.world, managed.geology_dynamics.as_ref());
     managed.refresh_reduced_metrics();
 
     let mut timeline = TimelineRuntime::new(TimelineRetentionPolicy::from_config(

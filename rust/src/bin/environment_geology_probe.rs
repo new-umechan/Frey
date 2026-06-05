@@ -1,5 +1,4 @@
 use frey_wasm::sim;
-use frey_wasm::sim::precomputed::AlphaSnapshotStage;
 use frey_wasm::sim::world::FeedbackQueue;
 use frey_wasm::sim::ExecWorldPhase;
 use frey_wasm::GeologyParams;
@@ -10,42 +9,26 @@ fn main() {
         ..GeologyParams::default()
     };
     let (mut world, hydrology_state) =
-        match sim::headless::init_world_for_headless_runner_from_alpha_snapshot(
-            "alpha",
-            6,
-            geology_params.clone(),
-            AlphaSnapshotStage::Environment,
-        ) {
-            Ok(result) => result,
-            Err(_) => {
-                let (mut world, hydrology_state) = sim::headless::init_world_for_headless_runner(
-                    "alpha",
-                    6,
-                    geology_params.clone(),
-                )
-                .unwrap_or_else(|err| panic!("failed to init world: {err}"));
-                let mut hydrology_state = Some(hydrology_state);
-                let mut feedback = FeedbackQueue::new(world.cell_count());
-                while world.clock.tick < 800 {
-                    sim::exec_world_with_feedback_and_hydrology(
-                        &mut world,
-                        &mut feedback,
-                        &mut hydrology_state,
-                    );
-                    sim::hydrology::sync_hydrology_state_for_headless_runner(
-                        &mut world,
-                        hydrology_state
-                            .as_mut()
-                            .expect("hydrology state should exist during cold-start probe"),
-                        &geology_params,
-                    );
-                }
-                (
-                    world,
-                    hydrology_state.expect("hydrology state should exist after cold-start probe"),
-                )
-            }
-        };
+        sim::headless::init_world_for_headless_runner("alpha", 6, geology_params.clone())
+            .unwrap_or_else(|err| panic!("failed to init world: {err}"));
+    let mut hydrology_state = Some(hydrology_state);
+    let mut feedback = FeedbackQueue::new(world.cell_count());
+    while world.clock.tick < 800 {
+        sim::exec_world_with_feedback_and_hydrology(
+            &mut world,
+            &mut feedback,
+            &mut hydrology_state,
+        );
+        sim::hydrology::sync_hydrology_state_for_headless_runner(
+            &mut world,
+            hydrology_state
+                .as_mut()
+                .expect("hydrology state should exist during environment probe"),
+            &geology_params,
+        );
+    }
+    let hydrology_state =
+        hydrology_state.expect("hydrology state should exist after environment probe");
     let mut feedback = FeedbackQueue::new(world.cell_count());
 
     let before = world.state.geology.height.clone();

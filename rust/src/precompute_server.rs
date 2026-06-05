@@ -24,7 +24,6 @@ use crate::application::world_dto::{
 };
 use crate::application::world_service::WorldService;
 use crate::application::{world_query_use_cases, world_use_cases};
-use crate::sim::precomputed::geology_fingerprint;
 use crate::sim::{module_doc_records, module_graph_record};
 use crate::{generate_mesh_core, GeologyParams};
 
@@ -35,6 +34,12 @@ const DEFAULT_KEYFRAME_INTERVAL: u32 = 64;
 const DEFAULT_PRECOMPUTE_RETENTION_TICKS: usize = 2;
 const DEFAULT_FRAME_COMPRESSION: FrameCompression = FrameCompression::Zstd;
 const ZSTD_LEVEL: i32 = 3;
+
+fn geology_fingerprint(params: &GeologyParams) -> Result<String, String> {
+    serde_json::to_string(params)
+        .map(|json| format!("geology-params-json-v1:{json}"))
+        .map_err(|err| format!("failed to serialize geology params fingerprint: {err}"))
+}
 
 #[derive(Clone)]
 struct AppState {

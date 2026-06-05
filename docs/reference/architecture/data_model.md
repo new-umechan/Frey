@@ -44,25 +44,6 @@ struct WorldRelations {
 checkpoint snapshot と seek 用の補助状態は `World` の正本には含めず、
 管理層（現状は WASM 側の `ManagedWorld`）で保持する。
 
-### Alpha 事前計算 Snapshot（dev 専用）
-
-`alpha` の開発 bootstrap 短縮のため、era 境界 snapshot を補助 artifact として扱う。
-
-- 対象 stage:
-    - `environment` (`tick=800`)
-    - `life` (`tick=1300`)
-    - `civilization` (`tick=1395`)
-    - `history` (`tick=1445`)
-- 保存正本: `./.cache/frey/alpha-snapshots/`
-- browser mirror: `web/public/.dev-precomputed/alpha/`
-- artifact:
-    - `manifest.json`（stage, tick, era, fingerprint, filename）
-    - `*.bin`（`WorldCore` + dynamics state + metadata を含む envelope）
-    - `*.json`（browser で直接開ける companion view。`*.bin` と同内容の pretty JSON）
-
-復元は dev opt-in のみで有効化する。`seed != alpha` では常に通常の `Crust` 初期化を使う。
-snapshot 不在・破損・fingerprint 不一致時は warning を出し、通常計算へフォールバックする。
-
 ## Managed 層（WASM transport）
 
 `ManagedWorld` は `World` 正本の外側で、次を管理する。

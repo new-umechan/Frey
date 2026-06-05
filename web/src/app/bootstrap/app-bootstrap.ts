@@ -48,7 +48,7 @@ interface BindRuntimeUiOptions {
         playbackController: PlaybackController;
         runPerf: () => Promise<void>;
         copyPerfResult: () => Promise<void>;
-        updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
+        updateTerrain: (seed: string) => Promise<void>;
     };
     getState: () => AppState;
     getCurrentEraMetrics: () => EraMetrics;

@@ -122,31 +122,6 @@ cd rust && wasm-pack test --node
 - `--check` 時は `meta.ticks` / `meta.level` / `meta.seeds` が baseline と一致しない場合に差分レポートへ記録する
 - あわせて `meta.transition_mode` / `meta.era_boundaries` / `meta.eras_at_measurement` の不一致も差分レポートへ記録する
 
-## dev snapshot 運用
-
-- 対象は `seed=alpha` のみ
-- 有効化:
-    - native / Node: `FREY_DEV_SNAPSHOT_STAGE=environment|life|civilization|history`
-    - browser: `?devSnapshotStage=environment|life|civilization|history`
-- 生成コマンド:
-
-```sh
-pnpm alpha:snapshot
-```
-
-- 保存先:
-    - canonical: `./.cache/frey/alpha-snapshots/`
-    - mirror: `web/public/.dev-precomputed/alpha/`
-
-- 再生成が必要な条件:
-    - format version 変更
-    - `GeologyParams` デフォルト変更
-    - era 境界変更
-    - snapshot に含める state schema 変更
-    - `alpha` 生成ロジック変更
-
-- snapshot 不在・破損・fingerprint 不一致時は warning を出して通常計算へ fallback する
-
 ## perf / benchmark artifact
 
 ### perf baseline

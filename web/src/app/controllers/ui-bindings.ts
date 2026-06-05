@@ -76,7 +76,7 @@ interface CreateUiHandlersOptions {
     playbackController: PlaybackController;
     runPerf: () => void;
     copyPerfResult: () => void;
-    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
+    updateTerrain: (seed: string) => Promise<void>;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
     eraScaleWeightFields: EraScaleWeightFields;
@@ -176,7 +176,7 @@ export interface BindAppUiControlsOptions {
     getCurrentCellMetric: () => string;
     getCurrentEraScale: () => string;
     getCurrentEraMetrics: () => EraMetrics;
-    updateTerrain: (seed: string, options?: { devSnapshotStage?: string }) => Promise<void>;
+    updateTerrain: (seed: string) => Promise<void>;
     setStatus: (msg: string) => void;
 }
 
