@@ -16,6 +16,10 @@ import {
     createDefaultEngineClient,
     prepareDefaultEngineRuntime,
 } from "./engine/default-engine-client";
+import {
+    loadDemoSeeds,
+    renderDemoSeedSelector,
+} from "./demo-seeds";
 
 interface SidebarControllerOptions {
     appShell: HTMLElement;
@@ -50,12 +54,22 @@ export async function createApp() {
     elements.setSidebarOpen = setSidebarOpen;
     const statusRows = [statusEraLabel, eraScaleTickLabel];
     const { setStatus } = createStatusController(statusMessage, statusRows);
+    const demoSeeds = await loadDemoSeeds();
 
     setPerfPanelVisibility(perfPanel, isPerfEnabled);
     if (sidebarToggle) {
         setSidebarOpen(true);
     }
-    seedInput.value = DEFAULT_TERRAIN_SEED;
+    const initialSeed = demoSeeds[0]?.seed ?? DEFAULT_TERRAIN_SEED;
+    seedInput.value = initialSeed;
+    renderDemoSeedSelector({
+        form: elements.seedForm,
+        input: seedInput,
+        seeds: demoSeeds,
+        onSelect: (seed) => {
+            setStatus(`Loading seed: ${seed}`);
+        },
+    });
     await prepareDefaultEngineRuntime();
     setStatus("Preparing mesh...");
     const bootstrapEngine = await createDefaultEngineClient();
@@ -69,6 +83,7 @@ export async function createApp() {
         basePositions,
         indices,
         metricCellOverlayMesh,
+        initialSeed,
     });
     await runtime.runInitialSync();
 

@@ -9,6 +9,7 @@ export interface RuntimeStoreOptions {
     indices: Uint32Array;
     createEraMetrics: (era: string) => EraMetrics;
     debugEnabled?: boolean;
+    initialSeed?: string;
 }
 
 export interface RuntimeStore {
@@ -30,6 +31,7 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         indices,
         createEraMetrics,
         debugEnabled,
+        initialSeed,
     } = options;
 
     let currentEraMetrics = createEraMetrics(DEFAULT_ERA_SCALE);
@@ -40,6 +42,7 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
     });
     const mutableStateStore = createMutableStateStore({
         debugEnabled,
+        initialSeed,
     });
 
     mutableStateStore.setCurrentTerrainData(null);

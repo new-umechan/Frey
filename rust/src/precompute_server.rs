@@ -10,12 +10,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::extract::{Path as AxumPath, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, Method, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::application::world_dto::{
     CheckpointTicksResponse, ExecWorldSliceResponse, FieldResponse, InitWorldConfig,
@@ -44,6 +44,18 @@ fn geology_fingerprint(params: &GeologyParams) -> Result<String, String> {
 #[derive(Clone)]
 struct AppState {
     inner: Arc<Mutex<ServerState>>,
+    config: ServerConfig,
+}
+
+#[derive(Clone, Default)]
+struct ServerConfig {
+    public_seeds: Option<BTreeSet<String>>,
+    public_mesh_level: Option<u32>,
+    max_mesh_level: Option<u32>,
+    max_tick: Option<u32>,
+    max_lod: Option<u32>,
+    disable_precompute_requests: bool,
+    cors_origins: Option<Vec<HeaderValue>>,
 }
 
 struct ServerState {
@@ -255,10 +267,12 @@ pub async fn run_from_env() -> Result<(), String> {
         .parse::<SocketAddr>()
         .map_err(|err| format!("invalid FREY_PRECOMPUTE_BIND={bind}: {err}"))?;
     let store_dir = env_path("FREY_PRECOMPUTE_STORE_DIR", DEFAULT_STORE_DIR);
+    let config = ServerConfig::from_env()?;
     let store = PrecomputedStore::load(&store_dir)?;
     let state = ServerState::from_store(store);
     let app = router(AppState {
         inner: Arc::new(Mutex::new(state)),
+        config,
     });
 
     eprintln!(
@@ -271,6 +285,147 @@ pub async fn run_from_env() -> Result<(), String> {
     axum::serve(listener, app)
         .await
         .map_err(|err| format!("server failed: {err}"))
+}
+
+impl ServerConfig {
+    fn from_env() -> Result<Self, String> {
+        Self::from_env_vars(std::env::vars())
+    }
+
+    fn from_env_vars<I, K, V>(vars: I) -> Result<Self, String>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        let vars = vars
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect::<BTreeMap<_, _>>();
+        Ok(Self {
+            public_seeds: parse_csv_set(vars.get("FREY_PUBLIC_SEEDS")),
+            public_mesh_level: parse_optional_u32(&vars, "FREY_PUBLIC_MESH_LEVEL")?,
+            max_mesh_level: parse_optional_u32(&vars, "FREY_MAX_MESH_LEVEL")?,
+            max_tick: parse_optional_u32(&vars, "FREY_MAX_TICK")?,
+            max_lod: parse_optional_u32(&vars, "FREY_MAX_LOD")?,
+            disable_precompute_requests: parse_bool_flag(
+                vars.get("FREY_DISABLE_PRECOMPUTE_REQUESTS"),
+            )?,
+            cors_origins: parse_cors_origins(vars.get("FREY_CORS_ORIGINS"))?,
+        })
+    }
+
+    fn allows_seed(&self, seed: &str) -> bool {
+        self.public_seeds
+            .as_ref()
+            .map_or(true, |seeds| seeds.contains(seed))
+    }
+
+    fn validate_seed(&self, seed: &str) -> Result<(), String> {
+        if self.allows_seed(seed) {
+            return Ok(());
+        }
+        Err(format!("seed is not public: {seed}"))
+    }
+
+    fn validate_mesh_level(&self, mesh_level: u32) -> Result<(), String> {
+        if let Some(public_mesh_level) = self.public_mesh_level {
+            if mesh_level != public_mesh_level {
+                return Err(format!(
+                    "mesh level {mesh_level} is not public; expected {public_mesh_level}"
+                ));
+            }
+        }
+        if let Some(max_mesh_level) = self.max_mesh_level {
+            if mesh_level > max_mesh_level {
+                return Err(format!(
+                    "mesh level {mesh_level} exceeds maximum {max_mesh_level}"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_tick(&self, tick: u32) -> Result<(), String> {
+        if let Some(max_tick) = self.max_tick {
+            if tick > max_tick {
+                return Err(format!("tick {tick} exceeds maximum {max_tick}"));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_lod(&self, lod: u32) -> Result<(), String> {
+        if let Some(max_lod) = self.max_lod {
+            if lod > max_lod {
+                return Err(format!("lod {lod} exceeds maximum {max_lod}"));
+            }
+        }
+        Ok(())
+    }
+
+    fn capped_head_tick(&self, head_tick: u32) -> u32 {
+        self.max_tick
+            .map_or(head_tick, |max_tick| head_tick.min(max_tick))
+    }
+}
+
+fn parse_optional_u32(vars: &BTreeMap<String, String>, name: &str) -> Result<Option<u32>, String> {
+    let Some(value) = vars.get(name).map(|value| value.trim()) else {
+        return Ok(None);
+    };
+    if value.is_empty() {
+        return Ok(None);
+    }
+    value
+        .parse::<u32>()
+        .map(Some)
+        .map_err(|_| format!("{name} must be an unsigned integer"))
+}
+
+fn parse_bool_flag(value: Option<&String>) -> Result<bool, String> {
+    let Some(value) = value.map(|value| value.trim().to_ascii_lowercase()) else {
+        return Ok(false);
+    };
+    match value.as_str() {
+        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "1" | "true" | "yes" | "on" => Ok(true),
+        _ => Err("FREY_DISABLE_PRECOMPUTE_REQUESTS must be a boolean".to_string()),
+    }
+}
+
+fn parse_csv_set(value: Option<&String>) -> Option<BTreeSet<String>> {
+    let values = value?
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<BTreeSet<_>>();
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
+}
+
+fn parse_cors_origins(value: Option<&String>) -> Result<Option<Vec<HeaderValue>>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let origins = value
+        .split(',')
+        .map(str::trim)
+        .filter(|origin| !origin.is_empty())
+        .map(|origin| {
+            HeaderValue::from_str(origin)
+                .map_err(|err| format!("invalid FREY_CORS_ORIGINS origin {origin}: {err}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if origins.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(origins))
+    }
 }
 
 pub fn run_precompute_world_from_env() -> Result<(), String> {
@@ -443,6 +598,13 @@ fn env_path(name: &str, default_value: &str) -> PathBuf {
 }
 
 fn router(state: AppState) -> Router {
+    let cors_layer = match &state.config.cors_origins {
+        Some(origins) => CorsLayer::new()
+            .allow_origin(origins.clone())
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_headers(Any),
+        None => CorsLayer::permissive(),
+    };
     Router::new()
         .route("/api/health", get(health))
         .route("/api/precomputed/seeds", get(list_seeds))
@@ -471,7 +633,7 @@ fn router(state: AppState) -> Router {
         .route("/api/worlds/:world_id/profiled", post(exec_world_profiled))
         .route("/api/exec-modules", get(get_exec_modules))
         .route("/api/exec-module-graph", get(get_exec_module_graph))
-        .layer(CorsLayer::permissive())
+        .layer(cors_layer)
         .with_state(state)
 }
 
@@ -620,15 +782,16 @@ impl PrecomputedStore {
         })
     }
 
-    fn records(&self) -> Vec<PrecomputedWorldRecord> {
+    fn records(&self, config: &ServerConfig) -> Vec<PrecomputedWorldRecord> {
         self.seeds
             .values()
+            .filter(|seed_store| config.allows_seed(&seed_store.manifest.seed))
             .map(|seed_store| PrecomputedWorldRecord {
                 seed: seed_store.manifest.seed.clone(),
                 world_id: String::new(),
                 mesh_level: seed_store.manifest.mesh_level,
-                max_tick: seed_store.manifest.max_tick,
-                ticks: (0..=seed_store.manifest.max_tick).collect(),
+                max_tick: config.capped_head_tick(seed_store.manifest.max_tick),
+                ticks: (0..=config.capped_head_tick(seed_store.manifest.max_tick)).collect(),
                 status: "ready",
             })
             .collect()
@@ -642,7 +805,10 @@ impl PrecomputedStore {
             .unwrap_or(0)
     }
 
-    fn mesh_level(&self) -> u32 {
+    fn mesh_level(&self, config: &ServerConfig) -> u32 {
+        if let Some(public_mesh_level) = config.public_mesh_level {
+            return public_mesh_level;
+        }
         self.seeds
             .values()
             .map(|seed| seed.manifest.mesh_level)
@@ -674,6 +840,12 @@ impl PrecomputedStore {
         }
         frame.tick = tick;
         Ok(frame)
+    }
+
+    fn has_precomputed(&self, seed: &str, mesh_level: u32) -> bool {
+        self.seeds
+            .get(seed)
+            .is_some_and(|seed_store| seed_store.manifest.mesh_level == mesh_level)
     }
 
     fn load_delta(&self, seed: &str, tick: u32) -> Result<ViewDeltaResponse, String> {
@@ -1020,6 +1192,45 @@ mod tests {
         .expect("decode with zstd");
         assert_eq!(decoded, envelope);
     }
+
+    #[test]
+    fn server_config_parses_public_demo_limits() {
+        let config = ServerConfig::from_env_vars([
+            ("FREY_PUBLIC_SEEDS", "alpha, beta"),
+            ("FREY_PUBLIC_MESH_LEVEL", "6"),
+            ("FREY_MAX_MESH_LEVEL", "7"),
+            ("FREY_MAX_TICK", "1600"),
+            ("FREY_MAX_LOD", "2"),
+            ("FREY_DISABLE_PRECOMPUTE_REQUESTS", "true"),
+            ("FREY_CORS_ORIGINS", "https://demo.example.com"),
+        ])
+        .expect("parse public demo config");
+
+        assert!(config.allows_seed("alpha"));
+        assert!(config.allows_seed("beta"));
+        assert!(!config.allows_seed("gamma"));
+        assert!(config.validate_mesh_level(6).is_ok());
+        assert!(config.validate_mesh_level(7).is_err());
+        assert!(config.validate_tick(1600).is_ok());
+        assert!(config.validate_tick(1601).is_err());
+        assert!(config.validate_lod(2).is_ok());
+        assert!(config.validate_lod(3).is_err());
+        assert!(config.disable_precompute_requests);
+        assert_eq!(config.cors_origins.as_ref().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn server_config_defaults_keep_development_behavior() {
+        let config =
+            ServerConfig::from_env_vars([] as [(&str, &str); 0]).expect("parse empty config");
+
+        assert!(config.allows_seed("any-seed"));
+        assert!(config.validate_mesh_level(64).is_ok());
+        assert!(config.validate_tick(u32::MAX).is_ok());
+        assert!(config.validate_lod(u32::MAX).is_ok());
+        assert!(!config.disable_precompute_requests);
+        assert!(config.cors_origins.is_none());
+    }
 }
 
 fn build_materialized_frame(
@@ -1070,6 +1281,20 @@ fn error_response(
     )
 }
 
+fn cap_session_head_tick(
+    state: &mut ServerState,
+    world_id: &str,
+    config: &ServerConfig,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let session = state
+        .session_mut(world_id)
+        .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+    let capped = config.capped_head_tick(session.frame.head_tick);
+    session.frame.head_tick = capped;
+    session.frame.timeline.head_tick = capped as f64;
+    Ok(())
+}
+
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true }))
 }
@@ -1077,16 +1302,17 @@ async fn health() -> Json<serde_json::Value> {
 async fn list_seeds(
     State(state): State<AppState>,
 ) -> Result<Json<SeedsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let state = lock_state(&state)?;
-    let mut seeds = state.store.records();
+    let mut seeds = state.store.records(&config);
     for record in &mut seeds {
         if let Some(world_id) = state.seed_worlds.get(&record.seed) {
             record.world_id = world_id.clone();
         }
     }
     Ok(Json(SeedsResponse {
-        mesh_level: state.store.mesh_level(),
-        max_tick: state.store.max_tick(),
+        mesh_level: state.store.mesh_level(&config),
+        max_tick: config.capped_head_tick(state.store.max_tick()),
         seeds,
         pending_requests: state.requests.values().cloned().collect(),
     }))
@@ -1096,6 +1322,20 @@ async fn create_generation_request(
     State(state): State<AppState>,
     Json(request): Json<InitWorldRequest>,
 ) -> Result<(StatusCode, Json<GenerationRequestedResponse>), (StatusCode, Json<ErrorResponse>)> {
+    state
+        .config
+        .validate_seed(&request.seed)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
+    state
+        .config
+        .validate_mesh_level(request.mesh_level)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
+    if state.config.disable_precompute_requests {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "precompute requests are disabled",
+        ));
+    }
     let mut state = lock_state(&state)?;
     let record = state.create_request(request.seed.clone(), request.mesh_level);
     Ok((
@@ -1111,8 +1351,13 @@ async fn create_generation_request(
 }
 
 async fn generate_mesh(
+    State(state): State<AppState>,
     AxumPath(level): AxumPath<u32>,
 ) -> Result<Json<MeshResponse>, (StatusCode, Json<ErrorResponse>)> {
+    state
+        .config
+        .validate_mesh_level(level)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
     let mesh =
         generate_mesh_core(level).map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
     Ok(Json(MeshResponse {
@@ -1128,10 +1373,30 @@ async fn init_world(
     State(state): State<AppState>,
     Json(request): Json<InitWorldRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<ErrorResponse>)> {
+    state
+        .config
+        .validate_seed(&request.seed)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
+    state
+        .config
+        .validate_mesh_level(request.mesh_level)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
+    let config = state.config.clone();
     let mut state = lock_state(&state)?;
     let _ = request.config;
+    if config.disable_precompute_requests
+        && !state
+            .store
+            .has_precomputed(&request.seed, request.mesh_level)
+    {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "precomputed world is not available",
+        ));
+    }
     match state.init_session(request.seed.clone(), request.mesh_level) {
         Ok(world_id) => {
+            cap_session_head_tick(&mut state, &world_id, &config)?;
             let session = state
                 .session(&world_id)
                 .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
@@ -1168,15 +1433,20 @@ async fn advance_world(
     AxumPath(world_id): AxumPath<String>,
     Json(request): Json<AdvanceRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let mut state = lock_state(&state)?;
     let session = state
         .session(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+    let head_tick = config.capped_head_tick(session.frame.head_tick);
     let target = session
         .frame
         .tick
         .saturating_add(request.tick_count)
-        .min(session.frame.head_tick);
+        .min(head_tick);
+    config
+        .validate_tick(target)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
     let seed = session.seed.clone();
     let frame = state
         .store
@@ -1187,10 +1457,11 @@ async fn advance_world(
         .session_mut(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?
         .frame = with_world_id(frame, &world_id);
+    cap_session_head_tick(&mut state, &world_id, &config)?;
     Ok(Json(serde_json::json!({
         "world_id": world_id,
         "tick": target,
-        "head_tick": state.store.seeds.get(&seed).map(|store| store.manifest.max_tick).unwrap_or(target),
+        "head_tick": config.capped_head_tick(state.store.seeds.get(&seed).map(|store| store.manifest.max_tick).unwrap_or(target)),
         "advanced_ticks": target.saturating_sub(previous)
     })))
 }
@@ -1200,6 +1471,7 @@ async fn advance_slice_and_delta(
     AxumPath(world_id): AxumPath<String>,
     Json(request): Json<SliceRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let mut state = lock_state(&state)?;
     let _ = request.work_budget;
     let (seed, current, head_tick) = {
@@ -1209,7 +1481,7 @@ async fn advance_slice_and_delta(
         (
             session.seed.clone(),
             session.frame.tick,
-            session.frame.head_tick,
+            config.capped_head_tick(session.frame.head_tick),
         )
     };
     let target = current.saturating_add(1).min(head_tick);
@@ -1238,6 +1510,8 @@ async fn advance_slice_and_delta(
             .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
         apply_delta_to_frame(&mut session.frame, &delta);
         session.frame.world_id = world_id.clone();
+        session.frame.head_tick = head_tick;
+        session.frame.timeline.head_tick = head_tick as f64;
     }
     let slice = ExecWorldSliceResponse {
         world_id,
@@ -1256,11 +1530,13 @@ async fn get_view_delta(
     AxumPath(world_id): AxumPath<String>,
     Json(request): Json<ViewDeltaRequest>,
 ) -> Result<Json<ViewDeltaResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let state = lock_state(&state)?;
     let session = state
         .session(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
     let mut delta = full_delta_from_frame(&session.frame);
+    delta.head_tick = config.capped_head_tick(session.frame.head_tick) as f64;
     filter_delta_fields(&mut delta, request.options);
     Ok(Json(delta))
 }
@@ -1280,11 +1556,14 @@ async fn get_timeline_state(
     State(state): State<AppState>,
     AxumPath(world_id): AxumPath<String>,
 ) -> Result<Json<TimelineStateResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let state = lock_state(&state)?;
     let session = state
         .session(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
-    Ok(Json(session.frame.timeline.clone()))
+    let mut timeline = session.frame.timeline.clone();
+    timeline.head_tick = config.capped_head_tick(session.frame.head_tick) as f64;
+    Ok(Json(timeline))
 }
 
 async fn get_field(
@@ -1292,6 +1571,10 @@ async fn get_field(
     AxumPath((world_id, field_kind)): AxumPath<(String, String)>,
     Query(query): Query<FieldQuery>,
 ) -> Result<Json<FieldResponse>, (StatusCode, Json<ErrorResponse>)> {
+    state
+        .config
+        .validate_lod(query.lod)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
     let state = lock_state(&state)?;
     let session = state
         .session(&world_id)
@@ -1314,16 +1597,16 @@ async fn list_checkpoint_ticks(
     State(state): State<AppState>,
     AxumPath(world_id): AxumPath<String>,
 ) -> Result<Json<CheckpointTicksResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let state = lock_state(&state)?;
     let session = state
         .session(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+    let head_tick = config.capped_head_tick(session.frame.head_tick);
     Ok(Json(CheckpointTicksResponse {
         world_id,
         interval: 1,
-        ticks: (0..=session.frame.head_tick)
-            .map(|tick| tick as f64)
-            .collect(),
+        ticks: (0..=head_tick).map(|tick| tick as f64).collect(),
     }))
 }
 
@@ -1332,6 +1615,11 @@ async fn seek_world(
     AxumPath(world_id): AxumPath<String>,
     Json(request): Json<SeekRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    state
+        .config
+        .validate_tick(request.tick)
+        .map_err(|err| error_response(StatusCode::FORBIDDEN, err))?;
+    let config = state.config.clone();
     let mut state = lock_state(&state)?;
     let seed = state
         .session(&world_id)
@@ -1346,13 +1634,14 @@ async fn seek_world(
         .session_mut(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?
         .frame = with_world_id(frame, &world_id);
+    cap_session_head_tick(&mut state, &world_id, &config)?;
     let session = state
         .session(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
     Ok(Json(serde_json::json!({
         "world_id": world_id,
         "tick": session.frame.tick,
-        "head_tick": session.frame.head_tick
+        "head_tick": config.capped_head_tick(session.frame.head_tick)
     })))
 }
 
@@ -1361,6 +1650,7 @@ async fn rewind_world(
     AxumPath(world_id): AxumPath<String>,
     Json(request): Json<AdvanceRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let config = state.config.clone();
     let mut state = lock_state(&state)?;
     let session = state
         .session(&world_id)
@@ -1376,10 +1666,11 @@ async fn rewind_world(
         .session_mut(&world_id)
         .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?
         .frame = with_world_id(frame, &world_id);
+    cap_session_head_tick(&mut state, &world_id, &config)?;
     Ok(Json(serde_json::json!({
         "world_id": world_id,
         "tick": target,
-        "head_tick": state.store.seeds.get(&seed).map(|store| store.manifest.max_tick).unwrap_or(target),
+        "head_tick": config.capped_head_tick(state.store.seeds.get(&seed).map(|store| store.manifest.max_tick).unwrap_or(target)),
         "rewound_ticks": previous.saturating_sub(target)
     })))
 }

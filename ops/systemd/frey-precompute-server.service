@@ -1,0 +1,19 @@
+[Unit]
+Description=Frey precomputed demo API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/prog/Frey
+EnvironmentFile=%h/.config/frey/precompute-server.env
+ExecStart=%h/prog/Frey/rust/target/release/precompute_server
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=%h/prog/Frey/data/precomputed
+
+[Install]
+WantedBy=default.target

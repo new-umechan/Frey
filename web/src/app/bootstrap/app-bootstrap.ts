@@ -111,6 +111,7 @@ interface BootstrapAppRuntimeOptions {
     basePositions: Float32Array;
     indices: Uint32Array;
     metricCellOverlayMesh: MetricCellOverlayMesh;
+    initialSeed?: string;
 }
 
 export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
@@ -121,6 +122,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         basePositions,
         indices,
         metricCellOverlayMesh,
+        initialSeed,
     } = options;
 
     const runtimeStore = createRuntimeStore({
@@ -128,6 +130,7 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         indices,
         createEraMetrics,
         debugEnabled: elements.debugToggleInput.checked,
+        initialSeed,
     });
 
     const sceneRuntime = createSceneRuntime({

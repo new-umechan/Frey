@@ -1,0 +1,10 @@
+{
+    "seeds": [
+        {
+            "seed": "alpha",
+            "label": "alpha",
+            "mesh_level": 6,
+            "description": "公開デモの標準 world"
+        }
+    ]
+}

@@ -88,9 +88,10 @@ export interface AppState {
 
 export function createMutableStateStore(options: {
     debugEnabled?: boolean;
+    initialSeed?: string;
 }) {
     let activeWorldId: string | null = null;
-    let currentSeed = DEFAULT_TERRAIN_SEED;
+    let currentSeed = options.initialSeed ?? DEFAULT_TERRAIN_SEED;
     let currentTerrainData: CoreBuffers | null = null;
     let currentSurfaceMode = DEFAULT_SURFACE_MODE;
     let currentViewMode = DEFAULT_VIEW_MODE;
