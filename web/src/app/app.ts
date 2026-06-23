@@ -21,6 +21,12 @@ import {
     renderDemoSeedSelector,
 } from "./demo-seeds";
 
+function readViteEnv(key: string): string {
+    const env = (import.meta as unknown as { env?: Record<string, unknown> }).env;
+    const value = env?.[key];
+    return typeof value === "string" ? value.trim() : "";
+}
+
 interface SidebarControllerOptions {
     appShell: HTMLElement;
     sidebarToggle: HTMLButtonElement | null;
@@ -55,12 +61,13 @@ export async function createApp() {
     const statusRows = [statusEraLabel, eraScaleTickLabel];
     const { setStatus } = createStatusController(statusMessage, statusRows);
     const demoSeeds = await loadDemoSeeds();
+    const configuredInitialSeed = readViteEnv("VITE_FREY_INITIAL_SEED");
 
     setPerfPanelVisibility(perfPanel, isPerfEnabled);
     if (sidebarToggle) {
         setSidebarOpen(true);
     }
-    const initialSeed = demoSeeds[0]?.seed ?? DEFAULT_TERRAIN_SEED;
+    const initialSeed = demoSeeds[0]?.seed || configuredInitialSeed || DEFAULT_TERRAIN_SEED;
     seedInput.value = initialSeed;
     renderDemoSeedSelector({
         form: elements.seedForm,

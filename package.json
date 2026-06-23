@@ -32,6 +32,7 @@
         "hooks:install": "tsx tools/dev/install-git-hooks.ts",
         "dev": "corepack pnpm dev:precomputed",
         "dev:precomputed": "corepack pnpm config:sync && tsx tools/dev/dev-precomputed.ts",
+        "preview:precomputed": "corepack pnpm config:sync && tsx tools/dev/preview-precomputed.ts",
         "dev:wasm": "corepack pnpm app:dev",
         "build": "pnpm app:build",
         "preview": "pnpm app:preview",

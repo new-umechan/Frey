@@ -27,7 +27,9 @@ use crate::application::{world_query_use_cases, world_use_cases};
 use crate::sim::{module_doc_records, module_graph_record};
 use crate::{generate_mesh_core, GeologyParams};
 
-const STORE_FORMAT_VERSION: u32 = 1;
+// Bump this whenever bincode-serialized frame DTOs change. Serde defaults do
+// not make bincode struct additions backward compatible.
+const STORE_FORMAT_VERSION: u32 = 2;
 const DEFAULT_STORE_DIR: &str = "data/precomputed/worlds";
 const DEFAULT_MAX_TICK: u32 = 1600;
 const DEFAULT_KEYFRAME_INTERVAL: u32 = 64;
@@ -746,12 +748,13 @@ impl PrecomputedStore {
                 }
                 let manifest = load_manifest(&manifest_path)?;
                 if manifest.format_version != STORE_FORMAT_VERSION {
-                    return Err(format!(
-                        "store format mismatch in {}: expected {}, got {}",
+                    eprintln!(
+                        "skipping stale precomputed store {}: expected format {}, got {}; regenerate this seed",
                         manifest_path.display(),
                         STORE_FORMAT_VERSION,
                         manifest.format_version
-                    ));
+                    );
+                    continue;
                 }
                 let mut keyframes = BTreeMap::new();
                 let mut deltas = BTreeMap::new();
@@ -946,7 +949,12 @@ where
     };
     let (envelope, _): (T, usize) =
         bincode::serde::decode_from_slice(&decoded, bincode::config::standard())
-            .map_err(|err| format!("failed to decode {label} {}: {err}", path.display()))?;
+            .map_err(|err| {
+                format!(
+                    "failed to decode {label} {}: {err}; precomputed frames may be stale, regenerate this seed",
+                    path.display()
+                )
+            })?;
     Ok(envelope)
 }
 
@@ -1151,6 +1159,7 @@ fn frame_filename(dir: &str, tick: u32, compression: FrameCompression) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct SampleEnvelope {
@@ -1230,6 +1239,42 @@ mod tests {
         assert!(config.validate_lod(u32::MAX).is_ok());
         assert!(!config.disable_precompute_requests);
         assert!(config.cors_origins.is_none());
+    }
+
+    #[test]
+    fn precomputed_store_skips_stale_manifest_format() {
+        let root = unique_test_dir("stale-manifest");
+        let seed_dir = root.join("alpha");
+        fs::create_dir_all(&seed_dir).expect("create stale seed dir");
+        let manifest = PrecomputedStoreManifest {
+            format_version: STORE_FORMAT_VERSION.saturating_sub(1),
+            seed: "alpha".to_string(),
+            mesh_level: 3,
+            max_tick: 0,
+            keyframe_interval: 64,
+            frame_compression: FrameCompression::Zstd,
+            geology_fingerprint: "test".to_string(),
+            field_kinds: Vec::new(),
+            frames: Vec::new(),
+        };
+        save_manifest(&seed_dir.join("manifest.json"), &manifest).expect("write stale manifest");
+
+        let store = PrecomputedStore::load(&root).expect("load store with stale seed");
+        assert!(!store.has_precomputed("alpha", 3));
+        assert!(store.seeds.is_empty());
+
+        fs::remove_dir_all(&root).expect("remove test store");
+    }
+
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "frey-precompute-{label}-{}-{nanos}",
+            std::process::id()
+        ))
     }
 }
 
