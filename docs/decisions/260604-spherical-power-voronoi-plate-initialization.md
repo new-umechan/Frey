@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded
+
+Superseded by `260617-damage-first-plate-emergence.md`.
 
 ## Context
 
