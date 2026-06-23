@@ -21,33 +21,41 @@ mod cases {
             &mut rng,
         );
         normalize_zscore(&mut phi);
-        let (plate_count_min, plate_count_max) = super::effective_plate_count_bounds(
-            params.plate_count_min,
-            params.plate_count_max,
-            positions.len(),
+        let mut pre_plate_rng = rng_from_seed_label(seed, "damage-first-pre-plate");
+        let mut pre_plate_phi = super::evaluate_phi(
+            &spherical,
+            params.harmonic_max_l,
+            params.spectral_alpha,
+            &mut pre_plate_rng,
         );
-        let mut plate_count_rng = rng_from_seed_label(seed, "plate-count");
-        let plate_count =
-            super::choose_plate_count(plate_count_min, plate_count_max, &mut plate_count_rng);
-        let seeds = super::pick_plate_seeds(&positions, plate_count);
-        let mut plate_weight_rng = rng_from_seed_label(seed, "plate-power-weights");
-        let plate_weights = super::generate_plate_power_weights(plate_count, &mut plate_weight_rng);
-        let plate_id = super::partition_plates(
-            super::PlatePartitionInput {
-                positions: &positions,
-                weights: &plate_weights,
-            },
-            &seeds,
+        normalize_zscore(&mut pre_plate_phi);
+        let emergent = super::build_damage_first_plate_field(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &pre_plate_phi,
+            params,
+            &mut pre_plate_rng,
         );
+        let plate_count = emergent.plate_count;
+        let plate_id = emergent.plate_id;
         super::validate_plate_partition(&nbr_offsets, &nbrs, &plate_id, plate_count)
-            .expect("valid spherical power Voronoi plate partition");
+            .expect("valid damage-first plate partition");
 
-        let attributes = super::assign_plate_attributes(
+        let mut attributes = super::assign_plate_attributes(
             &plate_id,
             plate_count,
             &phi,
             &mut rng,
             params.ocean_plate_ratio,
+        );
+        super::bias_plate_motion_from_pre_plate_fields(
+            &positions,
+            &plate_id,
+            &mut attributes,
+            &emergent.plume,
+            &emergent.downwelling,
+            &emergent.craton_resistance,
         );
         let boundary_edges =
             super::extract_boundary_edges(&positions, &nbr_offsets, &nbrs, &plate_id, &attributes);
@@ -165,6 +173,9 @@ mod cases {
             height,
             plate_id,
             plate_count,
+            plate_emergence_regime: emergent.regime,
+            plate_emergence_fallback: emergent.fallback,
+            initial_plate_kinematics: emergent.initial_kinematics,
             land_ratio,
             river_flux,
             river_next,
@@ -249,6 +260,73 @@ mod cases {
 
         assert_eq!(a.plate_count, b.plate_count);
         assert_eq!(a.plate_id, b.plate_id);
+    }
+
+    #[test]
+    fn proto_fallback_plate_count_tracks_plate_count_targets() {
+        let base = GeologyParams {
+            level: 2,
+            plate_count_min: 4,
+            plate_count_max: 6,
+            ..GeologyParams::default()
+        };
+        let changed = GeologyParams {
+            plate_count_min: 18,
+            plate_count_max: 24,
+            ..base.clone()
+        };
+
+        let a = generate_for_test("plate-count-target-ignored", &base);
+        let b = generate_for_test("plate-count-target-ignored", &changed);
+
+        assert_eq!(
+            a.plate_emergence_fallback,
+            crate::sim::geology_types::PlateEmergenceFallbackKind::StagnantLidProtoPlates
+        );
+        assert_eq!(a.plate_count, base.plate_count_min);
+        assert_eq!(b.plate_count, changed.plate_count_min);
+        assert_eq!(a.initial_plate_kinematics.len(), a.plate_count as usize);
+        assert_eq!(b.initial_plate_kinematics.len(), b.plate_count as usize);
+    }
+
+    #[test]
+    fn alpha_level_six_reaches_mobile_lid_without_fallback() {
+        let params = GeologyParams {
+            level: 6,
+            ..GeologyParams::default()
+        };
+
+        let output = generate_for_test("alpha", &params);
+
+        assert_eq!(
+            output.plate_emergence_regime,
+            crate::sim::geology_types::TectonicRegime::MobileLid
+        );
+        assert_eq!(
+            output.plate_emergence_fallback,
+            crate::sim::geology_types::PlateEmergenceFallbackKind::None
+        );
+        assert!(output.plate_count >= 5);
+    }
+
+    #[test]
+    fn gamma_level_six_reaches_mobile_lid_without_fallback() {
+        let params = GeologyParams {
+            level: 6,
+            ..GeologyParams::default()
+        };
+
+        let output = generate_for_test("gamma", &params);
+
+        assert_eq!(
+            output.plate_emergence_regime,
+            crate::sim::geology_types::TectonicRegime::MobileLid
+        );
+        assert_eq!(
+            output.plate_emergence_fallback,
+            crate::sim::geology_types::PlateEmergenceFallbackKind::None
+        );
+        assert!(output.plate_count >= 5);
     }
 
     #[test]

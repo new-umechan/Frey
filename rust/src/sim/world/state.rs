@@ -8,7 +8,10 @@ use super::entity_state::{EntityState, EntityStateError};
 use super::exec::{
     ClockState, ComponentPatch, EntityBundle, EntityRef, ExecScratchState, TargetRef,
 };
-use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, PlateRelation, StressTensor};
+use crate::sim::geology_types::{
+    CrustType, GeologyInternal, InitialPlateKinematics, PlateEmergenceFallbackKind, PlateId,
+    PlateRelation, StressTensor, TectonicRegime,
+};
 use crate::sim::polity::types::{PolityGroup, PolityRelation};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -382,6 +385,12 @@ pub struct GeologyState {
     #[serde(default)]
     pub lake_depth: Vec<f32>,
     pub plate_id: Vec<PlateId>,
+    #[serde(default)]
+    pub plate_emergence_regime: TectonicRegime,
+    #[serde(default)]
+    pub plate_emergence_fallback: PlateEmergenceFallbackKind,
+    #[serde(default)]
+    pub initial_plate_kinematics: Vec<InitialPlateKinematics>,
     #[serde(default)]
     pub volcanism: Vec<f32>,
     #[serde(default)]
@@ -1131,6 +1140,9 @@ pub struct BoundaryDynamicsState {
 pub struct GeologyStepMetrics {
     pub geology_activity: f32,
     pub boundary_activity: f32,
+    pub plate_id_churn_rate: f32,
+    pub orphan_cell_count: f32,
+    pub single_cell_plate_count: f32,
     pub activity_scale: f32,
     pub runtime_rebuild_applied: f32,
     pub mean_abs_surface_write_delta: f32,

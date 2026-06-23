@@ -1061,7 +1061,9 @@ pub(super) fn earth_preset(
     nbrs: &[u32],
     river_rain_base: f32,
 ) -> GeologyOutput {
-    use crate::sim::geology_types::PlateId;
+    use crate::sim::geology_types::{
+        InitialPlateKinematics, PlateEmergenceFallbackKind, PlateId, TectonicRegime,
+    };
 
     let mut height = vec![0.0; positions.len()];
     let mut plate_id = vec![PlateId(0); positions.len()];
@@ -1121,6 +1123,9 @@ pub(super) fn earth_preset(
         height,
         plate_id,
         plate_count,
+        plate_emergence_regime: TectonicRegime::MobileLid,
+        plate_emergence_fallback: PlateEmergenceFallbackKind::None,
+        initial_plate_kinematics: vec![InitialPlateKinematics::default(); plate_count as usize],
         land_ratio,
         river_flux,
         river_next,

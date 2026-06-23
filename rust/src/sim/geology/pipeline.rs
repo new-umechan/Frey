@@ -1,4 +1,5 @@
 use super::*;
+use crate::sim::geology_types::{PlateEmergenceFallbackKind, TectonicRegime};
 
 pub(super) fn generate(seed: &str, params: GeologyParams) -> GeologyOutput {
     generate_with_mesh(seed, params).0
@@ -41,6 +42,9 @@ pub(super) fn init_crust_update_state(
         phi: Vec::new(),
         plate_count_target: 0,
         plate_id: Vec::new(),
+        plate_emergence_regime: TectonicRegime::MobileLid,
+        plate_emergence_fallback: PlateEmergenceFallbackKind::None,
+        initial_plate_kinematics: Vec::new(),
         attributes: Vec::new(),
         boundary_edges: Vec::new(),
         vertex_lithosphere: Vec::new(),
@@ -79,34 +83,42 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
             state.phase = CrustUpdatePhase::BuildPlateField;
         }
         CrustUpdatePhase::BuildPlateField => {
-            let (plate_count_min, plate_count_max) = effective_plate_count_bounds(
-                state.params.plate_count_min,
-                state.params.plate_count_max,
-                state.positions.len(),
+            let mut pre_plate_rng =
+                rng_from_seed_label(&state.world_seed, "damage-first-pre-plate");
+            let mut pre_plate_phi = evaluate_phi(
+                &state.spherical,
+                state.params.harmonic_max_l,
+                state.params.spectral_alpha,
+                &mut pre_plate_rng,
             );
-            let mut plate_count_rng = rng_from_seed_label(&state.world_seed, "plate-count");
-            let plate_count =
-                choose_plate_count(plate_count_min, plate_count_max, &mut plate_count_rng);
-            let seeds = pick_plate_seeds(&state.positions, plate_count);
-            let mut plate_weight_rng =
-                rng_from_seed_label(&state.world_seed, "plate-power-weights");
-            let plate_weights = generate_plate_power_weights(plate_count, &mut plate_weight_rng);
-            let plate_id = partition_plates(
-                PlatePartitionInput {
-                    positions: &state.positions,
-                    weights: &plate_weights,
-                },
-                &seeds,
+            normalize_zscore(&mut pre_plate_phi);
+            let emergent = build_damage_first_plate_field(
+                &state.positions,
+                &state.nbr_offsets,
+                &state.nbrs,
+                &pre_plate_phi,
+                &state.params,
+                &mut pre_plate_rng,
             );
+            let plate_count = emergent.plate_count;
+            let plate_id = emergent.plate_id;
             validate_plate_partition(&state.nbr_offsets, &state.nbrs, &plate_id, plate_count)
                 .unwrap_or_else(|err| panic!("plate partition generation failed: {err}"));
 
-            let attributes = assign_plate_attributes(
+            let mut attributes = assign_plate_attributes(
                 &plate_id,
                 plate_count,
                 &state.phi,
                 &mut state.rng,
                 state.params.ocean_plate_ratio,
+            );
+            bias_plate_motion_from_pre_plate_fields(
+                &state.positions,
+                &plate_id,
+                &mut attributes,
+                &emergent.plume,
+                &emergent.downwelling,
+                &emergent.craton_resistance,
             );
             let boundary_edges = extract_boundary_edges(
                 &state.positions,
@@ -137,6 +149,9 @@ pub(super) fn step_crust_update(state: &mut CrustTerrainUpdateState) {
 
             state.plate_count_target = plate_count;
             state.plate_id = plate_id;
+            state.plate_emergence_regime = emergent.regime;
+            state.plate_emergence_fallback = emergent.fallback;
+            state.initial_plate_kinematics = emergent.initial_kinematics;
             state.attributes = attributes;
             state.boundary_edges = boundary_edges;
             state.vertex_lithosphere = vertex_lithosphere;
@@ -334,6 +349,9 @@ pub(super) fn finalize_crust_update_state(
         height: state.height,
         plate_id: state.plate_id,
         plate_count,
+        plate_emergence_regime: state.plate_emergence_regime,
+        plate_emergence_fallback: state.plate_emergence_fallback,
+        initial_plate_kinematics: state.initial_plate_kinematics,
         land_ratio,
         river_flux: state.river_flux,
         river_next: state.river_next,

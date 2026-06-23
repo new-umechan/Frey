@@ -95,6 +95,7 @@ pub(crate) struct MetricsResponse {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub plate_count: u32,
     pub global_sediment_export: f32,
     pub marine_sediment_mass: f32,
     pub solid_earth_mass_proxy: f32,
@@ -102,6 +103,9 @@ pub(crate) struct MetricsResponse {
     pub ocean_water_inventory: f32,
     pub ocean_water_inventory_drift: f32,
     pub ice_inventory: f32,
+    pub plate_id_churn_rate: f32,
+    pub orphan_cell_count: f32,
+    pub single_cell_plate_count: f32,
 }
 
 #[derive(Serialize)]
@@ -124,6 +128,7 @@ pub(crate) struct ScientificBenchmarkMetricsResponse {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub plate_count: u32,
     pub global_sediment_export: f32,
     pub marine_sediment_mass: f32,
     pub solid_earth_mass_proxy: f32,

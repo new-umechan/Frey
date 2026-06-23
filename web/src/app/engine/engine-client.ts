@@ -70,6 +70,9 @@ export interface MetricsResult {
   continent_count: number;
   largest_continent_cells: number;
   plate_count?: number;
+  plate_id_churn_rate?: number;
+  orphan_cell_count?: number;
+  single_cell_plate_count?: number;
 }
 
 export type ProfiledExecResult = Record<string, unknown>;

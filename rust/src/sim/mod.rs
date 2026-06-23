@@ -76,6 +76,21 @@ pub fn build_geology_with_mesh(
     geology::generate_with_mesh(seed, geology_params)
 }
 
+pub fn diagnose_plate_emergence(
+    seed: &str,
+    geology_params: GeologyParams,
+) -> self::geology_types::PlateEmergenceDiagnostics {
+    geology::diagnose_plate_emergence(seed, geology_params)
+}
+
+pub fn diagnose_plate_emergence_with_override(
+    seed: &str,
+    geology_params: GeologyParams,
+    min_region_override: Option<usize>,
+) -> self::geology_types::PlateEmergenceDiagnostics {
+    geology::diagnose_plate_emergence_with_override(seed, geology_params, min_region_override)
+}
+
 pub fn run_climate_step_for_bench(world: &mut world::World, climate_budget: u32) {
     climate::surface::run_climate_step(world, climate_budget);
 }

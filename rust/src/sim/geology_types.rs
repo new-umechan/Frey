@@ -53,6 +53,39 @@ pub struct GeologyInternal {
     pub backarc_volcanism: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum TectonicRegime {
+    StagnantLid,
+    #[default]
+    MobileLid,
+    ShatteredLid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum PlateEmergenceFallbackKind {
+    #[default]
+    None,
+    StagnantLidProtoPlates,
+    ShatteredLidProtoBlocks,
+    LegacyPowerVoronoi,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct InitialPlateKinematics {
+    pub angular_axis: [f32; 3],
+    pub angular_speed: f32,
+    #[serde(default)]
+    pub activity: f32,
+    #[serde(default)]
+    pub plume_divergence_bias: [f32; 3],
+    #[serde(default)]
+    pub downwelling_convergence_bias: [f32; 3],
+    #[serde(default)]
+    pub subduction_tendency: f32,
+    #[serde(default)]
+    pub craton_resistance: f32,
+}
+
 fn default_thickness() -> f32 {
     30.0
 }
@@ -73,6 +106,12 @@ pub struct GeologyParams {
     pub plate_count_min: u32,
     pub plate_count_max: u32,
     pub ocean_plate_ratio: f32,
+    pub pre_plate_steps: u32,
+    pub pre_plate_damage_rate: f32,
+    pub pre_plate_healing_decay: f32,
+    pub pre_plate_boundary_ratio_min: f32,
+    pub pre_plate_boundary_ratio_max: f32,
+    pub pre_plate_min_region_fraction: f32,
     pub boundary_band: f32,
     pub boundary_convergent_base_gain: f32,
     pub boundary_divergent_base_gain: f32,
@@ -228,6 +267,9 @@ pub struct GeologyOutput {
     pub height: Vec<f32>,
     pub plate_id: Vec<PlateId>,
     pub plate_count: u32,
+    pub plate_emergence_regime: TectonicRegime,
+    pub plate_emergence_fallback: PlateEmergenceFallbackKind,
+    pub initial_plate_kinematics: Vec<InitialPlateKinematics>,
     pub land_ratio: f32,
     pub river_flux: Vec<f32>,
     pub river_next: Vec<i32>,
@@ -243,4 +285,78 @@ pub struct GeologyOutput {
     pub debug_arc_strength: Vec<f32>,
     pub debug_backarc_strength: Vec<f32>,
     pub debug_ocean_ocean_arc_strength: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlateEmergenceThresholdDiagnostic {
+    pub boundary_ratio: f32,
+    pub valid_count: u32,
+    pub largest_ratio: f32,
+    pub tiny_fragment_ratio: f32,
+    pub single_cell_plate_count: u32,
+    pub min_plate_cells: u32,
+    pub final_plate_count: u32,
+    pub multi_component_plate_count: u32,
+    pub max_plate_component_count: u32,
+    pub mean_detached_fragment_ratio: f32,
+    pub max_plate_area_ratio: f32,
+    pub second_plate_area_ratio: f32,
+    pub effective_plate_count: f32,
+    pub mean_plate_boundary_complexity: f32,
+    pub max_plate_boundary_complexity: f32,
+    pub regime: TectonicRegime,
+    pub regime_score: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlateEmergenceIterationDiagnostic {
+    pub step: u32,
+    pub mean_abs_damage_delta: f32,
+    pub max_damage_delta: f32,
+    pub selected_boundary_ratio: f32,
+    pub selected_valid_count: u32,
+    pub selected_largest_ratio: f32,
+    pub selected_tiny_fragment_ratio: f32,
+    pub selected_single_cell_plate_count: u32,
+    pub selected_min_plate_cells: u32,
+    pub selected_final_plate_count: u32,
+    pub selected_multi_component_plate_count: u32,
+    pub selected_max_plate_component_count: u32,
+    pub selected_mean_detached_fragment_ratio: f32,
+    pub selected_max_plate_area_ratio: f32,
+    pub selected_second_plate_area_ratio: f32,
+    pub selected_effective_plate_count: f32,
+    pub selected_mean_plate_boundary_complexity: f32,
+    pub selected_max_plate_boundary_complexity: f32,
+    pub selected_regime: TectonicRegime,
+    pub selected_regime_score: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlateEmergenceDiagnostics {
+    pub seed: String,
+    pub level: u32,
+    pub min_region: u32,
+    pub base_step_budget: u32,
+    pub max_step_budget: u32,
+    pub settled_steps: u32,
+    pub selected_boundary_ratio: f32,
+    pub selected_valid_count: u32,
+    pub selected_largest_ratio: f32,
+    pub selected_tiny_fragment_ratio: f32,
+    pub selected_single_cell_plate_count: u32,
+    pub selected_min_plate_cells: u32,
+    pub selected_final_plate_count: u32,
+    pub selected_multi_component_plate_count: u32,
+    pub selected_max_plate_component_count: u32,
+    pub selected_mean_detached_fragment_ratio: f32,
+    pub selected_max_plate_area_ratio: f32,
+    pub selected_second_plate_area_ratio: f32,
+    pub selected_effective_plate_count: f32,
+    pub selected_mean_plate_boundary_complexity: f32,
+    pub selected_max_plate_boundary_complexity: f32,
+    pub selected_regime: TectonicRegime,
+    pub selected_regime_score: f32,
+    pub evolution_iterations: Vec<PlateEmergenceIterationDiagnostic>,
+    pub threshold_candidates: Vec<PlateEmergenceThresholdDiagnostic>,
 }

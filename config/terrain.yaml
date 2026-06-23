@@ -16,6 +16,24 @@ plate_count_max:
 ocean_plate_ratio:
   type: f32
   value: 0.65
+pre_plate_steps:
+  type: u32
+  value: 40
+pre_plate_damage_rate:
+  type: f32
+  value: 0.18
+pre_plate_healing_decay:
+  type: f32
+  value: 0.985
+pre_plate_boundary_ratio_min:
+  type: f32
+  value: 0.08
+pre_plate_boundary_ratio_max:
+  type: f32
+  value: 0.22
+pre_plate_min_region_fraction:
+  type: f32
+  value: 0.20
 boundary_band:
   type: f32
   value: 0.08

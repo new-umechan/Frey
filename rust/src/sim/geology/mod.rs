@@ -37,6 +37,41 @@ pub(super) fn generate_with_mesh(
     pipeline::generate_with_mesh(seed, params)
 }
 
+pub(super) fn diagnose_plate_emergence(
+    seed: &str,
+    params: GeologyParams,
+) -> crate::sim::geology_types::PlateEmergenceDiagnostics {
+    diagnose_plate_emergence_with_override(seed, params, None)
+}
+
+pub(super) fn diagnose_plate_emergence_with_override(
+    seed: &str,
+    params: GeologyParams,
+    min_region_override: Option<usize>,
+) -> crate::sim::geology_types::PlateEmergenceDiagnostics {
+    let (positions, indices) = generate_icosphere(params.level);
+    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+    let spherical = compute_spherical_coords(&positions);
+    let mut pre_plate_rng = rng_from_seed_label(seed, "damage-first-pre-plate");
+    let mut pre_plate_phi = evaluate_phi(
+        &spherical,
+        params.harmonic_max_l,
+        params.spectral_alpha,
+        &mut pre_plate_rng,
+    );
+    normalize_zscore(&mut pre_plate_phi);
+    plates::diagnose_plate_emergence_with_mesh(
+        seed,
+        &positions,
+        &nbr_offsets,
+        &nbrs,
+        &pre_plate_phi,
+        &params,
+        min_region_override,
+        &mut pre_plate_rng,
+    )
+}
+
 pub(crate) fn update_geology(
     world: &mut crate::sim::world::World,
     geology_state: &mut crate::sim::exec::GeologyExecState,

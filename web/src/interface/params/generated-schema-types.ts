@@ -206,6 +206,12 @@ export interface TerrainSchemaParams {
     plate_count_min: number;
     plate_count_max: number;
     ocean_plate_ratio: number;
+    pre_plate_steps: number;
+    pre_plate_damage_rate: number;
+    pre_plate_healing_decay: number;
+    pre_plate_boundary_ratio_min: number;
+    pre_plate_boundary_ratio_max: number;
+    pre_plate_min_region_fraction: number;
     boundary_band: number;
     boundary_convergent_base_gain: number;
     boundary_divergent_base_gain: number;
@@ -308,6 +314,12 @@ export const TerrainSchemaParamsKeys = [
     "plate_count_min",
     "plate_count_max",
     "ocean_plate_ratio",
+    "pre_plate_steps",
+    "pre_plate_damage_rate",
+    "pre_plate_healing_decay",
+    "pre_plate_boundary_ratio_min",
+    "pre_plate_boundary_ratio_max",
+    "pre_plate_min_region_fraction",
     "boundary_band",
     "boundary_convergent_base_gain",
     "boundary_divergent_base_gain",

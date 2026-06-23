@@ -1,5 +1,7 @@
 use super::*;
-use crate::sim::geology_types::PlateId;
+use crate::sim::geology_types::{
+    InitialPlateKinematics, PlateEmergenceFallbackKind, PlateId, TectonicRegime,
+};
 
 #[derive(Clone)]
 pub(super) struct PlateAttr {
@@ -141,6 +143,9 @@ pub(crate) struct CrustTerrainUpdateState {
     pub(super) phi: Vec<f32>,
     pub(super) plate_count_target: usize,
     pub(super) plate_id: Vec<PlateId>,
+    pub(super) plate_emergence_regime: TectonicRegime,
+    pub(super) plate_emergence_fallback: PlateEmergenceFallbackKind,
+    pub(super) initial_plate_kinematics: Vec<InitialPlateKinematics>,
     pub(super) attributes: Vec<PlateAttr>,
     pub(super) boundary_edges: Vec<BoundaryEdge>,
     pub(super) vertex_lithosphere: Vec<VertexLithosphere>,

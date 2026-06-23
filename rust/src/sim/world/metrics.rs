@@ -25,6 +25,7 @@ pub struct WorldMetrics {
     pub river_flux_concentration: f32,
     pub continent_count: u32,
     pub largest_continent_cells: u32,
+    pub plate_count: u32,
     pub global_sediment_export: f32,
     pub marine_sediment_mass: f32,
     pub solid_earth_mass_proxy: f32,
@@ -39,6 +40,9 @@ pub struct WorldMetrics {
     pub zero_mean_std_delta: f32,
     pub geology_activity: f32,
     pub boundary_activity: f32,
+    pub plate_id_churn_rate: f32,
+    pub orphan_cell_count: f32,
+    pub single_cell_plate_count: f32,
     pub uplift_rate: f32,
     pub subsidence_rate: f32,
     pub mean_compressive: f32,
@@ -123,6 +127,9 @@ impl World {
             (
                 finite_or(metrics.geology_activity),
                 finite_or(metrics.boundary_activity),
+                finite_or(metrics.plate_id_churn_rate),
+                finite_or(metrics.orphan_cell_count),
+                finite_or(metrics.single_cell_plate_count),
                 finite_or(metrics.uplift_rate),
                 finite_or(metrics.subsidence_rate),
                 finite_or(metrics.mean_compressive),
@@ -173,6 +180,7 @@ impl World {
             river_flux_concentration,
             continent_count: continent_count as u32,
             largest_continent_cells: largest_continent_cells as u32,
+            plate_count: unique_plate_count(&self.state.geology.plate_id),
             global_sediment_export: self.control.global_sediment_export.max(0.0),
             marine_sediment_mass: self.control.marine_sediment_mass.max(0.0),
             solid_earth_mass_proxy: self.control.solid_earth_mass_proxy,
@@ -189,12 +197,15 @@ impl World {
             zero_mean_std_delta: self.state.geology.zero_mean_std_delta,
             geology_activity: cached_geology.map(|values| values.0).unwrap_or(0.0),
             boundary_activity: cached_geology.map(|values| values.1).unwrap_or(0.0),
-            uplift_rate: cached_geology.map(|values| values.2).unwrap_or(0.0),
-            subsidence_rate: cached_geology.map(|values| values.3).unwrap_or(0.0),
-            mean_compressive: cached_geology.map(|values| values.4).unwrap_or(0.0),
-            mean_tensile: cached_geology.map(|values| values.5).unwrap_or(0.0),
-            mean_abs_diffusive_raw: cached_geology.map(|values| values.6).unwrap_or(0.0),
-            mean_abs_isostatic_raw: cached_geology.map(|values| values.7).unwrap_or(0.0),
+            plate_id_churn_rate: cached_geology.map(|values| values.2).unwrap_or(0.0),
+            orphan_cell_count: cached_geology.map(|values| values.3).unwrap_or(0.0),
+            single_cell_plate_count: cached_geology.map(|values| values.4).unwrap_or(0.0),
+            uplift_rate: cached_geology.map(|values| values.5).unwrap_or(0.0),
+            subsidence_rate: cached_geology.map(|values| values.6).unwrap_or(0.0),
+            mean_compressive: cached_geology.map(|values| values.7).unwrap_or(0.0),
+            mean_tensile: cached_geology.map(|values| values.8).unwrap_or(0.0),
+            mean_abs_diffusive_raw: cached_geology.map(|values| values.9).unwrap_or(0.0),
+            mean_abs_isostatic_raw: cached_geology.map(|values| values.10).unwrap_or(0.0),
             mean_thickness,
             std_thickness,
             mean_density,
@@ -209,6 +220,18 @@ impl World {
             mean_rigidity_continental,
         }
     }
+}
+
+fn unique_plate_count(plate_ids: &[crate::sim::geology_types::PlateId]) -> u32 {
+    use std::collections::BTreeSet;
+
+    plate_ids
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .len()
+        .try_into()
+        .unwrap_or(u32::MAX)
 }
 
 fn finite_or(value: f32) -> f32 {

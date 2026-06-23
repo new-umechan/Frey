@@ -20,8 +20,9 @@ pub use sim::world;
 
 pub use crate::sim::erosion::ErosionAutomatonState;
 pub use crate::sim::geology_types::{
-    CrustType, GeologyInternal, GeologyOutput, GeologyParams, MeshOutput, PlateId, PlateRelation,
-    StressTensor, SubductionPolarity,
+    CrustType, GeologyInternal, GeologyOutput, GeologyParams, InitialPlateKinematics, MeshOutput,
+    PlateEmergenceDiagnostics, PlateEmergenceFallbackKind, PlateEmergenceThresholdDiagnostic,
+    PlateId, PlateRelation, StressTensor, SubductionPolarity, TectonicRegime,
 };
 #[cfg(feature = "wasm_transport")]
 pub use crate::transport::wasm::WorldSimController;

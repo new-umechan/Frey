@@ -14,34 +14,110 @@
 
 ### 2.8 初期プレート分割
 
-初期プレート分割は、球面上の additively weighted Voronoi として定義する。
-各セル位置を単位球面上の点 `x`、プレート seed 位置を `s_i`、
-プレート重みを `w_i` とし、セルの `plate_id` は次の最小化で決める。
+初期プレートは直接配置しない。
+まず連続したリソスフェア上に `strength`、`stress`、`active_damage`、
+`inherited_weakness` の一時 field を作り、pre-plate damage growth pass で弱線を育てる。
+`damage_memory` は runtime 履歴用の概念であり、初期化時点では 0 として扱う。
+
+基本式は次の近似である。
 
 ```text
-plate_id(x) = argmin_i (d_sphere(x, s_i)^2 - w_i)
-d_sphere(x, s_i) = acos(clamp(dot(x, s_i), -1, 1))
+active_damage += max(0, stress - strength) * pre_plate_damage_rate
+active_damage *= pre_plate_healing_decay
+active_damage = max(active_damage, inherited_weakness)
 ```
 
-同点時は小さい `plate_id` を採用する。
+`pre_plate_steps` は固定回数の即時停止条件ではなく、base budget として使う。
+damage evolution は checkpoint ごとに抽出結果を再評価し、
+`BoundaryExtraction` が改善している間だけ追加で進める。
+base budget 到達後に最良候補が連続 checkpoint で更新されなくなった時点で停止し、
+採用するのは「最後の snapshot」ではなく「全 checkpoint 中の最良 snapshot」である。
 
-`plate_count` は `plate_count_min` / `plate_count_max` から決める。
-低解像度メッシュでは、非空・連結の初期 plate を作れるように、
-生成前にメッシュセル数から有効上限をかける。
-seed は `phi` の局所極値ではなく farthest-point sampling で選ぶ。
-開始 seed は固定方向 `[1, 0, 0]` に最も近いセルとし、
-以後は既存 seed への最小球面距離が最大のセルを追加する。
-同距離の場合は cell index が小さい候補を採用する。
+`strength` は、craton-like な高強度領域、厚いリソスフェア近似、低温域で増え、
+高温域、既存 damage、plume 近傍で下がる。
+`stress` は、plume、downwelling、material contrast、mantle shear proxy から作る。
+これらは厳密な物理量ではなく、damage mechanics、inherited weakness、plume-rift interaction を
+生成用に簡略化した proxy である。
 
-プレート重み `w_i` は決定的な乱数列から bounded uniform で生成し、平均 0 に正規化する。
-単位は `d_sphere^2` と同じ radian^2 とする。
-標準偏差が `0.20 * target_angle^2` になるようにし、
-`target_angle = sqrt(4π / plate_count)` とする。
+境界抽出では `boundary_potential` を使う。
+これは plate boundary として抽出されやすい度合いであり、
+ridge/trench/transform/collision などの boundary type ではない。
 
-分割時にはメッシュ辺の経路コスト、anisotropy、warp basis、edge noise、
-boundary band penalty を使わない。
-空 plate または非連結 plate が生成された場合は補正せず、生成失敗として扱う。
-`phi` は初期 seed 配置や分割境界には使わず、プレート属性や初期標高骨格の入力として扱う。
+```text
+boundary_potential =
+  active_damage
+  + inherited_weakness
+  + damage_memory
+  + material_contrast
+  + mantle_shear_proxy
+```
+
+v1 では本格的な skeleton graph は作らない。
+`boundary_potential` の adaptive threshold で boundary mask を作り、
+小さい boundary island を削除して connected components を抽出する。
+太い boundary band はこの段階では許容する。
+
+採用条件の考え方は次である。
+
+```text
+弱い境界 + 強い内部 = plate
+```
+
+抽出後は全セルに有効な `plate_id` を割り当てる。
+plate 数は生成目標ではなく観測結果である。
+Damage-first path では `plate_count_min` / `plate_count_max` を参照しない。
+抽出結果は次の regime として判定する。
+
+- `stagnant_lid`: 境界 network が未発達で、巨大な蓋が残る
+- `mobile_lid`: 複数の強い内部 block と弱い境界 network が成立する
+- `shattered_lid`: 破壊されすぎて小片化する
+
+`mobile_lid` でない場合は、従来 power Voronoi ではなく proto fallback を返し、
+`plate_emergence_fallback` に理由を残す。
+
+`mobile_lid` 候補どうしの選別では、plate 数だけでなく shape quality も見る。
+最低限の guardrail は次である。
+
+- `single_cell_plate_count`: 1 cell plate の数
+- `multi_component_plate_count`: 連結でない plate の数
+- `mean_detached_fragment_ratio`: 各 plate で最大連結成分の外にある面積比の平均
+- `mean_plate_boundary_complexity`
+- `max_plate_boundary_complexity`
+
+ここで `plate_boundary_complexity` は
+
+```text
+inter-plate neighbor contacts / sqrt(plate cell count)
+```
+
+の proxy とする。厳密な perimeter/area ではないが、
+球面メッシュ上で「境界が過剰に入り組んでいる」「細長すぎる」を cheap に検知するための近似である。
+`mean_detached_fragment_ratio` は
+
+```text
+1 - largest_connected_component_cells / plate_cells
+```
+
+で定義し、同じ `plate_id` が複数塊へ分断されていないかを見る。
+
+major plate 相当の読みやすさを優先するため、
+初期 emergence の最終 `plate_id` は `6-8` を許容帯として評価する。
+ただし plate 数だけを優先して、巨大 plate の再出現や面積分布の悪化を許してはならない。
+
+各 plate の初期運動は runtime へ永続化する。
+初期段階の運動傾向は `plume_divergence_bias`、`downwelling_convergence_bias`、
+`subduction_tendency`、`craton_resistance` として扱う。
+成熟した沈み込み履歴から育つ `slab_pull_bias` とは区別する。
+
+Crust 期の活動は `plate_id` delta ではなく、boundary activity、surface delta、
+volcanism、crust age/density/thickness 更新を主指標とする。
+`plate_id_churn_rate`、`orphan_cell_count`、`single_cell_plate_count` は
+ownership transfer がノイズ化していないかを見る guardrail である。
+
+Runtime の ownership transfer では、boundary crossing によって donor plate が
+1 cell / 2 cell の degenerate block へ崩れる reassignment を許さない。
+これは plate 数 target の固定ではなく、剛体 block とみなしにくい極小片の
+生成を抑える guardrail である。
 
 ### 2.1 採用モデル
 
