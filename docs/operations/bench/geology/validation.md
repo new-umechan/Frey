@@ -113,9 +113,15 @@ jq -r '.samples[] | [
   .mean_plate_speed_km_per_myr,
   .max_plate_speed_km_per_myr,
   .mean_cell_crossing_fraction_per_tick,
+  .boundary_crossing_substeps,
   .mean_direction_persistence,
   .reciprocal_churn_ratio,
-  .mean_centroid_path_straightness
+  .mean_centroid_path_straightness,
+  .mean_slab_pull_drive,
+  .mean_ridge_push_drive,
+  .mean_collision_drag,
+  .mean_force_target_speed_km_per_myr,
+  .mean_basal_target_speed_km_per_myr
 ] | @tsv' /tmp/frey_crust_plate_series.jsonl
 ```
 
@@ -127,6 +133,9 @@ jq -r '.samples[] | [
 - `mean_cell_crossing_fraction_per_tick`
     - 1 tick の移動量が平均セル間隔の何倍か
     - level 依存なので、同じ level の run 同士で比較する
+- `boundary_crossing_substeps`
+    - 1 tick 内で discrete ownership transfer を何分割したか
+    - `mean_cell_crossing_fraction_per_tick > 1` で 1 のままなら、速度に対して境界移動が追従していない
 - `mean_direction_persistence`
     - sample 間の plate velocity 方向 cosine
     - `0.7` 未満が続く場合は jitter / random walk を疑う
@@ -136,6 +145,14 @@ jq -r '.samples[] | [
 - `mean_centroid_path_straightness`
     - `net displacement / cumulative path length`
     - 低いほど往復や蛇行が多い
+- `mean_slab_pull_drive` / `mean_ridge_push_drive`
+    - runtime kinematics が使った駆動力 proxy の平均
+    - Frey では slab pull を主駆動、ridge push を副次駆動として読む
+    - `mean_ridge_push_drive` が `mean_slab_pull_drive` より継続的に大きい場合は、
+      plate speed が ridge activity に支配されすぎていないかを疑う
+- `mean_force_target_speed_km_per_myr` / `mean_basal_target_speed_km_per_myr`
+    - boundary force 由来 target と basal motion floor 由来 target の比較
+    - basal 側だけで速度帯を維持している場合は、slab/ridge の分類や memory が弱すぎる可能性がある
 
 この指標は pass/fail gate ではなく、plate motion の自然さを読む診断 artifact とする。
 
@@ -145,6 +162,16 @@ jq -r '.samples[] | [
 late Crust の速度崩れは解消したと読む。
 同じ run で `mean_cell_crossing_fraction_per_tick` は `1.7-2.6` 程度なので、
 次に見るべき点は複数セル相当の displacement と ownership transfer の整合である。
+
+同日の drive 正規化と boundary crossing substep 導入後、alpha level 6 の 80 tick run では
+tick 80 で `mean_plate_speed_km_per_myr=54.9`、
+`mean_cell_crossing_fraction_per_tick=2.28`、`boundary_crossing_substeps=4` だった。
+同 tick の drive は `mean_slab_pull_drive=0.213`、
+`mean_ridge_push_drive=0.093` で、ridge push は無視できるほど小さくはないが
+slab pull より小さい副次駆動として読める。
+`mean_force_target_speed_km_per_myr=57.4` と
+`mean_basal_target_speed_km_per_myr=56.6` が近く、速度維持が basal floor だけに
+依存していないことも確認できる。
 
 自動化可能な配列整合性、値域、決定性、snapshot 整合はコード側で担保する。
 本書では手動サニティチェック手順を保持しない。

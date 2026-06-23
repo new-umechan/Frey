@@ -48,6 +48,7 @@ struct TickRecord {
     oceanic_cell_ratio: f32,
     continental_cell_ratio: f32,
     plate_id_churn_rate: f32,
+    boundary_crossing_substeps: f32,
     orphan_cell_count: f32,
     single_cell_plate_count: f32,
     geology_activity: f32,
@@ -59,6 +60,11 @@ struct TickRecord {
     mean_direction_persistence: f32,
     reciprocal_churn_ratio: f32,
     mean_centroid_path_straightness: f32,
+    mean_slab_pull_drive: f32,
+    mean_ridge_push_drive: f32,
+    mean_collision_drag: f32,
+    mean_force_target_speed_km_per_myr: f32,
+    mean_basal_target_speed_km_per_myr: f32,
 }
 
 #[derive(Debug, Default)]
@@ -80,6 +86,11 @@ struct MotionDiagnostics {
     mean_direction_persistence: f32,
     reciprocal_churn_ratio: f32,
     mean_centroid_path_straightness: f32,
+    mean_slab_pull_drive: f32,
+    mean_ridge_push_drive: f32,
+    mean_collision_drag: f32,
+    mean_force_target_speed_km_per_myr: f32,
+    mean_basal_target_speed_km_per_myr: f32,
 }
 
 impl Default for MotionDiagnostics {
@@ -92,6 +103,11 @@ impl Default for MotionDiagnostics {
             mean_direction_persistence: 1.0,
             reciprocal_churn_ratio: 1.0,
             mean_centroid_path_straightness: 1.0,
+            mean_slab_pull_drive: 0.0,
+            mean_ridge_push_drive: 0.0,
+            mean_collision_drag: 0.0,
+            mean_force_target_speed_km_per_myr: 0.0,
+            mean_basal_target_speed_km_per_myr: 0.0,
         }
     }
 }
@@ -206,6 +222,7 @@ fn sample_world(
         oceanic_cell_ratio: metrics.oceanic_cell_ratio,
         continental_cell_ratio: metrics.continental_cell_ratio,
         plate_id_churn_rate: runtime_metrics.plate_id_churn_rate,
+        boundary_crossing_substeps: runtime_metrics.boundary_crossing_substeps,
         orphan_cell_count: runtime_metrics.orphan_cell_count,
         single_cell_plate_count: runtime_metrics.single_cell_plate_count,
         geology_activity: runtime_metrics.geology_activity,
@@ -217,6 +234,11 @@ fn sample_world(
         mean_direction_persistence: motion.mean_direction_persistence,
         reciprocal_churn_ratio: motion.reciprocal_churn_ratio,
         mean_centroid_path_straightness: motion.mean_centroid_path_straightness,
+        mean_slab_pull_drive: motion.mean_slab_pull_drive,
+        mean_ridge_push_drive: motion.mean_ridge_push_drive,
+        mean_collision_drag: motion.mean_collision_drag,
+        mean_force_target_speed_km_per_myr: motion.mean_force_target_speed_km_per_myr,
+        mean_basal_target_speed_km_per_myr: motion.mean_basal_target_speed_km_per_myr,
     }
 }
 
@@ -253,6 +275,12 @@ impl MotionTracker {
         let mut persistence_count = 0_u32;
         let mut straightness_sum = 0.0_f32;
         let mut straightness_count = 0_u32;
+        let mut slab_pull_drive_sum = 0.0_f32;
+        let mut ridge_push_drive_sum = 0.0_f32;
+        let mut collision_drag_sum = 0.0_f32;
+        let mut force_target_speed_sum = 0.0_f32;
+        let mut basal_target_speed_sum = 0.0_f32;
+        let mut drive_count = 0_u32;
         let mut velocity_dirs = vec![None; plate_count];
 
         for pid in 0..plate_count {
@@ -272,6 +300,12 @@ impl MotionTracker {
             max_speed = max_speed.max(speed_km_per_myr);
             crossing_sum += crossing_fraction;
             max_crossing = max_crossing.max(crossing_fraction);
+            slab_pull_drive_sum += finite_or(state.slab_pull_drive, 0.0).max(0.0);
+            ridge_push_drive_sum += finite_or(state.ridge_push_drive, 0.0).max(0.0);
+            collision_drag_sum += finite_or(state.collision_drag, 0.0).max(0.0);
+            force_target_speed_sum += finite_or(state.force_target_speed_km_per_myr, 0.0).max(0.0);
+            basal_target_speed_sum += finite_or(state.basal_target_speed_km_per_myr, 0.0).max(0.0);
+            drive_count = drive_count.saturating_add(1);
 
             let dir = normalized(cross3(state.angular_axis, centroid));
             velocity_dirs[pid] = dir;
@@ -316,6 +350,11 @@ impl MotionTracker {
             mean_direction_persistence: mean_or_one(persistence_sum, persistence_count),
             reciprocal_churn_ratio,
             mean_centroid_path_straightness: mean_or_one(straightness_sum, straightness_count),
+            mean_slab_pull_drive: mean_or_zero(slab_pull_drive_sum, drive_count),
+            mean_ridge_push_drive: mean_or_zero(ridge_push_drive_sum, drive_count),
+            mean_collision_drag: mean_or_zero(collision_drag_sum, drive_count),
+            mean_force_target_speed_km_per_myr: mean_or_zero(force_target_speed_sum, drive_count),
+            mean_basal_target_speed_km_per_myr: mean_or_zero(basal_target_speed_sum, drive_count),
         }
     }
 

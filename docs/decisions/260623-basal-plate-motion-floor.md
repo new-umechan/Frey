@@ -32,10 +32,30 @@ boundary drive が一時的に弱い場合でも plate speed がその一定割�
 - slab pull / rollback / ridge push / collision drag から求める force target
 - `reference_angular_speed` 由来の basal target
 
+force target は、生の drive proxy をそのまま `0-1` の速度係数とは扱わない。
+runtime の `slab_pull_drive` / `ridge_push_drive` は plate 全体の境界 cell 平均であり、
+mobile-lid として十分に駆動されている状態でも 1.0 には近づかない。
+そのため、合成 drive を `EXPECTED_MOBILE_LID_DRIVE` で正規化してから
+Earth reference speed に変換する。
+
 速度の上昇は従来どおり比較的速く追従させ、減速はより緩やかにする。
 また、plate velocity の実効速度から `activity` 乗算を外す。
 `activity` は境界過程の強さであり、plate 全体の drift 速度を二重に減衰させる
 係数としては使わない。
+
+この判断を後から検証できるように、runtime `PlateKinematicsState` へ
+drive diagnostics を保存する。
+`crust_plate_count_series` は次を記録する。
+
+- `mean_slab_pull_drive`
+- `mean_ridge_push_drive`
+- `mean_collision_drag`
+- `mean_force_target_speed_km_per_myr`
+- `mean_basal_target_speed_km_per_myr`
+
+Frey では slab pull を主駆動、ridge push を副次駆動として読む。
+そのため、ridge push が slab pull を継続的に上回る run は、
+plate motion の駆動バランスを再確認する対象とする。
 
 ## Consequences
 
@@ -48,7 +68,7 @@ boundary drive が一時的に弱い場合でも plate speed がその一定割�
 欠点:
 
 - basal target は mantle convection を直接解くものではなく、初期 kinematics の proxy である
-- level 6 では `mean_cell_crossing_fraction_per_tick` が 1 を超える場合があり、
-  複数セル相当の displacement を boundary crossing がどう扱うかは別途検証が必要
+- level 6 では `mean_cell_crossing_fraction_per_tick` が 1 を超える場合があるため、
+  boundary crossing は速度に応じて 1 tick を少数の substep に分ける
 - `reference_angular_speed` は serialized runtime state に追加されるため、
   既存 snapshot から読む場合は serde default と現速度で補正する

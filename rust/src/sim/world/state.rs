@@ -1063,6 +1063,16 @@ pub struct PlateKinematicsState {
     #[serde(default)]
     pub reference_angular_speed: f32,
     #[serde(default)]
+    pub slab_pull_drive: f32,
+    #[serde(default)]
+    pub ridge_push_drive: f32,
+    #[serde(default)]
+    pub collision_drag: f32,
+    #[serde(default)]
+    pub force_target_speed_km_per_myr: f32,
+    #[serde(default)]
+    pub basal_target_speed_km_per_myr: f32,
+    #[serde(default)]
     pub phase_offset: f32,
     pub activity: f32,
 }
@@ -1143,6 +1153,7 @@ pub struct GeologyStepMetrics {
     pub geology_activity: f32,
     pub boundary_activity: f32,
     pub plate_id_churn_rate: f32,
+    pub boundary_crossing_substeps: f32,
     pub orphan_cell_count: f32,
     pub single_cell_plate_count: f32,
     pub activity_scale: f32,

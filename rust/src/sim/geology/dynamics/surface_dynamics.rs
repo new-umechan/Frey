@@ -578,6 +578,7 @@ pub(super) fn apply_stress_and_surface_update(
         geology_activity: (terrain_delta_sum / denom).clamp(0.0, 1.0),
         boundary_activity: (boundary_sum / denom).clamp(0.0, 1.0),
         plate_id_churn_rate: 0.0,
+        boundary_crossing_substeps: 0.0,
         orphan_cell_count: 0.0,
         single_cell_plate_count: 0.0,
         activity_scale,

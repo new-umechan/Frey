@@ -9,6 +9,9 @@ use crate::sim::exec::{lerp, CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFOR
 
 use super::{EARTH_MEAN_RADIUS_KM, EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR, YEARS_PER_MYR};
 
+const EXPECTED_MOBILE_LID_DRIVE: f32 = 0.30;
+const MAX_NORMALIZED_DRIVE: f32 = 1.8;
+
 #[inline]
 fn finite_or(value: f32, fallback: f32) -> f32 {
     if value.is_finite() {
@@ -396,11 +399,15 @@ pub(super) fn update_plate_kinematics(
         let ridge_push = finite_or(plate_ridge_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
         let collision_drag = finite_or(plate_collision_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
         let slab_pull_drive = slab_convergence + 0.5 * slab_rollback;
+        let ridge_push_drive = 0.35 * ridge_push;
+        let activity_drive = 0.10 * activity;
         let driving_strength =
-            finite_or(slab_pull_drive + 0.35 * ridge_push + 0.10 * activity, 0.0).max(0.0);
+            finite_or(slab_pull_drive + ridge_push_drive + activity_drive, 0.0).max(0.0);
+        let normalized_driving_strength =
+            (driving_strength / EXPECTED_MOBILE_LID_DRIVE).clamp(0.0, MAX_NORMALIZED_DRIVE);
         let drag = 1.0 + 2.0 * collision_drag;
         let target_speed_km_per_myr =
-            EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR * gain * driving_strength / drag;
+            EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR * gain * normalized_driving_strength / drag;
         let force_target_angular_speed = finite_or(
             target_speed_km_per_myr / EARTH_MEAN_RADIUS_KM * myr_per_tick,
             0.0,
@@ -413,6 +420,8 @@ pub(super) fn update_plate_kinematics(
         .max(plate_states[pid].angular_speed)
         .clamp(0.0, 0.30);
         let basal_target_angular_speed = (reference_angular_speed * 0.35 * gain).clamp(0.0, 0.30);
+        let basal_target_speed_km_per_myr =
+            basal_target_angular_speed * EARTH_MEAN_RADIUS_KM / myr_per_tick.max(1e-6);
         let target_angular_speed = force_target_angular_speed
             .max(basal_target_angular_speed)
             .clamp(0.0, 0.30);
@@ -430,6 +439,11 @@ pub(super) fn update_plate_kinematics(
             target_angular_speed,
         )
         .clamp(0.0, 0.30);
+        plate_states[pid].slab_pull_drive = slab_pull_drive;
+        plate_states[pid].ridge_push_drive = ridge_push_drive;
+        plate_states[pid].collision_drag = collision_drag;
+        plate_states[pid].force_target_speed_km_per_myr = target_speed_km_per_myr;
+        plate_states[pid].basal_target_speed_km_per_myr = basal_target_speed_km_per_myr;
         plate_states[pid].activity =
             finite_or(lerp(plate_states[pid].activity, activity, 0.20), activity).clamp(0.0, 1.0);
     }
@@ -548,6 +562,11 @@ mod tests {
             angular_axis: [0.0, 1.0, 0.0],
             angular_speed: 0.0,
             reference_angular_speed: 0.0,
+            slab_pull_drive: 0.0,
+            ridge_push_drive: 0.0,
+            collision_drag: 0.0,
+            force_target_speed_km_per_myr: 0.0,
+            basal_target_speed_km_per_myr: 0.0,
             phase_offset: 0.0,
             activity: 0.0,
         }
@@ -596,6 +615,9 @@ mod tests {
         );
 
         assert!(plate_states[0].angular_speed > plate_states[1].angular_speed);
+        assert!(plate_states[0].slab_pull_drive > plate_states[0].ridge_push_drive);
+        assert_eq!(plate_states[1].slab_pull_drive, 0.0);
+        assert!(plate_states[0].force_target_speed_km_per_myr > 0.0);
 
         boundary_state.slab_convergence_component.fill(0.0);
         boundary_state.slab_rollback_component.fill(0.0);

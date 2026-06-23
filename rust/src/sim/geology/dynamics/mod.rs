@@ -148,7 +148,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &world.control.geology_params,
     );
     let mut next_plate_id = plate_id.to_vec();
-    apply_boundary_crossing_discrete_attrs(
+    let boundary_crossing_substeps = apply_boundary_crossing_discrete_attrs(
         BoundaryCrossingInput {
             positions,
             nbr_offsets,
@@ -226,6 +226,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     metrics.plate_id_churn_rate = plate_id_churn_rate;
     metrics.orphan_cell_count = orphan_cell_count as f32;
     metrics.single_cell_plate_count = single_cell_plate_count as f32;
+    metrics.boundary_crossing_substeps = boundary_crossing_substeps as f32;
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
@@ -660,6 +661,11 @@ fn build_plate_states(
                 angular_axis: initial.angular_axis,
                 angular_speed: initial.angular_speed,
                 reference_angular_speed: initial.angular_speed,
+                slab_pull_drive: 0.0,
+                ridge_push_drive: 0.0,
+                collision_drag: 0.0,
+                force_target_speed_km_per_myr: 0.0,
+                basal_target_speed_km_per_myr: 0.0,
                 phase_offset: std::f32::consts::TAU * hash01(plate as u32 ^ 0x85eb_ca6b),
                 activity: initial.activity.clamp(0.0, 1.0),
             });
@@ -670,6 +676,11 @@ fn build_plate_states(
             angular_axis: seeded_axis(seed ^ 0x27d4_eb2f),
             angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
             reference_angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
+            slab_pull_drive: 0.0,
+            ridge_push_drive: 0.0,
+            collision_drag: 0.0,
+            force_target_speed_km_per_myr: 0.0,
+            basal_target_speed_km_per_myr: 0.0,
             phase_offset: std::f32::consts::TAU * hash01(seed ^ 0x85eb_ca6b),
             activity: (0.60_f32 + 0.40_f32 * hash01(seed ^ 0x9e37_79b9)).clamp(0.0, 1.0),
         });
@@ -880,6 +891,41 @@ fn apply_boundary_crossing_discrete_attrs(
     input: BoundaryCrossingInput<'_>,
     plate_id_next: &mut [PlateId],
     vertex_states: &mut [VertexCrustState],
+) -> u32 {
+    let substeps = boundary_crossing_substeps(
+        input.positions,
+        input.nbr_offsets,
+        input.nbrs,
+        input.plate_states,
+        input.plate_id_prev,
+        input.boundary_state,
+    );
+    let distance_scale = 1.0 / substeps as f32;
+    for substep in 0..substeps {
+        let plate_id_prev = plate_id_next.to_vec();
+        apply_boundary_crossing_discrete_attrs_substep(
+            BoundaryCrossingInput {
+                positions: input.positions,
+                nbr_offsets: input.nbr_offsets,
+                nbrs: input.nbrs,
+                plate_states: input.plate_states,
+                plate_id_prev: &plate_id_prev,
+                boundary_state: input.boundary_state,
+                tick_seed: input.tick_seed ^ substep.rotate_left(11),
+            },
+            plate_id_next,
+            vertex_states,
+            distance_scale,
+        );
+    }
+    substeps
+}
+
+fn apply_boundary_crossing_discrete_attrs_substep(
+    input: BoundaryCrossingInput<'_>,
+    plate_id_next: &mut [PlateId],
+    vertex_states: &mut [VertexCrustState],
+    distance_scale: f32,
 ) {
     let positions = input.positions;
     let nbr_offsets = input.nbr_offsets;
@@ -942,7 +988,8 @@ fn apply_boundary_crossing_discrete_attrs(
                 best_edge_spacing = len;
             }
         }
-        let crossing_probability = boundary_crossing_probability(best_score, best_edge_spacing);
+        let crossing_probability =
+            boundary_crossing_probability(best_score * distance_scale, best_edge_spacing);
         let sample = hash01(
             input.tick_seed
                 ^ (i as u32).wrapping_mul(0x9e37_79b9)
@@ -962,6 +1009,45 @@ fn apply_boundary_crossing_discrete_attrs(
     for (i, crust) in next_crust.into_iter().enumerate() {
         vertex_states[i].crust_type = crust;
     }
+}
+
+fn boundary_crossing_substeps(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_states: &[PlateKinematicsState],
+    plate_id: &[PlateId],
+    boundary_state: &BoundaryDynamicsState,
+) -> u32 {
+    let mut max_cell_fraction = 0.0_f32;
+    for i in 0..plate_id.len() {
+        if boundary_state.activity.get(i).copied().unwrap_or(0.0) <= 0.0 {
+            continue;
+        }
+        let start = nbr_offsets[i] as usize;
+        let end = nbr_offsets[i + 1] as usize;
+        let velocity = plate_velocity_for_cell(plate_states, plate_id[i], positions[i]);
+        let speed =
+            (velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2])
+                .sqrt();
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            if n >= plate_id.len() || plate_id[n] == plate_id[i] {
+                continue;
+            }
+            let dx = [
+                positions[i][0] - positions[n][0],
+                positions[i][1] - positions[n][1],
+                positions[i][2] - positions[n][2],
+            ];
+            let spacing = (dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2])
+                .sqrt()
+                .max(1e-5);
+            max_cell_fraction = max_cell_fraction.max(speed / spacing);
+        }
+    }
+
+    finite_or(max_cell_fraction.ceil(), 1.0).clamp(1.0, 4.0) as u32
 }
 
 fn boundary_crossing_probability(inflow_distance: f32, edge_spacing_unit_sphere: f32) -> f32 {
@@ -1013,7 +1099,9 @@ fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustSt
 
 #[cfg(test)]
 mod tests {
-    use super::boundary_crossing_probability;
+    use super::{boundary_crossing_probability, boundary_crossing_substeps};
+    use crate::sim::geology_types::PlateId;
+    use crate::sim::world::{BoundaryDynamicsState, BoundaryType, PlateKinematicsState};
 
     #[test]
     fn boundary_crossing_probability_uses_actual_inflow_distance() {
@@ -1029,5 +1117,63 @@ mod tests {
 
         assert_eq!(inactive, 0.0);
         assert!(active > inactive);
+    }
+
+    #[test]
+    fn boundary_crossing_substeps_follow_cell_crossing_scale() {
+        let positions = vec![[1.0, 0.0, 0.0], [0.995, 0.1, 0.0]];
+        let nbr_offsets = vec![0, 1, 2];
+        let nbrs = vec![1, 0];
+        let plate_id = vec![PlateId(0), PlateId(1)];
+        let boundary_state = BoundaryDynamicsState {
+            dominant_type: vec![BoundaryType::Subduction; 2],
+            activity: vec![1.0; 2],
+            ..Default::default()
+        };
+        let slow_states = vec![
+            plate_state([0.0, 0.0, 1.0], 0.02),
+            plate_state([0.0, 0.0, 1.0], 0.02),
+        ];
+        let fast_states = vec![
+            plate_state([0.0, 0.0, 1.0], 0.30),
+            plate_state([0.0, 0.0, 1.0], 0.30),
+        ];
+
+        assert_eq!(
+            boundary_crossing_substeps(
+                &positions,
+                &nbr_offsets,
+                &nbrs,
+                &slow_states,
+                &plate_id,
+                &boundary_state,
+            ),
+            1
+        );
+        assert!(
+            boundary_crossing_substeps(
+                &positions,
+                &nbr_offsets,
+                &nbrs,
+                &fast_states,
+                &plate_id,
+                &boundary_state,
+            ) > 1
+        );
+    }
+
+    fn plate_state(axis: [f32; 3], speed: f32) -> PlateKinematicsState {
+        PlateKinematicsState {
+            angular_axis: axis,
+            angular_speed: speed,
+            reference_angular_speed: speed,
+            slab_pull_drive: 0.0,
+            ridge_push_drive: 0.0,
+            collision_drag: 0.0,
+            force_target_speed_km_per_myr: 0.0,
+            basal_target_speed_km_per_myr: 0.0,
+            phase_offset: 0.0,
+            activity: 1.0,
+        }
     }
 }
