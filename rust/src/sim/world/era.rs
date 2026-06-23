@@ -77,3 +77,13 @@ impl EraKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::EraKind;
+
+    #[test]
+    fn crust_tick_represents_five_myr() {
+        assert_eq!(EraKind::Crust.real_years_per_tick(), 5_000_000.0);
+    }
+}

@@ -251,19 +251,15 @@ pub(super) fn apply_stress_and_surface_update(
             0.0,
         )
         .max(0.0);
-        let convergence_memory = finite_or(
-            boundary_state
-                .edge_internal
-                .get(i)
-                .map(|s| s.convergence_memory)
-                .unwrap_or(0.0),
-            0.0,
-        )
-        .clamp(0.0, 1.0);
+        let subduction_memory = if boundary_type == BoundaryType::Subduction {
+            finite_or((slab_conv + slab_roll).max(boundary_activity), 0.0).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
 
         state.arc_volcanism = if boundary_type == BoundaryType::Subduction {
             boundary_activity
-                * (0.35 + 0.65 * convergence_memory)
+                * (0.35 + 0.65 * subduction_memory)
                 * params.arc_volcanism_gain.max(0.0)
         } else {
             0.0
@@ -299,7 +295,7 @@ pub(super) fn apply_stress_and_surface_update(
         } else {
             0.0
         };
-        let total_subsidence = tectonic_subsidence;
+        let total_subsidence = tectonic_subsidence + thermal_subsidence;
         tectonic_uplift_sum += tectonic_uplift.abs();
         volcanic_uplift_sum += volcanic_uplift.abs();
         tectonic_subsidence_sum += tectonic_subsidence.abs();
@@ -581,6 +577,9 @@ pub(super) fn apply_stress_and_surface_update(
     GeologyStepMetrics {
         geology_activity: (terrain_delta_sum / denom).clamp(0.0, 1.0),
         boundary_activity: (boundary_sum / denom).clamp(0.0, 1.0),
+        plate_id_churn_rate: 0.0,
+        orphan_cell_count: 0.0,
+        single_cell_plate_count: 0.0,
         activity_scale,
         runtime_rebuild_applied: 0.0,
         mean_abs_surface_write_delta: finite_or(terrain_delta_sum / denom, 0.0),
@@ -990,7 +989,7 @@ fn crust_rigidity_bounds(crust_type: CrustType) -> (f32, f32) {
 fn enforce_zero_mean_endogenous_height_change(
     prev_height: &[f32],
     next_height: &mut [f32],
-    _weights: &[f32],
+    weights: &[f32],
 ) -> ZeroMeanCorrectionStats {
     if prev_height.len() != next_height.len() || next_height.is_empty() {
         return ZeroMeanCorrectionStats::default();
@@ -1020,23 +1019,81 @@ fn enforce_zero_mean_endogenous_height_change(
         return ZeroMeanCorrectionStats::default();
     }
 
-    let correction_fraction = (residual.abs() / same_sign_delta_sum).clamp(0.0, 1.0);
-    for (index, (next, prev)) in next_height.iter_mut().zip(prev_height.iter()).enumerate() {
+    let max_weight = weights
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .fold(0.0_f32, f32::max);
+    let mut capacities = vec![0.0_f32; next_height.len()];
+    let mut capacity_sum = 0.0_f32;
+    for (index, (next, prev)) in next_height.iter().zip(prev_height.iter()).enumerate() {
         let delta = *next - *prev;
         if !delta.is_finite() || delta.signum() != target_sign {
             continue;
         }
-        let correction = delta.abs() * correction_fraction;
-        if correction <= 0.0 {
-            continue;
+        let weight = weights.get(index).copied().unwrap_or(0.0);
+        let weight_norm = if max_weight > 1e-6 {
+            finite_or(weight / max_weight, 0.0).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let correction_capacity = delta.abs() * (1.0 - 0.90 * weight_norm);
+        capacities[index] = correction_capacity;
+        capacity_sum += correction_capacity;
+    }
+
+    let mut remaining = residual.abs();
+    if capacity_sum > 1e-6 {
+        let correction_scale = (remaining / capacity_sum).clamp(0.0, 1.0);
+        for (index, (next, prev)) in next_height.iter_mut().zip(prev_height.iter()).enumerate() {
+            let delta = *next - *prev;
+            if !delta.is_finite() || delta.signum() != target_sign {
+                continue;
+            }
+            let correction = capacities[index] * correction_scale;
+            if correction <= 0.0 {
+                continue;
+            }
+            *next -= target_sign * correction;
+            adjusted[index] = true;
+            total_abs_correction += correction;
+            remaining -= correction;
         }
-        *next -= target_sign * correction;
-        adjusted[index] = true;
-        total_abs_correction += correction;
+    }
+
+    if remaining > 1e-6 {
+        let remaining_same_sign_delta_sum = next_height
+            .iter()
+            .zip(prev_height.iter())
+            .map(|(next, prev)| next - prev)
+            .filter(|delta| delta.is_finite() && delta.signum() == target_sign)
+            .map(f32::abs)
+            .sum::<f32>();
+        if remaining_same_sign_delta_sum > 1e-6 {
+            let correction_fraction = (remaining / remaining_same_sign_delta_sum).clamp(0.0, 1.0);
+            for (index, (next, prev)) in next_height.iter_mut().zip(prev_height.iter()).enumerate()
+            {
+                let delta = *next - *prev;
+                if !delta.is_finite() || delta.signum() != target_sign {
+                    continue;
+                }
+                let correction = delta.abs() * correction_fraction;
+                if correction <= 0.0 {
+                    continue;
+                }
+                *next -= target_sign * correction;
+                adjusted[index] = true;
+                total_abs_correction += correction;
+            }
+        }
+    }
+
+    for value in next_height.iter_mut() {
+        *value = value.clamp(GEOLOGY_HEIGHT_MIN, GEOLOGY_HEIGHT_MAX);
     }
 
     let adjusted_cells = adjusted.into_iter().filter(|value| *value).count() as f32;
-    let denom = next_height.len().max(1) as f32;
+    let denom = prev_height.len().max(1) as f32;
     let std_after = height_std_dev(next_height);
     ZeroMeanCorrectionStats {
         adjusted_cells_ratio: adjusted_cells / denom,
@@ -1106,6 +1163,23 @@ mod tests {
     use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
     use crate::sim::world::{BoundaryDynamicsState, BoundaryType, VertexCrustState};
     use crate::GeologyParams;
+
+    fn oceanic_vertex(params: &GeologyParams) -> VertexCrustState {
+        VertexCrustState {
+            crust_type: CrustType::Oceanic,
+            thickness: 0.35,
+            density: params.oceanic_base_density + params.age_density_gain,
+            age: params.age_ref,
+            stress: 0.0,
+            temperature: 0.5,
+            rigidity: 0.46,
+            arc_volcanism: 0.0,
+            ridge_volcanism: 0.0,
+            hotspot_volcanism: 0.0,
+            backarc_volcanism: 0.0,
+            stress_tensor: StressTensor::default(),
+        }
+    }
 
     #[test]
     fn endogenous_height_change_preserves_global_mean() {
@@ -1255,5 +1329,97 @@ mod tests {
         assert_eq!(metrics.debug_surface_max_delta_tectonic_subsidence, 0.0);
         assert_eq!(metrics.mean_abs_surface_step_delta, 0.0);
         assert_eq!(next_height, heights);
+    }
+
+    #[test]
+    fn oceanic_thermal_subsidence_contributes_to_surface_forcing() {
+        let nbr_offsets = vec![0, 0];
+        let nbrs = vec![];
+        let heights = vec![-0.12];
+        let plate_id = vec![PlateId(0)];
+        let boundary_state = BoundaryDynamicsState {
+            dominant_type: vec![BoundaryType::PassiveMargin],
+            activity: vec![0.0],
+            ..BoundaryDynamicsState::default()
+        };
+        let mantle_heat = vec![0.4];
+        let plume_force = vec![0.0];
+        let params = GeologyParams::default();
+        let mut next_vertex_states = vec![oceanic_vertex(&params)];
+        let mut next_height = heights.clone();
+        let mut next_volcanism = vec![0.0];
+        let mut next_vertex_buoyancy = vec![0.0];
+        let mut output = SurfaceUpdateOutput {
+            next_vertex_states: &mut next_vertex_states,
+            next_height: &mut next_height,
+            next_volcanism: &mut next_volcanism,
+            next_vertex_buoyancy: &mut next_vertex_buoyancy,
+        };
+
+        let metrics = apply_stress_and_surface_update(
+            SurfaceUpdateInput {
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                heights: &heights,
+                plate_id: &plate_id,
+                boundary_state: &boundary_state,
+                mantle_heat: &mantle_heat,
+                plume_force: &plume_force,
+                activity_scale: 1.0,
+                params: &params,
+            },
+            &mut output,
+        );
+
+        assert!(metrics.mean_abs_thermal_subsidence > 0.0);
+        assert!(metrics.mean_abs_surface_raw_delta > 0.0);
+    }
+
+    #[test]
+    fn slab_component_strengthens_subduction_arc_volcanism() {
+        let nbr_offsets = vec![0, 0];
+        let nbrs = vec![];
+        let heights = vec![-0.08];
+        let plate_id = vec![PlateId(0)];
+        let mantle_heat = vec![0.4];
+        let plume_force = vec![0.0];
+        let params = GeologyParams::default();
+
+        let run = |slab_convergence: f32| {
+            let boundary_state = BoundaryDynamicsState {
+                dominant_type: vec![BoundaryType::Subduction],
+                activity: vec![0.1],
+                slab_convergence_component: vec![slab_convergence],
+                slab_rollback_component: vec![0.0],
+                ..BoundaryDynamicsState::default()
+            };
+            let mut next_vertex_states = vec![oceanic_vertex(&params)];
+            let mut next_height = heights.clone();
+            let mut next_volcanism = vec![0.0];
+            let mut next_vertex_buoyancy = vec![0.0];
+            let mut output = SurfaceUpdateOutput {
+                next_vertex_states: &mut next_vertex_states,
+                next_height: &mut next_height,
+                next_volcanism: &mut next_volcanism,
+                next_vertex_buoyancy: &mut next_vertex_buoyancy,
+            };
+            let _ = apply_stress_and_surface_update(
+                SurfaceUpdateInput {
+                    nbr_offsets: &nbr_offsets,
+                    nbrs: &nbrs,
+                    heights: &heights,
+                    plate_id: &plate_id,
+                    boundary_state: &boundary_state,
+                    mantle_heat: &mantle_heat,
+                    plume_force: &plume_force,
+                    activity_scale: 1.0,
+                    params: &params,
+                },
+                &mut output,
+            );
+            next_volcanism[0]
+        };
+
+        assert!(run(0.6) > run(0.0));
     }
 }

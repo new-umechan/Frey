@@ -18,6 +18,10 @@ use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, Surf
 
 const ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET: f32 = 0.02;
 const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
+const MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS: usize = 3;
+pub(super) const EARTH_MEAN_RADIUS_KM: f32 = 6_371.0;
+pub(super) const EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR: f32 = 50.0;
+pub(super) const YEARS_PER_MYR: f32 = 1_000_000.0;
 
 #[inline]
 fn debug_assert_finite_non_negative(value: f32, label: &str, index: usize) {
@@ -131,6 +135,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &mut dynamics.plate_states,
         &dynamics.boundary_state,
         &world.control.geology_params,
+        world.clock.real_years_per_tick,
     );
 
     let mut next_vertex_states = advect_continuous_attributes(
@@ -151,10 +156,14 @@ pub(crate) fn run_geology_dynamics_step_with_state(
             plate_states: &dynamics.plate_states,
             plate_id_prev: plate_id,
             boundary_state: &dynamics.boundary_state,
+            tick_seed: (world.clock.tick as u32) ^ (dynamics.update_index as u32).rotate_left(13),
         },
         &mut next_plate_id,
         &mut next_vertex_states,
     );
+    let plate_id_churn_rate = plate_id_churn_rate(plate_id, &next_plate_id);
+    let orphan_cell_count = orphan_cell_count(nbr_offsets, nbrs, &next_plate_id);
+    let single_cell_plate_count = single_cell_plate_count(&next_plate_id);
 
     let reclassify_interval = world
         .control
@@ -214,6 +223,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     metrics.mean_abs_surface_output_delta = mean_abs_height_delta(heights, &next_height);
     metrics.runtime_rebuild_applied = if rebuilt_runtime_state { 1.0 } else { 0.0 };
     metrics.activity_scale = activity_scale;
+    metrics.plate_id_churn_rate = plate_id_churn_rate;
+    metrics.orphan_cell_count = orphan_cell_count as f32;
+    metrics.single_cell_plate_count = single_cell_plate_count as f32;
 
     dynamics.vertex_states = next_vertex_states;
     dynamics.cached_metrics = metrics;
@@ -266,6 +278,56 @@ fn mean_abs_height_delta(before: &[f32], after: &[f32]) -> f32 {
         / count as f32
 }
 
+fn plate_id_churn_rate(before: &[PlateId], after: &[PlateId]) -> f32 {
+    let count = before.len().min(after.len());
+    if count == 0 {
+        return 0.0;
+    }
+    let changed = before
+        .iter()
+        .zip(after.iter())
+        .take(count)
+        .filter(|(a, b)| a != b)
+        .count();
+    changed as f32 / count as f32
+}
+
+fn orphan_cell_count(nbr_offsets: &[u32], nbrs: &[u32], plate_id: &[PlateId]) -> usize {
+    let mut orphan_count = 0usize;
+    for v in 0..plate_id.len() {
+        let start = nbr_offsets[v] as usize;
+        let end = nbr_offsets[v + 1] as usize;
+        if start == end {
+            continue;
+        }
+        let same_neighbors = nbrs[start..end]
+            .iter()
+            .filter(|&&n| plate_id.get(n as usize) == Some(&plate_id[v]))
+            .count();
+        if same_neighbors == 0 {
+            orphan_count += 1;
+        }
+    }
+    orphan_count
+}
+
+fn single_cell_plate_count(plate_id: &[PlateId]) -> usize {
+    let plate_count = plate_id
+        .iter()
+        .copied()
+        .max()
+        .map(|v| v.as_usize() + 1)
+        .unwrap_or(0);
+    let mut counts = vec![0usize; plate_count];
+    for &pid in plate_id {
+        let idx = pid.as_usize();
+        if idx < counts.len() {
+            counts[idx] += 1;
+        }
+    }
+    counts.into_iter().filter(|&count| count == 1).count()
+}
+
 fn geology_activity_scale(world: &World) -> f32 {
     match world.clock.epoch {
         EraKind::Crust => 1.0,
@@ -308,7 +370,10 @@ fn ensure_geology_dynamics(
         return false;
     }
 
-    let plate_states = build_plate_states(&world.state.geology.plate_id);
+    let plate_states = build_plate_states(
+        &world.state.geology.plate_id,
+        &world.state.geology.initial_plate_kinematics,
+    );
     let mut vertex_states = vec![
         VertexCrustState {
             crust_type: CrustType::Continental,
@@ -578,7 +643,10 @@ fn debug_validate_geology_state_with_state(
     }
 }
 
-fn build_plate_states(plate_ids: &[PlateId]) -> Vec<PlateKinematicsState> {
+fn build_plate_states(
+    plate_ids: &[PlateId],
+    initial_kinematics: &[crate::sim::geology_types::InitialPlateKinematics],
+) -> Vec<PlateKinematicsState> {
     let plate_count = plate_ids
         .iter()
         .copied()
@@ -587,6 +655,15 @@ fn build_plate_states(plate_ids: &[PlateId]) -> Vec<PlateKinematicsState> {
         .unwrap_or(0);
     let mut plate_states = Vec::with_capacity(plate_count);
     for plate in 0..plate_count {
+        if let Some(initial) = initial_kinematics.get(plate) {
+            plate_states.push(PlateKinematicsState {
+                angular_axis: initial.angular_axis,
+                angular_speed: initial.angular_speed,
+                phase_offset: std::f32::consts::TAU * hash01(plate as u32 ^ 0x85eb_ca6b),
+                activity: initial.activity.clamp(0.0, 1.0),
+            });
+            continue;
+        }
         let seed = plate as u32;
         plate_states.push(PlateKinematicsState {
             angular_axis: seeded_axis(seed ^ 0x27d4_eb2f),
@@ -794,6 +871,7 @@ struct BoundaryCrossingInput<'a> {
     plate_states: &'a [PlateKinematicsState],
     plate_id_prev: &'a [PlateId],
     boundary_state: &'a BoundaryDynamicsState,
+    tick_seed: u32,
 }
 
 fn apply_boundary_crossing_discrete_attrs(
@@ -807,6 +885,7 @@ fn apply_boundary_crossing_discrete_attrs(
     let plate_states = input.plate_states;
     let plate_id_prev = input.plate_id_prev;
     let boundary_state = input.boundary_state;
+    let mut plate_sizes = plate_cell_counts(plate_id_prev);
 
     let mut next_crust = vertex_states
         .iter()
@@ -816,13 +895,21 @@ fn apply_boundary_crossing_discrete_attrs(
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
         let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
-        if boundary_activity < 0.12 {
+        if boundary_activity <= 0.0 {
+            continue;
+        }
+        let current_plate = plate_id_prev[i].as_usize();
+        if plate_sizes.get(current_plate).copied().unwrap_or(0)
+            <= MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS
+        {
             continue;
         }
 
         let mut best_score = 0.0_f32;
         let mut best_plate = plate_id_prev[i];
         let mut best_crust = next_crust[i];
+        let mut best_edge_spacing = 1.0_f32;
+        let vel_i = plate_velocity_for_cell(plate_states, plate_id_prev[i], positions[i]);
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
             if n >= plate_id_prev.len() || plate_id_prev[n] == plate_id_prev[i] {
@@ -839,15 +926,33 @@ fn apply_boundary_crossing_discrete_attrs(
                     .sqrt()
                     .max(1e-5);
             let dir = [dir_raw[0] / len, dir_raw[1] / len, dir_raw[2] / len];
-            let inflow = vel_n[0] * dir[0] + vel_n[1] * dir[1] + vel_n[2] * dir[2];
-            let score = inflow.max(0.0) * boundary_activity;
-            if score > best_score && inflow > 0.02 {
+            let neighbor_inflow = vel_n[0] * dir[0] + vel_n[1] * dir[1] + vel_n[2] * dir[2];
+            let current_motion = vel_i[0] * dir[0] + vel_i[1] * dir[1] + vel_i[2] * dir[2];
+            let relative_inflow = neighbor_inflow - current_motion;
+            if current_motion < -1e-5 {
+                continue;
+            }
+            let score = neighbor_inflow.min(relative_inflow).max(0.0);
+            if score > best_score {
                 best_score = score;
                 best_plate = plate_id_prev[n];
                 best_crust = vertex_states[n].crust_type;
+                best_edge_spacing = len;
             }
         }
-        if best_score > 0.03 {
+        let crossing_probability = boundary_crossing_probability(best_score, best_edge_spacing);
+        let sample = hash01(
+            input.tick_seed
+                ^ (i as u32).wrapping_mul(0x9e37_79b9)
+                ^ best_plate.as_u32().rotate_left(7),
+        );
+        if crossing_probability > 0.0 && sample <= crossing_probability {
+            if let Some(count) = plate_sizes.get_mut(current_plate) {
+                *count = count.saturating_sub(1);
+            }
+            if let Some(count) = plate_sizes.get_mut(best_plate.as_usize()) {
+                *count = count.saturating_add(1);
+            }
             plate_id_next[i] = best_plate;
             next_crust[i] = best_crust;
         }
@@ -855,6 +960,34 @@ fn apply_boundary_crossing_discrete_attrs(
     for (i, crust) in next_crust.into_iter().enumerate() {
         vertex_states[i].crust_type = crust;
     }
+}
+
+fn boundary_crossing_probability(inflow_distance: f32, edge_spacing_unit_sphere: f32) -> f32 {
+    if inflow_distance <= 0.0 || edge_spacing_unit_sphere <= 0.0 {
+        return 0.0;
+    }
+
+    let cell_fraction = finite_or(inflow_distance, 0.0).max(0.0)
+        / finite_or(edge_spacing_unit_sphere, 1.0).max(1e-5);
+
+    finite_or(cell_fraction, 0.0).clamp(0.0, 0.95)
+}
+
+fn plate_cell_counts(plate_id: &[PlateId]) -> Vec<usize> {
+    let plate_count = plate_id
+        .iter()
+        .copied()
+        .max()
+        .map(|value| value.as_usize() + 1)
+        .unwrap_or(0);
+    let mut counts = vec![0usize; plate_count];
+    for &pid in plate_id {
+        let index = pid.as_usize();
+        if let Some(count) = counts.get_mut(index) {
+            *count += 1;
+        }
+    }
+    counts
 }
 
 fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustState]) {
@@ -873,5 +1006,26 @@ fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustSt
             hotspot_volcanism: source[i].hotspot_volcanism,
             backarc_volcanism: source[i].backarc_volcanism,
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::boundary_crossing_probability;
+
+    #[test]
+    fn boundary_crossing_probability_uses_actual_inflow_distance() {
+        let probability = boundary_crossing_probability(0.03, 0.10);
+
+        assert!((probability - 0.30).abs() < 1e-5);
+    }
+
+    #[test]
+    fn boundary_crossing_probability_is_zero_without_inflow() {
+        let inactive = boundary_crossing_probability(0.0, 0.10);
+        let active = boundary_crossing_probability(0.03, 0.10);
+
+        assert_eq!(inactive, 0.0);
+        assert!(active > inactive);
     }
 }

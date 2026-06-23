@@ -7,6 +7,8 @@ use crate::GeologyParams;
 use crate::sim::exec::math::{cross3, dot, length3, seeded_axis};
 use crate::sim::exec::{lerp, CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFORM_THRESHOLD};
 
+use super::{EARTH_MEAN_RADIUS_KM, EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR, YEARS_PER_MYR};
+
 #[inline]
 fn finite_or(value: f32, fallback: f32) -> f32 {
     if value.is_finite() {
@@ -112,13 +114,27 @@ pub(super) fn reclassify_boundaries(
             plate_id[j],
         );
 
-        let (bt, score) = classify_boundary_pair(
+        let (mut bt, mut score) = classify_boundary_pair(
             rel.rel_n,
             rel.rel_t,
             vertex_states[i],
             vertex_states[j],
             params,
         );
+        let prev_memory = boundary_state
+            .edge_internal
+            .get(eid)
+            .map(|edge| edge.convergence_memory)
+            .unwrap_or(0.0);
+        if bt != BoundaryType::Subduction && rel.rel_n > -DIVERGENT_THRESHOLD {
+            if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
+                let buoyancy = oceanic_negative_buoyancy_proxy(oceanic, params);
+                if prev_memory > 0.20 && buoyancy > 0.25 {
+                    bt = BoundaryType::Subduction;
+                    score = score.max(prev_memory * buoyancy);
+                }
+            }
+        }
         edge_types[eid] = bt;
         edge_scores[eid] = finite_or(score, 0.0).clamp(0.0, 1.0);
 
@@ -199,7 +215,6 @@ pub(super) fn reclassify_boundaries(
     boundary_state.slab_convergence_component.fill(0.0);
     boundary_state.slab_rollback_component.fill(0.0);
 
-    let mantle_density = params.mantle_density.max(1e-3);
     let dip_density_scale = params.dip_density_scale.max(1e-4);
     let age_ref = params.age_ref.max(1e-4);
     let mut cell_rollback_count = vec![0_u32; cell_count];
@@ -210,8 +225,11 @@ pub(super) fn reclassify_boundaries(
         }
 
         let age_norm = finite_or(subduction_age_edge[eid] / age_ref, 0.0).clamp(0.0, 1.0);
-        let density_ocean = finite_or(subduction_density_edge[eid], mantle_density);
-        let dip_factor = ((density_ocean - mantle_density) / dip_density_scale).clamp(0.0, 1.0);
+        let density_ocean = finite_or(subduction_density_edge[eid], params.oceanic_base_density);
+        let density_age_factor =
+            ((density_ocean - params.oceanic_base_density) / dip_density_scale).clamp(0.0, 1.0);
+        let negative_buoyancy_proxy =
+            finite_or(0.5 * age_norm + 0.5 * density_age_factor, 0.0).clamp(0.0, 1.0);
         let memory = finite_or(boundary_state.edge_internal[eid].convergence_memory, 0.0);
         let slab_depth_est = params.subduction_depth_gain.max(0.0) * age_norm * memory;
         let suppression = finite_or(
@@ -220,15 +238,14 @@ pub(super) fn reclassify_boundaries(
         )
         .clamp(0.0, 1.0);
         let rollback = finite_or(
-            params.rollback_gain.max(0.0) * age_norm * dip_factor * slab_depth_est * suppression,
+            params.rollback_gain.max(0.0) * negative_buoyancy_proxy * slab_depth_est * suppression,
             0.0,
         )
         .clamp(0.0, params.rollback_fraction_max.max(0.0));
 
+        let kinematic_coupling = edge_scores[eid].max(memory * 0.5).clamp(0.0, 1.0);
         let slab_pull_mag = finite_or(
-            edge_scores[eid].max(0.0)
-                * (density_ocean - mantle_density).max(0.0)
-                * (1.0 + slab_depth_est),
+            kinematic_coupling * negative_buoyancy_proxy * (1.0 + slab_depth_est),
             0.0,
         );
         let slab_conv = slab_pull_mag * (1.0 - rollback);
@@ -313,43 +330,87 @@ pub(super) fn update_plate_kinematics(
     plate_states: &mut [PlateKinematicsState],
     boundary_state: &BoundaryDynamicsState,
     params: &GeologyParams,
+    years_per_tick: f32,
 ) {
     if plate_states.is_empty() {
         return;
     }
 
     let mut plate_activity = vec![0.0_f32; plate_states.len()];
+    let mut plate_slab_convergence = vec![0.0_f32; plate_states.len()];
+    let mut plate_slab_rollback = vec![0.0_f32; plate_states.len()];
+    let mut plate_ridge_activity = vec![0.0_f32; plate_states.len()];
+    let mut plate_collision_activity = vec![0.0_f32; plate_states.len()];
     let mut plate_count = vec![0_u32; plate_states.len()];
+    let mut plate_boundary_count = vec![0_u32; plate_states.len()];
 
     for (i, plate) in plate_id.iter().enumerate() {
         let pid = plate.as_usize();
         if pid >= plate_states.len() {
             continue;
         }
-        plate_activity[pid] +=
-            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0);
+        let activity =
+            finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0);
+        plate_activity[pid] += activity;
+        if activity > 0.0 {
+            plate_boundary_count[pid] = plate_boundary_count[pid].saturating_add(1);
+        }
+        plate_slab_convergence[pid] += finite_or(
+            boundary_state
+                .slab_convergence_component
+                .get(i)
+                .copied()
+                .unwrap_or(0.0),
+            0.0,
+        )
+        .max(0.0);
+        plate_slab_rollback[pid] += finite_or(
+            boundary_state
+                .slab_rollback_component
+                .get(i)
+                .copied()
+                .unwrap_or(0.0),
+            0.0,
+        )
+        .max(0.0);
+        match boundary_state
+            .dominant_type
+            .get(i)
+            .copied()
+            .unwrap_or(BoundaryType::PassiveMargin)
+        {
+            BoundaryType::Ridge | BoundaryType::Rift => plate_ridge_activity[pid] += activity,
+            BoundaryType::Collision => plate_collision_activity[pid] += activity,
+            _ => {}
+        }
         plate_count[pid] = plate_count[pid].saturating_add(1);
     }
 
     let gain = params.plate_motion_gain.max(0.0);
+    let myr_per_tick = finite_or(years_per_tick / YEARS_PER_MYR, 0.0).max(0.0);
     for pid in 0..plate_states.len() {
-        let denom = plate_count[pid].max(1) as f32;
+        let denom = plate_boundary_count[pid].max(1) as f32;
         let activity = finite_or(plate_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
-        let damping = match dominant_plate_boundary_type(
-            PlateId(pid as u32),
-            plate_id,
-            &boundary_state.dominant_type,
-        ) {
-            BoundaryType::PassiveMargin => 0.985,
-            BoundaryType::Collision => 0.980,
-            BoundaryType::Subduction => 0.995,
-            _ => 0.990,
-        };
-        plate_states[pid].angular_speed = finite_or(
-            plate_states[pid].angular_speed * damping + gain * activity * 0.015,
-            0.12,
+        let slab_convergence = finite_or(plate_slab_convergence[pid] / denom, 0.0).max(0.0);
+        let slab_rollback = finite_or(plate_slab_rollback[pid] / denom, 0.0).max(0.0);
+        let ridge_push = finite_or(plate_ridge_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
+        let collision_drag = finite_or(plate_collision_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
+        let slab_pull_drive = slab_convergence + 0.5 * slab_rollback;
+        let driving_strength =
+            finite_or(slab_pull_drive + 0.35 * ridge_push + 0.10 * activity, 0.0).max(0.0);
+        let drag = 1.0 + 2.0 * collision_drag;
+        let target_speed_km_per_myr =
+            EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR * gain * driving_strength / drag;
+        let target_angular_speed = finite_or(
+            target_speed_km_per_myr / EARTH_MEAN_RADIUS_KM * myr_per_tick,
+            0.0,
         )
-        .clamp(0.01, 0.30);
+        .clamp(0.0, 0.30);
+        plate_states[pid].angular_speed = finite_or(
+            lerp(plate_states[pid].angular_speed, target_angular_speed, 0.20),
+            target_angular_speed,
+        )
+        .clamp(0.0, 0.30);
         plate_states[pid].activity =
             finite_or(lerp(plate_states[pid].activity, activity, 0.20), activity).clamp(0.0, 1.0);
     }
@@ -421,50 +482,14 @@ fn densest_oceanic(a: VertexCrustState, b: VertexCrustState) -> Option<VertexCru
     oceanic
 }
 
-fn dominant_plate_boundary_type(
-    plate: PlateId,
-    plate_id: &[PlateId],
-    boundary_types: &[BoundaryType],
-) -> BoundaryType {
-    let mut counts = [0_u32; 6];
-    for (i, current_plate) in plate_id.iter().enumerate() {
-        if *current_plate != plate {
-            continue;
-        }
-        let t = boundary_types
-            .get(i)
-            .copied()
-            .unwrap_or(BoundaryType::PassiveMargin);
-        counts[boundary_type_index(t)] = counts[boundary_type_index(t)].saturating_add(1);
-    }
-    let mut best = BoundaryType::PassiveMargin;
-    let mut best_count = 0_u32;
-    for t in [
-        BoundaryType::Subduction,
-        BoundaryType::Collision,
-        BoundaryType::Ridge,
-        BoundaryType::Rift,
-        BoundaryType::Transform,
-        BoundaryType::PassiveMargin,
-    ] {
-        let c = counts[boundary_type_index(t)];
-        if c > best_count {
-            best_count = c;
-            best = t;
-        }
-    }
-    best
-}
-
-fn boundary_type_index(boundary_type: BoundaryType) -> usize {
-    match boundary_type {
-        BoundaryType::Ridge => 0,
-        BoundaryType::Rift => 1,
-        BoundaryType::Subduction => 2,
-        BoundaryType::Collision => 3,
-        BoundaryType::Transform => 4,
-        BoundaryType::PassiveMargin => 5,
-    }
+fn oceanic_negative_buoyancy_proxy(state: VertexCrustState, params: &GeologyParams) -> f32 {
+    let age_norm = finite_or(state.age / params.age_ref.max(1e-4), 0.0).clamp(0.0, 1.0);
+    let density_age_factor = finite_or(
+        (state.density - params.oceanic_base_density) / params.dip_density_scale.max(1e-4),
+        0.0,
+    )
+    .clamp(0.0, 1.0);
+    finite_or(0.5 * age_norm + 0.5 * density_age_factor, 0.0).clamp(0.0, 1.0)
 }
 
 fn plate_velocity_from_state(
@@ -492,4 +517,90 @@ fn plate_velocity_from_state(
         angular_axis[2] * angular_speed,
     ];
     cross3(omega, pos)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sim::geology_types::CrustType;
+
+    fn plate_state() -> PlateKinematicsState {
+        PlateKinematicsState {
+            angular_axis: [0.0, 1.0, 0.0],
+            angular_speed: 0.0,
+            phase_offset: 0.0,
+            activity: 0.0,
+        }
+    }
+
+    fn oceanic_state(age: f32, density: f32) -> VertexCrustState {
+        VertexCrustState {
+            crust_type: CrustType::Oceanic,
+            thickness: 0.45,
+            density,
+            age,
+            stress: 0.0,
+            temperature: 0.0,
+            rigidity: 30e9,
+            arc_volcanism: 0.0,
+            ridge_volcanism: 0.0,
+            hotspot_volcanism: 0.0,
+            backarc_volcanism: 0.0,
+            stress_tensor: Default::default(),
+        }
+    }
+
+    #[test]
+    fn slab_pull_increases_plate_speed_more_than_passive_activity() {
+        let plate_id = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
+        let mut plate_states = vec![plate_state(), plate_state()];
+        let mut boundary_state = BoundaryDynamicsState {
+            dominant_type: vec![
+                BoundaryType::Subduction,
+                BoundaryType::Subduction,
+                BoundaryType::PassiveMargin,
+                BoundaryType::PassiveMargin,
+            ],
+            activity: vec![0.5, 0.5, 0.5, 0.5],
+            slab_convergence_component: vec![1.0, 1.0, 0.0, 0.0],
+            slab_rollback_component: vec![0.2, 0.2, 0.0, 0.0],
+            ..Default::default()
+        };
+
+        update_plate_kinematics(
+            &plate_id,
+            &mut plate_states,
+            &boundary_state,
+            &GeologyParams::default(),
+            5_000_000.0,
+        );
+
+        assert!(plate_states[0].angular_speed > plate_states[1].angular_speed);
+
+        boundary_state.slab_convergence_component.fill(0.0);
+        boundary_state.slab_rollback_component.fill(0.0);
+        let slab_driven_speed = plate_states[0].angular_speed;
+        update_plate_kinematics(
+            &plate_id,
+            &mut plate_states,
+            &boundary_state,
+            &GeologyParams::default(),
+            5_000_000.0,
+        );
+
+        assert!(plate_states[0].angular_speed < slab_driven_speed);
+    }
+
+    #[test]
+    fn oceanic_buoyancy_proxy_uses_age_and_model_density_gain() {
+        let params = GeologyParams::default();
+        let young = oceanic_state(0.0, params.oceanic_base_density);
+        let old = oceanic_state(
+            params.age_ref,
+            params.oceanic_base_density + params.age_density_gain,
+        );
+
+        assert_eq!(oceanic_negative_buoyancy_proxy(young, &params), 0.0);
+        assert!(oceanic_negative_buoyancy_proxy(old, &params) > 0.5);
+    }
 }
