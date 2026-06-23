@@ -139,6 +139,13 @@ jq -r '.samples[] | [
 
 この指標は pass/fail gate ではなく、plate motion の自然さを読む診断 artifact とする。
 
+2026-06-23 の basal motion floor 導入後、alpha level 6 の 80 tick run では
+`mean_plate_speed_km_per_myr` が tick 20 以降も `42-63 km/Myr` に残った。
+導入前は tick 40 以降で `0.1 km/Myr` 前後まで落ちていたため、
+late Crust の速度崩れは解消したと読む。
+同じ run で `mean_cell_crossing_fraction_per_tick` は `1.7-2.6` 程度なので、
+次に見るべき点は複数セル相当の displacement と ownership transfer の整合である。
+
 自動化可能な配列整合性、値域、決定性、snapshot 整合はコード側で担保する。
 本書では手動サニティチェック手順を保持しない。
 

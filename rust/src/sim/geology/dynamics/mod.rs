@@ -659,6 +659,7 @@ fn build_plate_states(
             plate_states.push(PlateKinematicsState {
                 angular_axis: initial.angular_axis,
                 angular_speed: initial.angular_speed,
+                reference_angular_speed: initial.angular_speed,
                 phase_offset: std::f32::consts::TAU * hash01(plate as u32 ^ 0x85eb_ca6b),
                 activity: initial.activity.clamp(0.0, 1.0),
             });
@@ -668,6 +669,7 @@ fn build_plate_states(
         plate_states.push(PlateKinematicsState {
             angular_axis: seeded_axis(seed ^ 0x27d4_eb2f),
             angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
+            reference_angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
             phase_offset: std::f32::consts::TAU * hash01(seed ^ 0x85eb_ca6b),
             activity: (0.60_f32 + 0.40_f32 * hash01(seed ^ 0x9e37_79b9)).clamp(0.0, 1.0),
         });

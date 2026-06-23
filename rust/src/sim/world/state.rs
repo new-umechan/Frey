@@ -1061,6 +1061,8 @@ pub struct PlateKinematicsState {
     pub angular_axis: [f32; 3],
     pub angular_speed: f32,
     #[serde(default)]
+    pub reference_angular_speed: f32,
+    #[serde(default)]
     pub phase_offset: f32,
     pub activity: f32,
 }
