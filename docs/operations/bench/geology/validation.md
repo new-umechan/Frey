@@ -130,6 +130,11 @@ plate ごとの駆動バランスを見る:
 ```bash
 jq -r '.samples[-1].plates[] | [
   .plate_id,
+  .cell_count,
+  .area_ratio,
+  .component_count,
+  .detached_fragment_ratio,
+  .boundary_complexity,
   .speed_km_per_myr,
   .cell_crossing_fraction_per_tick,
   .slab_pull_drive,
@@ -173,6 +178,9 @@ jq -r '.samples[-1].plates[] | [
     - plate ごとの speed / drive / target
     - 平均値が妥当でも、slab pull が強い plate が遅い、ridge-only plate が速すぎる、
       collision drag が高い plate が減速していない、といった外れ値を見る
+    - `component_count > 1` や `detached_fragment_ratio` の上昇は、plate shape が
+      時間経過で分断・崩壊している兆候として読む
+    - `boundary_complexity` の上昇は、分断ではなく境界の蛇行・ギザギザ化を疑う
 
 この指標は pass/fail gate ではなく、plate motion の自然さを読む診断 artifact とする。
 
@@ -197,6 +205,12 @@ per-plate では slab が強い plate 2/3/4 が `75-90 km/Myr` と速く、
 force target も高い。一方で plate 7 は `mean_slab_pull_drive=0` でも
 basal target により `57 km/Myr` 程度で動くため、basal proxy が強すぎる
 外れ値を今後の確認対象とする。
+
+同日の boundary crossing shape guard 導入後、alpha level 6 の 120 tick run では
+全 plate が `component_count=1`、`detached_fragment_ratio=0` を維持した。
+導入前は tick 80 で `max_components=4`、`max_detached=0.333` まで悪化していた。
+guard 後も `boundary_complexity` は最大 `14.8` まで上がるため、
+残る違和感は分断よりも境界の蛇行・細かさとして確認する。
 
 自動化可能な配列整合性、値域、決定性、snapshot 整合はコード側で担保する。
 本書では手動サニティチェック手順を保持しない。

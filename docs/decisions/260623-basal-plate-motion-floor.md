@@ -70,6 +70,17 @@ plate motion の駆動バランスを再確認する対象とする。
 平均値だけでは plate ごとの外れ値を隠すため、最終判断は `plates[]` で
 slab-dominated plate が相対的に速いか、collision-dragged plate が減速しているかを読む。
 
+Discrete ownership transfer は、速度に応じて substep 化するだけでは plate shape を
+保てない場合がある。
+そのため、boundary crossing には shape guard を置く。
+
+- mesh size に応じた donor floor 未満の plate からは cell を奪わない
+- cell を失うと局所的に plate が分断される場合は transfer しない
+- transfer 先 plate の局所支持が 1 neighbor だけの場合は細い突起として reject する
+
+これは地球物理の force model ではなく、格子上の discrete plate ownership が
+視覚的に崩壊しないための数値安定化である。
+
 ## Consequences
 
 利点:

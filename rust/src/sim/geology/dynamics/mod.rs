@@ -19,6 +19,8 @@ use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, Surf
 const ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET: f32 = 0.02;
 const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
 const MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS: usize = 3;
+const MAX_BOUNDARY_CROSSING_DONOR_FLOOR_CELLS: usize = 24;
+const MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS: usize = 2;
 pub(super) const EARTH_MEAN_RADIUS_KM: f32 = 6_371.0;
 pub(super) const EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR: f32 = 50.0;
 pub(super) const YEARS_PER_MYR: f32 = 1_000_000.0;
@@ -934,6 +936,7 @@ fn apply_boundary_crossing_discrete_attrs_substep(
     let plate_id_prev = input.plate_id_prev;
     let boundary_state = input.boundary_state;
     let mut plate_sizes = plate_cell_counts(plate_id_prev);
+    let donor_floor = runtime_boundary_crossing_donor_floor(plate_id_prev.len());
 
     let mut next_crust = vertex_states
         .iter()
@@ -947,9 +950,10 @@ fn apply_boundary_crossing_discrete_attrs_substep(
             continue;
         }
         let current_plate = plate_id_prev[i].as_usize();
-        if plate_sizes.get(current_plate).copied().unwrap_or(0)
-            <= MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS
-        {
+        if plate_sizes.get(current_plate).copied().unwrap_or(0) <= donor_floor {
+            continue;
+        }
+        if !removing_cell_preserves_plate_local_connectivity(nbr_offsets, nbrs, plate_id_prev, i) {
             continue;
         }
 
@@ -990,6 +994,11 @@ fn apply_boundary_crossing_discrete_attrs_substep(
         }
         let crossing_probability =
             boundary_crossing_probability(best_score * distance_scale, best_edge_spacing);
+        if same_plate_neighbor_count(nbr_offsets, nbrs, plate_id_prev, i, best_plate)
+            < MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS
+        {
+            continue;
+        }
         let sample = hash01(
             input.tick_seed
                 ^ (i as u32).wrapping_mul(0x9e37_79b9)
@@ -1009,6 +1018,80 @@ fn apply_boundary_crossing_discrete_attrs_substep(
     for (i, crust) in next_crust.into_iter().enumerate() {
         vertex_states[i].crust_type = crust;
     }
+}
+
+fn runtime_boundary_crossing_donor_floor(cell_count: usize) -> usize {
+    (cell_count / 2048)
+        .clamp(
+            MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS,
+            MAX_BOUNDARY_CROSSING_DONOR_FLOOR_CELLS,
+        )
+        .max(MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS)
+}
+
+fn same_plate_neighbor_count(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    cell: usize,
+    target_plate: PlateId,
+) -> usize {
+    let start = nbr_offsets[cell] as usize;
+    let end = nbr_offsets[cell + 1] as usize;
+    nbrs[start..end]
+        .iter()
+        .filter(|&&neighbor_u32| {
+            plate_id
+                .get(neighbor_u32 as usize)
+                .copied()
+                .is_some_and(|pid| pid == target_plate)
+        })
+        .count()
+}
+
+fn removing_cell_preserves_plate_local_connectivity(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    cell: usize,
+) -> bool {
+    let target_plate = plate_id[cell];
+    let start = nbr_offsets[cell] as usize;
+    let end = nbr_offsets[cell + 1] as usize;
+    let same_neighbors = nbrs[start..end]
+        .iter()
+        .map(|&neighbor_u32| neighbor_u32 as usize)
+        .filter(|&neighbor| plate_id.get(neighbor).copied() == Some(target_plate))
+        .collect::<Vec<_>>();
+    if same_neighbors.len() <= 1 {
+        return true;
+    }
+
+    let mut visited = vec![false; same_neighbors.len()];
+    let mut stack = vec![0usize];
+    visited[0] = true;
+    while let Some(index) = stack.pop() {
+        let neighbor_cell = same_neighbors[index];
+        let n_start = nbr_offsets[neighbor_cell] as usize;
+        let n_end = nbr_offsets[neighbor_cell + 1] as usize;
+        for &candidate_u32 in &nbrs[n_start..n_end] {
+            let candidate = candidate_u32 as usize;
+            if candidate == cell || plate_id.get(candidate).copied() != Some(target_plate) {
+                continue;
+            }
+            if let Some(candidate_index) = same_neighbors
+                .iter()
+                .position(|&same_neighbor| same_neighbor == candidate)
+            {
+                if !visited[candidate_index] {
+                    visited[candidate_index] = true;
+                    stack.push(candidate_index);
+                }
+            }
+        }
+    }
+
+    visited.into_iter().all(|value| value)
 }
 
 fn boundary_crossing_substeps(
@@ -1099,7 +1182,11 @@ fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustSt
 
 #[cfg(test)]
 mod tests {
-    use super::{boundary_crossing_probability, boundary_crossing_substeps};
+    use super::{
+        boundary_crossing_probability, boundary_crossing_substeps,
+        removing_cell_preserves_plate_local_connectivity, runtime_boundary_crossing_donor_floor,
+        same_plate_neighbor_count,
+    };
     use crate::sim::geology_types::PlateId;
     use crate::sim::world::{BoundaryDynamicsState, BoundaryType, PlateKinematicsState};
 
@@ -1159,6 +1246,31 @@ mod tests {
                 &plate_id,
                 &boundary_state,
             ) > 1
+        );
+    }
+
+    #[test]
+    fn runtime_boundary_crossing_donor_floor_scales_with_mesh_size() {
+        assert_eq!(runtime_boundary_crossing_donor_floor(128), 3);
+        assert_eq!(runtime_boundary_crossing_donor_floor(40_960), 20);
+        assert_eq!(runtime_boundary_crossing_donor_floor(400_000), 24);
+    }
+
+    #[test]
+    fn boundary_crossing_shape_guard_rejects_local_bridge_cells() {
+        let nbr_offsets = vec![0, 1, 3, 4];
+        let nbrs = vec![1, 0, 2, 1];
+        let plate_id = vec![PlateId(0), PlateId(0), PlateId(0)];
+
+        assert!(!removing_cell_preserves_plate_local_connectivity(
+            &nbr_offsets,
+            &nbrs,
+            &plate_id,
+            1,
+        ));
+        assert_eq!(
+            same_plate_neighbor_count(&nbr_offsets, &nbrs, &plate_id, 1, PlateId(0)),
+            2
         );
     }
 

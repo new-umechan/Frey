@@ -71,6 +71,12 @@ struct TickRecord {
 #[derive(Debug, Clone, Serialize)]
 struct PlateMotionRecord {
     plate_id: u32,
+    cell_count: u32,
+    area_ratio: f32,
+    component_count: u32,
+    largest_component_ratio: f32,
+    detached_fragment_ratio: f32,
+    boundary_complexity: f32,
     speed_km_per_myr: f32,
     cell_crossing_fraction_per_tick: f32,
     direction_persistence: f32,
@@ -80,6 +86,16 @@ struct PlateMotionRecord {
     collision_drag: f32,
     force_target_speed_km_per_myr: f32,
     basal_target_speed_km_per_myr: f32,
+}
+
+#[derive(Debug, Clone)]
+struct PlateShapeRecord {
+    cell_count: u32,
+    area_ratio: f32,
+    component_count: u32,
+    largest_component_ratio: f32,
+    detached_fragment_ratio: f32,
+    boundary_complexity: f32,
 }
 
 #[derive(Debug, Default)]
@@ -282,6 +298,12 @@ impl MotionTracker {
             .as_ref()
             .map(|state| state.plate_states.as_slice())
             .unwrap_or(&[]);
+        let shape_records = plate_shape_records(
+            &world.mesh().nbr_offsets,
+            &world.mesh().nbrs,
+            plate_id,
+            plate_count,
+        );
 
         let myr_per_tick = (world.clock.real_years_per_tick / YEARS_PER_MYR).max(1e-6);
         let mut speed_sum = 0.0_f32;
@@ -376,6 +398,12 @@ impl MotionTracker {
                 };
             plate_records.push(PlateMotionRecord {
                 plate_id: pid as u32,
+                cell_count: shape_records[pid].cell_count,
+                area_ratio: shape_records[pid].area_ratio,
+                component_count: shape_records[pid].component_count,
+                largest_component_ratio: shape_records[pid].largest_component_ratio,
+                detached_fragment_ratio: shape_records[pid].detached_fragment_ratio,
+                boundary_complexity: shape_records[pid].boundary_complexity,
                 speed_km_per_myr,
                 cell_crossing_fraction_per_tick: crossing_fraction,
                 direction_persistence,
@@ -464,6 +492,93 @@ fn plate_centroids(
             },
         )
         .collect()
+}
+
+fn plate_shape_records(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate_count: usize,
+) -> Vec<PlateShapeRecord> {
+    let total_cells = plate_id.len().max(1) as f32;
+    let mut cell_counts = vec![0_u32; plate_count];
+    let mut boundary_contacts = vec![0_u32; plate_count];
+    for (cell, &pid) in plate_id.iter().enumerate() {
+        let plate = pid.as_usize();
+        if plate >= plate_count {
+            continue;
+        }
+        cell_counts[plate] = cell_counts[plate].saturating_add(1);
+        let start = nbr_offsets[cell] as usize;
+        let end = nbr_offsets[cell + 1] as usize;
+        for &neighbor_u32 in &nbrs[start..end] {
+            let neighbor = neighbor_u32 as usize;
+            if neighbor >= plate_id.len() || plate_id[neighbor] == pid {
+                continue;
+            }
+            boundary_contacts[plate] = boundary_contacts[plate].saturating_add(1);
+        }
+    }
+
+    let mut records = vec![
+        PlateShapeRecord {
+            cell_count: 0,
+            area_ratio: 0.0,
+            component_count: 0,
+            largest_component_ratio: 0.0,
+            detached_fragment_ratio: 0.0,
+            boundary_complexity: 0.0,
+        };
+        plate_count
+    ];
+    let mut visited = vec![false; plate_id.len()];
+    let mut stack = Vec::<usize>::new();
+
+    for plate in 0..plate_count {
+        let cells = cell_counts[plate];
+        if cells == 0 {
+            continue;
+        }
+        let mut component_count = 0_u32;
+        let mut largest_component_cells = 0_u32;
+        for start_cell in 0..plate_id.len() {
+            if visited[start_cell] || plate_id[start_cell].as_usize() != plate {
+                continue;
+            }
+            visited[start_cell] = true;
+            stack.push(start_cell);
+            let mut component_cells = 0_u32;
+            while let Some(cell) = stack.pop() {
+                component_cells = component_cells.saturating_add(1);
+                let start = nbr_offsets[cell] as usize;
+                let end = nbr_offsets[cell + 1] as usize;
+                for &neighbor_u32 in &nbrs[start..end] {
+                    let neighbor = neighbor_u32 as usize;
+                    if neighbor >= plate_id.len()
+                        || visited[neighbor]
+                        || plate_id[neighbor].as_usize() != plate
+                    {
+                        continue;
+                    }
+                    visited[neighbor] = true;
+                    stack.push(neighbor);
+                }
+            }
+            component_count = component_count.saturating_add(1);
+            largest_component_cells = largest_component_cells.max(component_cells);
+        }
+        let largest_component_ratio = largest_component_cells as f32 / cells.max(1) as f32;
+        records[plate] = PlateShapeRecord {
+            cell_count: cells,
+            area_ratio: cells as f32 / total_cells,
+            component_count,
+            largest_component_ratio,
+            detached_fragment_ratio: 1.0 - largest_component_ratio,
+            boundary_complexity: boundary_contacts[plate] as f32 / (cells as f32).sqrt().max(1.0),
+        };
+    }
+
+    records
 }
 
 fn mean_cell_spacing_km(mesh: &frey_wasm::sim::world::WorldMesh) -> f32 {
@@ -614,7 +729,10 @@ fn env_f32(name: &str) -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{great_circle_distance_km, reciprocal_churn_ratio, PlateId, EARTH_MEAN_RADIUS_KM};
+    use super::{
+        great_circle_distance_km, plate_shape_records, reciprocal_churn_ratio, PlateId,
+        EARTH_MEAN_RADIUS_KM,
+    };
 
     #[test]
     fn reciprocal_churn_ratio_detects_one_way_motion() {
@@ -638,5 +756,21 @@ mod tests {
         let expected = std::f32::consts::FRAC_PI_2 * EARTH_MEAN_RADIUS_KM;
 
         assert!((distance - expected).abs() < 1e-3);
+    }
+
+    #[test]
+    fn plate_shape_records_detect_detached_fragments() {
+        let nbr_offsets = vec![0, 1, 3, 5, 6];
+        let nbrs = vec![1, 0, 2, 1, 3, 2];
+        let plate_id = vec![PlateId(0), PlateId(1), PlateId(1), PlateId(0)];
+
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+
+        assert_eq!(records[0].cell_count, 2);
+        assert_eq!(records[0].component_count, 2);
+        assert_eq!(records[0].largest_component_ratio, 0.5);
+        assert_eq!(records[0].detached_fragment_ratio, 0.5);
+        assert_eq!(records[1].component_count, 1);
+        assert_eq!(records[1].detached_fragment_ratio, 0.0);
     }
 }
