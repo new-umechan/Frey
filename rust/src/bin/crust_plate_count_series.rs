@@ -65,6 +65,21 @@ struct TickRecord {
     mean_collision_drag: f32,
     mean_force_target_speed_km_per_myr: f32,
     mean_basal_target_speed_km_per_myr: f32,
+    plates: Vec<PlateMotionRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct PlateMotionRecord {
+    plate_id: u32,
+    speed_km_per_myr: f32,
+    cell_crossing_fraction_per_tick: f32,
+    direction_persistence: f32,
+    centroid_path_straightness: f32,
+    slab_pull_drive: f32,
+    ridge_push_drive: f32,
+    collision_drag: f32,
+    force_target_speed_km_per_myr: f32,
+    basal_target_speed_km_per_myr: f32,
 }
 
 #[derive(Debug, Default)]
@@ -91,6 +106,7 @@ struct MotionDiagnostics {
     mean_collision_drag: f32,
     mean_force_target_speed_km_per_myr: f32,
     mean_basal_target_speed_km_per_myr: f32,
+    plates: Vec<PlateMotionRecord>,
 }
 
 impl Default for MotionDiagnostics {
@@ -108,6 +124,7 @@ impl Default for MotionDiagnostics {
             mean_collision_drag: 0.0,
             mean_force_target_speed_km_per_myr: 0.0,
             mean_basal_target_speed_km_per_myr: 0.0,
+            plates: Vec::new(),
         }
     }
 }
@@ -239,6 +256,7 @@ fn sample_world(
         mean_collision_drag: motion.mean_collision_drag,
         mean_force_target_speed_km_per_myr: motion.mean_force_target_speed_km_per_myr,
         mean_basal_target_speed_km_per_myr: motion.mean_basal_target_speed_km_per_myr,
+        plates: motion.plates,
     }
 }
 
@@ -282,6 +300,7 @@ impl MotionTracker {
         let mut basal_target_speed_sum = 0.0_f32;
         let mut drive_count = 0_u32;
         let mut velocity_dirs = vec![None; plate_count];
+        let mut plate_records = Vec::<PlateMotionRecord>::new();
 
         for pid in 0..plate_count {
             let Some(centroid) = centroids[pid] else {
@@ -290,8 +309,7 @@ impl MotionTracker {
             let Some(state) = plate_states.get(pid).copied() else {
                 continue;
             };
-            let effective_angular_speed =
-                finite_or(state.angular_speed * (0.55 + 0.45 * state.activity), 0.0).max(0.0);
+            let effective_angular_speed = finite_or(state.angular_speed, 0.0).max(0.0);
             let speed_km_per_myr = effective_angular_speed * EARTH_MEAN_RADIUS_KM / myr_per_tick;
             let crossing_fraction =
                 speed_km_per_myr * myr_per_tick / mean_cell_spacing_km.max(1e-6);
@@ -318,6 +336,16 @@ impl MotionTracker {
                 persistence_sum += dot3(prev, current).clamp(-1.0, 1.0);
                 persistence_count = persistence_count.saturating_add(1);
             }
+            let direction_persistence = if let (Some(prev), Some(current)) = (
+                self.previous_velocity_dirs
+                    .get(pid)
+                    .and_then(|value| *value),
+                dir,
+            ) {
+                dot3(prev, current).clamp(-1.0, 1.0)
+            } else {
+                1.0
+            };
 
             if self.initial_centroids[pid].is_none() {
                 self.initial_centroids[pid] = Some(centroid);
@@ -334,6 +362,32 @@ impl MotionTracker {
                     straightness_count = straightness_count.saturating_add(1);
                 }
             }
+            let centroid_path_straightness =
+                if let Some(initial_centroid) = self.initial_centroids[pid] {
+                    let path = self.centroid_path_lengths_km[pid];
+                    if path > 1e-6 {
+                        let net = great_circle_distance_km(initial_centroid, centroid);
+                        (net / path).clamp(0.0, 1.0)
+                    } else {
+                        1.0
+                    }
+                } else {
+                    1.0
+                };
+            plate_records.push(PlateMotionRecord {
+                plate_id: pid as u32,
+                speed_km_per_myr,
+                cell_crossing_fraction_per_tick: crossing_fraction,
+                direction_persistence,
+                centroid_path_straightness,
+                slab_pull_drive: finite_or(state.slab_pull_drive, 0.0).max(0.0),
+                ridge_push_drive: finite_or(state.ridge_push_drive, 0.0).max(0.0),
+                collision_drag: finite_or(state.collision_drag, 0.0).max(0.0),
+                force_target_speed_km_per_myr: finite_or(state.force_target_speed_km_per_myr, 0.0)
+                    .max(0.0),
+                basal_target_speed_km_per_myr: finite_or(state.basal_target_speed_km_per_myr, 0.0)
+                    .max(0.0),
+            });
         }
 
         let reciprocal_churn_ratio =
@@ -355,6 +409,7 @@ impl MotionTracker {
             mean_collision_drag: mean_or_zero(collision_drag_sum, drive_count),
             mean_force_target_speed_km_per_myr: mean_or_zero(force_target_speed_sum, drive_count),
             mean_basal_target_speed_km_per_myr: mean_or_zero(basal_target_speed_sum, drive_count),
+            plates: plate_records,
         }
     }
 

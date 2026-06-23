@@ -1,8 +1,8 @@
-# Basal plate motion floor
+# Basal plate motion calibrated proxy
 
 ## Status
 
-Accepted
+Draft
 
 ## Context
 
@@ -20,7 +20,17 @@ tick 40 以降の `mean_plate_speed_km_per_myr` が `0.1 km/Myr` 前後まで落
 boundary drive が弱まると初期 plate field が持っていた mantle-scale drift まで
 失っていたことにある。
 
-## Decision
+## Proposed Decision
+
+This is a calibrated proxy for Frey runtime plate motion, not a
+full geodynamic force-balance solver.
+The goal is to keep Crust plate motion plausible enough for downstream
+terrain, climate, hydrology, and ecology systems without letting plate work
+become the whole project.
+
+The current constants, including `EXPECTED_MOBILE_LID_DRIVE` and ridge-push
+weighting, are calibration parameters. They are not literature-derived
+physical constants.
 
 `PlateKinematicsState` に `reference_angular_speed` を持たせる。
 これは初期 plate kinematics 由来の basal motion proxy であり、
@@ -52,10 +62,13 @@ drive diagnostics を保存する。
 - `mean_collision_drag`
 - `mean_force_target_speed_km_per_myr`
 - `mean_basal_target_speed_km_per_myr`
+- `plates[]` per-plate speed / drive / target diagnostics
 
 Frey では slab pull を主駆動、ridge push を副次駆動として読む。
 そのため、ridge push が slab pull を継続的に上回る run は、
 plate motion の駆動バランスを再確認する対象とする。
+平均値だけでは plate ごとの外れ値を隠すため、最終判断は `plates[]` で
+slab-dominated plate が相対的に速いか、collision-dragged plate が減速しているかを読む。
 
 ## Consequences
 
@@ -72,3 +85,11 @@ plate motion の駆動バランスを再確認する対象とする。
   boundary crossing は速度に応じて 1 tick を少数の substep に分ける
 - `reference_angular_speed` は serialized runtime state に追加されるため、
   既存 snapshot から読む場合は serde default と現速度で補正する
+
+## Out of Scope
+
+- mantle convection solver
+- MORVEL/NUVEL の直接再現
+- SI 単位系で閉じた force-balance solver
+- slab geometry, viscosity, asthenosphere coupling の詳細モデル
+- plate 内部変形や microplate dynamics の詳細再現

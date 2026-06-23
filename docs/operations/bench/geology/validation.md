@@ -125,6 +125,22 @@ jq -r '.samples[] | [
 ] | @tsv' /tmp/frey_crust_plate_series.jsonl
 ```
 
+plate ごとの駆動バランスを見る:
+
+```bash
+jq -r '.samples[-1].plates[] | [
+  .plate_id,
+  .speed_km_per_myr,
+  .cell_crossing_fraction_per_tick,
+  .slab_pull_drive,
+  .ridge_push_drive,
+  .collision_drag,
+  .force_target_speed_km_per_myr,
+  .basal_target_speed_km_per_myr,
+  .centroid_path_straightness
+] | @tsv' /tmp/frey_crust_plate_series.jsonl
+```
+
 読み方:
 
 - `mean_plate_speed_km_per_myr`
@@ -153,6 +169,10 @@ jq -r '.samples[] | [
 - `mean_force_target_speed_km_per_myr` / `mean_basal_target_speed_km_per_myr`
     - boundary force 由来 target と basal motion floor 由来 target の比較
     - basal 側だけで速度帯を維持している場合は、slab/ridge の分類や memory が弱すぎる可能性がある
+- `plates[]`
+    - plate ごとの speed / drive / target
+    - 平均値が妥当でも、slab pull が強い plate が遅い、ridge-only plate が速すぎる、
+      collision drag が高い plate が減速していない、といった外れ値を見る
 
 この指標は pass/fail gate ではなく、plate motion の自然さを読む診断 artifact とする。
 
@@ -163,15 +183,20 @@ late Crust の速度崩れは解消したと読む。
 同じ run で `mean_cell_crossing_fraction_per_tick` は `1.7-2.6` 程度なので、
 次に見るべき点は複数セル相当の displacement と ownership transfer の整合である。
 
-同日の drive 正規化と boundary crossing substep 導入後、alpha level 6 の 80 tick run では
-tick 80 で `mean_plate_speed_km_per_myr=54.9`、
-`mean_cell_crossing_fraction_per_tick=2.28`、`boundary_crossing_substeps=4` だった。
+同日の drive 正規化と boundary crossing substep 導入後、bench 側の速度計算を
+runtime velocity と同じく `activity` 非依存に揃えた alpha level 6 の 80 tick run では、
+tick 80 で `mean_plate_speed_km_per_myr=70.0`、
+`mean_cell_crossing_fraction_per_tick=2.91`、`boundary_crossing_substeps=4` だった。
 同 tick の drive は `mean_slab_pull_drive=0.213`、
 `mean_ridge_push_drive=0.093` で、ridge push は無視できるほど小さくはないが
 slab pull より小さい副次駆動として読める。
 `mean_force_target_speed_km_per_myr=57.4` と
 `mean_basal_target_speed_km_per_myr=56.6` が近く、速度維持が basal floor だけに
 依存していないことも確認できる。
+per-plate では slab が強い plate 2/3/4 が `75-90 km/Myr` と速く、
+force target も高い。一方で plate 7 は `mean_slab_pull_drive=0` でも
+basal target により `57 km/Myr` 程度で動くため、basal proxy が強すぎる
+外れ値を今後の確認対象とする。
 
 自動化可能な配列整合性、値域、決定性、snapshot 整合はコード側で担保する。
 本書では手動サニティチェック手順を保持しない。
