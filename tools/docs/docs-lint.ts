@@ -19,6 +19,7 @@ const VALID_DECISION_STATUSES = new Set([
 const DOCS_REFERENCE_PATTERN = /docs\/[A-Za-z0-9_./-]+\.md/g;
 const STATUS_HEADING_PATTERN = /^## Status\s*$/m;
 const ADR_FILENAME_PATTERN = /^\d{6}-[a-z0-9-]+\.md$/;
+const DECISION_MAX_ACCEPTED_WORDS = 350;
 
 function getLineNumber(text: string, index: number): number {
     return text.slice(0, index).split("\n").length;
@@ -92,6 +93,74 @@ function lintDecisionStatus(relativePath: string, text: string): Violation[] {
     return [];
 }
 
+function getDecisionStatus(text: string): { status: string; line: number } | null {
+    const headingMatch = STATUS_HEADING_PATTERN.exec(text);
+    if (!headingMatch || headingMatch.index == null) {
+        return null;
+    }
+
+    const headingLine = getLineNumber(text, headingMatch.index);
+    const lines = text.split("\n");
+    const nextNonEmptyLine = findNextNonEmptyLine(lines, headingLine);
+    if (!nextNonEmptyLine) {
+        return null;
+    }
+
+    return {
+        status: nextNonEmptyLine.line,
+        line: nextNonEmptyLine.lineNumber,
+    };
+}
+
+function countWords(text: string): number {
+    return text.split(/\s+/).filter((word) => word.length > 0).length;
+}
+
+function lintDecisionLifecycle(relativePath: string, text: string): Violation[] {
+    if (!relativePath.startsWith("docs/decisions/")) {
+        return [];
+    }
+
+    const status = getDecisionStatus(text);
+    if (!status || !VALID_DECISION_STATUSES.has(status.status)) {
+        return [];
+    }
+
+    const violations: Violation[] = [];
+
+    if (status.status === "Draft" && !/^## Close when\s*$/m.test(text)) {
+        violations.push({
+            path: relativePath,
+            line: status.line,
+            ruleId: "decision-draft-close-when-required",
+            message: "Draft decisions must define `## Close when`",
+        });
+    }
+
+    if (status.status === "Accepted") {
+        const wordCount = countWords(text);
+        if (wordCount > DECISION_MAX_ACCEPTED_WORDS) {
+            violations.push({
+                path: relativePath,
+                line: status.line,
+                ruleId: "decision-accepted-compressed",
+                message: `Accepted decisions must stay compressed (${wordCount}/${DECISION_MAX_ACCEPTED_WORDS} words)`,
+            });
+        }
+    }
+
+    if (status.status === "Superseded" && !/Superseded by|Replaced by|^## Superseded By\s*$/m.test(text)) {
+        violations.push({
+            path: relativePath,
+            line: status.line,
+            ruleId: "decision-superseded-target-required",
+            message: "Superseded decisions must name the replacement target",
+        });
+    }
+
+    return violations;
+}
+
 function lintReferenceStatus(relativePath: string, text: string): Violation[] {
     if (!relativePath.startsWith("docs/reference/")) {
         return [];
@@ -146,6 +215,7 @@ export function lintRepo(repoRoot: string = DEFAULT_REPO_ROOT): Violation[] {
 
         violations.push(...lintDocsPathExists(repoRoot, repoRelativePath, text));
         violations.push(...lintDecisionStatus(repoRelativePath, text));
+        violations.push(...lintDecisionLifecycle(repoRelativePath, text));
         violations.push(...lintReferenceStatus(repoRelativePath, text));
     }
 

@@ -104,3 +104,9 @@ Discrete ownership transfer は、速度に応じて substep 化するだけで�
 - SI 単位系で閉じた force-balance solver
 - slab geometry, viscosity, asthenosphere coupling の詳細モデル
 - plate 内部変形や microplate dynamics の詳細再現
+
+## Close when
+
+- basal motion proxy を採用する場合は `Accepted` にし、実装済み仕様と近似の trade-off を `docs/reference/modules/geology.md` へ反映する。
+- runtime plate motion の下限を別方式で扱う場合は `Superseded` にし、置換先 decision または reference を明示する。
+- late Crust の plate speed 低下を問題として扱わない場合は `Rejected` にし、benchmark 上の理由を残す。

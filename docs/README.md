@@ -28,12 +28,22 @@
 - これから変える設計案のうち、追跡したい検討状態
 - `Status` で `Draft`, `Accepted`, `Rejected`, `Superseded` のいずれかを明示する
 - 実験値は必要最小限の根拠だけを残し、詳細ログは bench 文書へ委譲する
+- `Draft` は未解決の判断キューとして扱い、実装前の作業メモや仕様書代わりにしない
+- `Accepted` は短い判断ログへ圧縮し、現在仕様の正本にはしない
+- `Superseded` は置換先を明示し、旧本文を読む必要がない状態にする
 
 ### `docs/reference/`
 
 - 現在の実装仕様
 - as-is の挙動、モジュール責務、公開前提
 - 変更履歴や試行錯誤ログは置かない
+- 用語の正本は `docs/reference/terminology.md` に置く
+
+### `docs/operations/`
+
+- 現在有効な開発、テスト、ベンチマーク、運用手順
+- 文書棚卸し手順は `docs/operations/docs-maintenance.md` に置く
+- 過去の手順や試行錯誤ログは置かない
 
 ### `docs/operations/bench/`
 
@@ -58,6 +68,24 @@
 3. 採用・却下・置換した判断は同じ文書の `Status` を更新する
 4. 実装後の仕様を `reference` に反映する
 5. 実験ログと比較履歴は `operations/bench` に残す
+6. `Accepted` にした decision は、判断、理由、正本への導線だけへ圧縮する
+
+## 用語ルール
+
+- 正規用語は `docs/reference/terminology.md` に集約する
+- 同じ概念に新しい別名を作らない
+- 文書本文では `benchmark` を基本形にし、`bench` はコマンド、パス、短い識別子に限る
+- `test` は日常開発で回す自動確認、`gate` は pass / fail 判定、`validation` は妥当性確認の目的を指す
+- 新しい文書を書く前に、既存用語で説明できるかを確認する
+
+## 棚卸しルール
+
+- `docs/decisions/` は判断と理由だけを残し、実装済み仕様は `docs/reference/` へ移す
+- 現在有効な手順は `docs/operations/` へ移す
+- 実験ログ、比較履歴、棄却した仮説は `docs/operations/bench/` へ移す
+- 棚卸し手順は `docs/operations/docs-maintenance.md` に従う
+- `Draft` には閉じる条件を置き、実装後に放置しない
+- `Accepted` は長文化させず、仕様、手順、実験ログを含めない
 
 ## 退避ルール
 

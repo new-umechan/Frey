@@ -81,3 +81,9 @@ WASM コアを Web 初期ロードから外すデメリットは次の通り。
 - HTTP/precomputed が unavailable のとき、WASM fallback を自動で使うか、明示的な開発モードに限定するか。
 - 初期ロードの受け入れ基準を LCP、TTI、first terrain render のどれで見るか。
 - 小さい visual/mesh 専用 WASM が必要になる実測閾値をどう置くか。
+
+## Close when
+
+- Web の既定 engine と WASM fallback 方針を採用する場合は `Accepted` にし、現在仕様を `docs/reference/interface/ui_spec.md` と `docs/reference/interface/wasm_api.md` へ反映する。
+- WASM 分割や HTTP/precomputed 優先を採用しない場合は `Rejected` にし、理由を残す。
+- server/precomputed の別設計へ吸収する場合は `Superseded` にし、置換先を明示する。

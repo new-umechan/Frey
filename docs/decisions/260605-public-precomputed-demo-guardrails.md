@@ -39,3 +39,9 @@ Web 側に公開 seed 一覧を持たせるだけでは、直接 HTTP request �
 
 - 公開 seed 一覧を Web 静的 JSON と server env のどちらから正本化するか。
 - 同時接続数が増えた場合に、単一 mutex と JSON response size がどの程度ボトルネックになるか。
+
+## Close when
+
+- 公開デモの制限方針を採用する場合は `Accepted` にし、実装済み仕様を `docs/reference/interface/precomputed_server_api.md` へ反映する。
+- 公開デモの制限を hosting/proxy 側へ寄せる場合は `Rejected` にし、理由を残す。
+- 別の公開 API 方針へ置き換える場合は `Superseded` にし、置換先を明示する。
