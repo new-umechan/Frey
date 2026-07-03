@@ -74,6 +74,21 @@ pub(super) fn reclassify_boundaries(
     if boundary_state.slab_rollback_component.len() != cell_count {
         boundary_state.slab_rollback_component = vec![0.0; cell_count];
     }
+    if boundary_state.convergence_component.len() != cell_count {
+        boundary_state.convergence_component = vec![0.0; cell_count];
+    }
+    if boundary_state.divergence_component.len() != cell_count {
+        boundary_state.divergence_component = vec![0.0; cell_count];
+    }
+    if boundary_state.transform_component.len() != cell_count {
+        boundary_state.transform_component = vec![0.0; cell_count];
+    }
+    if boundary_state.obliquity.len() != cell_count {
+        boundary_state.obliquity = vec![0.0; cell_count];
+    }
+    if boundary_state.subduction_gate.len() != cell_count {
+        boundary_state.subduction_gate = vec![0.0; cell_count];
+    }
 
     let current_plate_hash = plate_id_signature(plate_id);
     let needs_rebuild_edge_pairs = boundary_state.edge_pairs.is_empty()
@@ -100,8 +115,12 @@ pub(super) fn reclassify_boundaries(
 
     let edge_pairs = &boundary_state.edge_pairs;
     let mut convergence_norm_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut divergence_norm_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut transform_norm_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut obliquity_edge = vec![0.0_f32; edge_pairs.len()];
     let mut subduction_age_edge = vec![0.0_f32; edge_pairs.len()];
     let mut subduction_density_edge = vec![0.0_f32; edge_pairs.len()];
+    let mut subduction_gate_edge = vec![0.0_f32; edge_pairs.len()];
     let mut edge_types = vec![BoundaryType::PassiveMargin; edge_pairs.len()];
     let mut edge_scores = vec![0.0_f32; edge_pairs.len()];
 
@@ -124,6 +143,10 @@ pub(super) fn reclassify_boundaries(
             vertex_states[j],
             params,
         );
+        convergence_norm_edge[eid] = rel.convergence_norm;
+        divergence_norm_edge[eid] = rel.divergence_norm;
+        transform_norm_edge[eid] = rel.transform_norm;
+        obliquity_edge[eid] = rel.obliquity;
         let prev_memory = boundary_state
             .edge_internal
             .get(eid)
@@ -142,10 +165,11 @@ pub(super) fn reclassify_boundaries(
         edge_scores[eid] = finite_or(score, 0.0).clamp(0.0, 1.0);
 
         if bt == BoundaryType::Subduction {
-            convergence_norm_edge[eid] = finite_or(rel.rel_n * 8.0, 0.0).clamp(0.0, 1.0);
             if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
                 subduction_age_edge[eid] = finite_or(oceanic.age, 0.0).max(0.0);
                 subduction_density_edge[eid] = finite_or(oceanic.density, 0.0).max(0.0);
+                subduction_gate_edge[eid] =
+                    subduction_gate(oceanic, prev_memory, rel.convergence_norm, params);
             }
         }
     }
@@ -154,6 +178,11 @@ pub(super) fn reclassify_boundaries(
         .dominant_type
         .fill(BoundaryType::PassiveMargin);
     boundary_state.activity.fill(0.0);
+    boundary_state.convergence_component.fill(0.0);
+    boundary_state.divergence_component.fill(0.0);
+    boundary_state.transform_component.fill(0.0);
+    boundary_state.obliquity.fill(0.0);
+    boundary_state.subduction_gate.fill(0.0);
     for (eid, pair) in edge_pairs.iter().enumerate() {
         let bt = edge_types[eid];
         let score = edge_scores[eid];
@@ -161,6 +190,11 @@ pub(super) fn reclassify_boundaries(
             if score > boundary_state.activity[cell] {
                 boundary_state.activity[cell] = score;
                 boundary_state.dominant_type[cell] = bt;
+                boundary_state.convergence_component[cell] = convergence_norm_edge[eid];
+                boundary_state.divergence_component[cell] = divergence_norm_edge[eid];
+                boundary_state.transform_component[cell] = transform_norm_edge[eid];
+                boundary_state.obliquity[cell] = obliquity_edge[eid];
+                boundary_state.subduction_gate[cell] = subduction_gate_edge[eid];
             }
         }
     }
@@ -286,6 +320,10 @@ pub(super) fn reclassify_boundaries(
 struct RelativeKinematics {
     rel_n: f32,
     rel_t: f32,
+    convergence_norm: f32,
+    divergence_norm: f32,
+    transform_norm: f32,
+    obliquity: f32,
 }
 
 fn relative_kinematics(
@@ -317,7 +355,17 @@ fn relative_kinematics(
     let rel_n = dot(rel_v, edge_dir);
     let rel_mag = length3(rel_v);
     let rel_t = (rel_mag * rel_mag - rel_n * rel_n).max(0.0).sqrt();
-    RelativeKinematics { rel_n, rel_t }
+    let convergence = rel_n.max(0.0);
+    let divergence = (-rel_n).max(0.0);
+    let obliquity = rel_t / (convergence + divergence + rel_t + 1e-5);
+    RelativeKinematics {
+        rel_n,
+        rel_t,
+        convergence_norm: finite_or(convergence * 8.0, 0.0).clamp(0.0, 1.0),
+        divergence_norm: finite_or(divergence * 8.0, 0.0).clamp(0.0, 1.0),
+        transform_norm: finite_or(rel_t * 7.0, 0.0).clamp(0.0, 1.0),
+        obliquity: finite_or(obliquity, 0.0).clamp(0.0, 1.0),
+    }
 }
 
 pub(super) fn plate_velocity_for_cell(
@@ -523,6 +571,28 @@ fn oceanic_negative_buoyancy_proxy(state: VertexCrustState, params: &GeologyPara
     )
     .clamp(0.0, 1.0);
     finite_or(0.5 * age_norm + 0.5 * density_age_factor, 0.0).clamp(0.0, 1.0)
+}
+
+fn subduction_gate(
+    state: VertexCrustState,
+    convergence_memory: f32,
+    convergence_norm: f32,
+    params: &GeologyParams,
+) -> f32 {
+    let age_norm = finite_or(state.age / params.age_ref.max(1e-4), 0.0).clamp(0.0, 1.0);
+    let density_age_factor = finite_or(
+        (state.density - params.oceanic_base_density) / params.dip_density_scale.max(1e-4),
+        0.0,
+    )
+    .clamp(0.0, 1.0);
+    finite_or(
+        0.45 * age_norm
+            + 0.30 * density_age_factor
+            + 0.15 * convergence_memory.clamp(0.0, 1.0)
+            + 0.10 * convergence_norm.clamp(0.0, 1.0),
+        0.0,
+    )
+    .clamp(0.0, 1.0)
 }
 
 fn plate_velocity_from_state(

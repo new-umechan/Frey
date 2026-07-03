@@ -97,6 +97,71 @@
 
 - feature ごとの属性名は配布元で揺れやすいので、前処理で repo 内 canonical schema へ落とす
 
+### 4.1 プレート再構成モデル
+
+- 用途: Earth plate shape metrics の参照分布
+- 保存先: `benches/raw/geology/plate_reconstruction/Muller2019/`
+- 性質: 観測値そのものではなく、Muller et al. 2019 reconstruction model
+
+取得コマンド:
+
+```bash
+uv run --python 3.11 --with gplately --with pygplates python -c \
+  'from gplately import download; download.DataServer("Muller2019").get_plate_reconstruction_files()'
+```
+
+取得後、local gplately cache から次を保存先へコピーする。
+
+- `Topologies/Muller_etal_2019_PlateBoundaries_DeformingNetworks.gpmlz`
+- `Rotations/Muller_etal_2019_CombinedRotations.rot`
+- `StaticPolygons/Muller_etal_2019_Global_StaticPlatePolygons.gpmlz`
+
+まずは `0, 10, 25, 50, 75, 100, 140 Ma` の各時点を独立した plate field として解決し、
+Frey と同じ shape metric を計算する。時系列変化そのものは、同一 reconstruction model 内の
+参照分布が安定してから追加する。
+
+CellStore 参照データ生成:
+
+```bash
+pnpm bench:resample:earth-plate-id --time-ma 0
+pnpm bench:resample:earth-plate-id --time-ma 10
+pnpm bench:resample:earth-plate-id --time-ma 25
+pnpm bench:resample:earth-plate-id --time-ma 50
+pnpm bench:resample:earth-plate-id --time-ma 75
+pnpm bench:resample:earth-plate-id --time-ma 100
+pnpm bench:resample:earth-plate-id --time-ma 140
+```
+
+出力:
+
+- `benches/data/earth_plate_id_ref_000Ma.bin`
+- `benches/data/earth_plate_id_ref_010Ma.bin`
+- `benches/data/earth_plate_id_ref_025Ma.bin`
+- `benches/data/earth_plate_id_ref_050Ma.bin`
+- `benches/data/earth_plate_id_ref_075Ma.bin`
+- `benches/data/earth_plate_id_ref_100Ma.bin`
+- `benches/data/earth_plate_id_ref_140Ma.bin`
+
+Earth 側 shape metric:
+
+```bash
+pnpm bench:earth-plate-shape
+pnpm bench:compare:plate-shape-earth
+```
+
+出力:
+
+- `benches/results/earth_plate_shape_stats.json`
+
+`earth_plate_id_ref_*Ma.bin` は `StaticPolygons` を reconstruction time へ回した cell assignment である。
+過去時点ほど present-day static polygon 由来の gap が増えるため、`unassigned_cell_count` を必ず確認する。
+また小さい plate id が `narrow_connection_cell_ratio` の上位 percentile を支配しやすいので、
+Frey の major plate と比較する前に all-plates 分布と major-plate 相当の分布を分けて読む。
+`bench:compare:plate-shape-earth` は Frey の最新 `plate_shape` の `top8` / `area_ge_1pct` p99 を、
+Earth reconstruction の同じ scope の p99 上限に対して表示する。
+古い Frey record で scope 別 p99 がない場合だけ `max_*` に fallback する。
+これは PASS/FAIL ではなく、目視で怪しい shape が Earth reconstruction の外れ値帯を超えているかを読むための診断である。
+
 ### 5. 大陸 / 海洋マスク
 
 - 用途: `crust_conditioned_hypsometry_separation`

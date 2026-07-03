@@ -3,6 +3,7 @@
 本書は運用文書である。重い科学ベンチマークの目的、実行入口、artifact の置き場、結果の読み方だけをまとめる。
 背景説明は `docs/concepts/overview.md`、採用済み仕様の正本は `docs/reference/` を参照する。
 日常の壊れ確認と常用ゲートは `docs/operations/test.md` を参照する。
+用語の正本は `docs/reference/terminology.md` を参照する。
 
 ## 目的
 
@@ -11,6 +12,16 @@
 - モデル変更やパラメータ調整の判断材料を残す
 
 このベンチマークは quality gate ではない。かなり重いため、手動実行を前提とする。
+
+## 用語
+
+- benchmark: 現実データ、参照 artifact、過去 artifact と比較してモデルの性質を読む重い評価
+- bench: コマンド、パス、短い識別子で使う benchmark の略称
+- validation: モデル契約や科学的仮説が診断指標と矛盾していないかを確認する目的
+- gate: pass / fail で変更の受け入れ可否を決める自動判定
+
+この文書では、説明文の基本形を benchmark とする。
+`pnpm bench:*`、`docs/operations/bench/`、`benches/results/` などの固有名は bench のまま扱う。
 
 ## artifact の正本
 

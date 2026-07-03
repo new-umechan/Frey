@@ -57,7 +57,8 @@ fn preserve_crust_freeboard(world: &mut World) -> CrustRecenteringStats {
     sorted.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
 
     let target_sea_ratio = 1.0 - target_land_ratio;
-    let sea_idx = ((sorted.len() as f32) * target_sea_ratio).floor() as usize;
+    let target_sea_count = ((sorted.len() as f32) * target_sea_ratio).ceil() as usize;
+    let sea_idx = target_sea_count.saturating_sub(1);
     let sea_level = sorted[sea_idx.min(sorted.len().saturating_sub(1))];
     if !sea_level.is_finite() || sea_level.abs() <= 1e-6 {
         return CrustRecenteringStats {

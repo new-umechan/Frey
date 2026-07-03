@@ -1,6 +1,12 @@
 use super::*;
 use crate::sim::geology_types::PlateId;
 
+const EARTH_RADIUS_KM: f32 = 6_371.0;
+const SUBDUCTION_ARC_DEPTH_MIN_KM: f32 = 90.0;
+const SUBDUCTION_ARC_DEPTH_MAX_KM: f32 = 130.0;
+const SUBDUCTION_DIP_MIN_DEG: f32 = 25.0;
+const SUBDUCTION_DIP_MAX_DEG: f32 = 65.0;
+
 pub(super) struct BoundaryModelInput<'a> {
     pub positions: &'a [[f32; 3]],
     pub nbr_offsets: &'a [u32],
@@ -63,8 +69,10 @@ pub(super) fn apply_boundary_model(
         match edge.boundary_type {
             EdgeReliefType::Convergent => {
                 let oblique_relief = 1.0 - params.boundary_obliquity_mix * edge.obliquity;
-                let conv_base =
-                    params.boundary_convergent_base_gain * edge.strength * oblique_relief;
+                let convergence = edge.convergence.max(edge.strength * 0.35).clamp(0.0, 1.0);
+                let conv_base = params.boundary_convergent_base_gain
+                    * convergence
+                    * oblique_relief.clamp(0.0, 1.0);
 
                 let (convergent_mode, subduction_polarity) = classify_convergent_edge(
                     edge.a,
@@ -77,17 +85,27 @@ pub(super) fn apply_boundary_model(
                 if let Some(mode) = convergent_mode {
                     match mode {
                         ConvergentMode::ContinentContinent => {
-                            let w = band_weight(
+                            let suture_w = band_weight(
                                 d,
-                                params.boundary_collision_width,
-                                params.boundary_anisotropy,
+                                params.boundary_collision_width * 0.35,
+                                params.boundary_anisotropy * 0.65,
                             );
-                            let uplift = conv_base * params.collision_gain * w;
-                            delta[v] += uplift;
-                            if d < params.boundary_collision_width * 0.55 {
-                                delta[v] -= 0.10 * uplift;
-                            }
-                            preserve_strength[v] = preserve_strength[v].max(0.80 * w);
+                            let core_w = ring_weight(
+                                d,
+                                params.boundary_collision_width * 0.45,
+                                params.boundary_collision_width * 0.75,
+                            );
+                            let plateau_w = band_weight(
+                                d,
+                                params.boundary_collision_width * 1.8,
+                                params.boundary_anisotropy * 1.35,
+                            );
+                            let orogen_w = 0.35 * core_w + 0.65 * plateau_w;
+                            let uplift = conv_base * params.collision_gain * orogen_w;
+                            let suture_notch = 0.08 * conv_base * params.collision_gain * suture_w;
+                            delta[v] += uplift - suture_notch;
+                            preserve_strength[v] =
+                                preserve_strength[v].max(0.55 * orogen_w.max(suture_w * 0.5));
                         }
                         ConvergentMode::OceanContinent | ConvergentMode::OceanOcean => {
                             let (subducting, overriding) = match subduction_polarity {
@@ -101,9 +119,15 @@ pub(super) fn apply_boundary_model(
                                 attributes,
                                 vertex_lithosphere,
                             );
+                            let subduction_gate = subduction_gate_for_edge(
+                                edge,
+                                subduction_polarity,
+                                vertex_lithosphere,
+                            );
                             let trench_depth_scale = lerp(0.90, 1.28, subduction_angle);
                             let trench_width_scale = lerp(1.16, 0.88, subduction_angle);
-                            let arc_offset_scale = lerp(1.22, 0.82, subduction_angle);
+                            let arc_center =
+                                subduction_arc_center(subduction_angle, subduction_gate);
                             let forearc_offset_scale = lerp(0.70, 0.48, subduction_angle);
                             let forearc_width_scale = lerp(0.95, 0.72, subduction_angle);
                             let backarc_offset_scale = lerp(1.65, 0.95, subduction_angle);
@@ -117,11 +141,14 @@ pub(super) fn apply_boundary_model(
                                         * (0.9 + 0.35 * edge.obliquity),
                                     params.boundary_anisotropy,
                                 );
-                                let trench =
-                                    conv_base * params.trench_gain * trench_depth_scale * trench_w;
+                                let trench = conv_base
+                                    * params.trench_gain
+                                    * subduction_gate
+                                    * trench_depth_scale
+                                    * trench_w;
                                 delta[v] -= trench;
                                 debug_trench_strength[v] = debug_trench_strength[v]
-                                    .max((edge.strength * trench_w).min(1.0));
+                                    .max((subduction_gate * convergence * trench_w).min(1.0));
                                 let outer_rise = ring_weight(
                                     d,
                                     params.boundary_trench_width * trench_width_scale * 1.6,
@@ -147,11 +174,11 @@ pub(super) fn apply_boundary_model(
                                 delta[v] -= 0.06 * conv_base * forearc_near_trench;
                                 delta[v] -= 0.07 * conv_base * forearc_w;
 
-                                let arc_center = params.boundary_arc_width
-                                    * arc_offset_scale
-                                    * (0.9 + 0.4 * edge.obliquity);
-                                let arc_w =
-                                    ring_weight(d, arc_center, params.boundary_arc_width * 0.7);
+                                let arc_center = arc_center * (0.95 + 0.15 * edge.obliquity);
+                                let arc_width = (arc_center * 0.35)
+                                    .max(params.boundary_arc_width * 0.45)
+                                    .min(params.boundary_arc_width * 1.15);
+                                let arc_w = ring_weight(d, arc_center, arc_width);
                                 let arc_gain = params.arc_gain;
                                 let (arc_multi_w, arc_multi_dist_scale) =
                                     accumulate_multi_edge_arc_signal(ArcSignalInput {
@@ -168,9 +195,13 @@ pub(super) fn apply_boundary_model(
                                     });
                                 let arc_apply_w = arc_multi_w.max(arc_w);
                                 let arc_apply_dist_scale = arc_multi_dist_scale.max(dist_scale);
-                                delta[v] +=
-                                    conv_base * arc_gain * arc_apply_w * arc_apply_dist_scale;
-                                let arc_debug_strength = (edge.strength * arc_apply_w).min(1.0);
+                                delta[v] += conv_base
+                                    * arc_gain
+                                    * subduction_gate
+                                    * arc_apply_w
+                                    * arc_apply_dist_scale;
+                                let arc_debug_strength =
+                                    (subduction_gate * convergence * arc_apply_w).min(1.0);
                                 debug_arc_strength[v] =
                                     debug_arc_strength[v].max(arc_debug_strength);
                                 if matches!(mode, ConvergentMode::OceanOcean) {
@@ -193,6 +224,9 @@ pub(super) fn apply_boundary_model(
                                     } else {
                                         0.15
                                     };
+                                let rollback_proxy = (subduction_gate
+                                    * (0.55 + 0.45 * edge.obliquity))
+                                    .clamp(0.0, 1.0);
                                 let backarc_shoulder_w = ring_weight(
                                     d,
                                     backarc_center + params.boundary_arc_width * 0.75,
@@ -200,6 +234,7 @@ pub(super) fn apply_boundary_model(
                                 );
                                 delta[v] -= conv_base
                                     * params.arc_gain
+                                    * rollback_proxy
                                     * backarc_basin_gain
                                     * backarc_w
                                     * dist_scale;
@@ -254,14 +289,23 @@ pub(super) fn apply_boundary_model(
                 }
                 let oblique_relief = 1.0 - 0.6 * params.boundary_obliquity_mix * edge.obliquity;
                 let rift_w = band_weight(d, rift_width, params.boundary_anisotropy * 0.8);
+                let divergence = edge.divergence.max(edge.strength * 0.35).clamp(0.0, 1.0);
                 let rift = params.boundary_divergent_base_gain
                     * params.rift_gain
-                    * edge.strength
+                    * divergence
                     * oblique_relief
                     * rift_w;
                 delta[v] -= rift;
                 if d < rift_width * 0.65 {
-                    delta[v] -= 0.05 * params.boundary_divergent_base_gain * edge.strength * rift_w;
+                    delta[v] -= 0.05 * params.boundary_divergent_base_gain * divergence * rift_w;
+                }
+                if attributes[edge.plate_a].is_ocean || attributes[edge.plate_b].is_ocean {
+                    let ridge_w = band_weight(
+                        d,
+                        params.boundary_trench_width.max(params.boundary_band),
+                        params.boundary_anisotropy * 0.7,
+                    );
+                    delta[v] += 0.30 * params.boundary_divergent_base_gain * divergence * ridge_w;
                 }
                 preserve_strength[v] = preserve_strength[v].max(0.55 * rift_w);
             }
@@ -273,8 +317,9 @@ pub(super) fn apply_boundary_model(
                 } else {
                     -1.0
                 };
+                let transform = edge.transform.max(edge.strength * 0.35).clamp(0.0, 1.0);
                 let relief = params.boundary_transform_relief_gain
-                    * edge.strength
+                    * transform
                     * (1.0 + 0.4 * edge.obliquity)
                     * w;
                 delta[v] += sign * 0.5 * relief;
@@ -462,25 +507,22 @@ pub(super) fn extract_boundary_edges(
             let vel_a = local_plate_velocity(&attributes[plate_a], plate_a, positions[i]);
             let vel_b = local_plate_velocity(&attributes[plate_b], plate_b, positions[j]);
             let rel_v = sub3(vel_b, vel_a);
-            let v_rel_n = dot3(rel_v, edge_dir);
-            let v_rel_t_vec = sub3(rel_v, mul3(edge_dir, v_rel_n));
-            let v_rel_t = length3(v_rel_t_vec);
-            let obliquity = v_rel_t / (v_rel_t + v_rel_n.abs() + 1e-5);
-            let (boundary_type, strength) = if v_rel_n > classify_eps {
-                (
-                    EdgeReliefType::Convergent,
-                    clamp((v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
-                )
-            } else if v_rel_n < -classify_eps {
-                (
-                    EdgeReliefType::Divergent,
-                    clamp((-v_rel_n - classify_eps) / 0.25, 0.0, 1.0),
-                )
+            let rel_n = dot3(rel_v, edge_dir);
+            let rel_t_vec = sub3(rel_v, mul3(edge_dir, rel_n));
+            let rel_t = length3(rel_t_vec);
+            let convergence = rel_n.max(0.0);
+            let divergence = (-rel_n).max(0.0);
+            let obliquity = rel_t / (convergence + divergence + rel_t + 1e-5);
+            let convergence_norm = clamp((convergence - classify_eps) / 0.25, 0.0, 1.0);
+            let divergence_norm = clamp((divergence - classify_eps) / 0.25, 0.0, 1.0);
+            let transform_norm = clamp((rel_t - 0.02) / 0.18, 0.0, 1.0);
+            let motion_strength = clamp((convergence + divergence + 0.5 * rel_t) / 0.25, 0.0, 1.0);
+            let (boundary_type, directional_strength) = if rel_n > classify_eps {
+                (EdgeReliefType::Convergent, convergence_norm)
+            } else if rel_n < -classify_eps {
+                (EdgeReliefType::Divergent, divergence_norm)
             } else {
-                (
-                    EdgeReliefType::Transform,
-                    clamp((v_rel_t - 0.02) / 0.18, 0.0, 1.0),
-                )
+                (EdgeReliefType::Transform, transform_norm)
             };
 
             edges.push(BoundaryEdge {
@@ -489,8 +531,11 @@ pub(super) fn extract_boundary_edges(
                 plate_a,
                 plate_b,
                 boundary_type,
-                strength: strength.max(0.05),
+                strength: directional_strength.max(0.30 * motion_strength).max(0.05),
                 obliquity,
+                convergence: convergence_norm,
+                divergence: divergence_norm,
+                transform: transform_norm,
             });
         }
     }
@@ -524,7 +569,8 @@ fn collect_intraplate_fold_sources(
 
         let both_continent = !a_ocean && !b_ocean;
         let mode_gain = if both_continent { 1.0 } else { 0.70 };
-        let seed_strength = edge.strength * (1.0 - 0.35 * edge.obliquity);
+        let seed_strength =
+            edge.convergence.max(edge.strength * 0.35) * (1.0 - 0.35 * edge.obliquity);
         if seed_strength <= 0.04 {
             continue;
         }
@@ -626,6 +672,44 @@ pub(super) fn estimate_subduction_angle_proxy(
     )
 }
 
+pub(super) fn subduction_arc_center(subduction_angle: f32, subduction_gate: f32) -> f32 {
+    let dip_deg = lerp(
+        SUBDUCTION_DIP_MIN_DEG,
+        SUBDUCTION_DIP_MAX_DEG,
+        clamp(subduction_angle, 0.0, 1.0),
+    );
+    let dip_rad = dip_deg.to_radians();
+    let target_depth_km = lerp(
+        SUBDUCTION_ARC_DEPTH_MIN_KM,
+        SUBDUCTION_ARC_DEPTH_MAX_KM,
+        clamp(subduction_gate, 0.0, 1.0),
+    );
+    let offset_km = target_depth_km / dip_rad.tan().max(0.20);
+    clamp(offset_km / EARTH_RADIUS_KM, 0.015, 0.070)
+}
+
+pub(super) fn subduction_gate_for_edge(
+    edge: BoundaryEdge,
+    polarity: SubductionPolarity,
+    vertex_lithosphere: &[VertexLithosphere],
+) -> f32 {
+    let subducting_vertex = match polarity {
+        SubductionPolarity::AUnderB => edge.a,
+        SubductionPolarity::BUnderA => edge.b,
+        SubductionPolarity::None => return 0.0,
+    };
+    let Some(subducting) = vertex_lithosphere.get(subducting_vertex).copied() else {
+        return 0.0;
+    };
+    let age_norm = clamp(subducting.age_norm, 0.0, 1.0);
+    let density_proxy = clamp(subducting.weight, 0.0, 1.0);
+    clamp(
+        0.50 * age_norm + 0.35 * density_proxy + 0.15 * edge.convergence,
+        0.0,
+        1.0,
+    )
+}
+
 pub(super) struct ArcSignalInput<'a> {
     pub vertex: usize,
     pub pid: usize,
@@ -716,22 +800,27 @@ pub(super) fn accumulate_multi_edge_arc_signal(input: ArcSignalInput<'_>) -> (f3
 
         let subduction_angle =
             estimate_subduction_angle_proxy(edge, polarity, attributes, vertex_lithosphere);
-        let arc_offset_scale = lerp(1.22, 0.82, subduction_angle);
-        let arc_center =
-            params.boundary_arc_width * arc_offset_scale * (0.9 + 0.4 * edge.obliquity);
+        let subduction_gate = subduction_gate_for_edge(edge, polarity, vertex_lithosphere);
+        let arc_center = subduction_arc_center(subduction_angle, subduction_gate)
+            * (0.95 + 0.15 * edge.obliquity);
 
         let edge_mid = normalize3(add3(positions[edge.a], positions[edge.b]));
         let d_mid = chord_distance(pos_v, edge_mid);
         let d_end =
             chord_distance(pos_v, positions[edge.a]).min(chord_distance(pos_v, positions[edge.b]));
         let d = d_mid.min(d_end * 0.9);
-        let arc_w = ring_weight(d, arc_center, params.boundary_arc_width * 0.70);
+        let arc_width = (arc_center * 0.35)
+            .max(params.boundary_arc_width * 0.45)
+            .min(params.boundary_arc_width * 1.15);
+        let arc_w = ring_weight(d, arc_center, arc_width);
         if arc_w <= 1e-4 {
             continue;
         }
 
         let dist_scale = (-(d * params.boundary_distance_falloff)).exp();
-        let source_weight = edge.strength * (1.0 - 0.45 * edge.obliquity);
+        let source_weight = edge.convergence.max(edge.strength * 0.35)
+            * subduction_gate
+            * (1.0 - 0.45 * edge.obliquity);
         let w = arc_w * source_weight.max(0.05);
         contrib_sum += arc_w * w;
         dist_scale_sum += dist_scale * w;

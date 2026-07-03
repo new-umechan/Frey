@@ -37,3 +37,7 @@ harness = false
 [[bench]]
 name = "geology_solo"
 harness = false
+
+[[bench]]
+name = "earth_plate_shape_solo"
+harness = false

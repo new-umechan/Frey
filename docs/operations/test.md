@@ -3,12 +3,23 @@
 本書は運用文書である。日常開発で使うテスト手順とゲート基準だけをまとめる。
 背景説明は `docs/concepts/overview.md`、採用済み仕様の正本は `docs/reference/` を参照する。
 重いベンチマーク運用は `docs/operations/benchmark.md` を参照する。
+用語の正本は `docs/reference/terminology.md` を参照する。
 
 ## 目的
 
 - 日常変更のあとに破壊的な回帰がないかを素早く確認する
 - seed 固定の回帰を継続監視する
 - 常用ゲートと補助ゲートの役割を分ける
+
+## 用語
+
+- test: 日常開発で回す自動確認
+- gate: pass / fail で変更の受け入れ可否を決める自動判定
+- benchmark: 現実データや artifact と比較してモデルの性質を読む重い評価
+- bench: コマンド、パス、短い識別子で使う benchmark の略称
+
+この文書では、日常実行と CI 判定を扱う。
+科学モデルの妥当性確認や重い artifact 比較は `docs/operations/benchmark.md` に置く。
 
 ## 日常実行
 

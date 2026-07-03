@@ -16,6 +16,7 @@ TERRAIN_MAGIC = b"TERRREF1"
 GEOLOGY_AGE_MAGIC = b"GEOAG001"
 GEOLOGY_RIDGE_MAGIC = b"GEORIDG1"
 GEOLOGY_CONTINENTAL_MASK_MAGIC = b"GEOCNTL1"
+GEOLOGY_EARTH_PLATE_ID_MAGIC = b"GEOPLID1"
 HYDRO_INPUT_MAGIC = b"HYDINPUT1"
 HYDRO_REF_MAGIC = b"HYDROREF1"
 GLOSEM_REF_MAGIC = b"GLOSEM01"
@@ -66,6 +67,7 @@ def parse_args() -> argparse.Namespace:
             "terrain",
             "geology-age",
             "plate-boundary",
+            "earth-plate-id",
             "continental-mask",
             "hydro-input",
             "hydro-ref",
@@ -130,6 +132,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--polygons",
         help="Input shapefile for continental polygons.",
+    )
+    parser.add_argument(
+        "--reconstruction-dir",
+        default="benches/raw/geology/plate_reconstruction/Muller2019",
+        help="Directory containing GPlates reconstruction files for earth-plate-id.",
+    )
+    parser.add_argument(
+        "--time-ma",
+        type=float,
+        default=0.0,
+        help="Reconstruction time in Ma for earth-plate-id.",
+    )
+    parser.add_argument(
+        "--earth-plate-source",
+        choices=["static-polygons", "resolved-topologies"],
+        default="static-polygons",
+        help=(
+            "Plate polygon source for earth-plate-id. static-polygons are reconstructed "
+            "through time and usually provide broader coverage; resolved-topologies are "
+            "kept for diagnostics."
+        ),
     )
     parser.add_argument(
         "--age-var-name",
@@ -262,6 +285,13 @@ def load_centroids(path: Path) -> Tuple[np.ndarray, np.ndarray]:
     return np.asarray(latitudes, dtype=np.float64), np.asarray(
         longitudes, dtype=np.float64
     )
+
+
+def reconstruction_time_label(time_ma: float) -> str:
+    if abs(time_ma - round(time_ma)) < 1e-6:
+        return f"{int(round(time_ma)):03d}Ma"
+    label = f"{time_ma:.2f}".rstrip("0").rstrip(".").replace(".", "p")
+    return f"{label}Ma"
 
 
 def parse_var_map(raw_items: Iterable[str]) -> Dict[str, str]:
@@ -998,6 +1028,153 @@ def rasterize_continental_polygons(
     return is_continental
 
 
+def resolve_earth_plate_ids(
+    reconstruction_dir: Path,
+    time_ma: float,
+    centroid_lat: np.ndarray,
+    centroid_lon: np.ndarray,
+    source: str,
+) -> np.ndarray:
+    try:
+        import pygplates
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(
+            "pygplates is required for earth-plate-id. "
+            "Use: uv run --python 3.11 --with pygplates python benches/scripts/resample.py ..."
+        ) from exc
+
+    rotation_path = (
+        reconstruction_dir
+        / "Rotations"
+        / "Muller_etal_2019_CombinedRotations.rot"
+    )
+    topology_path = (
+        reconstruction_dir
+        / "Topologies"
+        / "Muller_etal_2019_PlateBoundaries_DeformingNetworks.gpmlz"
+    )
+    static_polygon_path = (
+        reconstruction_dir
+        / "StaticPolygons"
+        / "Muller_etal_2019_Global_StaticPlatePolygons.gpmlz"
+    )
+    required_paths = [rotation_path]
+    if source == "resolved-topologies":
+        required_paths.append(topology_path)
+    elif source == "static-polygons":
+        required_paths.append(static_polygon_path)
+    else:
+        raise ValueError(f"unknown earth plate source: {source}")
+
+    for path in required_paths:
+        if not path.exists():
+            raise FileNotFoundError(f"missing reconstruction input: {path}")
+
+    rotation_model = pygplates.RotationModel(str(rotation_path))
+    if source == "resolved-topologies":
+        topology_features = pygplates.FeatureCollection(str(topology_path))
+        resolved_topologies = []
+        shared_boundary_sections = []
+        pygplates.resolve_topologies(
+            topology_features,
+            rotation_model,
+            resolved_topologies,
+            float(time_ma),
+            shared_boundary_sections,
+        )
+        source_geometries = [
+            (
+                int(topology.get_feature().get_reconstruction_plate_id()),
+                topology.get_resolved_boundary(),
+            )
+            for topology in resolved_topologies
+        ]
+    else:
+        static_features = pygplates.FeatureCollection(str(static_polygon_path))
+        reconstructed_geometries = []
+        pygplates.reconstruct(
+            static_features,
+            rotation_model,
+            reconstructed_geometries,
+            float(time_ma),
+        )
+        source_geometries = [
+            (
+                int(geometry.get_feature().get_reconstruction_plate_id()),
+                geometry.get_reconstructed_geometry(),
+            )
+            for geometry in reconstructed_geometries
+        ]
+
+    polygons = []
+    for plate_id, polygon in source_geometries:
+        if plate_id < 0:
+            continue
+        area = abs(float(polygon.get_area()))
+        bbox = spherical_polygon_bbox(polygon)
+        polygons.append((area, plate_id, polygon, bbox))
+
+    if not polygons:
+        raise ValueError(
+            f"no earth plate polygons with reconstruction plate ids at {time_ma} Ma"
+        )
+
+    # Smaller polygons first preserves microplates when topology polygons overlap.
+    polygons.sort(key=lambda item: item[0])
+    unresolved = np.iinfo(np.uint32).max
+    plate_ids = np.full(centroid_lat.shape, unresolved, dtype=np.uint32)
+    for index in range(centroid_lat.size):
+        lat = float(centroid_lat[index])
+        lon = normalize_lon(float(centroid_lon[index]))
+        point = pygplates.PointOnSphere(
+            lat,
+            lon,
+        )
+        for _, plate_id, polygon, bbox in polygons:
+            if not bbox_contains(bbox, lat, lon):
+                continue
+            if polygon.is_point_in_polygon(point):
+                plate_ids[index] = np.uint32(plate_id)
+                break
+    return plate_ids
+
+
+def normalize_lon(lon: float) -> float:
+    normalized = ((lon + 180.0) % 360.0) - 180.0
+    if normalized == -180.0 and lon > 0.0:
+        return 180.0
+    return normalized
+
+
+def spherical_polygon_bbox(polygon) -> tuple[float, float, float, float, bool]:
+    points = polygon.get_exterior_ring_points()
+    latitudes = []
+    longitudes = []
+    for point in points:
+        lat, lon = point.to_lat_lon()
+        latitudes.append(float(lat))
+        longitudes.append(normalize_lon(float(lon)))
+    if not latitudes:
+        return (-90.0, 90.0, -180.0, 180.0, False)
+    min_lat = min(latitudes)
+    max_lat = max(latitudes)
+    min_lon = min(longitudes)
+    max_lon = max(longitudes)
+    wraps_antimeridian = (max_lon - min_lon) > 180.0
+    return (min_lat, max_lat, min_lon, max_lon, wraps_antimeridian)
+
+
+def bbox_contains(
+    bbox: tuple[float, float, float, float, bool], lat: float, lon: float
+) -> bool:
+    min_lat, max_lat, min_lon, max_lon, wraps_antimeridian = bbox
+    if lat < min_lat or lat > max_lat:
+        return False
+    if wraps_antimeridian:
+        return lon <= min_lon or lon >= max_lon
+    return min_lon <= lon <= max_lon
+
+
 def transform_aridity(values: np.ndarray, source: str) -> np.ndarray:
     if source == "pet_over_precip":
         return values
@@ -1067,6 +1244,19 @@ def write_geology_continental_mask_ref_bin(path: Path, mask: np.ndarray) -> None
         handle.write(GEOLOGY_CONTINENTAL_MASK_MAGIC)
         handle.write(struct.pack("<I", VERSION))
         handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(values.tobytes(order="C"))
+
+
+def write_geology_earth_plate_id_ref_bin(
+    path: Path, time_ma: float, plate_ids: np.ndarray
+) -> None:
+    values = np.asarray(plate_ids, dtype="<u4")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(GEOLOGY_EARTH_PLATE_ID_MAGIC)
+        handle.write(struct.pack("<I", VERSION))
+        handle.write(struct.pack("<Q", int(values.size)))
+        handle.write(struct.pack("<f", float(time_ma)))
         handle.write(values.tobytes(order="C"))
 
 
@@ -1434,6 +1624,10 @@ def main() -> None:
             output_path = Path("benches/data/oceanic_crust_age_ref.bin")
         elif args.module == "plate-boundary":
             output_path = Path("benches/data/plate_boundary_ref.bin")
+        elif args.module == "earth-plate-id":
+            output_path = Path(
+                f"benches/data/earth_plate_id_ref_{reconstruction_time_label(float(args.time_ma))}.bin"
+            )
         elif args.module == "continental-mask":
             output_path = Path("benches/data/continental_mask_ref.bin")
         elif args.module == "hydro-input":
@@ -1515,6 +1709,29 @@ def main() -> None:
         write_geology_ridge_ref_bin(output_path, ridge_distance_km)
         print(f"WROTE {output_path}")
         print(f"CELL_COUNT {len(ridge_distance_km)}")
+        return
+
+    if args.module == "earth-plate-id":
+        plate_ids = resolve_earth_plate_ids(
+            Path(args.reconstruction_dir),
+            float(args.time_ma),
+            centroid_lat,
+            centroid_lon,
+            args.earth_plate_source,
+        )
+        unresolved = np.iinfo(np.uint32).max
+        assigned = int(np.count_nonzero(plate_ids != unresolved))
+        unique_assigned = int(np.unique(plate_ids[plate_ids != unresolved]).size)
+        print(
+            f"earth_plate_id: assigned={assigned}/{int(plate_ids.size)} "
+            f"unassigned={int(plate_ids.size) - assigned} "
+            f"unique_plates={unique_assigned} time_ma={float(args.time_ma):.3f}"
+        )
+        write_geology_earth_plate_id_ref_bin(
+            output_path, float(args.time_ma), plate_ids
+        )
+        print(f"WROTE {output_path}")
+        print(f"CELL_COUNT {len(plate_ids)}")
         return
 
     if args.module == "continental-mask":

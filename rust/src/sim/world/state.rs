@@ -1146,6 +1146,16 @@ pub struct BoundaryDynamicsState {
     pub slab_convergence_component: Vec<f32>,
     #[serde(default)]
     pub slab_rollback_component: Vec<f32>,
+    #[serde(default)]
+    pub convergence_component: Vec<f32>,
+    #[serde(default)]
+    pub divergence_component: Vec<f32>,
+    #[serde(default)]
+    pub transform_component: Vec<f32>,
+    #[serde(default)]
+    pub obliquity: Vec<f32>,
+    #[serde(default)]
+    pub subduction_gate: Vec<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]

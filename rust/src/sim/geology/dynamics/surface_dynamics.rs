@@ -16,6 +16,7 @@ const MARINE_UPHILL_DIFFUSION_CEILING: f32 = 0.35;
 const MARINE_SHALLOW_MIXING_DEPTH: f32 = 0.10;
 const COASTAL_LAND_DOWN_DIFFUSION_FLOOR: f32 = 0.20;
 const COASTAL_LAND_FREEBOARD_BAND: f32 = 0.08;
+const STRESS_PROXY_LIMIT: f32 = 2.0;
 
 #[derive(Clone, Copy, Default)]
 struct ZeroMeanCorrectionStats {
@@ -135,8 +136,22 @@ pub(super) fn apply_stress_and_surface_update(
         let boundary_activity =
             finite_or(boundary_state.activity.get(i).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0)
                 * activity_scale;
+        let convergence =
+            boundary_component(&boundary_state.convergence_component, i) * activity_scale;
+        let divergence =
+            boundary_component(&boundary_state.divergence_component, i) * activity_scale;
+        let transform = boundary_component(&boundary_state.transform_component, i) * activity_scale;
+        let obliquity = boundary_component(&boundary_state.obliquity, i);
+        let subduction_gate = boundary_component(&boundary_state.subduction_gate, i);
 
-        let mut tensor = boundary_tensor(boundary_type, boundary_activity);
+        let mut tensor = boundary_tensor(
+            boundary_type,
+            boundary_activity,
+            convergence,
+            divergence,
+            transform,
+            obliquity,
+        );
 
         let plume =
             finite_or(plume_force.get(i).copied().unwrap_or(0.0), 0.0).max(0.0) * activity_scale;
@@ -156,8 +171,8 @@ pub(super) fn apply_stress_and_surface_update(
             .map(|v| finite_or(v, 0.0))
             .unwrap_or(0.0);
         let slab_roll = slab_roll * activity_scale;
-        tensor.xx -= slab_conv * 0.08;
-        tensor.yy -= slab_conv * 0.08;
+        tensor.xx -= slab_conv * (0.06 + 0.05 * subduction_gate);
+        tensor.yy -= slab_conv * (0.06 + 0.05 * subduction_gate);
         tensor.xx += slab_roll * 0.05;
         tensor.yy += slab_roll * 0.03;
         let backarc_tension = boundary_state
@@ -215,11 +230,16 @@ pub(super) fn apply_stress_and_surface_update(
         tensor.xx *= inv_rigidity;
         tensor.yy *= inv_rigidity;
         tensor.xy *= inv_rigidity;
+        tensor.xx = finite_or(tensor.xx, 0.0).clamp(-STRESS_PROXY_LIMIT, STRESS_PROXY_LIMIT);
+        tensor.yy = finite_or(tensor.yy, 0.0).clamp(-STRESS_PROXY_LIMIT, STRESS_PROXY_LIMIT);
+        tensor.xy = finite_or(tensor.xy, 0.0).clamp(-STRESS_PROXY_LIMIT, STRESS_PROXY_LIMIT);
 
-        let stress_scalar = finite_or((tensor.xx + tensor.yy) * 0.5 + tensor.xy.abs() * 0.30, 0.0);
+        let stress_scalar = finite_or((tensor.xx + tensor.yy) * 0.5 + tensor.xy.abs() * 0.30, 0.0)
+            .clamp(-STRESS_PROXY_LIMIT, STRESS_PROXY_LIMIT);
         let relax = params.stress_relaxation_rate.clamp(0.0, 1.0);
         let carried_stress = prev.stress * stress_memory_scale;
-        let stress = finite_or(carried_stress * (1.0 - relax) + stress_scalar * relax, 0.0);
+        let stress = finite_or(carried_stress * (1.0 - relax) + stress_scalar * relax, 0.0)
+            .clamp(-STRESS_PROXY_LIMIT, STRESS_PROXY_LIMIT);
 
         let mut state = prev;
         state.temperature = mantle_heat_i;
@@ -252,13 +272,20 @@ pub(super) fn apply_stress_and_surface_update(
         )
         .max(0.0);
         let subduction_memory = if boundary_type == BoundaryType::Subduction {
-            finite_or((slab_conv + slab_roll).max(boundary_activity), 0.0).clamp(0.0, 1.0)
+            finite_or(
+                (slab_conv + slab_roll)
+                    .max(boundary_activity)
+                    .max(subduction_gate),
+                0.0,
+            )
+            .clamp(0.0, 1.0)
         } else {
             0.0
         };
 
         state.arc_volcanism = if boundary_type == BoundaryType::Subduction {
             boundary_activity
+                * (0.45 + 0.55 * subduction_gate)
                 * (0.35 + 0.65 * subduction_memory)
                 * params.arc_volcanism_gain.max(0.0)
         } else {
@@ -266,7 +293,9 @@ pub(super) fn apply_stress_and_surface_update(
         };
         state.ridge_volcanism = if matches!(boundary_type, BoundaryType::Ridge | BoundaryType::Rift)
         {
-            boundary_activity * params.ridge_volcanism_gain.max(0.0)
+            boundary_activity
+                * (0.40 + 0.60 * divergence.max(0.0).clamp(0.0, 1.0))
+                * params.ridge_volcanism_gain.max(0.0)
         } else {
             0.0
         };
@@ -285,13 +314,49 @@ pub(super) fn apply_stress_and_surface_update(
         )
         .max(0.0);
 
-        let tectonic_uplift = params.tectonic_uplift_gain.max(0.0) * compressive;
+        let collision_uplift_bias = if boundary_type == BoundaryType::Collision {
+            params.tectonic_uplift_gain.max(0.0) * convergence * (1.0 - 0.40 * obliquity)
+        } else {
+            0.0
+        };
+        let arc_uplift_bias = if boundary_type == BoundaryType::Subduction {
+            0.35 * params.tectonic_uplift_gain.max(0.0) * convergence * subduction_gate
+        } else {
+            0.0
+        };
+        let ridge_uplift_bias = if boundary_type == BoundaryType::Ridge {
+            0.20 * params.tectonic_uplift_gain.max(0.0) * divergence
+        } else {
+            0.0
+        };
+        let tectonic_uplift = params.tectonic_uplift_gain.max(0.0) * compressive
+            + collision_uplift_bias
+            + arc_uplift_bias
+            + ridge_uplift_bias;
         let volcanic_uplift = volcanism * params.volcanic_uplift_gain.max(0.0);
         let uplift = tectonic_uplift + volcanic_uplift;
-        let tectonic_subsidence = params.tectonic_subsidence_gain.max(0.0) * tensile;
+        let trench_subsidence_bias = if boundary_type == BoundaryType::Subduction {
+            params.trench_gain.max(0.0)
+                * params.tectonic_subsidence_gain.max(0.0)
+                * convergence
+                * subduction_gate
+        } else {
+            0.0
+        };
+        let backarc_subsidence_bias =
+            params.tectonic_subsidence_gain.max(0.0) * rollback_fraction * slab_roll;
+        let rift_subsidence_bias = if boundary_type == BoundaryType::Rift {
+            params.tectonic_subsidence_gain.max(0.0) * divergence
+        } else {
+            0.0
+        };
+        let tectonic_subsidence = params.tectonic_subsidence_gain.max(0.0) * tensile
+            + trench_subsidence_bias
+            + backarc_subsidence_bias
+            + rift_subsidence_bias;
         let thermal_subsidence = if state.crust_type == CrustType::Oceanic {
             let age_norm = (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0);
-            params.thermal_subsidence_gain.max(0.0) * age_norm.sqrt()
+            params.thermal_subsidence_gain.max(0.0) * age_norm.sqrt() * activity_scale
         } else {
             0.0
         };
@@ -787,10 +852,21 @@ fn smoothing_limiter(endogenous_forcing: f32, smoothing_strength: f32, local_rel
     if smoothing_strength <= 1e-6 {
         return 1.0;
     }
+    if smoothing_strength <= endogenous_forcing.max(0.0) {
+        return 1.0;
+    }
 
     let forcing_budget = endogenous_forcing.max(1e-4) * SMOOTHING_DOMINANCE_TARGET;
     let relief_budget = local_relief.max(1e-4) * RELIEF_RETENTION_FRACTION_PER_STEP;
-    let allowable_smoothing = forcing_budget.min(relief_budget).max(1e-6);
+    let minimum_retained_smoothing = if endogenous_forcing > 0.0 {
+        smoothing_strength * 0.25
+    } else {
+        0.0
+    };
+    let allowable_smoothing = forcing_budget
+        .min(relief_budget)
+        .max(minimum_retained_smoothing)
+        .max(1e-6);
     if smoothing_strength <= allowable_smoothing {
         1.0
     } else {
@@ -1120,23 +1196,34 @@ fn height_std_dev(values: &[f32]) -> f32 {
     variance.max(0.0).sqrt()
 }
 
-fn boundary_tensor(boundary_type: BoundaryType, activity: f32) -> StressTensor {
+fn boundary_tensor(
+    boundary_type: BoundaryType,
+    activity: f32,
+    convergence: f32,
+    divergence: f32,
+    transform: f32,
+    obliquity: f32,
+) -> StressTensor {
     let a = activity.clamp(0.0, 1.0);
+    let c = convergence.max(a * 0.35).clamp(0.0, 1.0);
+    let d = divergence.max(a * 0.35).clamp(0.0, 1.0);
+    let t = transform.max(a * 0.35).clamp(0.0, 1.0);
+    let oblique_compression = (1.0 - 0.40 * obliquity.clamp(0.0, 1.0)).clamp(0.0, 1.0);
     match boundary_type {
         BoundaryType::Subduction | BoundaryType::Collision => StressTensor {
-            xx: -0.09 * a,
-            yy: -0.09 * a,
-            xy: 0.0,
+            xx: -0.09 * c * oblique_compression,
+            yy: -0.09 * c * oblique_compression,
+            xy: 0.03 * t,
         },
         BoundaryType::Ridge | BoundaryType::Rift => StressTensor {
-            xx: 0.07 * a,
-            yy: 0.07 * a,
-            xy: 0.0,
+            xx: 0.07 * d,
+            yy: 0.07 * d,
+            xy: 0.02 * t,
         },
         BoundaryType::Transform => StressTensor {
             xx: 0.0,
             yy: 0.0,
-            xy: 0.08 * a,
+            xy: 0.08 * t,
         },
         BoundaryType::PassiveMargin => StressTensor {
             xx: 0.0,
@@ -1144,6 +1231,14 @@ fn boundary_tensor(boundary_type: BoundaryType, activity: f32) -> StressTensor {
             xy: 0.0,
         },
     }
+}
+
+fn boundary_component(values: &[f32], index: usize) -> f32 {
+    values
+        .get(index)
+        .copied()
+        .map(|value| finite_or(value, 0.0).clamp(0.0, 1.0))
+        .unwrap_or(0.0)
 }
 
 fn finite_or(value: f32, fallback: f32) -> f32 {

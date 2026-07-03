@@ -45,6 +45,9 @@ pub(super) struct BoundaryEdge {
     pub(super) boundary_type: EdgeReliefType,
     pub(super) strength: f32,
     pub(super) obliquity: f32,
+    pub(super) convergence: f32,
+    pub(super) divergence: f32,
+    pub(super) transform: f32,
 }
 
 #[derive(Clone, Copy)]

@@ -187,6 +187,67 @@ heat_release_rate: プルーム発生時の放熱率
 9. アイソスタシー調整
 10. 活動量メトリクス更新
 
+### 2.4 プレート相対運動からの地形応答
+
+初期地形生成と Crust runtime では、隣接 plate 境界の相対速度を同じ proxy へ分解する。
+
+```text
+rel_v = v_b - v_a
+n = unit(pos_b - pos_a)
+
+C = max(0, dot(rel_v, n))
+D = max(0, -dot(rel_v, n))
+T = length(rel_v - dot(rel_v, n) * n)
+obliquity = T / (C + D + T + eps)
+```
+
+`C` は収束、`D` は発散、`T` は横ずれ、`obliquity` は斜交度として扱う。
+これらは厳密な応力場ではなく、coarse mesh で地形生成の因果を追うための
+相対運動 proxy である。
+
+収束境界では、地殻タイプと海洋地殻の古さ・密度 proxy から
+衝突または沈み込みを選ぶ。
+沈み込み適性は次の近似で読む。
+
+```text
+subduction_gate =
+    0.45 * age_norm
+  + 0.30 * density_age_factor
+  + 0.15 * convergence_memory
+  + 0.10 * convergence_norm
+```
+
+地形応答は次の対応を持つ。
+
+- `Collision`: `C` が強いほど広い orogenic belt の uplift が増え、`obliquity` が高いほど弱まる
+- `Subduction`: `subduction_gate` が高いほど海溝 subsidence、火山弧 uplift、弧火山性が強まる
+- `Ridge`: `D` が強いほど海嶺 uplift と ridge volcanism が強まる
+- `Rift`: `D` が強いほどリフト沈降と引張応力が強まる
+- `Transform`: `T` が強いほど狭い relief と shear stress が強まる
+
+大陸衝突山脈は境界線上の一点ピークではなく、
+縫合線近傍の浅い notch、境界から少し離れた core uplift、
+広い plateau 成分の合成として扱う。
+
+沈み込み帯の火山弧は海溝そのものではなく、沈み込む slab が
+火山発生深度へ達する位置に置く。
+距離は次の近似で決める。
+
+```text
+dip = lerp(25deg, 65deg, subduction_angle_proxy)
+target_depth = lerp(90km, 130km, subduction_gate)
+arc_distance_from_trench = target_depth / tan(dip)
+```
+
+そのため、急角度の沈み込みでは火山弧が海溝に近く、
+緩角度の沈み込みでは火山弧がより遠くなる。
+
+初期地形生成では境界からの距離に `band` / `ring` 型の減衰を掛けて、
+海溝・弧・背弧・衝突帯・リフト・海嶺・transform relief を合成する。
+runtime では同じ proxy を `BoundaryDynamicsState` に保持し、
+`surface_dynamics` の stress、tectonic uplift / subsidence、volcanism、
+地殻厚更新へ反映する。
+
 ### 2.7 Environment 期の地質時定数
 
 `Environment` 期では、Crust 期と同じ tectonic / smoothing / isostatic 応答を

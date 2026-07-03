@@ -26,6 +26,8 @@ interface GeologyScoreRecord {
         metrics?: Record<string, NumberLike>;
     };
     diagnostics?: Record<string, NumberLike>;
+    plate_shape_initial?: Record<string, NumberLike>;
+    plate_shape?: Record<string, NumberLike>;
 }
 
 const PHASE2_KEYS = [
@@ -38,6 +40,36 @@ const DIAGNOSTIC_KEYS = [
     "open_boundary_export_fraction",
     "erosion_reference_coverage",
     "lake_deposition_share",
+] as const;
+
+const PLATE_SHAPE_KEYS = [
+    "plate_count",
+    "max_area_ratio",
+    "effective_plate_count",
+    "multi_component_plate_count",
+    "max_component_count",
+    "mean_detached_fragment_ratio",
+    "max_detached_fragment_ratio",
+    "mean_boundary_complexity",
+    "max_boundary_complexity",
+    "mean_elongation",
+    "max_elongation",
+    "mean_narrow_connection_cell_ratio",
+    "max_narrow_connection_cell_ratio",
+    "area_ge_1pct_plate_count",
+    "area_ge_1pct_p95_boundary_complexity",
+    "area_ge_1pct_p99_boundary_complexity",
+    "area_ge_1pct_p95_elongation",
+    "area_ge_1pct_p99_elongation",
+    "area_ge_1pct_p95_narrow_connection_cell_ratio",
+    "area_ge_1pct_p99_narrow_connection_cell_ratio",
+    "top8_plate_count",
+    "top8_p95_boundary_complexity",
+    "top8_p99_boundary_complexity",
+    "top8_p95_elongation",
+    "top8_p99_elongation",
+    "top8_p95_narrow_connection_cell_ratio",
+    "top8_p99_narrow_connection_cell_ratio",
 ] as const;
 
 function parseArgs(argv: string[]): Args {
@@ -198,6 +230,24 @@ async function main() {
             label: key,
             current: current.diagnostics?.[key],
             baseline: baseline.diagnostics?.[key],
+        })),
+    );
+
+    printMetricSection(
+        "-- Plate Shape Initial Observation --",
+        PLATE_SHAPE_KEYS.map((key) => ({
+            label: key,
+            current: current.plate_shape_initial?.[key],
+            baseline: baseline.plate_shape_initial?.[key],
+        })),
+    );
+
+    printMetricSection(
+        "-- Plate Shape Runtime Observation --",
+        PLATE_SHAPE_KEYS.map((key) => ({
+            label: key,
+            current: current.plate_shape?.[key],
+            baseline: baseline.plate_shape?.[key],
         })),
     );
 }

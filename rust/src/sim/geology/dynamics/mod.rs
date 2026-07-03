@@ -445,6 +445,11 @@ fn ensure_geology_dynamics(
             backarc_tension: vec![0.0; cell_count],
             slab_convergence_component: vec![0.0; cell_count],
             slab_rollback_component: vec![0.0; cell_count],
+            convergence_component: vec![0.0; cell_count],
+            divergence_component: vec![0.0; cell_count],
+            transform_component: vec![0.0; cell_count],
+            obliquity: vec![0.0; cell_count],
+            subduction_gate: vec![0.0; cell_count],
         },
         mantle_heat,
         cached_metrics: GeologyStepMetrics::default(),
@@ -949,25 +954,27 @@ fn apply_boundary_crossing_discrete_attrs_substep(
         if boundary_activity <= 0.0 {
             continue;
         }
-        let current_plate = plate_id_prev[i].as_usize();
+        let current_plate_id = plate_id_next[i];
+        let current_plate = current_plate_id.as_usize();
         if plate_sizes.get(current_plate).copied().unwrap_or(0) <= donor_floor {
             continue;
         }
-        if !removing_cell_preserves_plate_local_connectivity(nbr_offsets, nbrs, plate_id_prev, i) {
+        if !removing_cell_preserves_plate_local_connectivity(nbr_offsets, nbrs, plate_id_next, i) {
             continue;
         }
 
         let mut best_score = 0.0_f32;
-        let mut best_plate = plate_id_prev[i];
+        let mut best_plate = current_plate_id;
         let mut best_crust = next_crust[i];
         let mut best_edge_spacing = 1.0_f32;
-        let vel_i = plate_velocity_for_cell(plate_states, plate_id_prev[i], positions[i]);
+        let vel_i = plate_velocity_for_cell(plate_states, current_plate_id, positions[i]);
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
-            if n >= plate_id_prev.len() || plate_id_prev[n] == plate_id_prev[i] {
+            if n >= plate_id_next.len() || plate_id_next[n] == current_plate_id {
                 continue;
             }
-            let vel_n = plate_velocity_for_cell(plate_states, plate_id_prev[n], positions[n]);
+            let neighbor_plate_id = plate_id_next[n];
+            let vel_n = plate_velocity_for_cell(plate_states, neighbor_plate_id, positions[n]);
             let dir_raw = [
                 positions[i][0] - positions[n][0],
                 positions[i][1] - positions[n][1],
@@ -987,14 +994,14 @@ fn apply_boundary_crossing_discrete_attrs_substep(
             let score = neighbor_inflow.min(relative_inflow).max(0.0);
             if score > best_score {
                 best_score = score;
-                best_plate = plate_id_prev[n];
+                best_plate = neighbor_plate_id;
                 best_crust = vertex_states[n].crust_type;
                 best_edge_spacing = len;
             }
         }
         let crossing_probability =
             boundary_crossing_probability(best_score * distance_scale, best_edge_spacing);
-        if same_plate_neighbor_count(nbr_offsets, nbrs, plate_id_prev, i, best_plate)
+        if same_plate_neighbor_count(nbr_offsets, nbrs, plate_id_next, i, best_plate)
             < MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS
         {
             continue;
@@ -1185,7 +1192,7 @@ mod tests {
     use super::{
         boundary_crossing_probability, boundary_crossing_substeps,
         removing_cell_preserves_plate_local_connectivity, runtime_boundary_crossing_donor_floor,
-        same_plate_neighbor_count,
+        same_plate_neighbor_count, MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS,
     };
     use crate::sim::geology_types::PlateId;
     use crate::sim::world::{BoundaryDynamicsState, BoundaryType, PlateKinematicsState};
@@ -1271,6 +1278,23 @@ mod tests {
         assert_eq!(
             same_plate_neighbor_count(&nbr_offsets, &nbrs, &plate_id, 1, PlateId(0)),
             2
+        );
+    }
+
+    #[test]
+    fn boundary_crossing_target_support_must_use_live_assignments() {
+        let nbr_offsets = vec![0, 2, 3, 4, 5];
+        let nbrs = vec![1, 2, 0, 0, 0];
+        let stale_plate_id = vec![PlateId(0), PlateId(1), PlateId(1), PlateId(0)];
+        let live_plate_id = vec![PlateId(0), PlateId(1), PlateId(0), PlateId(0)];
+
+        assert_eq!(
+            same_plate_neighbor_count(&nbr_offsets, &nbrs, &stale_plate_id, 0, PlateId(1)),
+            MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS,
+        );
+        assert!(
+            same_plate_neighbor_count(&nbr_offsets, &nbrs, &live_plate_id, 0, PlateId(1))
+                < MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS
         );
     }
 

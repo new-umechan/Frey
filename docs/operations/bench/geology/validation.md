@@ -83,12 +83,26 @@ plate が分断されているのではなく、境界が細かく蛇行して�
 この場合は score penalty を足す前に、
 threshold candidate 群の中に area balance の良い候補が存在するかを先に確認する。
 
+注意: `plate_emergence_probe` は `seed=earth` でも damage-first plate emergence を診断する。
+一方で `build_geology_with_mesh("earth", ...)` は `earth_preset` へ早期 return するため、
+`geology_validation_solo` default の `seed=earth` は probe の結果と一致しない。
+Frey の通常生成 plate を Earth 実データと比較する場合は、`alpha` などの通常 seed を使う。
+
 `crust_plate_count_series` は tick 0 だけでも、初期 plate field が runtime 前に
 何 plate へ compact されたかを確認できる。
 runtime まで見る場合は `plate_count` だけでなく、
 `plate_id_churn_rate`、`orphan_cell_count`、`single_cell_plate_count` も合わせて読む。
 plate 数が維持されていても `single_cell_plate_count` が増えるなら、
 runtime ownership transfer が degenerate micro-plate を作っている可能性がある。
+`component_count > 1` や `detached_fragment_ratio > 0` が runtime 後にだけ出る場合は、
+boundary crossing の ownership transfer が plate を分断している可能性が高い。
+
+2026-07-03 の `seed=eta` 観測では、修正前は tick 14 で plate 9 が
+`component_count=2`, `detached_fragment_ratio=0.266355` になっていた。
+原因は boundary crossing substep が stale な `plate_id_prev` で target support を判定し、
+同じ substep 内で既に動いた隣接 cell をまだ support として数えていたことだった。
+譲渡判定を live な `plate_id_next` に寄せた後、同じ 30 tick series では
+multi-component event が 23 件から 0 件になった。
 
 ### Plate motion naturalness の確認
 
