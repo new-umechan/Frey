@@ -1,283 +1,51 @@
-# Ecologyの詳細設計
+# 生態の考え方
 
-## 目的
+この文書は、現在の生態モデルを、実装の細部ではなく概念として説明する。
+関数名、内部フィールド名、式、個別パラメータの一覧はここでは扱わない。
 
-物理的な地形や気候レイヤーから植生に落とし込むこと。
-詳細な植生シミュレータではなく、あくまで人類の文化圏に
-影響を与えうる範囲での近似計算をすることが目的。
-毎tickで次の値を`World State`へ書く。
+## 役割
 
-- `biome`
-- `tree_cover`
-- `ground_cover`
-- `disturbance`
-- `soil_fertility`
+生態モデルは、気候、水、地形から、各セルの植生と土壌の状態を近似する。
+目的は、詳細な生態系を再現することではなく、人間活動や生業に影響する地表の性質を作ることである。
 
-## 入力
+ここで扱う生態は、植物群落の大まかな状態である。
+個別の種、食物網、遷移の細部、季節変化は直接扱わない。
 
-- `ClimateState` （temperature, precipitation）
-- `HydrologyState` （river_flow）
-- `GeoState` （height）
-- `FeedbackQueue` （Subsistence・Geology・Hydrologyからの変化量）
-- 前tickの `EcologyState`
+## 更新
 
-## 出力
+まず、温度と水分から、その場所で育ちやすい植生の方向を決める。
+暖かく湿った場所では木が増えやすく、乾いた場所や寒い場所では草地や裸地に近づきやすい。
+高い場所や水がたまりやすい場所では、別の地表状態になりやすい。
 
-全セル分の `EcologyState`：
+植生は目標状態へ即座に変わるのではなく、前の状態から少しずつ近づく。
+これにより、気候が変わっても地表は遅れて反応する。
+乾燥、寒冷化、攪乱が強い場合は、回復よりも減少が速くなる。
 
-```rust
-struct EcologyState {
-    // 公開I/O（他モジュールが読む）
-    biome: Biome,
+土壌の肥沃さは、気候、水、植生、攪乱の影響を受ける。
+植生が安定している場所では維持されやすく、乾燥や強い攪乱が続く場所では低下しやすい。
 
-    // 永続状態（因果・長期記憶）
-    tree_cover:     f32,  // 0..1
-    ground_cover:   f32,  // 0..1
-    disturbance:    f32,  // 0..1
-    soil_fertility: f32,  // 0..1
-}
-```
+最後に、外部が読みやすい大まかな地表ラベルを作る。
+このラベルは説明や下流利用のための要約であり、内部計算の主因にはしない。
 
-### データ型の補足: biome
+## 接続
 
-`docs/reference/architecture/data_model.md`の補足
+生態は、気候、水、地形を読む。
+出力する植生、地表被覆、攪乱、土壌は、気候の蒸発散、生業、栽培・飼養の成立しやすさに影響する。
 
-非連続で恣意的なラベル。
-下流で使うためにあるが、使用は最低限にとどめ、なるべく連続状態を参照するように。
-内部計算には使用しない。
+人間活動が強くなる時代では、生態は外部からの攪乱も受ける。
+その場合でも、生態モデルは地表状態の変化を担当し、社会側の判断そのものは担当しない。
 
-```rust
-enum Biome {
-    TropicalForest,
-    Savanna,
-    // Steppe: Tier2で Domesticates の実装時に必要なら追加
-    Desert,
-    Grassland,
-    TemperateForest,
-    BorealForest,
-    Tundra,
-    Wetland,
-    Alpine,
-}
-```
+## 参照している考え方
 
-## 処理ロジック
+現在のモデルは、次の考え方を組み合わせた近似である。
 
-### 共通ヘルパー
+- 気温と水分が植生の上限を大きく決める
+- 植生は環境変化へ遅れて追従する
+- 攪乱は植生回復を遅らせ、地表を開ける
+- 安定した植生は土壌を保ちやすい
+- 地表ラベルは連続状態の要約であり、原因そのものではない
 
-```rust
-/// ポテンシャルに向かって指数的に収束する
-fn converge_toward(
-    current: f32,
-    potential: f32,
-    rate_up: f32,    // potentialがcurrentより高い場合の速度
-    rate_down: f32,  // potentialがcurrentより低い場合の速度
-    dt: f32,
-) -> f32 {
-    let rate = if potential > current { rate_up } else { rate_down };
-    current + (potential - current) * rate * dt
-}
-```
+## 意図的な近似
 
-### biome
-
-決定木。外部から参照するためのラベルとしての扱いで、内部計算には使用しない。
-
-```rust
-fn classify_biome(
-    tree_cover: f32,
-    ground_cover: f32,
-    climate: &ClimateState,
-    hydrology: &HydrologyState,
-    geo: &GeoState,
-) -> Biome {
-    let temp     = climate.temperature;
-    let precip   = climate.precipitation;
-    let height   = geo.height;
-    let flooding = derive_flooding(hydrology.river_flow, geo.height);
-
-    // 1. 標高・気温優先
-    if height > ALPINE_THRESHOLD {
-        return Biome::Alpine;
-    }
-    if temp < TUNDRA_THRESHOLD {
-        return Biome::Tundra;
-    }
-
-    // 2. 乾燥
-    if precip < DESERT_THRESHOLD {
-        return Biome::Desert;
-    }
-
-    // 3. 湛水
-    if flooding > WETLAND_THRESHOLD && tree_cover < WETLAND_TREE_THRESHOLD {
-        return Biome::Wetland;
-    }
-
-    // 4. 気温帯 × tree_cover × ground_cover
-    if temp > TROPICAL_TEMP_THRESHOLD {
-        return if tree_cover > FOREST_THRESHOLD {
-            Biome::TropicalForest
-        } else {
-            Biome::Savanna  // 高温・低tree_cover（ground_coverの有無は問わない）
-        };
-    }
-
-    if temp > BOREAL_TEMP_THRESHOLD {
-        return if tree_cover > FOREST_THRESHOLD {
-            Biome::TemperateForest
-        } else {
-            // tree_cover低・ground_cover高低どちらもGrasslandにまとめる
-            // Tier2でSteppeにするか検討
-            Biome::Grassland
-        };
-    }
-
-    Biome::BorealForest
-}
-
-fn derive_flooding(river_flow: f32, height: f32) -> f32 {
-    // 流量が多く、標高が低いほど湛水しやすい
-    // 具体的な式はチューニング時に決める
-    todo!()
-}
-```
-
-### disturbance
-
-詳細定義はSubsistence設計時に確定。
-
-### tree_cover
-
-```rust
-fn update_tree_cover(
-    current: f32,
-    climate: &ClimateState,
-    feedback: &TreeCoverFeedback,
-    dt: f32,
-) -> f32 {
-    // 1. 気候から潜在的なtree_coverを計算
-    let potential = tree_cover_potential(climate.temperature, climate.precipitation);
-
-    // 2. FeedbackQueueから受け取る変化量
-    let logging_loss    = feedback.logging * dt;     // 伐採
-    let slash_burn_loss = feedback.slash_burn * dt;  // 焼畑
-
-    // 3. ポテンシャルへ収束した次の値からlossを引く
-    (converge_toward(current, potential, TREE_GROWTH_RATE, TREE_DECLINE_RATE, dt)
-        - logging_loss
-        - slash_burn_loss
-    ).clamp(0.0, 1.0)
-}
-
-fn tree_cover_potential(temperature: f32, precipitation: f32) -> f32 {
-    // 高温多雨→高い、乾燥・極寒→低い
-    todo!()
-}
-
-struct TreeCoverFeedback {
-    logging:    f32,  // Subsistenceが積む（伐採強度）
-    slash_burn: f32,  // Subsistenceが積む（焼畑）
-}
-```
-
-### ground_cover
-
-```rust
-fn update_ground_cover(
-    current: f32,
-    climate: &ClimateState,
-    feedback: &GroundCoverFeedback,
-    dt: f32,
-) -> f32 {
-    // 1. 気候から潜在的なground_coverを計算
-    let potential = ground_cover_potential(climate.temperature, climate.precipitation);
-
-    // 2. FeedbackQueueから受け取る変化量
-    let grazing_loss    = feedback.grazing * dt;     // 放牧による草地消耗
-    let slash_burn_loss = feedback.slash_burn * dt;  // 焼畑（tree_coverと共有）
-
-    // 3. ポテンシャルへ収束した次の値からlossを引く
-    (converge_toward(current, potential, GROUND_GROWTH_RATE, GROUND_DECLINE_RATE, dt)
-        - grazing_loss
-        - slash_burn_loss
-    ).clamp(0.0, 1.0)
-}
-
-fn ground_cover_potential(temperature: f32, precipitation: f32) -> f32 {
-    // 草本は樹木より乾燥・寒冷に強い→ポテンシャルが下がりにくい
-    todo!()
-}
-
-struct GroundCoverFeedback {
-    grazing:    f32,  // Subsistenceが積む（放牧強度）
-    slash_burn: f32,  // Subsistenceが積む（焼畑）
-}
-```
-
-### soil_fertility
-
-```rust
-fn update_soil_fertility(
-    current: f32,
-    tree_cover: f32,
-    ground_cover: f32,
-    climate: &ClimateState,
-    feedback: &SoilFertilityFeedback,
-    dt: f32,
-) -> f32 {
-    // 1. 自然回復（非常に遅い）
-    let natural_recovery = natural_recovery_rate(tree_cover, ground_cover, climate)
-        * dt
-        * (1.0 - current);
-
-    // 2. FeedbackQueueから受け取る変化量
-    let farming_loss     = feedback.farming_consumption * dt;  // 農耕・連作
-    let erosion_loss     = feedback.erosion_loss * dt;         // 侵食による表土流出
-    let flood_gain       = feedback.flood_deposition * dt;     // 洪水・堆積
-    let slash_burn_delta = feedback.slash_burn_delta * dt;     // 焼畑（正負あり）
-
-    let next = current
-        + natural_recovery
-        + flood_gain
-        + slash_burn_delta
-        - farming_loss
-        - erosion_loss;
-
-    next.clamp(0.0, 1.0)
-}
-
-fn natural_recovery_rate(
-    tree_cover: f32,
-    ground_cover: f32,
-    climate: &ClimateState,
-) -> f32 {
-    // 植生被覆と気候から直接計算。Biomeを経由しない。
-    let cover         = tree_cover + ground_cover * GROUND_COVER_WEIGHT;
-    let temp_factor   = f(climate.temperature);
-    let precip_factor = g(climate.precipitation);
-
-    cover * temp_factor * precip_factor * BASE_RECOVERY_RATE
-}
-
-struct SoilFertilityFeedback {
-    farming_consumption: f32,  // Subsistenceが積む（農耕・連作強度）
-    erosion_loss:        f32,  // Geologyが積む（侵食量から導出）
-    flood_deposition:    f32,  // Hydrologyが積む（氾濫・堆積量から導出）
-    slash_burn_delta:    f32,  // Subsistenceが積む（焼畑、正負あり）
-}
-```
-
-## 責務分離
-
-- `productivity` は `Subsistence` の責務とする
-- `habitability` は `Settlement` の責務とする
-- `riparian_vegetation` は `Geology` の更新関数内で局所計算する派生値とする
-- `biome` は外部参照用ラベルであり、Ecology内部計算には使用しない
-
-## 関連
-
-- `docs/reference/architecture/module_boundaries.md`
-- `docs/reference/architecture/data_model.md`
-- `docs/reference/modules/climate.md`（`tree_cover` / `ground_cover` 由来の
-  `vegetation_density_proxy` をClimateが内部計算して利用）
+このモデルでは、個別種の競争、食物網、火災の詳細、病害、季節性、生物地理の履歴は直接扱わない。
+代わりに、気候と水に対して説明しやすい植生・土壌の分布を安定して出すことを優先する。

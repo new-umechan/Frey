@@ -1,73 +1,49 @@
-# Subsistence の詳細仕様
+# 生業の考え方
 
-## 目的
+この文書は、現在の生業モデルを、実装の細部ではなく概念として説明する。
+関数名、内部フィールド名、式、個別パラメータの一覧はここでは扱わない。
 
-`Subsistence` は、`Hydrology` / `Ecology` / `Domesticates` / `Population` を読み、
-生業構成と食料供給特性を更新する。
+## 役割
 
-`Domesticates` の後、`Population` / `Settlement` の前に実行される。
+生業モデルは、環境と利用可能な技術から、人々がどのような食料獲得に頼るかを近似する。
+目的は、個別の経済活動を再現することではなく、人口や集落が読む食料供給の平均と不安定さを作ることである。
 
-## 公開 state
+生業は単一の選択ではなく、複数の手段の混合として扱う。
+ある場所では採集や狩猟が中心になり、別の場所では漁労、栽培、飼養が強くなる。
 
-- `subsistence_mix`
-- `food_energy_mean`
-- `food_energy_variance`
-- `buffer_capacity`
-- `mobility_capacity`
-- `land_use_intensity`
+## 更新
 
-## 入力
+まず、水への近さ、海岸性、植生、土壌、地形から、自然資源へのアクセスを見積もる。
+水や沿岸に近い場所では水産資源が使いやすく、植生や地表状態は採集・狩猟・栽培の向き不向きに影響する。
 
-- `geology.height`
-- `hydrology.surface_water_access`
-- `ecology.tree_cover`
-- `ecology.ground_cover`
-- `ecology.soil_fertility`
-- `domesticates.crop_adoption`
-- `domesticates.livestock_adoption`
-- `population.population`
-- `projection.terrain.is_coastal`
-- 前 tick の `subsistence_mix`
+次に、栽培・飼養の普及度から、農耕や牧畜に使える能力を見積もる。
+環境だけでなく、すでに利用が広がっているかどうかが重要になる。
 
-## `SubsistenceMix`
+人口が増えると、より集約的な手段へ寄る圧力が強くなる。
+ただし、環境や利用能力が支えない場所では、人口圧だけで農耕や牧畜へ移るわけではない。
 
-```rust
-struct SubsistenceMix {
-    gathering:   f32,
-    hunting:     f32,
-    fishing:     f32,
-    cultivation: f32,
-    herding:     f32,
-}
-```
+最後に、前の時間ステップの生業構成から少しずつ新しい構成へ近づける。
+これにより、環境や人口が変わっても生活様式は急に切り替わらない。
 
-各軸は `0.0..=1.0`、合計は `1.0` に正規化する。
+## 接続
 
-## 内部システム
+生業は、水アクセス、植生、土壌、栽培・飼養の普及度、人口を読む。
+出力する食料供給、変動性、蓄えやすさ、移動しやすさ、土地利用の強さは、人口と集落の条件になる。
 
-- `AccessSystem`:
-  `ecology.*`、`hydrology.surface_water_access`、`terrain.is_coastal` から
-  `inland_aquatic_access` / `coastal_aquatic_access` を含むアクセス状態を導出する
-- `CapabilitySystem`:
-  `crop_adoption` / `livestock_adoption` から利用能力を導出する
-- `PressureSystem`:
-  `population.population` から人口圧を導出する
-- `StrategySystem`:
-  access / capability / pressure と前 tick の `subsistence_mix` から
-  次の `SubsistenceMix` を更新する
-- `OutputSystem`:
-  `SubsistenceMix` とアクセス・圧力状態から
-  `food_energy_mean` / `food_energy_variance` / `buffer_capacity` /
-  `mobility_capacity` / `land_use_intensity` を更新する
+このモデルは、人口そのものや集落配置を直接決めない。
+それらは、生業が出した条件を読んで別の領域が更新する。
 
-## 下流利用
+## 参照している考え方
 
-- `Population`:
-  `food_energy_mean` / `food_energy_variance` / `buffer_capacity` / `surface_water_access`
-- `Settlement`:
-  `subsistence_mix` / `food_energy_mean` / `food_energy_variance` /
-  `buffer_capacity` / `mobility_capacity` / `surface_water_access`
+現在のモデルは、次の考え方を組み合わせた近似である。
 
-## 補足
+- 食料獲得は複数手段の混合である
+- 環境アクセスは生業の上限を作る
+- 栽培・飼養の普及は、利用能力として生業を変える
+- 人口圧は集約化を促すが、環境制約を消すわけではない
+- 生業構成は環境変化へ遅れて追従する
 
-`Hydrology.surface_water_access` を水アクセスの正本として扱う。
+## 意図的な近似
+
+このモデルでは、個別集団の意思決定、交易価格、制度、技術革新、季節的な労働配分は直接扱わない。
+代わりに、環境と利用能力から食料供給の性質を安定して導くことを優先する。

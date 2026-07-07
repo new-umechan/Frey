@@ -1,196 +1,51 @@
-# Glaciologyの詳細仕様
+# 氷と海面の考え方
 
-## 目的
+この文書は、現在の氷河・氷床モデルを、実装の細部ではなく概念として説明する。
+関数名、内部フィールド名、式、個別パラメータの一覧はここでは扱わない。
 
-Glaciologyは、地形と気候から氷河の質量収支を計算し、氷厚・融解流出・氷河侵食率を更新する。
-毎tickで次の値を `World State` / `WorldControlState` に書く。
+## 役割
 
-- 氷厚（`glaciology.ice_thickness`）
-- 氷荷重（`glaciology.ice_load`）
-- 堆積量（`glaciology.accumulation`）
-- 消耗量（`glaciology.ablation`）
-- 地盤応答目標量（`glaciology.isostatic_adjustment`）
-- 融解流出量（`glaciology.glacial_melt_runoff`）
-- 氷河侵食率（`glaciology.glacial_erosion_rate`）
-- 全球海面基準（`control.sea_level_offset`）
+このモデルは、地形と気候から、氷がどこにたまり、どこで融け、どれだけ水や侵食として戻るかを近似する。
+目的は、氷河流動を詳細に再現することではなく、寒冷な地形、融け水、氷の重さ、海面への影響を
+世界状態へ安定して反映することである。
 
-Glaciologyは「氷河固有状態の更新」に責務を限定し、標高の最終反映は `Geology` が担う。
+## 更新
 
-## 入力
+まず、各セルの温度と降水から、雪として残りやすい量と融けやすい量を見積もる。
+寒く、降水がある場所では氷が増えやすい。
+暖かい場所では氷が減り、融け水が下流の水文へ渡る。
 
-Glaciologyが読む主な値は次のとおり。
+氷厚は急に目標値へ飛ばさず、前の状態から少しずつ変える。
+これにより、気候が変わっても氷は遅れて反応する。
 
-- `geology.height`
-- `climate.temperature`
-- `climate.precipitation`
-- `geo.neighbors_offsets`
-- `geo.neighbors`
-- `clock.epoch`
+厚い氷は地面を押し下げる方向に働く。
+氷が減ると、その荷重も弱まる。
+この地盤応答は氷側で目標量を作り、地形側が最終的な高さへ反映する。
 
-## 出力
+氷が増えると海にある水が減り、氷が融けると海へ戻る。
+海面は、海盆に入る水の量と、現在の地形が持つ海盆容量から決まる。
+この更新も急に切り替えず、時代の移行直後は段階的に効かせる。
 
-Glaciologyは次のセル配列と global control を出力する。
+## 接続
 
-- `glaciology.ice_thickness`
-- `glaciology.ice_load`
-- `glaciology.accumulation`
-- `glaciology.ablation`
-- `glaciology.isostatic_adjustment`
-- `glaciology.glacial_melt_runoff`
-- `glaciology.glacial_erosion_rate`
-- `control.sea_level_offset`
+氷は、地形の高さ、気温、降水を読む。
+出力する氷厚、融け水、氷河侵食、地盤応答、海面基準は、水文と地形へ戻る。
 
-## 処理ロジック
+このモデルは、氷が作る水と荷重を扱う。
+河川網や流量の集計、最終的な地形反映は、それぞれ別の領域が担当する。
 
-### 実行位置
+## 参照している考え方
 
-tick内の実行順は次のとおり。
+現在のモデルは、次の考え方を組み合わせた近似である。
 
-1. `Geology`
-2. `Climate`
-3. `Glaciology`
-4. `Hydrology`
+- 気温が低いほど降水は雪として残りやすい
+- 暖かいほど氷は融けやすい
+- 氷厚は気候変化へ遅れて反応する
+- 厚い氷は地面へ荷重をかける
+- 氷と海は水の貯蔵先としてつながっている
+- 融け水と氷河侵食は、地形と水文へ戻る外力になる
 
-`Glaciology` で計算した融解流出量は同tickの `Hydrology` に入力される。
-ただし runtime では `Crust` 期に glaciology 更新を走らせず、`sea_level_offset` の capacity closure も行わない。
-氷床・海面の動的更新は `Environment` 期以降で扱う。
+## 意図的な近似
 
-### 質量収支（PDD系）
-
-各セルで温度と降水から氷河収支を計算する。  
-積雪は「固体降水率」を温度から線形近似して求める。
-
-```text
-solid_frac = 1                      (T <= 0C)
-solid_frac = 0                      (T >= 2C)
-solid_frac = linear interpolation   (0C < T < 2C)
-
-accumulation = precipitation * accumulation_gain * solid_frac
-
-ablation = max(T - ablation_temp_threshold_c, 0) * ablation_gain
-```
-
-`local_relief` は近傍セル標高差から導く地形起伏proxyとする。
-
-### 氷厚更新
-
-氷厚は急変を避けるために平滑化更新する。
-
-```text
-next_raw = max(prev_ice + accumulation - ablation, 0)
-ice_thickness = lerp(prev_ice, next_raw, alpha)
-```
-
-`alpha` は実行budgetと `thickness_response_rate` から導く。
-
-### 融解流出
-
-融解由来の流出を次式で計算し、`Hydrology` の入力流出へ加算する。
-
-```text
-melt_source = max(ablation - accumulation, 0)
-glacial_melt_runoff = melt_source * melt_runoff_gain
-```
-
-### 海面基準
-
-v1 の `sea_level_offset` は `capacity closure` で扱う。
-現地形から近似再計算した `ocean basin capacity` と
-`ocean_water_inventory` / `ice_inventory` を入力に、
-有効海水量に対応する海面を代数的に解く。
-
-海面式に直接入る water inventory は `Ocean + Ice` のみとし、
-湖・河川・土壌水・地下水などの陸上一時貯留水は diagnostics に留める。
-`Environment` 期への遷移直後はスピンアップ窓を持ち、`ice -> ocean` coupling を段階的に有効化する。  
-加えて、cryosphere reservoir 自体も通常運転へ即時遷移させない。
-`environment_spinup_ticks` の間は次を段階的に有効化する。
-
-- accumulation / ablation の source term
-- 氷厚更新の response alpha
-- ice-ocean exchange
-- isostatic adjustment response
-
-これにより `Environment` 初回 tick で `ice_inventory` が急増し、
-`surface_elevation` が一気に沈む shock を防ぐ。
-
-`sea_level_offset` は inventory residual を `A_eff(η)=dV/dη` で割った
-半陰的 step とし、`sea_level_relaxation_tau_ticks` の指数緩和で追従する。  
-ここで `A_eff(η)` は海盆 hypsometry から導く有効海盆面積であり、
-離散実装では current/target の submerged cell count の平均で近似する。  
-さらに semi-implicit target は `current η` と root solve した `η_eq` の bracket に clamp し、
-hypsometry の非線形で Newton-like step が overshoot しないようにする。  
-`A_eff` が小さい帯では `dη/dV` が大きくなるため、
-実効緩和時間は `tau_eff = tau_base / sqrt(A_eff_fraction)` として伸ばす。  
-`Ocean + (sea_level_coupling * Ice)` をtick内保存対象にし、氷海交換量は
-`ice_ocean_coupling_tau_ticks` 由来の交換上限で制限する。
-
-### 氷河侵食率
-
-v1では氷厚と起伏の近似式で侵食率を与える。
-
-```text
-glacial_erosion_rate = ice_thickness * local_relief * erosion_gain
-```
-
-標高への反映は `Geology` 側で `glacial_erosion_coupling` を通して行う。
-この侵食で生じる sediment は v1 では `Hydrology` へ渡さず、
-glacial erosion source と export / `marine_sediment_mass` diagnostics にのみ計上する。
-
-## パラメータ管理
-
-氷河パラメータは `config/glaciology.yaml` を正本とし、
-`pnpm run config:sync` で
-`rust/src/generated/glaciology_params_defaults.rs` を再生成する。
-
-主パラメータ:
-
-- `accum_temp_threshold_c`
-- `ablation_temp_threshold_c`
-- `accumulation_gain`
-- `accumulation_temp_sensitivity`
-- `ablation_gain`
-- `thickness_response_rate`
-- `melt_runoff_gain`
-- `erosion_gain`
-- `glacial_erosion_coupling`
-- `sea_level_relaxation_tau_ticks`
-- `ice_ocean_coupling_tau_ticks`
-- `environment_spinup_ticks`
-- `mass_conservation_epsilon`
-
-## 責務分離
-
-- `Glaciology` は氷河状態と氷河由来フラックスのみ書く
-- `Glaciology` は `ocean basin capacity` と `Ocean + Ice` inventory から `sea_level_offset` を導く
-- `Hydrology` は河川ネットワーク・流量・河川侵食を更新する
-- `Geology` は河川侵食と氷河侵食を合算して標高へ反映する
-- `Climate` は気候場を更新し、氷河自体は更新しない
-- v1 では氷河由来 sediment transport は持たず、`Hydrology` に渡すのは `glacial_melt_runoff` のみとする
-
-## 今後の展望
-
-### v2候補（物理強化）
-
-- 氷河流動の方向性を持つ輸送（ice flux divergence）を導入する
-- 氷厚勾配と基盤勾配を分離した侵食則に置き換える
-- 氷床と山岳氷河を別モードで扱う
-
-### v2候補（水文連携強化）
-
-- `glacial_melt_runoff` を季節性付きで分解する
-- 氷河湖形成と氷河湖決壊（GLOF）をHydrologyへ接続する
-- 河川水温や土砂輸送への氷河寄与を独立項として持つ
-
-### v3候補（生態・社会連携）
-
-- 高山帯バイオーム境界の時間変化を `Ecology` に供給する
-- 氷河後退が居住可能域へ与える遅延効果を `Settlement` へ接続する
-- 長期淡水安定性指標を `Subsistence` / `Population` へ提供する
-
-関連:
-
-- `docs/reference/architecture/module_boundaries.md`
-- `docs/reference/architecture/data_model.md`
-- `docs/reference/modules/climate.md`
-- `docs/reference/modules/hydrology.md`
-- `docs/reference/modules/geology.md`
+このモデルでは、氷の三次元流動、氷床縁の詳細、季節融解、氷底水、氷山、細かな堆積物輸送は直接扱わない。
+代わりに、長い時間スケールで氷が増減し、水・荷重・侵食として他領域へ戻る関係を安定して表す。
