@@ -347,6 +347,7 @@ struct PlateShapeStats {
     effective_plate_count: f32,
     mean_boundary_complexity: f32,
     max_boundary_complexity: f32,
+    max_enclosed_plate_risk: f32,
 }
 
 fn proto_lid_plate_field(
@@ -774,6 +775,12 @@ fn choose_boundary_extraction(
                         .unwrap_or(Ordering::Equal)
                 })
                 .then_with(|| {
+                    a.shape_stats
+                        .max_enclosed_plate_risk
+                        .partial_cmp(&b.shape_stats.max_enclosed_plate_risk)
+                        .unwrap_or(Ordering::Equal)
+                })
+                .then_with(|| {
                     a.stats
                         .largest_ratio
                         .partial_cmp(&b.stats.largest_ratio)
@@ -856,6 +863,7 @@ pub(super) fn diagnose_plate_emergence_with_mesh(
             selected_effective_plate_count: 0.0,
             selected_mean_plate_boundary_complexity: 0.0,
             selected_max_plate_boundary_complexity: 0.0,
+            selected_max_enclosed_plate_risk: 0.0,
             selected_regime: TectonicRegime::StagnantLid,
             selected_regime_score: f32::INFINITY,
             evolution_iterations: Vec::new(),
@@ -954,6 +962,7 @@ pub(super) fn diagnose_plate_emergence_with_mesh(
                 effective_plate_count: shape_stats.effective_plate_count,
                 mean_plate_boundary_complexity: shape_stats.mean_boundary_complexity,
                 max_plate_boundary_complexity: shape_stats.max_boundary_complexity,
+                max_enclosed_plate_risk: shape_stats.max_enclosed_plate_risk,
                 regime,
                 regime_score: regime_score(regime, &stats, &shape_stats),
             }
@@ -982,6 +991,7 @@ pub(super) fn diagnose_plate_emergence_with_mesh(
         selected_effective_plate_count: selected.shape_stats.effective_plate_count,
         selected_mean_plate_boundary_complexity: selected.shape_stats.mean_boundary_complexity,
         selected_max_plate_boundary_complexity: selected.shape_stats.max_boundary_complexity,
+        selected_max_enclosed_plate_risk: selected.shape_stats.max_enclosed_plate_risk,
         selected_regime: selected.regime,
         selected_regime_score: selected.regime_score,
         evolution_iterations: evolution
@@ -1039,6 +1049,10 @@ pub(super) fn diagnose_plate_emergence_with_mesh(
                         .selected
                         .shape_stats
                         .max_boundary_complexity,
+                    selected_max_enclosed_plate_risk: checkpoint
+                        .selected
+                        .shape_stats
+                        .max_enclosed_plate_risk,
                     selected_regime: checkpoint.selected.regime,
                     selected_regime_score: checkpoint.selected.regime_score,
                 },
@@ -1123,13 +1137,14 @@ fn regime_score(
             let low_effective_plate_penalty =
                 0.20 * (4.8 - shape_stats.effective_plate_count).max(0.0);
             let over_fragment_penalty =
-                0.16 * (shape_stats.final_plate_count.saturating_sub(8)) as f32;
+                0.06 * (shape_stats.final_plate_count.saturating_sub(10)) as f32;
             let under_split_penalty =
                 0.14 * (6usize.saturating_sub(shape_stats.final_plate_count)) as f32;
             let mean_complexity_penalty =
                 0.05 * (shape_stats.mean_boundary_complexity - 4.8).max(0.0);
             let max_complexity_penalty =
                 0.08 * (shape_stats.max_boundary_complexity - 6.2).max(0.0);
+            let enclosed_plate_penalty = 1.80 * shape_stats.max_enclosed_plate_risk;
             (stats.largest_ratio - 0.45).abs()
                 + stats.tiny_fragment_ratio
                 + 0.04 * (stats.valid_count as f32 - expected_valid_count).abs()
@@ -1143,6 +1158,7 @@ fn regime_score(
                 + under_split_penalty
                 + mean_complexity_penalty
                 + max_complexity_penalty
+                + enclosed_plate_penalty
         }
         TectonicRegime::StagnantLid => {
             10.0 + stats.largest_ratio + (4 - stats.valid_count.min(4)) as f32
@@ -1495,6 +1511,7 @@ fn plate_shape_stats(nbr_offsets: &[u32], nbrs: &[u32], plate_id: &[PlateId]) ->
     let mut complexity_sum = 0.0_f32;
     let mut complexity_count = 0usize;
     let mut max_boundary_complexity = 0.0_f32;
+    let mut max_enclosed_plate_risk = 0.0_f32;
     let mut area_ratios = Vec::<f32>::with_capacity(plate_count);
     let mut hhi = 0.0_f32;
     let mut visited = vec![false; plate_id.len()];
@@ -1517,6 +1534,13 @@ fn plate_shape_stats(nbr_offsets: &[u32], nbrs: &[u32], plate_id: &[PlateId]) ->
         complexity_sum += complexity;
         complexity_count += 1;
         max_boundary_complexity = max_boundary_complexity.max(complexity);
+        max_enclosed_plate_risk = max_enclosed_plate_risk.max(enclosed_plate_risk(
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            plate,
+            cells,
+        ));
 
         let mut component_count = 0usize;
         let mut largest_component_cells = 0usize;
@@ -1576,7 +1600,44 @@ fn plate_shape_stats(nbr_offsets: &[u32], nbrs: &[u32], plate_id: &[PlateId]) ->
             complexity_sum / complexity_count as f32
         },
         max_boundary_complexity,
+        max_enclosed_plate_risk,
     }
+}
+
+fn enclosed_plate_risk(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+    plate_cells: usize,
+) -> f32 {
+    if plate_cells == 0 || plate_id.is_empty() {
+        return 0.0;
+    }
+    let mut contacts = std::collections::BTreeMap::<u32, u32>::new();
+    let mut total_contacts = 0_u32;
+    for v in 0..plate_id.len() {
+        if plate_id[v].as_usize() != plate {
+            continue;
+        }
+        let start = nbr_offsets[v] as usize;
+        let end = nbr_offsets[v + 1] as usize;
+        for &n_u32 in &nbrs[start..end] {
+            let n = n_u32 as usize;
+            if n >= plate_id.len() || plate_id[n].as_usize() == plate {
+                continue;
+            }
+            total_contacts = total_contacts.saturating_add(1);
+            *contacts.entry(plate_id[n].as_u32()).or_insert(0) += 1;
+        }
+    }
+    let Some(dominant_contacts) = contacts.values().copied().max() else {
+        return 0.0;
+    };
+    let dominant_ratio = dominant_contacts as f32 / total_contacts.max(1) as f32;
+    let area_ratio = plate_cells as f32 / plate_id.len().max(1) as f32;
+    let small_plate_gate = ((0.10 - area_ratio) / 0.10).clamp(0.0, 1.0);
+    dominant_ratio * small_plate_gate
 }
 
 fn assigned_plate_count(plate_id: &[PlateId]) -> usize {

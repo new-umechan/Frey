@@ -1,6 +1,7 @@
 use crate::GeologyParams;
 
 mod boundary_dynamics;
+mod plate_ownership;
 mod surface_dynamics;
 
 use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
@@ -14,8 +15,11 @@ use boundary_dynamics::{
     plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics,
     ReclassifyBoundariesInput,
 };
+use plate_ownership::{apply_euler_front_advection, EulerFrontAdvectionInput};
 use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
 
+const PLATE_OWNERSHIP_MODE_LEGACY_TAKEOVER: u32 = 0;
+const PLATE_OWNERSHIP_MODE_EULER_FRONT_ADVECTION: u32 = 1;
 const ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET: f32 = 0.02;
 const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
 const MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS: usize = 3;
@@ -150,19 +154,47 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &world.control.geology_params,
     );
     let mut next_plate_id = plate_id.to_vec();
-    let boundary_crossing_substeps = apply_boundary_crossing_discrete_attrs(
-        BoundaryCrossingInput {
-            positions,
-            nbr_offsets,
-            nbrs,
-            plate_states: &dynamics.plate_states,
-            plate_id_prev: plate_id,
-            boundary_state: &dynamics.boundary_state,
-            tick_seed: (world.clock.tick as u32) ^ (dynamics.update_index as u32).rotate_left(13),
-        },
-        &mut next_plate_id,
-        &mut next_vertex_states,
-    );
+    let boundary_crossing_substeps = match world.control.geology_params.plate_ownership_mode {
+        PLATE_OWNERSHIP_MODE_EULER_FRONT_ADVECTION => apply_euler_front_advection(
+            EulerFrontAdvectionInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_states: &dynamics.plate_states,
+                boundary_state: &dynamics.boundary_state,
+            },
+            &mut next_plate_id,
+            &mut next_vertex_states,
+        ),
+        PLATE_OWNERSHIP_MODE_LEGACY_TAKEOVER => apply_boundary_crossing_discrete_attrs(
+            BoundaryCrossingInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_states: &dynamics.plate_states,
+                plate_id_prev: plate_id,
+                boundary_state: &dynamics.boundary_state,
+                tick_seed: (world.clock.tick as u32)
+                    ^ (dynamics.update_index as u32).rotate_left(13),
+            },
+            &mut next_plate_id,
+            &mut next_vertex_states,
+        ),
+        _ => apply_boundary_crossing_discrete_attrs(
+            BoundaryCrossingInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_states: &dynamics.plate_states,
+                plate_id_prev: plate_id,
+                boundary_state: &dynamics.boundary_state,
+                tick_seed: (world.clock.tick as u32)
+                    ^ (dynamics.update_index as u32).rotate_left(13),
+            },
+            &mut next_plate_id,
+            &mut next_vertex_states,
+        ),
+    };
     let plate_id_churn_rate = plate_id_churn_rate(plate_id, &next_plate_id);
     let orphan_cell_count = orphan_cell_count(nbr_offsets, nbrs, &next_plate_id);
     let single_cell_plate_count = single_cell_plate_count(&next_plate_id);
@@ -894,6 +926,34 @@ struct BoundaryCrossingInput<'a> {
     tick_seed: u32,
 }
 
+#[derive(Clone, Copy)]
+struct BoundaryTransferIntent {
+    source_plate: PlateId,
+    target_plate: PlateId,
+    crust: CrustType,
+    score: f32,
+    edge_spacing: f32,
+}
+
+struct BoundaryTransferComponent {
+    target_plate: PlateId,
+    cells: Vec<usize>,
+    source_removals: Vec<usize>,
+    support_contact_count: u32,
+    score_sum: f32,
+    edge_spacing_sum: f32,
+}
+
+impl BoundaryTransferComponent {
+    fn support_density(&self) -> f32 {
+        if self.cells.is_empty() {
+            0.0
+        } else {
+            self.support_contact_count as f32 / self.cells.len() as f32
+        }
+    }
+}
+
 fn apply_boundary_crossing_discrete_attrs(
     input: BoundaryCrossingInput<'_>,
     plate_id_next: &mut [PlateId],
@@ -947,33 +1007,117 @@ fn apply_boundary_crossing_discrete_attrs_substep(
         .iter()
         .map(|s| s.crust_type)
         .collect::<Vec<_>>();
-    for i in 0..plate_id_prev.len() {
-        let start = nbr_offsets[i] as usize;
-        let end = nbr_offsets[i + 1] as usize;
+    let intents = collect_boundary_transfer_intents(
+        positions,
+        nbr_offsets,
+        nbrs,
+        plate_states,
+        plate_id_next,
+        boundary_state,
+        &next_crust,
+        &plate_sizes,
+        donor_floor,
+    );
+    let mut components = collect_boundary_transfer_components(
+        nbr_offsets,
+        nbrs,
+        plate_id_prev,
+        &intents,
+        plate_sizes.len(),
+    );
+    components.sort_by(|a, b| {
+        let a_key = (a.support_density(), a.cells.len(), a.score_sum);
+        let b_key = (b.support_density(), b.cells.len(), b.score_sum);
+        b_key
+            .0
+            .total_cmp(&a_key.0)
+            .then_with(|| b_key.1.cmp(&a_key.1))
+            .then_with(|| b_key.2.total_cmp(&a_key.2))
+    });
+
+    for component in components {
+        if component.cells.is_empty() {
+            continue;
+        }
+        let mut can_transfer = true;
+        for (source_plate, &remove_count) in component.source_removals.iter().enumerate() {
+            if remove_count == 0 {
+                continue;
+            }
+            if plate_sizes.get(source_plate).copied().unwrap_or(0) <= donor_floor + remove_count {
+                can_transfer = false;
+                break;
+            }
+        }
+        if !can_transfer {
+            continue;
+        }
+        let mean_score = component.score_sum / component.cells.len() as f32;
+        let mean_edge_spacing = component.edge_spacing_sum / component.cells.len() as f32;
+        let crossing_probability =
+            boundary_crossing_probability(mean_score * distance_scale, mean_edge_spacing);
+        let sample = hash01(
+            input.tick_seed
+                ^ component.target_plate.as_u32().rotate_left(7)
+                ^ (component.cells.len() as u32).rotate_left(13),
+        );
+        if crossing_probability <= 0.0 || sample > crossing_probability {
+            continue;
+        }
+        for &cell in &component.cells {
+            let Some(intent) = intents[cell].as_ref() else {
+                continue;
+            };
+            if let Some(count) = plate_sizes.get_mut(intent.source_plate.as_usize()) {
+                *count = count.saturating_sub(1);
+            }
+            if let Some(count) = plate_sizes.get_mut(intent.target_plate.as_usize()) {
+                *count = count.saturating_add(1);
+            }
+            plate_id_next[cell] = intent.target_plate;
+            next_crust[cell] = intent.crust;
+        }
+    }
+    for (i, crust) in next_crust.into_iter().enumerate() {
+        vertex_states[i].crust_type = crust;
+    }
+}
+
+fn collect_boundary_transfer_intents(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_states: &[PlateKinematicsState],
+    plate_id: &[PlateId],
+    boundary_state: &BoundaryDynamicsState,
+    next_crust: &[CrustType],
+    plate_sizes: &[usize],
+    donor_floor: usize,
+) -> Vec<Option<BoundaryTransferIntent>> {
+    let mut intents = vec![None; plate_id.len()];
+    for i in 0..plate_id.len() {
         let boundary_activity = boundary_state.activity.get(i).copied().unwrap_or(0.0);
         if boundary_activity <= 0.0 {
             continue;
         }
-        let current_plate_id = plate_id_next[i];
+        let current_plate_id = plate_id[i];
         let current_plate = current_plate_id.as_usize();
-        if plate_sizes.get(current_plate).copied().unwrap_or(0) <= donor_floor {
+        if current_plate >= plate_id.len() {
             continue;
         }
-        if !removing_cell_preserves_plate_local_connectivity(nbr_offsets, nbrs, plate_id_next, i) {
-            continue;
-        }
-
         let mut best_score = 0.0_f32;
         let mut best_plate = current_plate_id;
         let mut best_crust = next_crust[i];
         let mut best_edge_spacing = 1.0_f32;
         let vel_i = plate_velocity_for_cell(plate_states, current_plate_id, positions[i]);
+        let start = nbr_offsets[i] as usize;
+        let end = nbr_offsets[i + 1] as usize;
         for &n_u32 in &nbrs[start..end] {
             let n = n_u32 as usize;
-            if n >= plate_id_next.len() || plate_id_next[n] == current_plate_id {
+            if n >= plate_id.len() || plate_id[n] == current_plate_id {
                 continue;
             }
-            let neighbor_plate_id = plate_id_next[n];
+            let neighbor_plate_id = plate_id[n];
             let vel_n = plate_velocity_for_cell(plate_states, neighbor_plate_id, positions[n]);
             let dir_raw = [
                 positions[i][0] - positions[n][0],
@@ -995,36 +1139,107 @@ fn apply_boundary_crossing_discrete_attrs_substep(
             if score > best_score {
                 best_score = score;
                 best_plate = neighbor_plate_id;
-                best_crust = vertex_states[n].crust_type;
+                best_crust = next_crust[n];
                 best_edge_spacing = len;
             }
         }
-        let crossing_probability =
-            boundary_crossing_probability(best_score * distance_scale, best_edge_spacing);
-        if same_plate_neighbor_count(nbr_offsets, nbrs, plate_id_next, i, best_plate)
+        if best_plate == current_plate_id {
+            continue;
+        }
+        if plate_sizes.get(current_plate).copied().unwrap_or(0) <= donor_floor {
+            continue;
+        }
+        if same_plate_neighbor_count(nbr_offsets, nbrs, plate_id, i, best_plate)
             < MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS
         {
             continue;
         }
-        let sample = hash01(
-            input.tick_seed
-                ^ (i as u32).wrapping_mul(0x9e37_79b9)
-                ^ best_plate.as_u32().rotate_left(7),
-        );
-        if crossing_probability > 0.0 && sample <= crossing_probability {
-            if let Some(count) = plate_sizes.get_mut(current_plate) {
-                *count = count.saturating_sub(1);
-            }
-            if let Some(count) = plate_sizes.get_mut(best_plate.as_usize()) {
-                *count = count.saturating_add(1);
-            }
-            plate_id_next[i] = best_plate;
-            next_crust[i] = best_crust;
+        intents[i] = Some(BoundaryTransferIntent {
+            source_plate: current_plate_id,
+            target_plate: best_plate,
+            crust: best_crust,
+            score: best_score,
+            edge_spacing: best_edge_spacing,
+        });
+    }
+    intents
+}
+
+fn collect_boundary_transfer_components(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    intents: &[Option<BoundaryTransferIntent>],
+    plate_count: usize,
+) -> Vec<BoundaryTransferComponent> {
+    let mut by_target = vec![Vec::<usize>::new(); plate_count];
+    for (cell, intent) in intents.iter().enumerate() {
+        let Some(intent) = intent else {
+            continue;
+        };
+        let target = intent.target_plate.as_usize();
+        if target < by_target.len() {
+            by_target[target].push(cell);
         }
     }
-    for (i, crust) in next_crust.into_iter().enumerate() {
-        vertex_states[i].crust_type = crust;
+
+    let mut visited = vec![false; plate_id.len()];
+    let mut stack = Vec::<usize>::new();
+    let mut components = Vec::<BoundaryTransferComponent>::new();
+    for target in 0..plate_count {
+        let candidates = &by_target[target];
+        if candidates.is_empty() {
+            continue;
+        }
+        for &start_cell in candidates {
+            if visited[start_cell] {
+                continue;
+            }
+            visited[start_cell] = true;
+            stack.push(start_cell);
+            let mut cells = Vec::<usize>::new();
+            let mut source_removals = vec![0usize; plate_count];
+            let mut score_sum = 0.0_f32;
+            let mut edge_spacing_sum = 0.0_f32;
+            let mut support_contact_count = 0_u32;
+            while let Some(cell) = stack.pop() {
+                cells.push(cell);
+                if let Some(intent) = intents[cell] {
+                    source_removals[intent.source_plate.as_usize()] =
+                        source_removals[intent.source_plate.as_usize()].saturating_add(1);
+                    score_sum += intent.score;
+                    edge_spacing_sum += intent.edge_spacing;
+                }
+                let start = nbr_offsets[cell] as usize;
+                let end = nbr_offsets[cell + 1] as usize;
+                for &neighbor_u32 in &nbrs[start..end] {
+                    let neighbor = neighbor_u32 as usize;
+                    if plate_id.get(neighbor).copied() == Some(PlateId(target as u32)) {
+                        support_contact_count = support_contact_count.saturating_add(1);
+                    }
+                    if neighbor >= plate_id.len()
+                        || visited[neighbor]
+                        || intents[neighbor].is_none()
+                        || intents[neighbor].map(|value| value.target_plate.as_usize())
+                            != Some(target)
+                    {
+                        continue;
+                    }
+                    visited[neighbor] = true;
+                    stack.push(neighbor);
+                }
+            }
+            components.push(BoundaryTransferComponent {
+                target_plate: PlateId(target as u32),
+                cells,
+                source_removals,
+                support_contact_count,
+                score_sum,
+                edge_spacing_sum,
+            });
+        }
     }
+    components
 }
 
 fn runtime_boundary_crossing_donor_floor(cell_count: usize) -> usize {
@@ -1056,6 +1271,7 @@ fn same_plate_neighbor_count(
         .count()
 }
 
+#[cfg(test)]
 fn removing_cell_preserves_plate_local_connectivity(
     nbr_offsets: &[u32],
     nbrs: &[u32],
@@ -1191,8 +1407,9 @@ fn sync_geology_internal(target: &mut [GeologyInternal], source: &[VertexCrustSt
 mod tests {
     use super::{
         boundary_crossing_probability, boundary_crossing_substeps,
-        removing_cell_preserves_plate_local_connectivity, runtime_boundary_crossing_donor_floor,
-        same_plate_neighbor_count, MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS,
+        collect_boundary_transfer_components, removing_cell_preserves_plate_local_connectivity,
+        runtime_boundary_crossing_donor_floor, same_plate_neighbor_count,
+        BoundaryTransferComponent, BoundaryTransferIntent, MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS,
     };
     use crate::sim::geology_types::PlateId;
     use crate::sim::world::{BoundaryDynamicsState, BoundaryType, PlateKinematicsState};
@@ -1296,6 +1513,75 @@ mod tests {
             same_plate_neighbor_count(&nbr_offsets, &nbrs, &live_plate_id, 0, PlateId(1))
                 < MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS
         );
+    }
+
+    #[test]
+    fn boundary_transfer_components_group_adjacent_candidates() {
+        let nbr_offsets = vec![0, 1, 2, 3, 4];
+        let nbrs = vec![1, 0, 3, 2];
+        let plate_id = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(2)];
+        let mut intents = vec![None; 4];
+        intents[0] = Some(BoundaryTransferIntent {
+            source_plate: PlateId(0),
+            target_plate: PlateId(1),
+            crust: crate::sim::geology_types::CrustType::Oceanic,
+            score: 0.8,
+            edge_spacing: 0.2,
+        });
+        intents[1] = Some(BoundaryTransferIntent {
+            source_plate: PlateId(0),
+            target_plate: PlateId(1),
+            crust: crate::sim::geology_types::CrustType::Oceanic,
+            score: 0.7,
+            edge_spacing: 0.2,
+        });
+        intents[3] = Some(BoundaryTransferIntent {
+            source_plate: PlateId(2),
+            target_plate: PlateId(1),
+            crust: crate::sim::geology_types::CrustType::Continental,
+            score: 0.6,
+            edge_spacing: 0.2,
+        });
+
+        let components =
+            collect_boundary_transfer_components(&nbr_offsets, &nbrs, &plate_id, &intents, 3);
+
+        assert_eq!(components.len(), 2);
+        assert_eq!(
+            components
+                .iter()
+                .map(|component| component.cells.len())
+                .sum::<usize>(),
+            3
+        );
+        assert!(components
+            .iter()
+            .any(|component| component.cells.len() == 2));
+        assert!(components
+            .iter()
+            .any(|component| component.cells.len() == 1));
+    }
+
+    #[test]
+    fn boundary_transfer_component_support_density_scales_with_target_contacts() {
+        let dense = BoundaryTransferComponent {
+            target_plate: PlateId(1),
+            cells: vec![0, 1],
+            source_removals: vec![2, 0],
+            support_contact_count: 6,
+            score_sum: 1.5,
+            edge_spacing_sum: 0.4,
+        };
+        let sparse = BoundaryTransferComponent {
+            target_plate: PlateId(1),
+            cells: vec![2, 3],
+            source_removals: vec![2, 0],
+            support_contact_count: 2,
+            score_sum: 1.5,
+            edge_spacing_sum: 0.4,
+        };
+
+        assert!(dense.support_density() > sparse.support_density());
     }
 
     fn plate_state(axis: [f32; 3], speed: f32) -> PlateKinematicsState {

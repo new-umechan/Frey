@@ -229,6 +229,9 @@ tectonic_uplift_gain:
 plate_motion_gain:
   type: f32
   value: 1.0
+plate_ownership_mode:
+  type: u32
+  value: 1
 boundary_reclassify_interval:
   type: u32
   value: 4

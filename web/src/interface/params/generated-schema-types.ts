@@ -277,6 +277,7 @@ export interface TerrainSchemaParams {
     deposition_thickness_coupling: number;
     tectonic_uplift_gain: number;
     plate_motion_gain: number;
+    plate_ownership_mode: number;
     boundary_reclassify_interval: number;
     river_rebuild_interval_min: number;
     river_rebuild_interval_max: number;
@@ -385,6 +386,7 @@ export const TerrainSchemaParamsKeys = [
     "deposition_thickness_coupling",
     "tectonic_uplift_gain",
     "plate_motion_gain",
+    "plate_ownership_mode",
     "boundary_reclassify_interval",
     "river_rebuild_interval_min",
     "river_rebuild_interval_max",

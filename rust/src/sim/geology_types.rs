@@ -177,6 +177,7 @@ pub struct GeologyParams {
     pub deposition_thickness_coupling: f32,
     pub tectonic_uplift_gain: f32,
     pub plate_motion_gain: f32,
+    pub plate_ownership_mode: u32,
     pub boundary_reclassify_interval: u32,
     pub river_rebuild_interval_min: u32,
     pub river_rebuild_interval_max: u32,
@@ -304,6 +305,7 @@ pub struct PlateEmergenceThresholdDiagnostic {
     pub effective_plate_count: f32,
     pub mean_plate_boundary_complexity: f32,
     pub max_plate_boundary_complexity: f32,
+    pub max_enclosed_plate_risk: f32,
     pub regime: TectonicRegime,
     pub regime_score: f32,
 }
@@ -328,6 +330,7 @@ pub struct PlateEmergenceIterationDiagnostic {
     pub selected_effective_plate_count: f32,
     pub selected_mean_plate_boundary_complexity: f32,
     pub selected_max_plate_boundary_complexity: f32,
+    pub selected_max_enclosed_plate_risk: f32,
     pub selected_regime: TectonicRegime,
     pub selected_regime_score: f32,
 }
@@ -355,6 +358,7 @@ pub struct PlateEmergenceDiagnostics {
     pub selected_effective_plate_count: f32,
     pub selected_mean_plate_boundary_complexity: f32,
     pub selected_max_plate_boundary_complexity: f32,
+    pub selected_max_enclosed_plate_risk: f32,
     pub selected_regime: TectonicRegime,
     pub selected_regime_score: f32,
     pub evolution_iterations: Vec<PlateEmergenceIterationDiagnostic>,
