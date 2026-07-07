@@ -2,10 +2,11 @@ use crate::sim::geology_types::{CrustType, PlateId};
 use crate::sim::world::{BoundaryDynamicsState, PlateKinematicsState, VertexCrustState};
 
 use super::boundary_dynamics::plate_velocity_for_cell;
-use super::{
-    finite_or, runtime_boundary_crossing_donor_floor, MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS,
-};
+use super::finite_or;
 
+const MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS: usize = 3;
+const MAX_BOUNDARY_CROSSING_DONOR_FLOOR_CELLS: usize = 24;
+const MIN_BOUNDARY_CROSSING_TARGET_NEIGHBORS: usize = 2;
 const MIN_EULER_FRONT_TRANSFER_BUDGET: usize = 8;
 const MAX_EULER_FRONT_TRANSFER_BUDGET: usize = 256;
 
@@ -395,6 +396,15 @@ fn same_plate_neighbor_count(
                 .is_some_and(|plate| plate == target_plate)
         })
         .count()
+}
+
+fn runtime_boundary_crossing_donor_floor(cell_count: usize) -> usize {
+    (cell_count / 2048)
+        .clamp(
+            MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS,
+            MAX_BOUNDARY_CROSSING_DONOR_FLOOR_CELLS,
+        )
+        .max(MIN_BOUNDARY_CROSSING_DONOR_PLATE_CELLS)
 }
 
 fn plate_cell_counts(plate_id: &[PlateId]) -> Vec<usize> {

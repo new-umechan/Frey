@@ -17,8 +17,8 @@ runtime 中の形状劣化を示していた。
 
 ## Decision
 
-既存の `legacy_takeover` を default として残しつつ、
-`plate_ownership_mode = 1` に `euler_front_advection` を追加する。
+`legacy_takeover` は削除し、runtime の plate ownership 更新を
+`euler_front_advection` に一本化する。
 
 `euler_front_advection` は全 cell の global remap ではなく、v1 では既存 mesh adjacency 上の
 boundary front を進める。
@@ -32,8 +32,9 @@ boundary front を進める。
 - stochastic hash ではなく score 順に deterministic に transfer する
 - donor plate が極小化する transfer は拒否する
 
-validation 用に `CRUST_PLATE_SERIES_OWNERSHIP_MODE=legacy|euler_front` を追加し、
-同じ seed/tick/record interval で比較できるようにする。
+比較検証後は mode switch を残さない。
+runtime の単一路線として扱い、validation は current implementation の
+multi-seed gate と Earth shape baseline で行う。
 
 ## Consequences
 
@@ -41,7 +42,8 @@ validation 用に `CRUST_PLATE_SERIES_OWNERSHIP_MODE=legacy|euler_front` を追�
 
 - ownership 更新が Euler velocity field に直接従う
 - stochastic な単発 takeover より front としてまとまりやすい
-- 既存 mode を残すため、validation で比較してから default 化できる
+- mode switch がないため、precompute / preview / bench で古い ownership path を
+  誤って使わない
 
 欠点:
 
@@ -49,10 +51,11 @@ validation 用に `CRUST_PLATE_SERIES_OWNERSHIP_MODE=legacy|euler_front` を追�
 - deterministic budget は sub-cell fraction の履歴を持たないため、低速 front は丸めの影響を受ける
 - CFL 予算は近似的な数値安定化であり、現実の plate boundary migration rate そのものではない
 - split / merge / microplate lifecycle は扱わず、既存 plate count 維持を前提にする
+- legacy との runtime 比較は commit history と過去 artifact に限られる
 
 ## Validation
 
-主に次を legacy と euler front で比較する。
+主に次を current implementation の multi-seed gate で監視する。
 
 - `persistent_boundary_complexity_growth`
 - `boundary_complexity_growth`
@@ -66,13 +69,12 @@ validation 用に `CRUST_PLATE_SERIES_OWNERSHIP_MODE=legacy|euler_front` を追�
 - `mean_euler_rotation_residual_ratio`
 - `reciprocal_churn_ratio`
 
-`pnpm bench:compare:plate-ownership` は legacy / candidate の
-`crust_plate_count_series` JSONL を読み、同じ tick / plate id でこれらの指標を比較する。
-`pnpm bench:run:plate-ownership-series` は複数 seed で legacy と euler front を実行し、
+`pnpm bench:run:plate-ownership-series` は複数 seed で current implementation を実行し、
 seed ごとの summary を出す。
 v1 の warning threshold は `max_plate_area_growth_from_initial <= 2.0`、
-`max_abs_plate_area_delta_ratio <= 0.05`、`max_enclosed_plate_risk <= 0.8`、かつ
-persistent complexity ratio と max boundary complexity が legacy 以下であることとする。
+`max_abs_plate_area_delta_ratio <= 0.05`、`max_enclosed_plate_risk <= 0.8`、
+`persistent_boundary_complexity_growth_plate_ratio <= 0.01`、かつ
+`max_boundary_complexity_growth <= 1.25` とする。
 初期 plate selection は、postprocess で enclosed plate を吸収するのではなく、
 やや多めの plate 数を許容し、`max_enclosed_plate_risk` が低い候補を優先する。
 これは plate 数を保ったまま、閉じ込められた小 plate を避けるためである。

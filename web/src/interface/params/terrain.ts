@@ -81,7 +81,6 @@ export const TERRAIN_PARAMS = Object.freeze({
     deposition_thickness_coupling: 0.40,
     tectonic_uplift_gain: 0.065,
     plate_motion_gain: 1.0,
-    plate_ownership_mode: 1,
     boundary_reclassify_interval: 4,
     river_rebuild_interval_min: 1,
     river_rebuild_interval_max: 8,

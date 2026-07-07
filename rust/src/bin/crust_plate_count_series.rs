@@ -392,9 +392,6 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
     if let Some(value) = env_f32("CRUST_PLATE_SERIES_DAMAGE_RATE") {
         geology_params.pre_plate_damage_rate = value;
     }
-    if let Some(value) = env_plate_ownership_mode("CRUST_PLATE_SERIES_OWNERSHIP_MODE") {
-        geology_params.plate_ownership_mode = value;
-    }
     let (mut world, _) =
         sim::headless::init_world_for_headless_runner(&config.seed, config.level, geology_params)
             .unwrap_or_else(|err| panic!("failed to init world: {err}"));
@@ -2051,17 +2048,6 @@ fn append_jsonl(path: &PathBuf, record: &BenchRecord) -> Result<(), String> {
 
 fn env_u32(name: &str) -> Option<u32> {
     env::var(name).ok()?.parse::<u32>().ok()
-}
-
-fn env_plate_ownership_mode(name: &str) -> Option<u32> {
-    let value = env::var(name).ok()?;
-    match value.trim() {
-        "" | "legacy" | "legacy_takeover" | "0" => Some(0),
-        "euler_front" | "euler_front_advection" | "1" => Some(1),
-        other => panic!(
-            "{name} must be legacy, legacy_takeover, euler_front, euler_front_advection, 0, or 1; got {other}"
-        ),
-    }
 }
 
 fn env_u64(name: &str) -> Option<u64> {

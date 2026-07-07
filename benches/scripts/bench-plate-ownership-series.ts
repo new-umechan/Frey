@@ -34,14 +34,12 @@ interface TickRecord {
     max_appendage_isolation_risk?: number;
 }
 
-interface ComparisonRow {
+interface GateRow {
     seed: string;
-    legacy: TickRecord;
-    candidate: TickRecord;
+    current: TickRecord;
 }
 
 const DEFAULT_SEEDS = ["alpha", "beta", "gamma", "delta"];
-const MODES = ["legacy", "euler_front"] as const;
 
 function parseArgs(argv: string[]): Args {
     const args: Args = {
@@ -109,7 +107,7 @@ function printHelp() {
     console.error("  --cargo-manifest <path>");
 }
 
-function runOne(args: Args, seed: string, mode: typeof MODES[number], runId: string): Promise<void> {
+function runOne(args: Args, seed: string, runId: string): Promise<void> {
     return new Promise((resolvePromise, rejectPromise) => {
         const child = spawn(
             "cargo",
@@ -128,9 +126,8 @@ function runOne(args: Args, seed: string, mode: typeof MODES[number], runId: str
                     CRUST_PLATE_SERIES_LEVEL: String(args.level),
                     CRUST_PLATE_SERIES_TICKS: String(args.ticks),
                     CRUST_PLATE_SERIES_RECORD_EVERY: String(args.recordEvery),
-                    CRUST_PLATE_SERIES_OWNERSHIP_MODE: mode,
                     CRUST_PLATE_SERIES_BENCH_OUT: args.out,
-                    CRUST_PLATE_SERIES_RUN_ID: `${runId}-${seed}-${mode}`,
+                    CRUST_PLATE_SERIES_RUN_ID: `${runId}-${seed}`,
                 },
             },
         );
@@ -179,22 +176,14 @@ function finite(value: number | undefined): number {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function delta(candidate: number | undefined, legacy: number | undefined): number {
-    return finite(candidate) - finite(legacy);
-}
-
-function status(row: ComparisonRow): "pass" | "warn" {
-    const complexityImproved =
-        finite(row.candidate.max_boundary_complexity_growth)
-        <= finite(row.legacy.max_boundary_complexity_growth) + 1e-6;
-    const persistenceImproved =
-        finite(row.candidate.persistent_boundary_complexity_growth_plate_ratio)
-        <= finite(row.legacy.persistent_boundary_complexity_growth_plate_ratio) + 1e-6;
-    const areaGrowthSafe = finite(row.candidate.max_plate_area_growth_from_initial) <= 2.0;
-    const areaDeltaSafe = finite(row.candidate.max_abs_plate_area_delta_ratio) <= 0.05;
-    const enclosureSafe = finite(row.candidate.max_enclosed_plate_risk) <= 0.8;
-    return complexityImproved && persistenceImproved && areaGrowthSafe && areaDeltaSafe
-        && enclosureSafe
+function status(row: GateRow): "pass" | "warn" {
+    const complexitySafe = finite(row.current.max_boundary_complexity_growth) <= 1.25;
+    const persistenceSafe =
+        finite(row.current.persistent_boundary_complexity_growth_plate_ratio) <= 0.01;
+    const areaGrowthSafe = finite(row.current.max_plate_area_growth_from_initial) <= 2.0;
+    const areaDeltaSafe = finite(row.current.max_abs_plate_area_delta_ratio) <= 0.05;
+    const enclosureSafe = finite(row.current.max_enclosed_plate_risk) <= 0.8;
+    return complexitySafe && persistenceSafe && areaGrowthSafe && areaDeltaSafe && enclosureSafe
         ? "pass"
         : "warn";
 }
@@ -203,24 +192,21 @@ function fmt(value: number | undefined): string {
     return finite(value).toFixed(6);
 }
 
-function printRows(rows: ComparisonRow[]) {
-    console.log("| seed | status | max_complexity legacy -> candidate | persistent legacy -> candidate | max_area_growth candidate | max_area_delta candidate | max_enclosed candidate | max_appendage candidate | residual_delta |");
+function printRows(rows: GateRow[]) {
+    console.log("| seed | status | max_complexity | persistent | max_area_growth | max_area_delta | max_enclosed | max_appendage | mean_euler_residual |");
     console.log("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
     for (const row of rows) {
         console.log(
             [
                 `| ${row.seed}`,
                 status(row),
-                `${fmt(row.legacy.max_boundary_complexity_growth)} -> ${fmt(row.candidate.max_boundary_complexity_growth)}`,
-                `${fmt(row.legacy.persistent_boundary_complexity_growth_plate_ratio)} -> ${fmt(row.candidate.persistent_boundary_complexity_growth_plate_ratio)}`,
-                fmt(row.candidate.max_plate_area_growth_from_initial),
-                fmt(row.candidate.max_abs_plate_area_delta_ratio),
-                fmt(row.candidate.max_enclosed_plate_risk),
-                fmt(row.candidate.max_appendage_isolation_risk),
-                delta(
-                    row.candidate.mean_euler_rotation_residual_ratio,
-                    row.legacy.mean_euler_rotation_residual_ratio,
-                ).toFixed(6),
+                fmt(row.current.max_boundary_complexity_growth),
+                fmt(row.current.persistent_boundary_complexity_growth_plate_ratio),
+                fmt(row.current.max_plate_area_growth_from_initial),
+                fmt(row.current.max_abs_plate_area_delta_ratio),
+                fmt(row.current.max_enclosed_plate_risk),
+                fmt(row.current.max_appendage_isolation_risk),
+                fmt(row.current.mean_euler_rotation_residual_ratio),
                 "|",
             ].join(" | "),
         );
@@ -234,20 +220,16 @@ async function main() {
     const args = parseArgs(process.argv.slice(2));
     const runId = `plate-ownership-${Date.now()}-${randomUUID().slice(0, 8)}`;
     for (const seed of args.seeds) {
-        for (const mode of MODES) {
-            console.error(`[plate-ownership-series] seed=${seed} mode=${mode} run_id=${runId}`);
-            await runOne(args, seed, mode, runId);
-        }
+        console.error(`[plate-ownership-series] seed=${seed} run_id=${runId}`);
+        await runOne(args, seed, runId);
     }
 
     const records = await loadRecords(args.out);
     const rows = args.seeds.map((seed) => {
-        const legacy = latestRecord(records, `${runId}-${seed}-legacy`);
-        const candidate = latestRecord(records, `${runId}-${seed}-euler_front`);
+        const current = latestRecord(records, `${runId}-${seed}`);
         return {
             seed,
-            legacy: findSample(legacy, args.ticks),
-            candidate: findSample(candidate, args.ticks),
+            current: findSample(current, args.ticks),
         };
     });
     console.log(`run_id=${runId}`);

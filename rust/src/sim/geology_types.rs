@@ -177,7 +177,6 @@ pub struct GeologyParams {
     pub deposition_thickness_coupling: f32,
     pub tectonic_uplift_gain: f32,
     pub plate_motion_gain: f32,
-    pub plate_ownership_mode: u32,
     pub boundary_reclassify_interval: u32,
     pub river_rebuild_interval_min: u32,
     pub river_rebuild_interval_max: u32,

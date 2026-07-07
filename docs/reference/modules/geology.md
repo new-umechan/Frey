@@ -124,14 +124,12 @@ inter-plate neighbor contacts / sqrt(plate cell count)
 変わった cell について、前回 sample の `to` plate 近傍から対象 cell へ向かう方向と
 `to - from` の相対 Euler velocity を比較する。
 正なら local velocity は takeover を支持し、負なら逆向きである。
-runtime の plate ownership 更新は `plate_ownership_mode` で選ぶ。
-`0` は legacy takeover で、boundary cell ごとに local inflow score から candidate を作り、
-target plate ごとの connected component として stochastic に適用する。
-`1` は Euler front advection で、boundary edge 上の `target - source` 相対 Euler velocity が
+runtime の plate ownership 更新は Euler front advection に一本化する。
+boundary edge 上の `target - source` 相対 Euler velocity が
 source cell へ向く場合だけ candidate にし、target plate ごとの connected component にまとめる。
 component の平均 `relative_inflow / edge_spacing` を component span の平方根で scaling し、
 tick 全体の CFL 予算内で score 順に deterministic に front を進める。
-どちらの mode でも donor plate が極小化する transfer は拒否する。
+donor plate が極小化する transfer は拒否する。
 artifact は sample 間差分だけを保存し、substep 内部の経路は直接保存しないので、
 この指標は「記録間隔内の最終差分が直前境界 velocity で説明しやすいか」の proxy として扱う。
 `boundary_transfer_largest_component_ratio` と `boundary_transfer_isolated_cell_ratio` は、
