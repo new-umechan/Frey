@@ -10,6 +10,9 @@ use frey_wasm::sim::geology_types::GeologyParams;
 const EARTH_PLATE_ID_MAGIC: &[u8; 8] = b"GEOPLID1";
 const INVALID_PLATE_ID: u32 = u32::MAX;
 const DEFAULT_TIMES_MA: [u32; 7] = [0, 10, 25, 50, 75, 100, 140];
+const CORRIDOR_CORE_DEGREE_THRESHOLDS: [usize; 2] = [3, 4];
+const BOUNDARY_DISTANCE_THIN_CELLS: u32 = 2;
+const CORE_EROSION_LAYERS: u32 = 2;
 
 #[derive(Debug, Clone)]
 struct EarthPlateIdRef {
@@ -41,6 +44,18 @@ struct PlateShapeSummary {
     max_narrow_connection_cell_ratio: f32,
     p95_narrow_connection_cell_ratio: f32,
     p99_narrow_connection_cell_ratio: f32,
+    mean_corridor_neck_risk: f32,
+    max_corridor_neck_risk: f32,
+    p95_corridor_neck_risk: f32,
+    p99_corridor_neck_risk: f32,
+    mean_boundary_thin_cell_ratio: f32,
+    max_boundary_thin_cell_ratio: f32,
+    p95_boundary_thin_cell_ratio: f32,
+    p99_boundary_thin_cell_ratio: f32,
+    mean_eroded_core_cell_ratio: f32,
+    min_eroded_core_cell_ratio: f32,
+    p05_eroded_core_cell_ratio: f32,
+    p01_eroded_core_cell_ratio: f32,
     area_ge_1pct_plate_count: usize,
     area_ge_1pct_p95_boundary_complexity: f32,
     area_ge_1pct_p99_boundary_complexity: f32,
@@ -48,6 +63,12 @@ struct PlateShapeSummary {
     area_ge_1pct_p99_elongation: f32,
     area_ge_1pct_p95_narrow_connection_cell_ratio: f32,
     area_ge_1pct_p99_narrow_connection_cell_ratio: f32,
+    area_ge_1pct_p95_corridor_neck_risk: f32,
+    area_ge_1pct_p99_corridor_neck_risk: f32,
+    area_ge_1pct_p95_boundary_thin_cell_ratio: f32,
+    area_ge_1pct_p99_boundary_thin_cell_ratio: f32,
+    area_ge_1pct_p05_eroded_core_cell_ratio: f32,
+    area_ge_1pct_p01_eroded_core_cell_ratio: f32,
     top8_plate_count: usize,
     top8_p95_boundary_complexity: f32,
     top8_p99_boundary_complexity: f32,
@@ -55,6 +76,12 @@ struct PlateShapeSummary {
     top8_p99_elongation: f32,
     top8_p95_narrow_connection_cell_ratio: f32,
     top8_p99_narrow_connection_cell_ratio: f32,
+    top8_p95_corridor_neck_risk: f32,
+    top8_p99_corridor_neck_risk: f32,
+    top8_p95_boundary_thin_cell_ratio: f32,
+    top8_p99_boundary_thin_cell_ratio: f32,
+    top8_p05_eroded_core_cell_ratio: f32,
+    top8_p01_eroded_core_cell_ratio: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +90,20 @@ struct PlateMetricRow {
     boundary_complexity: f32,
     elongation: f32,
     narrow_connection_cell_ratio: f32,
+    corridor_neck_risk: f32,
+    boundary_thin_cell_ratio: f32,
+    eroded_core_cell_ratio: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CorridorMetrics {
+    neck_risk: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct BoundaryDistanceProfile {
+    thin_ratio: f32,
+    eroded_core_ratio: f32,
 }
 
 fn main() {
@@ -70,8 +111,7 @@ fn main() {
         level: 6,
         ..Default::default()
     };
-    let (_, positions, nbr_offsets, nbrs) =
-        sim::build_geology_with_mesh("earth", geology_params);
+    let (_, positions, nbr_offsets, nbrs) = sim::build_geology_with_mesh("earth", geology_params);
 
     let mut summaries = Vec::new();
     for time_ma in DEFAULT_TIMES_MA {
@@ -259,6 +299,15 @@ fn compute_plate_shape_summary(
     let mut narrow_ratio_sum = 0.0_f32;
     let mut max_narrow_ratio = 0.0_f32;
     let mut narrow_ratio_values = Vec::new();
+    let mut corridor_neck_risk_sum = 0.0_f32;
+    let mut max_corridor_neck_risk = 0.0_f32;
+    let mut corridor_neck_risk_values = Vec::new();
+    let mut boundary_thin_ratio_sum = 0.0_f32;
+    let mut max_boundary_thin_ratio = 0.0_f32;
+    let mut boundary_thin_ratio_values = Vec::new();
+    let mut eroded_core_ratio_sum = 0.0_f32;
+    let mut min_eroded_core_ratio = 1.0_f32;
+    let mut eroded_core_ratio_values = Vec::new();
     let mut metric_rows = Vec::new();
     let mut populated_plate_count = 0usize;
 
@@ -297,11 +346,27 @@ fn compute_plate_shape_summary(
         narrow_ratio_sum += narrow_ratio;
         max_narrow_ratio = max_narrow_ratio.max(narrow_ratio);
         narrow_ratio_values.push(narrow_ratio);
+        let corridor =
+            corridor_metrics(nbr_offsets, nbrs, plate_id, cell_count, plate as u32, cells);
+        corridor_neck_risk_sum += corridor.neck_risk;
+        max_corridor_neck_risk = max_corridor_neck_risk.max(corridor.neck_risk);
+        corridor_neck_risk_values.push(corridor.neck_risk);
+        let boundary_profile =
+            boundary_distance_profile(nbr_offsets, nbrs, plate_id, cell_count, plate as u32, cells);
+        boundary_thin_ratio_sum += boundary_profile.thin_ratio;
+        max_boundary_thin_ratio = max_boundary_thin_ratio.max(boundary_profile.thin_ratio);
+        boundary_thin_ratio_values.push(boundary_profile.thin_ratio);
+        eroded_core_ratio_sum += boundary_profile.eroded_core_ratio;
+        min_eroded_core_ratio = min_eroded_core_ratio.min(boundary_profile.eroded_core_ratio);
+        eroded_core_ratio_values.push(boundary_profile.eroded_core_ratio);
         metric_rows.push(PlateMetricRow {
             area_ratio,
             boundary_complexity,
             elongation,
             narrow_connection_cell_ratio: narrow_ratio,
+            corridor_neck_risk: corridor.neck_risk,
+            boundary_thin_cell_ratio: boundary_profile.thin_ratio,
+            eroded_core_cell_ratio: boundary_profile.eroded_core_ratio,
         });
     }
 
@@ -312,6 +377,12 @@ fn compute_plate_shape_summary(
     let p99_elongation = percentile(&mut elongation_values, 0.99);
     let p95_narrow_connection_cell_ratio = percentile(&mut narrow_ratio_values.clone(), 0.95);
     let p99_narrow_connection_cell_ratio = percentile(&mut narrow_ratio_values, 0.99);
+    let p95_corridor_neck_risk = percentile(&mut corridor_neck_risk_values.clone(), 0.95);
+    let p99_corridor_neck_risk = percentile(&mut corridor_neck_risk_values, 0.99);
+    let p95_boundary_thin_cell_ratio = percentile(&mut boundary_thin_ratio_values.clone(), 0.95);
+    let p99_boundary_thin_cell_ratio = percentile(&mut boundary_thin_ratio_values, 0.99);
+    let p05_eroded_core_cell_ratio = percentile(&mut eroded_core_ratio_values.clone(), 0.05);
+    let p01_eroded_core_cell_ratio = percentile(&mut eroded_core_ratio_values, 0.01);
     let area_ge_1pct = scoped_percentiles(
         metric_rows
             .iter()
@@ -354,6 +425,22 @@ fn compute_plate_shape_summary(
         max_narrow_connection_cell_ratio: max_narrow_ratio,
         p95_narrow_connection_cell_ratio,
         p99_narrow_connection_cell_ratio,
+        mean_corridor_neck_risk: corridor_neck_risk_sum / denom,
+        max_corridor_neck_risk,
+        p95_corridor_neck_risk,
+        p99_corridor_neck_risk,
+        mean_boundary_thin_cell_ratio: boundary_thin_ratio_sum / denom,
+        max_boundary_thin_cell_ratio: max_boundary_thin_ratio,
+        p95_boundary_thin_cell_ratio,
+        p99_boundary_thin_cell_ratio,
+        mean_eroded_core_cell_ratio: eroded_core_ratio_sum / denom,
+        min_eroded_core_cell_ratio: if populated_plate_count == 0 {
+            0.0
+        } else {
+            min_eroded_core_ratio
+        },
+        p05_eroded_core_cell_ratio,
+        p01_eroded_core_cell_ratio,
         area_ge_1pct_plate_count: area_ge_1pct.plate_count,
         area_ge_1pct_p95_boundary_complexity: area_ge_1pct.p95_boundary_complexity,
         area_ge_1pct_p99_boundary_complexity: area_ge_1pct.p99_boundary_complexity,
@@ -363,6 +450,12 @@ fn compute_plate_shape_summary(
             .p95_narrow_connection_cell_ratio,
         area_ge_1pct_p99_narrow_connection_cell_ratio: area_ge_1pct
             .p99_narrow_connection_cell_ratio,
+        area_ge_1pct_p95_corridor_neck_risk: area_ge_1pct.p95_corridor_neck_risk,
+        area_ge_1pct_p99_corridor_neck_risk: area_ge_1pct.p99_corridor_neck_risk,
+        area_ge_1pct_p95_boundary_thin_cell_ratio: area_ge_1pct.p95_boundary_thin_cell_ratio,
+        area_ge_1pct_p99_boundary_thin_cell_ratio: area_ge_1pct.p99_boundary_thin_cell_ratio,
+        area_ge_1pct_p05_eroded_core_cell_ratio: area_ge_1pct.p05_eroded_core_cell_ratio,
+        area_ge_1pct_p01_eroded_core_cell_ratio: area_ge_1pct.p01_eroded_core_cell_ratio,
         top8_plate_count: top8.plate_count,
         top8_p95_boundary_complexity: top8.p95_boundary_complexity,
         top8_p99_boundary_complexity: top8.p99_boundary_complexity,
@@ -370,6 +463,12 @@ fn compute_plate_shape_summary(
         top8_p99_elongation: top8.p99_elongation,
         top8_p95_narrow_connection_cell_ratio: top8.p95_narrow_connection_cell_ratio,
         top8_p99_narrow_connection_cell_ratio: top8.p99_narrow_connection_cell_ratio,
+        top8_p95_corridor_neck_risk: top8.p95_corridor_neck_risk,
+        top8_p99_corridor_neck_risk: top8.p99_corridor_neck_risk,
+        top8_p95_boundary_thin_cell_ratio: top8.p95_boundary_thin_cell_ratio,
+        top8_p99_boundary_thin_cell_ratio: top8.p99_boundary_thin_cell_ratio,
+        top8_p05_eroded_core_cell_ratio: top8.p05_eroded_core_cell_ratio,
+        top8_p01_eroded_core_cell_ratio: top8.p01_eroded_core_cell_ratio,
     }
 }
 
@@ -397,6 +496,18 @@ fn empty_summary(time_ma: f32, cell_count: usize) -> PlateShapeSummary {
         max_narrow_connection_cell_ratio: 0.0,
         p95_narrow_connection_cell_ratio: 0.0,
         p99_narrow_connection_cell_ratio: 0.0,
+        mean_corridor_neck_risk: 0.0,
+        max_corridor_neck_risk: 0.0,
+        p95_corridor_neck_risk: 0.0,
+        p99_corridor_neck_risk: 0.0,
+        mean_boundary_thin_cell_ratio: 0.0,
+        max_boundary_thin_cell_ratio: 0.0,
+        p95_boundary_thin_cell_ratio: 0.0,
+        p99_boundary_thin_cell_ratio: 0.0,
+        mean_eroded_core_cell_ratio: 0.0,
+        min_eroded_core_cell_ratio: 0.0,
+        p05_eroded_core_cell_ratio: 0.0,
+        p01_eroded_core_cell_ratio: 0.0,
         area_ge_1pct_plate_count: 0,
         area_ge_1pct_p95_boundary_complexity: 0.0,
         area_ge_1pct_p99_boundary_complexity: 0.0,
@@ -404,6 +515,12 @@ fn empty_summary(time_ma: f32, cell_count: usize) -> PlateShapeSummary {
         area_ge_1pct_p99_elongation: 0.0,
         area_ge_1pct_p95_narrow_connection_cell_ratio: 0.0,
         area_ge_1pct_p99_narrow_connection_cell_ratio: 0.0,
+        area_ge_1pct_p95_corridor_neck_risk: 0.0,
+        area_ge_1pct_p99_corridor_neck_risk: 0.0,
+        area_ge_1pct_p95_boundary_thin_cell_ratio: 0.0,
+        area_ge_1pct_p99_boundary_thin_cell_ratio: 0.0,
+        area_ge_1pct_p05_eroded_core_cell_ratio: 0.0,
+        area_ge_1pct_p01_eroded_core_cell_ratio: 0.0,
         top8_plate_count: 0,
         top8_p95_boundary_complexity: 0.0,
         top8_p99_boundary_complexity: 0.0,
@@ -411,6 +528,12 @@ fn empty_summary(time_ma: f32, cell_count: usize) -> PlateShapeSummary {
         top8_p99_elongation: 0.0,
         top8_p95_narrow_connection_cell_ratio: 0.0,
         top8_p99_narrow_connection_cell_ratio: 0.0,
+        top8_p95_corridor_neck_risk: 0.0,
+        top8_p99_corridor_neck_risk: 0.0,
+        top8_p95_boundary_thin_cell_ratio: 0.0,
+        top8_p99_boundary_thin_cell_ratio: 0.0,
+        top8_p05_eroded_core_cell_ratio: 0.0,
+        top8_p01_eroded_core_cell_ratio: 0.0,
     }
 }
 
@@ -423,6 +546,12 @@ struct ScopedPercentiles {
     p99_elongation: f32,
     p95_narrow_connection_cell_ratio: f32,
     p99_narrow_connection_cell_ratio: f32,
+    p95_corridor_neck_risk: f32,
+    p99_corridor_neck_risk: f32,
+    p95_boundary_thin_cell_ratio: f32,
+    p99_boundary_thin_cell_ratio: f32,
+    p05_eroded_core_cell_ratio: f32,
+    p01_eroded_core_cell_ratio: f32,
 }
 
 fn scoped_percentiles(rows: Vec<PlateMetricRow>) -> ScopedPercentiles {
@@ -435,6 +564,18 @@ fn scoped_percentiles(rows: Vec<PlateMetricRow>) -> ScopedPercentiles {
         .iter()
         .map(|row| row.narrow_connection_cell_ratio)
         .collect::<Vec<_>>();
+    let mut corridor = rows
+        .iter()
+        .map(|row| row.corridor_neck_risk)
+        .collect::<Vec<_>>();
+    let mut boundary_thin = rows
+        .iter()
+        .map(|row| row.boundary_thin_cell_ratio)
+        .collect::<Vec<_>>();
+    let mut eroded_core = rows
+        .iter()
+        .map(|row| row.eroded_core_cell_ratio)
+        .collect::<Vec<_>>();
     ScopedPercentiles {
         plate_count: rows.len(),
         p95_boundary_complexity: percentile(&mut boundary.clone(), 0.95),
@@ -443,15 +584,18 @@ fn scoped_percentiles(rows: Vec<PlateMetricRow>) -> ScopedPercentiles {
         p99_elongation: percentile(&mut elongation, 0.99),
         p95_narrow_connection_cell_ratio: percentile(&mut narrow.clone(), 0.95),
         p99_narrow_connection_cell_ratio: percentile(&mut narrow, 0.99),
+        p95_corridor_neck_risk: percentile(&mut corridor.clone(), 0.95),
+        p99_corridor_neck_risk: percentile(&mut corridor, 0.99),
+        p95_boundary_thin_cell_ratio: percentile(&mut boundary_thin.clone(), 0.95),
+        p99_boundary_thin_cell_ratio: percentile(&mut boundary_thin, 0.99),
+        p05_eroded_core_cell_ratio: percentile(&mut eroded_core.clone(), 0.05),
+        p01_eroded_core_cell_ratio: percentile(&mut eroded_core, 0.01),
     }
 }
 
 fn neighbors<'a>(nbr_offsets: &[u32], nbrs: &'a [u32], index: usize) -> &'a [u32] {
     let start = nbr_offsets.get(index).copied().unwrap_or(0) as usize;
-    let end = nbr_offsets
-        .get(index + 1)
-        .copied()
-        .unwrap_or(start as u32) as usize;
+    let end = nbr_offsets.get(index + 1).copied().unwrap_or(start as u32) as usize;
     nbrs.get(start..end).unwrap_or(&[])
 }
 
@@ -499,6 +643,187 @@ fn compute_components(
     }
 }
 
+fn corridor_metrics(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    cell_count: usize,
+    plate: u32,
+    plate_cells: usize,
+) -> CorridorMetrics {
+    let mut best = CorridorMetrics::default();
+    for min_degree in CORRIDOR_CORE_DEGREE_THRESHOLDS {
+        let retained = plate_k_core(nbr_offsets, nbrs, plate_id, cell_count, plate, min_degree);
+        let (_, largest, second_largest) =
+            retained_component_summary(nbr_offsets, nbrs, plate_id, cell_count, plate, &retained);
+        if second_largest == 0 {
+            continue;
+        }
+        let neck_risk = second_largest as f32 / plate_cells.max(1) as f32;
+        if neck_risk > best.neck_risk {
+            best = CorridorMetrics { neck_risk };
+        }
+        let _ = largest;
+    }
+    best
+}
+
+fn plate_k_core(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    cell_count: usize,
+    plate: u32,
+    min_degree: usize,
+) -> Vec<bool> {
+    let mut retained = plate_id
+        .iter()
+        .take(cell_count)
+        .map(|id| *id == plate)
+        .collect::<Vec<_>>();
+    loop {
+        let mut changed = false;
+        let mut remove = Vec::<usize>::new();
+        for cell in 0..cell_count {
+            if !retained[cell] {
+                continue;
+            }
+            let degree = neighbors(nbr_offsets, nbrs, cell)
+                .iter()
+                .filter(|&&neighbor_u32| {
+                    let neighbor = neighbor_u32 as usize;
+                    neighbor < cell_count && retained[neighbor]
+                })
+                .count();
+            if degree < min_degree {
+                remove.push(cell);
+            }
+        }
+        for cell in remove {
+            retained[cell] = false;
+            changed = true;
+        }
+        if !changed {
+            break;
+        }
+    }
+    retained
+}
+
+fn retained_component_summary(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    cell_count: usize,
+    plate: u32,
+    retained: &[bool],
+) -> (usize, usize, usize) {
+    let mut visited = vec![false; cell_count];
+    let mut queue = VecDeque::<usize>::new();
+    let mut component_count = 0usize;
+    let mut largest = 0usize;
+    let mut second_largest = 0usize;
+
+    for start in 0..cell_count {
+        if visited[start] || !retained[start] || plate_id[start] != plate {
+            continue;
+        }
+        visited[start] = true;
+        queue.push_back(start);
+        let mut size = 0usize;
+        while let Some(cell) = queue.pop_front() {
+            size += 1;
+            for &neighbor_u32 in neighbors(nbr_offsets, nbrs, cell) {
+                let neighbor = neighbor_u32 as usize;
+                if neighbor >= cell_count
+                    || visited[neighbor]
+                    || !retained[neighbor]
+                    || plate_id[neighbor] != plate
+                {
+                    continue;
+                }
+                visited[neighbor] = true;
+                queue.push_back(neighbor);
+            }
+        }
+        component_count += 1;
+        if size > largest {
+            second_largest = largest;
+            largest = size;
+        } else if size > second_largest {
+            second_largest = size;
+        }
+    }
+
+    (component_count, largest, second_largest)
+}
+
+fn boundary_distance_profile(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[u32],
+    cell_count: usize,
+    plate: u32,
+    plate_cells: usize,
+) -> BoundaryDistanceProfile {
+    if plate_cells == 0 {
+        return BoundaryDistanceProfile::default();
+    }
+    let mut distance = vec![u32::MAX; cell_count];
+    let mut queue = VecDeque::<usize>::new();
+    for cell in 0..cell_count {
+        if plate_id[cell] != plate {
+            continue;
+        }
+        let is_boundary = neighbors(nbr_offsets, nbrs, cell)
+            .iter()
+            .any(|&neighbor_u32| {
+                let neighbor = neighbor_u32 as usize;
+                neighbor >= cell_count
+                    || plate_id[neighbor] == INVALID_PLATE_ID
+                    || plate_id[neighbor] != plate
+            });
+        if is_boundary {
+            distance[cell] = 0;
+            queue.push_back(cell);
+        }
+    }
+
+    while let Some(cell) = queue.pop_front() {
+        let next_distance = distance[cell].saturating_add(1);
+        for &neighbor_u32 in neighbors(nbr_offsets, nbrs, cell) {
+            let neighbor = neighbor_u32 as usize;
+            if neighbor >= cell_count
+                || plate_id[neighbor] != plate
+                || distance[neighbor] <= next_distance
+            {
+                continue;
+            }
+            distance[neighbor] = next_distance;
+            queue.push_back(neighbor);
+        }
+    }
+
+    let mut thin_count = 0usize;
+    let mut core_count = 0usize;
+    for cell in 0..cell_count {
+        if plate_id[cell] != plate {
+            continue;
+        }
+        if distance[cell] <= BOUNDARY_DISTANCE_THIN_CELLS {
+            thin_count += 1;
+        }
+        if distance[cell] > CORE_EROSION_LAYERS {
+            core_count += 1;
+        }
+    }
+
+    BoundaryDistanceProfile {
+        thin_ratio: thin_count as f32 / plate_cells as f32,
+        eroded_core_ratio: core_count as f32 / plate_cells as f32,
+    }
+}
+
 fn approximate_plate_elongation(
     positions: &[[f32; 3]],
     plate_id: &[u32],
@@ -506,11 +831,7 @@ fn approximate_plate_elongation(
     plate: u32,
     plate_cells: usize,
 ) -> f32 {
-    let start = match plate_id
-        .iter()
-        .take(cell_count)
-        .position(|&id| id == plate)
-    {
+    let start = match plate_id.iter().take(cell_count).position(|&id| id == plate) {
         Some(index) => index,
         None => return 0.0,
     };
@@ -553,10 +874,7 @@ fn percentile(values: &mut [f32], q: f32) -> f32 {
     if values.is_empty() {
         return 0.0;
     }
-    values.sort_by(|left, right| {
-        left.partial_cmp(right)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    values.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
     let rank = (values.len().saturating_sub(1) as f32) * q.clamp(0.0, 1.0);
     let lower = rank.floor() as usize;
     let upper = rank.ceil() as usize;
@@ -569,7 +887,7 @@ fn percentile(values: &mut [f32], q: f32) -> f32 {
 
 fn print_summary(summary: &PlateShapeSummary) {
     println!(
-        "time_ma={:.0} valid={} unassigned={} plates={} area_ge_1pct={} top8={} top8_p99_elongation={:.6} top8_p99_narrow_connection_cell_ratio={:.6} top8_p99_boundary_complexity={:.6}",
+        "time_ma={:.0} valid={} unassigned={} plates={} area_ge_1pct={} top8={} top8_p99_elongation={:.6} top8_p99_narrow_connection_cell_ratio={:.6} top8_p99_corridor_neck_risk={:.6} top8_p99_boundary_thin_cell_ratio={:.6} top8_p01_eroded_core_cell_ratio={:.6} top8_p99_boundary_complexity={:.6}",
         summary.time_ma,
         summary.valid_cell_count,
         summary.unassigned_cell_count,
@@ -578,6 +896,9 @@ fn print_summary(summary: &PlateShapeSummary) {
         summary.top8_plate_count,
         summary.top8_p99_elongation,
         summary.top8_p99_narrow_connection_cell_ratio,
+        summary.top8_p99_corridor_neck_risk,
+        summary.top8_p99_boundary_thin_cell_ratio,
+        summary.top8_p01_eroded_core_cell_ratio,
         summary.top8_p99_boundary_complexity,
     );
 }
@@ -591,10 +912,14 @@ fn write_summaries_json(path: &Path, summaries: &[PlateShapeSummary]) -> Result<
         .map_err(|error| format!("failed to create {}: {}", path.display(), error))?;
     writeln!(file, "[").map_err(|error| error.to_string())?;
     for (index, summary) in summaries.iter().enumerate() {
-        let comma = if index + 1 == summaries.len() { "" } else { "," };
+        let comma = if index + 1 == summaries.len() {
+            ""
+        } else {
+            ","
+        };
         writeln!(
             file,
-            "  {{\"time_ma\":{},\"valid_cell_count\":{},\"unassigned_cell_count\":{},\"plate_count\":{},\"max_area_ratio\":{:.6},\"effective_plate_count\":{:.6},\"multi_component_plate_count\":{},\"max_component_count\":{},\"mean_detached_fragment_ratio\":{:.6},\"max_detached_fragment_ratio\":{:.6},\"mean_boundary_complexity\":{:.6},\"max_boundary_complexity\":{:.6},\"p95_boundary_complexity\":{:.6},\"p99_boundary_complexity\":{:.6},\"mean_elongation\":{:.6},\"max_elongation\":{:.6},\"p95_elongation\":{:.6},\"p99_elongation\":{:.6},\"mean_narrow_connection_cell_ratio\":{:.6},\"max_narrow_connection_cell_ratio\":{:.6},\"p95_narrow_connection_cell_ratio\":{:.6},\"p99_narrow_connection_cell_ratio\":{:.6},\"area_ge_1pct_plate_count\":{},\"area_ge_1pct_p95_boundary_complexity\":{:.6},\"area_ge_1pct_p99_boundary_complexity\":{:.6},\"area_ge_1pct_p95_elongation\":{:.6},\"area_ge_1pct_p99_elongation\":{:.6},\"area_ge_1pct_p95_narrow_connection_cell_ratio\":{:.6},\"area_ge_1pct_p99_narrow_connection_cell_ratio\":{:.6},\"top8_plate_count\":{},\"top8_p95_boundary_complexity\":{:.6},\"top8_p99_boundary_complexity\":{:.6},\"top8_p95_elongation\":{:.6},\"top8_p99_elongation\":{:.6},\"top8_p95_narrow_connection_cell_ratio\":{:.6},\"top8_p99_narrow_connection_cell_ratio\":{:.6}}}{}",
+            "  {{\"time_ma\":{},\"valid_cell_count\":{},\"unassigned_cell_count\":{},\"plate_count\":{},\"max_area_ratio\":{:.6},\"effective_plate_count\":{:.6},\"multi_component_plate_count\":{},\"max_component_count\":{},\"mean_detached_fragment_ratio\":{:.6},\"max_detached_fragment_ratio\":{:.6},\"mean_boundary_complexity\":{:.6},\"max_boundary_complexity\":{:.6},\"p95_boundary_complexity\":{:.6},\"p99_boundary_complexity\":{:.6},\"mean_elongation\":{:.6},\"max_elongation\":{:.6},\"p95_elongation\":{:.6},\"p99_elongation\":{:.6},\"mean_narrow_connection_cell_ratio\":{:.6},\"max_narrow_connection_cell_ratio\":{:.6},\"p95_narrow_connection_cell_ratio\":{:.6},\"p99_narrow_connection_cell_ratio\":{:.6},\"mean_corridor_neck_risk\":{:.6},\"max_corridor_neck_risk\":{:.6},\"p95_corridor_neck_risk\":{:.6},\"p99_corridor_neck_risk\":{:.6},\"mean_boundary_thin_cell_ratio\":{:.6},\"max_boundary_thin_cell_ratio\":{:.6},\"p95_boundary_thin_cell_ratio\":{:.6},\"p99_boundary_thin_cell_ratio\":{:.6},\"mean_eroded_core_cell_ratio\":{:.6},\"min_eroded_core_cell_ratio\":{:.6},\"p05_eroded_core_cell_ratio\":{:.6},\"p01_eroded_core_cell_ratio\":{:.6},\"area_ge_1pct_plate_count\":{},\"area_ge_1pct_p95_boundary_complexity\":{:.6},\"area_ge_1pct_p99_boundary_complexity\":{:.6},\"area_ge_1pct_p95_elongation\":{:.6},\"area_ge_1pct_p99_elongation\":{:.6},\"area_ge_1pct_p95_narrow_connection_cell_ratio\":{:.6},\"area_ge_1pct_p99_narrow_connection_cell_ratio\":{:.6},\"area_ge_1pct_p95_corridor_neck_risk\":{:.6},\"area_ge_1pct_p99_corridor_neck_risk\":{:.6},\"area_ge_1pct_p95_boundary_thin_cell_ratio\":{:.6},\"area_ge_1pct_p99_boundary_thin_cell_ratio\":{:.6},\"area_ge_1pct_p05_eroded_core_cell_ratio\":{:.6},\"area_ge_1pct_p01_eroded_core_cell_ratio\":{:.6},\"top8_plate_count\":{},\"top8_p95_boundary_complexity\":{:.6},\"top8_p99_boundary_complexity\":{:.6},\"top8_p95_elongation\":{:.6},\"top8_p99_elongation\":{:.6},\"top8_p95_narrow_connection_cell_ratio\":{:.6},\"top8_p99_narrow_connection_cell_ratio\":{:.6},\"top8_p95_corridor_neck_risk\":{:.6},\"top8_p99_corridor_neck_risk\":{:.6},\"top8_p95_boundary_thin_cell_ratio\":{:.6},\"top8_p99_boundary_thin_cell_ratio\":{:.6},\"top8_p05_eroded_core_cell_ratio\":{:.6},\"top8_p01_eroded_core_cell_ratio\":{:.6}}}{}",
             summary.time_ma,
             summary.valid_cell_count,
             summary.unassigned_cell_count,
@@ -617,6 +942,18 @@ fn write_summaries_json(path: &Path, summaries: &[PlateShapeSummary]) -> Result<
             summary.max_narrow_connection_cell_ratio,
             summary.p95_narrow_connection_cell_ratio,
             summary.p99_narrow_connection_cell_ratio,
+            summary.mean_corridor_neck_risk,
+            summary.max_corridor_neck_risk,
+            summary.p95_corridor_neck_risk,
+            summary.p99_corridor_neck_risk,
+            summary.mean_boundary_thin_cell_ratio,
+            summary.max_boundary_thin_cell_ratio,
+            summary.p95_boundary_thin_cell_ratio,
+            summary.p99_boundary_thin_cell_ratio,
+            summary.mean_eroded_core_cell_ratio,
+            summary.min_eroded_core_cell_ratio,
+            summary.p05_eroded_core_cell_ratio,
+            summary.p01_eroded_core_cell_ratio,
             summary.area_ge_1pct_plate_count,
             summary.area_ge_1pct_p95_boundary_complexity,
             summary.area_ge_1pct_p99_boundary_complexity,
@@ -624,6 +961,12 @@ fn write_summaries_json(path: &Path, summaries: &[PlateShapeSummary]) -> Result<
             summary.area_ge_1pct_p99_elongation,
             summary.area_ge_1pct_p95_narrow_connection_cell_ratio,
             summary.area_ge_1pct_p99_narrow_connection_cell_ratio,
+            summary.area_ge_1pct_p95_corridor_neck_risk,
+            summary.area_ge_1pct_p99_corridor_neck_risk,
+            summary.area_ge_1pct_p95_boundary_thin_cell_ratio,
+            summary.area_ge_1pct_p99_boundary_thin_cell_ratio,
+            summary.area_ge_1pct_p05_eroded_core_cell_ratio,
+            summary.area_ge_1pct_p01_eroded_core_cell_ratio,
             summary.top8_plate_count,
             summary.top8_p95_boundary_complexity,
             summary.top8_p99_boundary_complexity,
@@ -631,6 +974,12 @@ fn write_summaries_json(path: &Path, summaries: &[PlateShapeSummary]) -> Result<
             summary.top8_p99_elongation,
             summary.top8_p95_narrow_connection_cell_ratio,
             summary.top8_p99_narrow_connection_cell_ratio,
+            summary.top8_p95_corridor_neck_risk,
+            summary.top8_p99_corridor_neck_risk,
+            summary.top8_p95_boundary_thin_cell_ratio,
+            summary.top8_p99_boundary_thin_cell_ratio,
+            summary.top8_p05_eroded_core_cell_ratio,
+            summary.top8_p01_eroded_core_cell_ratio,
             comma,
         )
         .map_err(|error| error.to_string())?;

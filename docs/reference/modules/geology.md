@@ -83,6 +83,19 @@ Damage-first path では `plate_count_min` / `plate_count_max` を参照しな�
 - `mean_detached_fragment_ratio`: 各 plate で最大連結成分の外にある面積比の平均
 - `mean_plate_boundary_complexity`
 - `max_plate_boundary_complexity`
+- `euler_rotation_residual_km`: 前回 plate state の剛体回転予測と実測 centroid の距離
+- `euler_rotation_residual_ratio`: residual を予測移動量または平均 cell 間隔で正規化した比
+- `boundary_transfer_velocity_alignment`: ownership transfer と local Euler velocity の整合度
+- `boundary_transfer_velocity_aligned_ratio`: velocity alignment が正の transfer cell 割合
+- `boundary_transfer_largest_component_ratio`: 獲得 cell 群の最大 component 比率
+- `boundary_transfer_isolated_cell_ratio`: 獲得 cell 群のうち孤立 component の割合
+- `articulation_cell_ratio`: その cell を除くと同一 plate の連結性が壊れる cell の割合
+- `boundary_complexity_growth`: runtime sample 初回に対する `plate_boundary_complexity` の比
+- `boundary_complexity_growth_window_mean`: 直近 4 sample の `boundary_complexity_growth` 平均
+- `persistent_boundary_complexity_growth`: 直近 4 sample すべてが `1.5x` 以上か
+- `corridor_neck_risk`: 低内部接続度 cell を剥がした後の secondary core lobe 比率
+- `boundary_thin_cell_ratio`: 境界から graph distance 2 以下にある cell の割合
+- `eroded_core_cell_ratio`: 2 layer erosion 後に残る interior cell の割合
 
 ここで `plate_boundary_complexity` は
 
@@ -99,6 +112,63 @@ inter-plate neighbor contacts / sqrt(plate cell count)
 ```
 
 で定義し、同じ `plate_id` が複数塊へ分断されていないかを見る。
+`euler_rotation_residual_km` は、前回 sample の centroid を前回
+`PlateKinematicsState.angular_axis` / `angular_speed` で sample 間隔ぶん回転させた
+予測位置と、今回の実測 centroid の大円距離である。
+`euler_rotation_residual_ratio` は
+`residual_km / max(expected_rotation_displacement_km, mean_cell_spacing_km)` で定義する。
+これは plate state の剛体回転と ownership transfer 後の plate id field が
+どれだけ整合しているかを見る runtime proxy であり、Earth shape benchmark とは
+直接比較しない。
+`boundary_transfer_velocity_alignment` は、sample 間で `plate_id` が `from -> to` に
+変わった cell について、前回 sample の `to` plate 近傍から対象 cell へ向かう方向と
+`to - from` の相対 Euler velocity を比較する。
+正なら local velocity は takeover を支持し、負なら逆向きである。
+runtime の plate ownership 更新は `plate_ownership_mode` で選ぶ。
+`0` は legacy takeover で、boundary cell ごとに local inflow score から candidate を作り、
+target plate ごとの connected component として stochastic に適用する。
+`1` は Euler front advection で、boundary edge 上の `target - source` 相対 Euler velocity が
+source cell へ向く場合だけ candidate にし、target plate ごとの connected component にまとめる。
+component の平均 `relative_inflow / edge_spacing` を component span の平方根で scaling し、
+tick 全体の CFL 予算内で score 順に deterministic に front を進める。
+どちらの mode でも donor plate が極小化する transfer は拒否する。
+artifact は sample 間差分だけを保存し、substep 内部の経路は直接保存しないので、
+この指標は「記録間隔内の最終差分が直前境界 velocity で説明しやすいか」の proxy として扱う。
+`boundary_transfer_largest_component_ratio` と `boundary_transfer_isolated_cell_ratio` は、
+同じ `to` plate が sample 間で獲得した cell 群を graph component に分解する。
+最大 component 比率が低く孤立 cell 比率が高い場合、transfer の向きは正しくても
+boundary front が斑点状に進んでいる可能性がある。
+`articulation_cell_ratio` は、同じ `plate_id` だけで作る graph 上の articulation point を数える。
+これは `component_count=1` かつ `detached_fragment_ratio=0` のままでも、
+1 cell 幅の neck で辛うじて連結している plate を検出するための topology proxy である。
+`boundary_complexity_growth` は、runtime ownership transfer によって
+同じ plate の周長/面積 proxy が初回 sample からどれだけ悪化したかを見る。
+`persistent_boundary_complexity_growth` は単発の spike を除外し、直近 4 sample で
+継続的に悪化している plate だけを runtime 専用に flag する。
+この window は artifact の sample 間隔に依存するため、`record_every` と併読する。
+`area_delta_ratio_per_sample` は前回 sample からの plate cell 数変化を前回 cell 数で割った値、
+`area_growth_from_initial` は初回 sample からの plate cell 数比である。
+tick summary では `mean_abs_plate_area_delta_ratio`、`max_abs_plate_area_delta_ratio`、
+`max_plate_area_growth_from_initial` を出す。
+これらは boundary が滑らかでも plate 面積が過剰に drift していないかを見る。
+`dominant_neighbor_contact_ratio` は、その plate の inter-plate contact のうち
+最も多く接している neighbor plate が占める割合である。
+`enclosed_plate_risk` は、小 plate が単一 neighbor にほぼ囲まれている状態の proxy であり、
+microplate として説明しにくい内包 plate を検出する。
+`appendage_isolation_risk` は、3-core で残る本体 core から外れた低接続度 component が、
+本体 core への接触に比べて外部 plate へ強く接している場合に上がる。
+これは同じ `plate_id` の一部が実質的に本体から隔離された枝かを見る warning proxy であり、
+幅広い帯が core として残る場合は低く出る。
+`corridor_neck_risk` は、同じ `plate_id` の graph から内部接続度の低い cell を
+k-core 的に剥がし、残った core が複数の大きな lobe へ分かれるかを見る。
+これは 1 cell articulation より太い corridor / hourglass 形状の proxy である。
+Earth plate shape benchmark でも非ゼロになるため、単独 fail 条件ではなく、
+Earth percentile、plate 面積、`boundary_complexity_growth` と併読する。
+`boundary_thin_cell_ratio` と `eroded_core_cell_ratio` は、plate 境界を seed とする
+multi-source BFS の graph distance から求める。
+これらは「corridor ではないが、plate 全体が薄く interior に乏しい」状態を検出する。
+小 plate では自然に極端化するため、Earth benchmark の top8 / area>=1% scope と
+併読する。
 
 major plate 相当の読みやすさを優先するため、
 初期 emergence の最終 `plate_id` は `6-8` を許容帯として評価する。

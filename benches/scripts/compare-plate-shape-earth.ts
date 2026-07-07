@@ -19,9 +19,15 @@ interface EarthShapeRecord {
     time_ma?: number;
     top8_p99_elongation?: NumberLike;
     top8_p99_narrow_connection_cell_ratio?: NumberLike;
+    top8_p99_corridor_neck_risk?: NumberLike;
+    top8_p99_boundary_thin_cell_ratio?: NumberLike;
+    top8_p01_eroded_core_cell_ratio?: NumberLike;
     top8_p99_boundary_complexity?: NumberLike;
     area_ge_1pct_p99_elongation?: NumberLike;
     area_ge_1pct_p99_narrow_connection_cell_ratio?: NumberLike;
+    area_ge_1pct_p99_corridor_neck_risk?: NumberLike;
+    area_ge_1pct_p99_boundary_thin_cell_ratio?: NumberLike;
+    area_ge_1pct_p01_eroded_core_cell_ratio?: NumberLike;
     area_ge_1pct_p99_boundary_complexity?: NumberLike;
 }
 
@@ -41,6 +47,30 @@ const COMPARISONS = [
         freyAreaKey: "area_ge_1pct_p99_narrow_connection_cell_ratio",
         top8Key: "top8_p99_narrow_connection_cell_ratio",
         areaKey: "area_ge_1pct_p99_narrow_connection_cell_ratio",
+    },
+    {
+        label: "corridor_neck_risk",
+        freyMaxKey: "max_corridor_neck_risk",
+        freyTop8Key: "top8_p99_corridor_neck_risk",
+        freyAreaKey: "area_ge_1pct_p99_corridor_neck_risk",
+        top8Key: "top8_p99_corridor_neck_risk",
+        areaKey: "area_ge_1pct_p99_corridor_neck_risk",
+    },
+    {
+        label: "boundary_thin_cell_ratio",
+        freyMaxKey: "max_boundary_thin_cell_ratio",
+        freyTop8Key: "top8_p99_boundary_thin_cell_ratio",
+        freyAreaKey: "area_ge_1pct_p99_boundary_thin_cell_ratio",
+        top8Key: "top8_p99_boundary_thin_cell_ratio",
+        areaKey: "area_ge_1pct_p99_boundary_thin_cell_ratio",
+    },
+    {
+        label: "eroded_core_cell_ratio_low",
+        freyMaxKey: "min_eroded_core_cell_ratio",
+        freyTop8Key: "top8_p01_eroded_core_cell_ratio",
+        freyAreaKey: "area_ge_1pct_p01_eroded_core_cell_ratio",
+        top8Key: "top8_p01_eroded_core_cell_ratio",
+        areaKey: "area_ge_1pct_p01_eroded_core_cell_ratio",
     },
     {
         label: "boundary_complexity",

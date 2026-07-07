@@ -17,6 +17,7 @@ struct SeriesRecord {
     selected_effective_plate_count: f32,
     selected_mean_plate_boundary_complexity: f32,
     selected_max_plate_boundary_complexity: f32,
+    selected_max_enclosed_plate_risk: f32,
     selected_regime_score: f32,
 }
 
@@ -57,6 +58,7 @@ fn main() {
                 .selected_mean_plate_boundary_complexity,
             selected_max_plate_boundary_complexity: diagnostics
                 .selected_max_plate_boundary_complexity,
+            selected_max_enclosed_plate_risk: diagnostics.selected_max_enclosed_plate_risk,
             selected_regime_score: diagnostics.selected_regime_score,
         });
     }
