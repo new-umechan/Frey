@@ -350,7 +350,10 @@ fn main() {
                     Some(path) => match load_hydro_erosion_ref(path) {
                         Ok(reference) => evaluate_erosion_metric(&sim_world, &reference),
                         Err(error) => {
-                            println!("-- Main Evaluation 1-C: erosion reference ERROR ({}) --", error);
+                            println!(
+                                "-- Main Evaluation 1-C: erosion reference ERROR ({}) --",
+                                error
+                            );
                             None
                         }
                     },
@@ -372,7 +375,10 @@ fn main() {
                         "-- Erosion Reference Source: SKIPPED (benches/data/glosem_ref.bin not found) --"
                     ),
                 }
-                println!("erosion_rate:  rho={}", format_option_number(erosion_metric));
+                println!(
+                    "erosion_rate:  rho={}",
+                    format_option_number(erosion_metric)
+                );
                 println!(
                     "sediment_budget_ratio={:.3}  coastal_deposition_share={:.3}  low_slope_deposition_share={:.3}",
                     sediment_metrics.sediment_budget_ratio.unwrap_or(f32::NAN),
@@ -684,11 +690,7 @@ fn slope_proxy(mesh: &world::WorldMesh, height: &[f32], index: usize) -> f32 {
     }
 }
 
-fn spearman_on_land(
-    model_field: &[f32],
-    ref_field: &[f32],
-    geology_height: &[f32],
-) -> Option<f32> {
+fn spearman_on_land(model_field: &[f32], ref_field: &[f32], geology_height: &[f32]) -> Option<f32> {
     let len = model_field
         .len()
         .min(ref_field.len())
@@ -1313,36 +1315,37 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("system time error: {}", error))?
         .as_millis();
 
-    let (main_state_label, main_ref_path, main_erosion_ref_path, main_error, metrics_json) = match main_eval_state {
-        MainEvaluationState::Ready {
-            reference_path,
-            erosion_reference_path,
-            metrics,
-        } => (
-            "ready",
-            Some(reference_path.display().to_string()),
-            erosion_reference_path
-                .as_ref()
-                .map(|value| format!("\"{}\"", json_escape(&value.display().to_string())))
-                .unwrap_or_else(|| "null".to_string()),
-            None,
-            format_phase2_metrics_json(metrics),
-        ),
-        MainEvaluationState::Skipped => (
-            "skipped",
-            None,
-            "null".to_string(),
-            None,
-            phase2_metrics_null_json(),
-        ),
-        MainEvaluationState::Error(error) => (
-            "error",
-            None,
-            "null".to_string(),
-            Some(error.clone()),
-            phase2_metrics_null_json(),
-        ),
-    };
+    let (main_state_label, main_ref_path, main_erosion_ref_path, main_error, metrics_json) =
+        match main_eval_state {
+            MainEvaluationState::Ready {
+                reference_path,
+                erosion_reference_path,
+                metrics,
+            } => (
+                "ready",
+                Some(reference_path.display().to_string()),
+                erosion_reference_path
+                    .as_ref()
+                    .map(|value| format!("\"{}\"", json_escape(&value.display().to_string())))
+                    .unwrap_or_else(|| "null".to_string()),
+                None,
+                format_phase2_metrics_json(metrics),
+            ),
+            MainEvaluationState::Skipped => (
+                "skipped",
+                None,
+                "null".to_string(),
+                None,
+                phase2_metrics_null_json(),
+            ),
+            MainEvaluationState::Error(error) => (
+                "error",
+                None,
+                "null".to_string(),
+                Some(error.clone()),
+                phase2_metrics_null_json(),
+            ),
+        };
 
     let line = format!(
         "{{\"schema_version\":2,\"timestamp_unix_ms\":{},\"bench\":\"hydrology_solo\",\"run_id\":\"{}\",\"repeat_index\":{},\"repeat_total\":{},\"git_commit\":{},\"seed\":\"{}\",\"mesh_level\":{},\"cell_count\":{},\"runtime\":{{\"hydrology_step_ms\":{}}},\"runtime_stats\":{{\"count\":1,\"median_ms\":{},\"p95_ms\":{}}},\"phase2\":{{\"state\":\"{}\",\"ref_path\":{},\"erosion_ref_path\":{},\"error\":{},\"metrics\":{}}},\"phase1\":{{\"river_flow_ranking\":{{\"matched\":{},\"total\":{},\"excluded_known_hard\":0,\"coverage_ratio\":{}}}}},\"diagnostics\":{{\"fill_spill_stats\":{{\"active_sink_count\":{},\"overflow_active_ratio\":{},\"mean_sink_fill_ratio\":{},\"ponded_cell_count\":{}}}}}}}\n",

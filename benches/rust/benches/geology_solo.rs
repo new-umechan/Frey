@@ -289,11 +289,9 @@ fn main() {
             &ridge_ref.ridge_distance_km,
         )
     });
-    let continental_metrics = continental_ref
-        .as_ref()
-        .map(|continental_ref| {
-            compute_continental_hypsometry_metrics(&terrain_ref.height, &continental_ref.mask)
-        });
+    let continental_metrics = continental_ref.as_ref().map(|continental_ref| {
+        compute_continental_hypsometry_metrics(&terrain_ref.height, &continental_ref.mask)
+    });
     let run_metadata = BenchRunMetadata {
         run_id,
         repeat_index,
@@ -443,7 +441,8 @@ fn load_terrain_ref(path: &Path) -> Result<TerrainRef, String> {
     let file = File::open(path)
         .map_err(|error| format!("failed to open {}: {}", path.display(), error))?;
     let mut reader = BufReader::new(file);
-    decode_terrain_ref(&mut reader).map_err(|error| format!("failed to decode {}: {}", path.display(), error))
+    decode_terrain_ref(&mut reader)
+        .map_err(|error| format!("failed to decode {}: {}", path.display(), error))
 }
 
 fn load_plate_boundary_ref(path: &Path) -> Result<PlateBoundaryRef, String> {
@@ -742,8 +741,11 @@ fn compute_ridge_distance_depth_metrics(
     }
 
     let ridge_distance_spearman = spearman(&samples_distance, &samples_depth);
-    let (ridge_distance_bin_spearman, bins) =
-        binned_distance_spearman(&samples_distance, &samples_depth, RIDGE_DISTANCE_BIN_WIDTH_KM);
+    let (ridge_distance_bin_spearman, bins) = binned_distance_spearman(
+        &samples_distance,
+        &samples_depth,
+        RIDGE_DISTANCE_BIN_WIDTH_KM,
+    );
     let ridge_distance_coverage_ratio = if oceanic_total > 0 {
         Some(oceanic_valid as f32 / oceanic_total as f32)
     } else {
@@ -842,7 +844,9 @@ fn binned_spearman(
         .iter()
         .copied()
         .filter(|value| value.is_finite() && *value >= 0.0)
-        .fold(None, |acc: Option<f32>, value| Some(acc.map_or(value, |current| current.max(value))));
+        .fold(None, |acc: Option<f32>, value| {
+            Some(acc.map_or(value, |current| current.max(value)))
+        });
     let Some(max_age) = max_age else {
         return (
             None,
@@ -968,8 +972,16 @@ fn median(values: &[f32]) -> f32 {
 }
 
 fn overlap_coefficient(a: &[f32], b: &[f32]) -> Option<f32> {
-    let a_valid: Vec<f32> = a.iter().copied().filter(|value| value.is_finite()).collect();
-    let b_valid: Vec<f32> = b.iter().copied().filter(|value| value.is_finite()).collect();
+    let a_valid: Vec<f32> = a
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .collect();
+    let b_valid: Vec<f32> = b
+        .iter()
+        .copied()
+        .filter(|value| value.is_finite())
+        .collect();
     if a_valid.len() < 2 || b_valid.len() < 2 {
         return None;
     }
@@ -997,11 +1009,13 @@ fn overlap_coefficient(a: &[f32], b: &[f32]) -> Option<f32> {
     let mut hist_a = vec![0.0_f32; bin_count];
     let mut hist_b = vec![0.0_f32; bin_count];
     for value in a_valid {
-        let index = (((value - min_value) / bin_width).floor() as isize).clamp(0, (bin_count - 1) as isize) as usize;
+        let index = (((value - min_value) / bin_width).floor() as isize)
+            .clamp(0, (bin_count - 1) as isize) as usize;
         hist_a[index] += 1.0;
     }
     for value in b_valid {
-        let index = (((value - min_value) / bin_width).floor() as isize).clamp(0, (bin_count - 1) as isize) as usize;
+        let index = (((value - min_value) / bin_width).floor() as isize)
+            .clamp(0, (bin_count - 1) as isize) as usize;
         hist_b[index] += 1.0;
     }
 
@@ -1043,7 +1057,11 @@ fn rank_with_ties(values: &[f32]) -> Vec<f32> {
         .copied()
         .enumerate()
         .collect::<Vec<(usize, f32)>>();
-    indexed.sort_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(std::cmp::Ordering::Equal));
+    indexed.sort_by(|left, right| {
+        left.1
+            .partial_cmp(&right.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     let mut ranks = vec![0.0_f32; values.len()];
     let mut start = 0usize;
     while start < indexed.len() {
@@ -1086,7 +1104,8 @@ fn pearson_corr(a: &[f32], b: &[f32]) -> Option<f32> {
 
 fn score_output_path() -> PathBuf {
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let candidate = PathBuf::from(manifest_dir).join("../results/geology_solo_main_scores.jsonl");
+        let candidate =
+            PathBuf::from(manifest_dir).join("../results/geology_solo_main_scores.jsonl");
         if let Some(parent) = candidate.parent() {
             if parent.exists() {
                 return candidate;
@@ -1222,8 +1241,7 @@ fn append_score_record_jsonl(
         )
         .map_err(|error| format!("failed to write json: {}", error))?;
     }
-    write!(&mut line, "}}}},")
-        .map_err(|error| format!("failed to write json: {}", error))?;
+    write!(&mut line, "}}}},").map_err(|error| format!("failed to write json: {}", error))?;
     write!(
         &mut line,
         "\"diagnostics\":{{\"generated_land_ratio\":{:.6},\"oceanic_age_min_myr\":{},\"oceanic_age_max_myr\":{},\"mean_depth\":{},\"oceanic_age_valid_cells\":{},\"oceanic_age_total_cells\":{},\"oceanic_age_bin_count\":{},\"oceanic_age_populated_bins\":{}",
@@ -1281,8 +1299,7 @@ fn append_score_record_jsonl(
         .map_err(|error| format!("failed to write json: {}", error))?;
     }
     write!(&mut line, "]").map_err(|error| format!("failed to write json: {}", error))?;
-    write!(&mut line, "}}}}\n")
-        .map_err(|error| format!("failed to write json: {}", error))?;
+    write!(&mut line, "}}}}\n").map_err(|error| format!("failed to write json: {}", error))?;
 
     let output_path = score_output_path();
     if let Some(parent) = output_path.parent() {
