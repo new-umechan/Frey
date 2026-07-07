@@ -57,6 +57,14 @@ pnpm preview:precomputed
 FREY_PRECOMPUTE_FORCE_REBUILD=true pnpm preview:precomputed
 ```
 
+開発 preview を「保存済み store の再生成込み」で再起動する場合は、同じ処理を alias 化した次を使う。
+
+```bash
+pnpm dev:restart:regen
+```
+
+`dev:restart` は process restart だけを行い、`data/precomputed/worlds/<seed>` は変更しない。保存済み frame が古い可能性を消したい場合は `dev:restart:regen` を使う。
+
 ## `dev:precomputed` の役割
 
 ```bash
