@@ -1,31 +1,29 @@
 ## Rules
 
-- Commit message: `tag: 日本語の説明`（例: `feat: ログイン機能の追加`）
+- Commit messages must be `tag: 日本語の説明` format, e.g. `feat: ログイン機能の追加`.
 - Do not run `git push`.
 - Use `pnpm`, not `npm`.
-- Keep `mod.rs` thin: only re-exports and submodule declarations.
-- Assume general programming knowledge, but explain repository-specific concepts.
-- Simulation models must be grounded in scientific literature. Approximations are allowed for performance, but document trade-offs.
+- Keep `mod.rs` thin: only submodule declarations and re-exports.
+- Assume general programming knowledge; explain repository-specific concepts.
+- Simulation models must be anchored in scientific literature. Performance approximations are allowed, but document what is approximated and where the trade-off is recorded.
 
-## Docs-First Development
+## Documentation Workflow
 
 For non-trivial design or behavior changes:
 
-1. Draft unresolved designs as `Draft` documents in `docs/decisions/`.
-2. Record adopted/rejected/superseded important decisions by updating their `Status`.
-3. Implement.
-4. Update canonical docs:
-   - `docs/reference/`: implemented specs
-   - `docs/operations/`: current procedures
-   - `docs/operations/bench/`: benchmark methods, validation logs, comparisons, rejected hypotheses
+1. Write unresolved designs as `Draft` decision docs in `docs/decisions/`.
+2. Update decision status when adopted, rejected, or superseded.
+3. Implement the change.
+4. Update canonical docs.
 
-Skip decision docs for small refactors, local cleanups, test-only changes, minor naming fixes, or behavior already covered by canonical docs.
+Decision docs are not required for small refactors, local cleanups, test-only changes, naming fixes, or behavior already covered by canonical docs.
 
-## Documentation
+## Docs Directory Guide
 
-- `docs/research/`: external research and pre-decision material
-- `docs/decisions/`: draft/adopted/rejected/superseded decisions and reasons
-- `docs/reference/`: implementation-matching specs only; no history or tentative plans
-- `docs/operations/`: current procedures only
-- `docs/operations/bench/`: benchmark procedures, validation logs, comparison history, rejected hypotheses
-- Remove or replace stale text; do not just append.
+- `docs/research/`: external research and pre-decision material.
+- `docs/decisions/`: important decisions, their status, and reasoning.
+- `docs/reference/`: current behavior, model contracts, module responsibilities, and public contracts.
+- `docs/operations/`: current procedures.
+- `docs/operations/bench/`: benchmark methods, validation logs, comparisons, diagnostics, and rejected hypotheses.
+
+Keep docs current by replacing stale text instead of only appending.
