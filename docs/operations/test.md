@@ -147,10 +147,13 @@ cd rust && wasm-pack test --node
 
 ## CI 自動実行
 
-- heavy seed gate: `.github/workflows/seed-regression-heavy-gate.yaml`
 - perf gate: `.github/workflows/perf-gate.yaml`
 - ScientificBenchmark artifact: `.github/workflows/scientific-benchmark-artifact.yaml`
 - wasm API tests: `.github/workflows/wasm-api-tests.yaml`
+
+## 手動ゲート
+
+- heavy seed gate: `.github/workflows/seed-regression-heavy-gate.yaml`
 
 ## 手動確認
 

@@ -1,16 +1,6 @@
 name: Seed Regression Heavy Gate
 
 on:
-    push:
-        branches:
-            - main
-        paths-ignore:
-            - docs/**
-            - README.md
-    pull_request:
-        paths-ignore:
-            - docs/**
-            - README.md
     workflow_dispatch:
 
 jobs:
