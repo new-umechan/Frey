@@ -337,11 +337,11 @@ tick 0で正規化した値である。これは単独で地学的な正誤を�
 持たないcentroid relaxationへの長期収束を検出する。400 tick以上ではenergy ratioが`0.75`を
 下回ったrunをwarningにする。閾値はEarth類似度ではなく、初期形状からの過度な幾何学化を
 拾う保守的なregression gateである。
-現行influence modelのalpha level 6、400 tick、10 tick間隔runでは、plate数9、最大block 1、
+過去のinfluence modelのalpha level 6、400 tick、10 tick間隔runでは、plate数9、最大block 1、
 孤立cell 0を維持した一方、energy ratioはtick 50で`0.592`、tick 400で`0.607`、
 nearest-centroid一致率はtick 0の`0.648`からtick 400の`0.804`へ上がった。
 したがって長期の幾何学化は分裂・枝とは独立したregressionとして検出できる。
-現行 local material mixing `0.16` + topology cleanup の alpha/beta/gamma/delta
+過去の local material mixing `0.16` + topology cleanup の alpha/beta/gamma/delta
 160 tick run では、`mutual_exchange_ratio` は約 `0.89-0.90` だった。
 同 run では response は約 `0.16-0.18`、topology block は全 seed で 1、
 最大 complexity は delta の `1.185` に収まった。
@@ -352,14 +352,15 @@ alpha は `max_boundary_complexity_growth=1.29` で gate を超えたため棄�
 次に hysteresis を試す場合は fractional commit を hard gate 化せず、
 soft な reverse-debt state として設計し直す。
 
-既定 ownership は persistent influence generator 方式である。generator を Euler 回転で進め、
-現在領域重心へ `0.2` 緩和し、local candidate と初期面積補正 `0.18` で所属を再分類する。
+過去の既定 ownership は persistent influence generator 方式だった。generator を Euler 回転で進め、
+現在領域重心へ `0.2` 緩和し、local candidate と初期面積補正 `0.18` で所属を再分類していた。
 alpha/beta/gamma/delta level 6、160 tick、毎 tick 記録では、最終 plate 数は `9/9/7/7`、
 速度は `77-84 km/Myr`、方向持続性は全 seed `0.999` 以上、response は `0.87-1.54` だった。
 最終 block は全 seed で 1、complexity growth は `1.02-1.06`、面積成長は `1.46-1.89` で
 全 warning gate を通過した。`mutual_exchange_ratio` は `0.064-0.239`、straightness は
 `0.624-0.815`、Euler residual ratio は `0.47-0.71` であり、厳密な剛体 polygon 移流ではない。
 alpha/beta/gamma には一時的な微小第2成分があり、alpha の履歴最大面積成長は `3.81` だった。
+この方式は比較検証の結果、現在の実行経路から削除し、persistent material element 方式へ固定した。
 
 surface material parcel prototype の1 tick dry runは次で実行する。
 
