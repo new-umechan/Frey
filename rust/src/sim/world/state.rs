@@ -1055,74 +1055,9 @@ pub struct GeologyDynamicsState {
     #[serde(default)]
     pub cached_metrics: GeologyStepMetrics,
     #[serde(default)]
-    pub boundary_front_accumulators: Vec<BoundaryFrontAccumulatorState>,
-    #[serde(default)]
-    pub plate_material: Vec<PlateMaterialState>,
-    #[serde(default)]
-    pub plate_area_targets: Vec<u32>,
-    #[serde(default)]
-    pub plate_influence_centers: Vec<[f32; 3]>,
-    #[serde(default)]
-    pub plate_velocity_centers: Vec<[f32; 3]>,
-    #[serde(default)]
-    pub surface_material: Vec<Vec<SurfaceMaterialState>>,
-    #[serde(default)]
     pub surface_material_elements: Vec<SurfaceMaterialElementState>,
     #[serde(default)]
     pub previous_surface_plate_id: Vec<PlateId>,
-    #[serde(default)]
-    pub plate_surface_polygons: Vec<PlateSurfacePolygonState>,
-    #[serde(default)]
-    pub plate_boundary_topology: PlateBoundaryTopologyState,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundaryTopologyState {
-    pub nodes: Vec<PlateBoundaryNodeState>,
-    pub segments: Vec<PlateBoundarySegmentState>,
-    pub components: Vec<PlateBoundaryComponentState>,
-    #[serde(default)]
-    pub half_edges: Vec<PlateBoundaryHalfEdgeState>,
-    #[serde(default)]
-    pub faces: Vec<PlateBoundaryFaceState>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundaryNodeState {
-    pub position: [f32; 3],
-    pub triple_junction: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundarySegmentState {
-    pub nodes: [u32; 2],
-    pub left_plate: PlateId,
-    pub right_plate: PlateId,
-    pub triangle: u32,
-    pub residual_normal_area: f32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundaryComponentState {
-    pub plate_pair: [PlateId; 2],
-    pub segments: Vec<u32>,
-    pub closed: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundaryHalfEdgeState {
-    pub origin: u32,
-    pub segment: u32,
-    pub twin: u32,
-    pub next: u32,
-    pub prev: u32,
-    pub face: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateBoundaryFaceState {
-    pub plate_id: PlateId,
-    pub boundaries: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -1147,28 +1082,6 @@ pub struct SurfaceMaterialElementState {
 
 fn default_surface_material_ownership_marker() -> bool {
     true
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateSurfacePolygonState {
-    pub plate_id: PlateId,
-    pub loops: Vec<Vec<[f32; 3]>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct BoundaryFrontAccumulatorState {
-    pub source_plate: u32,
-    pub target_plate: u32,
-    pub bucket: u32,
-    pub residual_cell_fraction: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct PlateMaterialState {
-    pub primary_plate: u32,
-    pub primary_weight: f32,
-    pub secondary_plate: u32,
-    pub secondary_weight: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

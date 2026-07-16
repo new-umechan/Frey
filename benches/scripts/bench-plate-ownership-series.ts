@@ -10,7 +10,6 @@ interface Args {
   level: number;
   out: string;
   cargoManifest: string;
-  ownershipModel: string;
 }
 
 interface BenchRecord {
@@ -98,7 +97,6 @@ function parseArgs(argv: string[]): Args {
     level: 6,
     out: "benches/results/plate_ownership_series.jsonl",
     cargoManifest: "rust/Cargo.toml",
-    ownershipModel: "0",
   };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -133,12 +131,6 @@ function parseArgs(argv: string[]): Args {
         args.cargoManifest = String(next ?? args.cargoManifest);
         i += 1;
         break;
-      case "--ownership-model":
-        args.ownershipModel = ownershipModelValue(
-          String(next ?? args.ownershipModel),
-        );
-        i += 1;
-        break;
       case "--help":
         printHelp();
         process.exit(0);
@@ -153,49 +145,6 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-function ownershipModelValue(value: string): string {
-  switch (value.trim().toLowerCase()) {
-    case "default":
-    case "transfer":
-    case "0":
-      return "0";
-    case "field":
-    case "influence":
-    case "1":
-      return "1";
-    case "surface":
-    case "transport":
-    case "2":
-      return "2";
-    case "topology":
-    case "3":
-      return "3";
-    case "elements":
-    case "finite-volume":
-    case "4":
-      return "4";
-    case "arrangement":
-    case "process-boundary":
-    case "5":
-      return "5";
-    case "front-only":
-    case "6":
-      return "6";
-    case "persistent-elements":
-    case "persistent-material":
-    case "7":
-      return "7";
-    case "persistent-material-topology":
-    case "8":
-      return "8";
-    case "persistent-elements-no-reactions":
-    case "9":
-      return "9";
-    default:
-      throw new Error(`Unknown ownership model: ${value}`);
-  }
-}
-
 function printHelp() {
   console.error(
     "Usage: tsx benches/scripts/bench-plate-ownership-series.ts [options]",
@@ -208,9 +157,6 @@ function printHelp() {
     "  --out <path>           default: benches/results/plate_ownership_series.jsonl",
   );
   console.error("  --cargo-manifest <path>");
-  console.error(
-    "  --ownership-model <default|field|surface|topology|elements|arrangement|front-only|persistent-elements>",
-  );
 }
 
 function runOne(args: Args, seed: string, runId: string): Promise<void> {
@@ -234,7 +180,6 @@ function runOne(args: Args, seed: string, runId: string): Promise<void> {
           CRUST_PLATE_SERIES_RECORD_EVERY: String(args.recordEvery),
           CRUST_PLATE_SERIES_BENCH_OUT: args.out,
           CRUST_PLATE_SERIES_RUN_ID: `${runId}-${seed}`,
-          CRUST_PLATE_SERIES_OWNERSHIP_MODEL: args.ownershipModel,
         },
       },
     );

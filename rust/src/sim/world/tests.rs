@@ -746,16 +746,8 @@ fn world_json_legacy_runtime_key_is_ignored() {
         boundary_state: BoundaryDynamicsState::default(),
         mantle_heat: Vec::new(),
         cached_metrics: GeologyStepMetrics::default(),
-        boundary_front_accumulators: Vec::new(),
-        plate_material: Vec::new(),
-        plate_area_targets: Vec::new(),
-        plate_influence_centers: Vec::new(),
-        plate_velocity_centers: Vec::new(),
-        surface_material: Vec::new(),
         surface_material_elements: Vec::new(),
         previous_surface_plate_id: Vec::new(),
-        plate_surface_polygons: Vec::new(),
-        plate_boundary_topology: Default::default(),
     });
     let mut value = serde_json::to_value(world).expect("world to_value should succeed");
     let object = value.as_object_mut().expect("world json should be object");

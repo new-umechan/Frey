@@ -592,9 +592,6 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
     if let Some(value) = env_f32("CRUST_PLATE_SERIES_DAMAGE_RATE") {
         geology_params.pre_plate_damage_rate = value;
     }
-    if let Some(value) = env_u32("CRUST_PLATE_SERIES_OWNERSHIP_MODEL") {
-        geology_params.plate_ownership_model = value;
-    }
     let (mut world, _) =
         sim::headless::init_world_for_headless_runner(&config.seed, config.level, geology_params)
             .unwrap_or_else(|err| panic!("failed to init world: {err}"));
@@ -842,14 +839,10 @@ impl MotionTracker {
             .mean_cell_spacing_km
             .get_or_insert_with(|| mean_cell_spacing_km(world.mesh()));
         let centroids = plate_centroids(world.mesh().positions.as_slice(), plate_id, plate_count);
-        let influence_centers = geology_state
-            .as_ref()
-            .map(|state| state.plate_influence_centers.as_slice())
-            .unwrap_or(&[]);
         let cvt = cvt_diagnostics(
             world.mesh().positions.as_slice(),
             plate_id,
-            influence_centers,
+            &[],
             &centroids,
             mean_cell_spacing_km / EARTH_MEAN_RADIUS_KM,
         );

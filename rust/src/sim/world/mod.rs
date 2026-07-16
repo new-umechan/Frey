@@ -20,14 +20,11 @@ pub use exec::{
 };
 pub use metrics::WorldMetrics;
 pub use state::{
-    ArchiveState, Biome, BoundaryDynamicsState, BoundaryFrontAccumulatorState, BoundaryType,
-    CellId, CellStore, CellStoreMut, CivilizationIndicators, CivilizationState,
-    CivilizationStateMut, ClimateState, CoastSide, ConflictState, ConvergentRegime, CropBitmap,
-    DomesticatesInternal, DomesticatesState, EcologyInternal, EcologyState, GeologyDynamicsState,
-    GeologyState, GeologyStepMetrics, GlaciologyState, HydrologyState, LivestockBitmap,
-    PlateBoundaryComponentState, PlateBoundaryFaceState, PlateBoundaryHalfEdgeState,
-    PlateBoundaryNodeState, PlateBoundarySegmentState, PlateBoundaryTopologyState,
-    PlateKinematicsState, PlateMaterialState, PlateSurfacePolygonState, PolityComponent,
+    ArchiveState, Biome, BoundaryDynamicsState, BoundaryType, CellId, CellStore, CellStoreMut,
+    CivilizationIndicators, CivilizationState, CivilizationStateMut, ClimateState, CoastSide,
+    ConflictState, ConvergentRegime, CropBitmap, DomesticatesInternal, DomesticatesState,
+    EcologyInternal, EcologyState, GeologyDynamicsState, GeologyState, GeologyStepMetrics,
+    GlaciologyState, HydrologyState, LivestockBitmap, PlateKinematicsState, PolityComponent,
     PolityGroupId, PolityId, PolityState, PopulationState, RegionComponent, RegionId,
     SettlementComponent, SettlementId, SettlementState, SubsistenceMix, SubsistenceState,
     SurfaceMaterialElementState, SurfaceMaterialState, TerrainState, VertexCrustState, World,

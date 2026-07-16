@@ -106,7 +106,6 @@ pub struct GeologyParams {
     pub plate_count_min: u32,
     pub plate_count_max: u32,
     pub ocean_plate_ratio: f32,
-    pub plate_ownership_model: u32,
     pub pre_plate_steps: u32,
     pub pre_plate_damage_rate: f32,
     pub pre_plate_healing_decay: f32,

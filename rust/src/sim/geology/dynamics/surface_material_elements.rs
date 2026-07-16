@@ -15,7 +15,10 @@ use super::surface_material_transport::{nearest_mesh_cell, rotate_unit_vector};
 
 const AREA_EPSILON: f32 = 1e-10;
 const MIN_REPRESENTABLE_CELL_FRACTION: f32 = 1e-3;
-const NUMERICAL_DUST_CELL_FRACTION: f32 = 1e-5;
+// Elements below this fraction of a mean mesh cell are numerical dust. Keeping
+// them makes the f32 gnomonic projection less stable without preserving useful
+// ownership history.
+const NUMERICAL_DUST_CELL_FRACTION: f32 = 1e-4;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct SurfaceMaterialElementProjection {
@@ -101,90 +104,7 @@ pub(super) struct SurfaceMaterialElementUpdate {
     pub crust_age: Vec<f32>,
     pub closure: MaterialCoverageClosureDiagnostics,
     pub coverage: MaterialCoverageRegimeDiagnostics,
-    pub reconstruction: MaterialElementReconstructionDiagnostics,
     pub marker_ownership: SurfaceMarkerOwnershipDiagnostics,
-}
-
-pub(super) fn update_surface_material_elements(
-    input: SurfaceMaterialElementUpdateInput<'_>,
-) -> Result<SurfaceMaterialElementUpdate, String> {
-    if input.elements.is_empty() {
-        *input.elements = initialize_surface_material_elements(
-            input.positions,
-            input.nbr_offsets,
-            input.nbrs,
-            input.plate_id,
-            input.crust,
-        )?;
-    }
-    advect_surface_material_elements(input.elements, input.plate_states)?;
-    discard_subcell_material_dust(input.elements, input.positions.len());
-    let mut projection = project_surface_material_elements(
-        input.elements,
-        input.positions,
-        input.nbr_offsets,
-        input.nbrs,
-    )?;
-    if projection.unassigned_element_count > 0 {
-        return Err(format!(
-            "{} finite-volume material elements were not projected: area={}, max_area={}",
-            projection.unassigned_element_count,
-            projection.unassigned_element_area,
-            projection.max_unassigned_element_area
-        ));
-    }
-    let bridge_projection = surface_projection_from_elements(&projection);
-    let plan = super::surface_boundary_sweep::plan_swept_boundary_reactions(
-        super::surface_boundary_sweep::SweptBoundaryInput {
-            positions: input.positions,
-            nbr_offsets: input.nbr_offsets,
-            nbrs: input.nbrs,
-            plate_id: input.plate_id,
-            crust: input.crust,
-            plate_states: input.plate_states,
-            boundary_state: input.boundary_state,
-            projection: &bridge_projection,
-            cell_capacity: Some(&projection.target_cell_areas),
-        },
-    );
-    let closure = close_material_element_coverage(&mut projection, &plan, input.positions);
-    let (elements, reconstruction) = reconstruct_surface_material_elements(
-        &projection,
-        input.positions,
-        input.nbr_offsets,
-        input.nbrs,
-    )?;
-    let plate_id = rasterize_material_element_centers(&elements, input.positions)?;
-    let coverage = classify_material_coverage_regimes(&projection, input.boundary_state, &plan);
-    let mut crust_type = Vec::with_capacity(projection.cells.len());
-    let mut crust_age = Vec::with_capacity(projection.cells.len());
-    for (cell, (&plate, materials)) in plate_id.iter().zip(&projection.cells).enumerate() {
-        let material = materials
-            .iter()
-            .find(|material| material.plate_id == plate)
-            .ok_or_else(|| {
-                format!(
-                    "sampled plate {} has no projected material in cell {cell}",
-                    plate.0
-                )
-            })?;
-        crust_type.push(if material.oceanic_area * 2.0 >= material.area {
-            CrustType::Oceanic
-        } else {
-            CrustType::Continental
-        });
-        crust_age.push(material.age_area / material.area.max(AREA_EPSILON));
-    }
-    *input.elements = elements;
-    Ok(SurfaceMaterialElementUpdate {
-        plate_id,
-        crust_type,
-        crust_age,
-        closure,
-        coverage,
-        reconstruction,
-        marker_ownership: SurfaceMarkerOwnershipDiagnostics::default(),
-    })
 }
 
 pub(super) fn update_persistent_surface_material_elements(
@@ -293,7 +213,6 @@ pub(super) fn update_persistent_surface_material_elements(
         crust_age,
         closure,
         coverage,
-        reconstruction: MaterialElementReconstructionDiagnostics::default(),
         marker_ownership,
     })
 }
@@ -714,34 +633,6 @@ fn rasterize_persistent_material_surface(
         diagnostics.changed_transform_cell_count += u32::from(transform_cells.contains(&cell));
     }
     Ok((plate_id, diagnostics))
-}
-
-fn rasterize_material_element_centers(
-    elements: &[SurfaceMaterialElementState],
-    positions: &[[f32; 3]],
-) -> Result<Vec<PlateId>, String> {
-    let mut candidates = vec![Vec::<PlateId>::new(); positions.len()];
-    for element in elements {
-        let cell = element.host_cell as usize;
-        let Some(&position) = positions.get(cell) else {
-            return Err("material element references an invalid host cell".to_string());
-        };
-        if spherical_triangle_contains(element.vertices, position) {
-            candidates[cell].push(element.plate_id);
-        }
-    }
-    candidates
-        .into_iter()
-        .enumerate()
-        .map(|(cell, mut plates)| {
-            plates.sort_unstable();
-            plates.dedup();
-            plates
-                .first()
-                .copied()
-                .ok_or_else(|| format!("material partition does not cover cell center {cell}"))
-        })
-        .collect()
 }
 
 fn spherical_triangle_contains(vertices: [[f32; 3]; 3], point: [f32; 3]) -> bool {

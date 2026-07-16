@@ -206,7 +206,6 @@ export interface TerrainSchemaParams {
     plate_count_min: number;
     plate_count_max: number;
     ocean_plate_ratio: number;
-    plate_ownership_model: number;
     pre_plate_steps: number;
     pre_plate_damage_rate: number;
     pre_plate_healing_decay: number;
@@ -315,7 +314,6 @@ export const TerrainSchemaParamsKeys = [
     "plate_count_min",
     "plate_count_max",
     "ocean_plate_ratio",
-    "plate_ownership_model",
     "pre_plate_steps",
     "pre_plate_damage_rate",
     "pre_plate_healing_decay",
