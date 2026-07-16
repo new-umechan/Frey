@@ -34,8 +34,8 @@
 
 ### `docs/reference/`
 
-- 現在の実装仕様
 - as-is の挙動、モジュール責務、公開前提
+- 実装を丸写しせず、読者が現在のモデルを理解するための雪にしいを置##
 - 変更履歴や試行錯誤ログは置かない
 - 用語の正本は `docs/reference/terminology.md` に置く
 
@@ -49,25 +49,38 @@
 
 - ベンチマークの実行方法
 - artifact の読み方
+- 違和感、モデル契約、診断指標、疑うべき機構の対応表
 - 内部検証ログ、比較履歴、棄却した仮説
 - `vxx` 系の検証はここに置く
+
+## 読み方
+
+実装や地形に違和感があるときは、最初から低レイヤーの実装詳細へ入らない。
+まず `docs/reference/` で現在のモデルが何を近似し、何を保証しないかを確認する。
+その後、該当する `docs/operations/bench/` の検証文書で、どの artifact と診断指標を見るかを決める。
+
+AI エージェントも同じ順序で読む。
+実装名や直近の変更箇所から調査を始めると、見た目の違和感と関係の薄い指標に引きずられやすい。
+違和感から調査する場合は、まず operations の対応表で、現象、モデル契約、主な指標、疑うべき機構を対応づける。
 
 ## Geology の運用
 
 - `docs/research/procedural_tctonic_planets.md`
     - `Procedural Tectonic Planets` 論文の調査ノートとして扱う
+- `docs/reference/modules/geology.md`
+    - 現在の地形・プレートモデルを、実装詳細ではなく概念として説明する
 - `docs/decisions/*`
     - Geology の新旧設計判断と Draft 検討を分けて置く
 - `docs/operations/bench/geology/*`
-    - Crust / Environment の内部診断、artifact の比較結果、旧 Geology の棚卸しを置く
+    - Crust / Environment の内部診断、artifact の比較結果、違和感から診断へ進む対応表、旧 Geology の棚卸しを置く
 
 ## 作業ルール
 
 1. 外部調査は `research` に書く
 2. 追跡したい変更案は `decisions` に `Draft` としてまとめる
 3. 採用・却下・置換した判断は同じ文書の `Status` を更新する
-4. 実装後の仕様を `reference` に反映する
-5. 実験ログと比較履歴は `operations/bench` に残す
+4. 実装後の現在モデルを `reference` に反映する
+5. artifact の読み方、診断指標、実験ログ、比較履歴は `operations/bench` に残す
 6. `Accepted` にした decision は、判断、理由、正本への導線だけへ圧縮する
 
 ## 用語ルール

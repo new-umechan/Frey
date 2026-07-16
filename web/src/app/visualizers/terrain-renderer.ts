@@ -99,6 +99,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     let metricBuffer: Float32Array | null = null;
     let metricOverlayBuffer: Float32Array | null = null;
     let currentMetricKey = "height";
+    let metricAttributeDataKey = "";
     let currentViewModeForGeometry = "normal";
     let pillarsVisible = false;
     let windVectorsVisible = false;
@@ -146,6 +147,7 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
                 overlayAttr.needsUpdate = true;
             }
         }
+        metricAttributeDataKey = metricMeta.dataKey;
     }
 
     function ensureAttribute(name: string, array: TypedArray, itemSize: number): THREE.BufferAttribute {
@@ -208,6 +210,11 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
     ) {
         if (!currentTerrainData) {
             return;
+        }
+        // Metric selection can change without a simulation delta. Refresh the
+        // shader attribute before rendering so it matches hover data.
+        if (metricAttributeDataKey !== getCellMetricMeta(currentMetricKey).dataKey) {
+            updateMetricAttribute(currentTerrainData);
         }
         const surfaceModeChanged = lastSurfaceMode !== currentSurfaceMode;
         const previousPillarsVisible = pillarsVisible;

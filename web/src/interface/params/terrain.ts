@@ -10,6 +10,7 @@ export const TERRAIN_PARAMS = Object.freeze({
     plate_count_min: 8,
     plate_count_max: 18,
     ocean_plate_ratio: 0.65,
+    plate_ownership_model: 7,
     pre_plate_steps: 40,
     pre_plate_damage_rate: 0.18,
     pre_plate_healing_decay: 0.985,

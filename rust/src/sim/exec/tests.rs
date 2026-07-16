@@ -173,6 +173,16 @@ fn hydrology_mfd_skips_in_later_eras_without_height_change_and_low_activity() {
         boundary_state: crate::sim::world::BoundaryDynamicsState::default(),
         mantle_heat: Vec::new(),
         cached_metrics: crate::sim::world::GeologyStepMetrics::default(),
+        boundary_front_accumulators: Vec::new(),
+        plate_material: Vec::new(),
+        plate_area_targets: Vec::new(),
+        plate_influence_centers: Vec::new(),
+        plate_velocity_centers: Vec::new(),
+        surface_material: Vec::new(),
+        surface_material_elements: Vec::new(),
+        previous_surface_plate_id: Vec::new(),
+        plate_surface_polygons: Vec::new(),
+        plate_boundary_topology: Default::default(),
     });
 
     assert!(!super::geology::should_run_hydrology_mfd_for_geology(
@@ -243,6 +253,16 @@ fn geology_step_preserves_crust_land_ratio_target() {
         boundary_state: crate::sim::world::BoundaryDynamicsState::default(),
         mantle_heat: Vec::new(),
         cached_metrics: crate::sim::world::GeologyStepMetrics::default(),
+        boundary_front_accumulators: Vec::new(),
+        plate_material: Vec::new(),
+        plate_area_targets: Vec::new(),
+        plate_influence_centers: Vec::new(),
+        plate_velocity_centers: Vec::new(),
+        surface_material: Vec::new(),
+        surface_material_elements: Vec::new(),
+        previous_surface_plate_id: Vec::new(),
+        plate_surface_polygons: Vec::new(),
+        plate_boundary_topology: Default::default(),
     });
     world.clock.epoch = EraKind::Crust;
     world.clock.transition.last_land_ratio = 0.5;

@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use frey_wasm::sim;
 use frey_wasm::sim::geology_types::PlateId;
-use frey_wasm::sim::world::PlateKinematicsState;
+use frey_wasm::sim::world::{BoundaryType, PlateKinematicsState};
 use frey_wasm::sim::GeologyExecState;
 use frey_wasm::GeologyParams;
 use serde::Serialize;
@@ -24,7 +24,14 @@ const BOUNDARY_DISTANCE_THIN_CELLS: u32 = 2;
 const CORE_EROSION_LAYERS: u32 = 2;
 const BOUNDARY_COMPLEXITY_GROWTH_WINDOW_SAMPLES: usize = 4;
 const PERSISTENT_BOUNDARY_COMPLEXITY_GROWTH_THRESHOLD: f32 = 1.5;
+const BRANCH_PERSISTENCE_WINDOW_SAMPLES: usize = 4;
+const PERSISTENT_BRANCH_AREA_RATIO_THRESHOLD: f32 = 0.15;
 const ENCLOSED_PLATE_AREA_GATE: f32 = 0.10;
+const WEAK_LINE_MIN_LARGEST_BLOCK_RATIO: f32 = 0.25;
+const WEAK_LINE_MIN_SECONDARY_BLOCK_RATIO: f32 = 0.01;
+const MULTISCALE_MAX_EROSION_CELLS: u32 = 8;
+const MULTISCALE_MIN_CORE_RATIO: f32 = 0.005;
+const MULTISCALE_MIN_CORE_CELLS: usize = 8;
 
 #[derive(Debug, Clone)]
 struct BenchConfig {
@@ -56,6 +63,8 @@ struct TickRecord {
     continental_cell_ratio: f32,
     plate_id_churn_rate: f32,
     boundary_crossing_substeps: f32,
+    boundary_topology_event_cell_count: f32,
+    boundary_topology_constrained_segment_count: f32,
     orphan_cell_count: f32,
     single_cell_plate_count: f32,
     geology_activity: f32,
@@ -66,6 +75,11 @@ struct TickRecord {
     max_cell_crossing_fraction_per_tick: f32,
     mean_direction_persistence: f32,
     reciprocal_churn_ratio: f32,
+    net_exchange_directionality_ratio: f32,
+    mutual_exchange_ratio: f32,
+    temporal_reversal_ratio: f32,
+    temporal_reversal_previous_velocity_aligned_ratio: f32,
+    temporal_reversal_current_velocity_aligned_ratio: f32,
     mean_centroid_path_straightness: f32,
     mean_euler_rotation_residual_km: f32,
     max_euler_rotation_residual_km: f32,
@@ -77,6 +91,59 @@ struct TickRecord {
     boundary_transfer_velocity_unaligned_ratio: f32,
     mean_boundary_transfer_largest_component_ratio: f32,
     max_boundary_transfer_isolated_cell_ratio: f32,
+    boundary_motion_expected_cell_count: f32,
+    boundary_motion_actual_cell_count: u32,
+    boundary_motion_response_ratio: f32,
+    boundary_motion_underactive_risk: f32,
+    boundary_motion_overactive_risk: f32,
+    boundary_motion_runtime_raw_expected_cell_count: f32,
+    boundary_motion_runtime_accumulated_expected_cell_count: f32,
+    boundary_motion_runtime_component_budget_cell_count: f32,
+    boundary_motion_runtime_transferable_component_budget_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_budget_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_deferred_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_donor_limited_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_outgoing_limited_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_incoming_limited_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_net_area_limited_cell_count: f32,
+    boundary_motion_runtime_plate_consistency_max_projected_out_ratio: f32,
+    boundary_motion_runtime_actual_transfer_cell_count: f32,
+    boundary_motion_runtime_patch_rejected_component_count: f32,
+    boundary_motion_runtime_patch_rejected_budget_cell_count: f32,
+    boundary_motion_runtime_source_fragment_rejected_component_count: f32,
+    boundary_motion_runtime_source_fragment_rejected_budget_cell_count: f32,
+    boundary_motion_runtime_target_disconnected_rejected_component_count: f32,
+    boundary_motion_runtime_target_disconnected_rejected_budget_cell_count: f32,
+    boundary_motion_runtime_budget_utilization_ratio: f32,
+    boundary_motion_runtime_plate_consistency_limited_ratio: f32,
+    boundary_motion_runtime_component_limited_ratio: f32,
+    material_reconstruction_hard_capacity_assigned_cell_count: f32,
+    material_reconstruction_closure_assigned_cell_count: f32,
+    material_reconstruction_rebalanced_cell_count: f32,
+    material_reconstruction_capacity_mismatch_cell_count: f32,
+    material_reconstruction_non_dominant_assignment_cell_count: f32,
+    material_reconstruction_mean_assigned_confidence: f32,
+    persistent_material_gap_ratio: f32,
+    persistent_material_overlap_ratio: f32,
+    persistent_material_unsupported_gap_ratio: f32,
+    persistent_material_subduction_overlap_ratio: f32,
+    persistent_material_collision_overlap_ratio: f32,
+    persistent_material_unsupported_overlap_ratio: f32,
+    persistent_material_element_count: f32,
+    persistent_material_ownership_marker_count: f32,
+    marker_empty_candidate_cell_count: f32,
+    marker_single_candidate_cell_count: f32,
+    marker_mixed_candidate_cell_count: f32,
+    marker_changed_empty_candidate_cell_count: f32,
+    marker_changed_single_candidate_cell_count: f32,
+    marker_changed_mixed_candidate_cell_count: f32,
+    marker_reversed_empty_candidate_cell_count: f32,
+    marker_reversed_single_candidate_cell_count: f32,
+    marker_reversed_mixed_candidate_cell_count: f32,
+    marker_changed_divergent_cell_count: f32,
+    marker_changed_subduction_cell_count: f32,
+    marker_changed_collision_cell_count: f32,
+    marker_changed_transform_cell_count: f32,
     mean_abs_plate_area_delta_ratio: f32,
     max_abs_plate_area_delta_ratio: f32,
     max_plate_area_growth_from_initial: f32,
@@ -98,10 +165,27 @@ struct TickRecord {
     max_boundary_thin_cell_ratio: f32,
     mean_eroded_core_cell_ratio: f32,
     min_eroded_core_cell_ratio: f32,
+    mean_plate_block_count: f32,
+    max_plate_block_count: u32,
+    multi_block_plate_ratio: f32,
+    max_secondary_plate_block_ratio: f32,
+    mean_weak_line_plate_block_count: f32,
+    max_weak_line_plate_block_count: u32,
+    weak_line_multi_block_plate_ratio: f32,
+    max_secondary_weak_line_plate_block_ratio: f32,
     mean_enclosed_plate_risk: f32,
     max_enclosed_plate_risk: f32,
     mean_appendage_isolation_risk: f32,
     max_appendage_isolation_risk: f32,
+    max_multiscale_neck_secondary_ratio: f32,
+    max_branch_area_ratio: f32,
+    max_branch_slenderness: f32,
+    persistent_branch_plate_ratio: f32,
+    nearest_generator_agreement_ratio: f32,
+    cvt_energy_ratio_from_initial: f32,
+    mean_generator_centroid_distance_cells: f32,
+    nearest_centroid_voronoi_agreement_ratio: f32,
+    centroid_voronoi_energy_ratio_from_initial: f32,
     plates: Vec<PlateMotionRecord>,
 }
 
@@ -113,6 +197,11 @@ struct PlateMotionRecord {
     component_count: u32,
     largest_component_ratio: f32,
     detached_fragment_ratio: f32,
+    secondary_component_rift_boundary_ratio: f32,
+    secondary_component_ridge_boundary_ratio: f32,
+    secondary_component_subduction_boundary_ratio: f32,
+    secondary_component_collision_boundary_ratio: f32,
+    unsupported_detached_component_ratio: f32,
     boundary_complexity: f32,
     boundary_complexity_growth: f32,
     boundary_complexity_growth_window_mean: f32,
@@ -128,6 +217,13 @@ struct PlateMotionRecord {
     boundary_distance_max: u32,
     boundary_thin_cell_ratio: f32,
     eroded_core_cell_ratio: f32,
+    plate_block_core_degree: u32,
+    plate_block_count: u32,
+    largest_plate_block_ratio: f32,
+    secondary_plate_block_ratio: f32,
+    weak_line_plate_block_count: u32,
+    largest_weak_line_plate_block_ratio: f32,
+    secondary_weak_line_plate_block_ratio: f32,
     dominant_neighbor_plate_id: u32,
     dominant_neighbor_contact_ratio: f32,
     enclosed_plate_risk: f32,
@@ -137,6 +233,11 @@ struct PlateMotionRecord {
     appendage_bridge_contact_ratio: f32,
     appendage_foreign_contact_ratio: f32,
     appendage_isolation_risk: f32,
+    multiscale_neck_width_cells: u32,
+    multiscale_neck_secondary_ratio: f32,
+    branch_neck_width_cells: u32,
+    branch_area_ratio: f32,
+    branch_slenderness: f32,
     speed_km_per_myr: f32,
     cell_crossing_fraction_per_tick: f32,
     direction_persistence: f32,
@@ -165,6 +266,11 @@ struct PlateShapeRecord {
     component_count: u32,
     largest_component_ratio: f32,
     detached_fragment_ratio: f32,
+    secondary_component_rift_boundary_ratio: f32,
+    secondary_component_ridge_boundary_ratio: f32,
+    secondary_component_subduction_boundary_ratio: f32,
+    secondary_component_collision_boundary_ratio: f32,
+    unsupported_detached_component_ratio: f32,
     boundary_complexity: f32,
     articulation_cell_count: u32,
     articulation_cell_ratio: f32,
@@ -176,6 +282,13 @@ struct PlateShapeRecord {
     boundary_distance_max: u32,
     boundary_thin_cell_ratio: f32,
     eroded_core_cell_ratio: f32,
+    plate_block_core_degree: u32,
+    plate_block_count: u32,
+    largest_plate_block_ratio: f32,
+    secondary_plate_block_ratio: f32,
+    weak_line_plate_block_count: u32,
+    largest_weak_line_plate_block_ratio: f32,
+    secondary_weak_line_plate_block_ratio: f32,
     dominant_neighbor_plate_id: u32,
     dominant_neighbor_contact_ratio: f32,
     enclosed_plate_risk: f32,
@@ -185,6 +298,11 @@ struct PlateShapeRecord {
     appendage_bridge_contact_ratio: f32,
     appendage_foreign_contact_ratio: f32,
     appendage_isolation_risk: f32,
+    multiscale_neck_width_cells: u32,
+    multiscale_neck_secondary_ratio: f32,
+    branch_neck_width_cells: u32,
+    branch_area_ratio: f32,
+    branch_slenderness: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -193,6 +311,31 @@ struct CorridorMetrics {
     component_count: u32,
     lobe_balance: f32,
     neck_risk: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct PlateBlockMetrics {
+    core_degree: u32,
+    block_count: u32,
+    largest_block_ratio: f32,
+    secondary_block_ratio: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct MultiscaleShapeMetrics {
+    neck_width_cells: u32,
+    neck_secondary_ratio: f32,
+    branch_neck_width_cells: u32,
+    branch_area_ratio: f32,
+    branch_slenderness: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CvtDiagnostics {
+    valid: bool,
+    nearest_generator_agreement_ratio: f32,
+    energy: f32,
+    mean_generator_centroid_distance_cells: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -226,13 +369,18 @@ struct MotionTracker {
     previous_plate_states: Vec<Option<PlateKinematicsState>>,
     previous_velocity_dirs: Vec<Option<[f32; 3]>>,
     previous_sample_tick: Option<u64>,
+    previous_previous_plate_id: Vec<PlateId>,
     previous_plate_id: Vec<PlateId>,
+    previous_boundary_activity: Vec<f32>,
     centroid_path_lengths_km: Vec<f32>,
     initial_plate_cell_counts: Vec<Option<u32>>,
     previous_plate_cell_counts: Vec<Option<u32>>,
     initial_boundary_complexities: Vec<Option<f32>>,
     boundary_complexity_growth_windows: Vec<VecDeque<f32>>,
+    branch_area_ratio_windows: Vec<VecDeque<f32>>,
     mean_cell_spacing_km: Option<f32>,
+    initial_cvt_energy: Option<f32>,
+    initial_centroid_voronoi_energy: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -243,6 +391,10 @@ struct MotionDiagnostics {
     max_cell_crossing_fraction_per_tick: f32,
     mean_direction_persistence: f32,
     reciprocal_churn_ratio: f32,
+    mutual_exchange_ratio: f32,
+    temporal_reversal_ratio: f32,
+    temporal_reversal_previous_velocity_aligned_ratio: f32,
+    temporal_reversal_current_velocity_aligned_ratio: f32,
     mean_centroid_path_straightness: f32,
     mean_euler_rotation_residual_km: f32,
     max_euler_rotation_residual_km: f32,
@@ -254,6 +406,11 @@ struct MotionDiagnostics {
     boundary_transfer_velocity_unaligned_ratio: f32,
     mean_boundary_transfer_largest_component_ratio: f32,
     max_boundary_transfer_isolated_cell_ratio: f32,
+    boundary_motion_expected_cell_count: f32,
+    boundary_motion_actual_cell_count: u32,
+    boundary_motion_response_ratio: f32,
+    boundary_motion_underactive_risk: f32,
+    boundary_motion_overactive_risk: f32,
     mean_abs_plate_area_delta_ratio: f32,
     max_abs_plate_area_delta_ratio: f32,
     max_plate_area_growth_from_initial: f32,
@@ -275,10 +432,27 @@ struct MotionDiagnostics {
     max_boundary_thin_cell_ratio: f32,
     mean_eroded_core_cell_ratio: f32,
     min_eroded_core_cell_ratio: f32,
+    mean_plate_block_count: f32,
+    max_plate_block_count: u32,
+    multi_block_plate_ratio: f32,
+    max_secondary_plate_block_ratio: f32,
+    mean_weak_line_plate_block_count: f32,
+    max_weak_line_plate_block_count: u32,
+    weak_line_multi_block_plate_ratio: f32,
+    max_secondary_weak_line_plate_block_ratio: f32,
     mean_enclosed_plate_risk: f32,
     max_enclosed_plate_risk: f32,
     mean_appendage_isolation_risk: f32,
     max_appendage_isolation_risk: f32,
+    max_multiscale_neck_secondary_ratio: f32,
+    max_branch_area_ratio: f32,
+    max_branch_slenderness: f32,
+    persistent_branch_plate_ratio: f32,
+    nearest_generator_agreement_ratio: f32,
+    cvt_energy_ratio_from_initial: f32,
+    mean_generator_centroid_distance_cells: f32,
+    nearest_centroid_voronoi_agreement_ratio: f32,
+    centroid_voronoi_energy_ratio_from_initial: f32,
     plates: Vec<PlateMotionRecord>,
 }
 
@@ -291,6 +465,10 @@ impl Default for MotionDiagnostics {
             max_cell_crossing_fraction_per_tick: 0.0,
             mean_direction_persistence: 1.0,
             reciprocal_churn_ratio: 1.0,
+            mutual_exchange_ratio: 0.0,
+            temporal_reversal_ratio: 0.0,
+            temporal_reversal_previous_velocity_aligned_ratio: 1.0,
+            temporal_reversal_current_velocity_aligned_ratio: 1.0,
             mean_centroid_path_straightness: 1.0,
             mean_euler_rotation_residual_km: 0.0,
             max_euler_rotation_residual_km: 0.0,
@@ -302,6 +480,11 @@ impl Default for MotionDiagnostics {
             boundary_transfer_velocity_unaligned_ratio: 0.0,
             mean_boundary_transfer_largest_component_ratio: 1.0,
             max_boundary_transfer_isolated_cell_ratio: 0.0,
+            boundary_motion_expected_cell_count: 0.0,
+            boundary_motion_actual_cell_count: 0,
+            boundary_motion_response_ratio: 1.0,
+            boundary_motion_underactive_risk: 0.0,
+            boundary_motion_overactive_risk: 0.0,
             mean_abs_plate_area_delta_ratio: 0.0,
             max_abs_plate_area_delta_ratio: 0.0,
             max_plate_area_growth_from_initial: 1.0,
@@ -323,10 +506,27 @@ impl Default for MotionDiagnostics {
             max_boundary_thin_cell_ratio: 0.0,
             mean_eroded_core_cell_ratio: 0.0,
             min_eroded_core_cell_ratio: 0.0,
+            mean_plate_block_count: 0.0,
+            max_plate_block_count: 0,
+            multi_block_plate_ratio: 0.0,
+            max_secondary_plate_block_ratio: 0.0,
+            mean_weak_line_plate_block_count: 0.0,
+            max_weak_line_plate_block_count: 0,
+            weak_line_multi_block_plate_ratio: 0.0,
+            max_secondary_weak_line_plate_block_ratio: 0.0,
             mean_enclosed_plate_risk: 0.0,
             max_enclosed_plate_risk: 0.0,
             mean_appendage_isolation_risk: 0.0,
             max_appendage_isolation_risk: 0.0,
+            max_multiscale_neck_secondary_ratio: 0.0,
+            max_branch_area_ratio: 0.0,
+            max_branch_slenderness: 0.0,
+            persistent_branch_plate_ratio: 0.0,
+            nearest_generator_agreement_ratio: 0.0,
+            cvt_energy_ratio_from_initial: 1.0,
+            mean_generator_centroid_distance_cells: 0.0,
+            nearest_centroid_voronoi_agreement_ratio: 0.0,
+            centroid_voronoi_energy_ratio_from_initial: 1.0,
             plates: Vec::new(),
         }
     }
@@ -392,6 +592,9 @@ fn run_benchmark(config: &BenchConfig, run_id: String) -> BenchRecord {
     if let Some(value) = env_f32("CRUST_PLATE_SERIES_DAMAGE_RATE") {
         geology_params.pre_plate_damage_rate = value;
     }
+    if let Some(value) = env_u32("CRUST_PLATE_SERIES_OWNERSHIP_MODEL") {
+        geology_params.plate_ownership_model = value;
+    }
     let (mut world, _) =
         sim::headless::init_world_for_headless_runner(&config.seed, config.level, geology_params)
             .unwrap_or_else(|err| panic!("failed to init world: {err}"));
@@ -446,6 +649,9 @@ fn sample_world(
         continental_cell_ratio: metrics.continental_cell_ratio,
         plate_id_churn_rate: runtime_metrics.plate_id_churn_rate,
         boundary_crossing_substeps: runtime_metrics.boundary_crossing_substeps,
+        boundary_topology_event_cell_count: runtime_metrics.boundary_topology_event_cell_count,
+        boundary_topology_constrained_segment_count: runtime_metrics
+            .boundary_topology_constrained_segment_count,
         orphan_cell_count: runtime_metrics.orphan_cell_count,
         single_cell_plate_count: runtime_metrics.single_cell_plate_count,
         geology_activity: runtime_metrics.geology_activity,
@@ -456,6 +662,13 @@ fn sample_world(
         max_cell_crossing_fraction_per_tick: motion.max_cell_crossing_fraction_per_tick,
         mean_direction_persistence: motion.mean_direction_persistence,
         reciprocal_churn_ratio: motion.reciprocal_churn_ratio,
+        net_exchange_directionality_ratio: motion.reciprocal_churn_ratio,
+        mutual_exchange_ratio: motion.mutual_exchange_ratio,
+        temporal_reversal_ratio: motion.temporal_reversal_ratio,
+        temporal_reversal_previous_velocity_aligned_ratio: motion
+            .temporal_reversal_previous_velocity_aligned_ratio,
+        temporal_reversal_current_velocity_aligned_ratio: motion
+            .temporal_reversal_current_velocity_aligned_ratio,
         mean_centroid_path_straightness: motion.mean_centroid_path_straightness,
         mean_euler_rotation_residual_km: motion.mean_euler_rotation_residual_km,
         max_euler_rotation_residual_km: motion.max_euler_rotation_residual_km,
@@ -469,6 +682,97 @@ fn sample_world(
         mean_boundary_transfer_largest_component_ratio: motion
             .mean_boundary_transfer_largest_component_ratio,
         max_boundary_transfer_isolated_cell_ratio: motion.max_boundary_transfer_isolated_cell_ratio,
+        boundary_motion_expected_cell_count: motion.boundary_motion_expected_cell_count,
+        boundary_motion_actual_cell_count: motion.boundary_motion_actual_cell_count,
+        boundary_motion_response_ratio: motion.boundary_motion_response_ratio,
+        boundary_motion_underactive_risk: motion.boundary_motion_underactive_risk,
+        boundary_motion_overactive_risk: motion.boundary_motion_overactive_risk,
+        boundary_motion_runtime_raw_expected_cell_count: runtime_metrics
+            .boundary_motion_raw_expected_cell_count,
+        boundary_motion_runtime_accumulated_expected_cell_count: runtime_metrics
+            .boundary_motion_accumulated_expected_cell_count,
+        boundary_motion_runtime_component_budget_cell_count: runtime_metrics
+            .boundary_motion_component_budget_cell_count,
+        boundary_motion_runtime_transferable_component_budget_cell_count: runtime_metrics
+            .boundary_motion_transferable_component_budget_cell_count,
+        boundary_motion_runtime_plate_consistency_budget_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_budget_cell_count,
+        boundary_motion_runtime_plate_consistency_deferred_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_deferred_cell_count,
+        boundary_motion_runtime_plate_consistency_donor_limited_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_donor_limited_cell_count,
+        boundary_motion_runtime_plate_consistency_outgoing_limited_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_outgoing_limited_cell_count,
+        boundary_motion_runtime_plate_consistency_incoming_limited_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_incoming_limited_cell_count,
+        boundary_motion_runtime_plate_consistency_net_area_limited_cell_count: runtime_metrics
+            .boundary_motion_plate_consistency_net_area_limited_cell_count,
+        boundary_motion_runtime_plate_consistency_max_projected_out_ratio: runtime_metrics
+            .boundary_motion_plate_consistency_max_projected_out_ratio,
+        boundary_motion_runtime_actual_transfer_cell_count: runtime_metrics
+            .boundary_motion_actual_transfer_cell_count,
+        boundary_motion_runtime_patch_rejected_component_count: runtime_metrics
+            .boundary_motion_patch_rejected_component_count,
+        boundary_motion_runtime_patch_rejected_budget_cell_count: runtime_metrics
+            .boundary_motion_patch_rejected_budget_cell_count,
+        boundary_motion_runtime_source_fragment_rejected_component_count: runtime_metrics
+            .boundary_motion_source_fragment_rejected_component_count,
+        boundary_motion_runtime_source_fragment_rejected_budget_cell_count: runtime_metrics
+            .boundary_motion_source_fragment_rejected_budget_cell_count,
+        boundary_motion_runtime_target_disconnected_rejected_component_count: runtime_metrics
+            .boundary_motion_target_disconnected_rejected_component_count,
+        boundary_motion_runtime_target_disconnected_rejected_budget_cell_count: runtime_metrics
+            .boundary_motion_target_disconnected_rejected_budget_cell_count,
+        boundary_motion_runtime_budget_utilization_ratio: runtime_metrics
+            .boundary_motion_budget_utilization_ratio,
+        boundary_motion_runtime_plate_consistency_limited_ratio: runtime_metrics
+            .boundary_motion_plate_consistency_limited_ratio,
+        boundary_motion_runtime_component_limited_ratio: runtime_metrics
+            .boundary_motion_component_limited_ratio,
+        material_reconstruction_hard_capacity_assigned_cell_count: runtime_metrics
+            .material_reconstruction_hard_capacity_assigned_cell_count,
+        material_reconstruction_closure_assigned_cell_count: runtime_metrics
+            .material_reconstruction_closure_assigned_cell_count,
+        material_reconstruction_rebalanced_cell_count: runtime_metrics
+            .material_reconstruction_rebalanced_cell_count,
+        material_reconstruction_capacity_mismatch_cell_count: runtime_metrics
+            .material_reconstruction_capacity_mismatch_cell_count,
+        material_reconstruction_non_dominant_assignment_cell_count: runtime_metrics
+            .material_reconstruction_non_dominant_assignment_cell_count,
+        material_reconstruction_mean_assigned_confidence: runtime_metrics
+            .material_reconstruction_mean_assigned_confidence,
+        persistent_material_gap_ratio: runtime_metrics.persistent_material_gap_ratio,
+        persistent_material_overlap_ratio: runtime_metrics.persistent_material_overlap_ratio,
+        persistent_material_unsupported_gap_ratio: runtime_metrics
+            .persistent_material_unsupported_gap_ratio,
+        persistent_material_subduction_overlap_ratio: runtime_metrics
+            .persistent_material_subduction_overlap_ratio,
+        persistent_material_collision_overlap_ratio: runtime_metrics
+            .persistent_material_collision_overlap_ratio,
+        persistent_material_unsupported_overlap_ratio: runtime_metrics
+            .persistent_material_unsupported_overlap_ratio,
+        persistent_material_element_count: runtime_metrics.persistent_material_element_count,
+        persistent_material_ownership_marker_count: runtime_metrics
+            .persistent_material_ownership_marker_count,
+        marker_empty_candidate_cell_count: runtime_metrics.marker_empty_candidate_cell_count,
+        marker_single_candidate_cell_count: runtime_metrics.marker_single_candidate_cell_count,
+        marker_mixed_candidate_cell_count: runtime_metrics.marker_mixed_candidate_cell_count,
+        marker_changed_empty_candidate_cell_count: runtime_metrics
+            .marker_changed_empty_candidate_cell_count,
+        marker_changed_single_candidate_cell_count: runtime_metrics
+            .marker_changed_single_candidate_cell_count,
+        marker_changed_mixed_candidate_cell_count: runtime_metrics
+            .marker_changed_mixed_candidate_cell_count,
+        marker_reversed_empty_candidate_cell_count: runtime_metrics
+            .marker_reversed_empty_candidate_cell_count,
+        marker_reversed_single_candidate_cell_count: runtime_metrics
+            .marker_reversed_single_candidate_cell_count,
+        marker_reversed_mixed_candidate_cell_count: runtime_metrics
+            .marker_reversed_mixed_candidate_cell_count,
+        marker_changed_divergent_cell_count: runtime_metrics.marker_changed_divergent_cell_count,
+        marker_changed_subduction_cell_count: runtime_metrics.marker_changed_subduction_cell_count,
+        marker_changed_collision_cell_count: runtime_metrics.marker_changed_collision_cell_count,
+        marker_changed_transform_cell_count: runtime_metrics.marker_changed_transform_cell_count,
         mean_abs_plate_area_delta_ratio: motion.mean_abs_plate_area_delta_ratio,
         max_abs_plate_area_delta_ratio: motion.max_abs_plate_area_delta_ratio,
         max_plate_area_growth_from_initial: motion.max_plate_area_growth_from_initial,
@@ -493,10 +797,28 @@ fn sample_world(
         max_boundary_thin_cell_ratio: motion.max_boundary_thin_cell_ratio,
         mean_eroded_core_cell_ratio: motion.mean_eroded_core_cell_ratio,
         min_eroded_core_cell_ratio: motion.min_eroded_core_cell_ratio,
+        mean_plate_block_count: motion.mean_plate_block_count,
+        max_plate_block_count: motion.max_plate_block_count,
+        multi_block_plate_ratio: motion.multi_block_plate_ratio,
+        max_secondary_plate_block_ratio: motion.max_secondary_plate_block_ratio,
+        mean_weak_line_plate_block_count: motion.mean_weak_line_plate_block_count,
+        max_weak_line_plate_block_count: motion.max_weak_line_plate_block_count,
+        weak_line_multi_block_plate_ratio: motion.weak_line_multi_block_plate_ratio,
+        max_secondary_weak_line_plate_block_ratio: motion.max_secondary_weak_line_plate_block_ratio,
         mean_enclosed_plate_risk: motion.mean_enclosed_plate_risk,
         max_enclosed_plate_risk: motion.max_enclosed_plate_risk,
         mean_appendage_isolation_risk: motion.mean_appendage_isolation_risk,
         max_appendage_isolation_risk: motion.max_appendage_isolation_risk,
+        max_multiscale_neck_secondary_ratio: motion.max_multiscale_neck_secondary_ratio,
+        max_branch_area_ratio: motion.max_branch_area_ratio,
+        max_branch_slenderness: motion.max_branch_slenderness,
+        persistent_branch_plate_ratio: motion.persistent_branch_plate_ratio,
+        nearest_generator_agreement_ratio: motion.nearest_generator_agreement_ratio,
+        cvt_energy_ratio_from_initial: motion.cvt_energy_ratio_from_initial,
+        mean_generator_centroid_distance_cells: motion.mean_generator_centroid_distance_cells,
+        nearest_centroid_voronoi_agreement_ratio: motion.nearest_centroid_voronoi_agreement_ratio,
+        centroid_voronoi_energy_ratio_from_initial: motion
+            .centroid_voronoi_energy_ratio_from_initial,
         plates: motion.plates,
     }
 }
@@ -520,14 +842,52 @@ impl MotionTracker {
             .mean_cell_spacing_km
             .get_or_insert_with(|| mean_cell_spacing_km(world.mesh()));
         let centroids = plate_centroids(world.mesh().positions.as_slice(), plate_id, plate_count);
+        let influence_centers = geology_state
+            .as_ref()
+            .map(|state| state.plate_influence_centers.as_slice())
+            .unwrap_or(&[]);
+        let cvt = cvt_diagnostics(
+            world.mesh().positions.as_slice(),
+            plate_id,
+            influence_centers,
+            &centroids,
+            mean_cell_spacing_km / EARTH_MEAN_RADIUS_KM,
+        );
+        let cvt_energy_ratio_from_initial = if cvt.valid {
+            let initial = self.initial_cvt_energy.get_or_insert(cvt.energy.max(1e-8));
+            cvt.energy / (*initial).max(1e-8)
+        } else {
+            1.0
+        };
+        let centroid_voronoi =
+            centroid_voronoi_diagnostics(world.mesh().positions.as_slice(), plate_id, &centroids);
+        let centroid_voronoi_energy_ratio_from_initial = if centroid_voronoi.valid {
+            let initial = self
+                .initial_centroid_voronoi_energy
+                .get_or_insert(centroid_voronoi.energy.max(1e-8));
+            centroid_voronoi.energy / (*initial).max(1e-8)
+        } else {
+            1.0
+        };
         let plate_states = geology_state
             .as_ref()
             .map(|state| state.plate_states.as_slice())
             .unwrap_or(&[]);
+        let boundary_activity = geology_state
+            .as_ref()
+            .map(|state| state.boundary_state.activity.as_slice())
+            .unwrap_or(&[]);
+        let boundary_types = geology_state
+            .as_ref()
+            .map(|state| state.boundary_state.dominant_type.as_slice())
+            .unwrap_or(&[]);
+        let weakness_proxy = plate_weakness_proxy(world, geology_state);
         let shape_records = plate_shape_records(
             &world.mesh().nbr_offsets,
             &world.mesh().nbrs,
             plate_id,
+            weakness_proxy.as_slice(),
+            boundary_types,
             plate_count,
         );
         let boundary_transfer_alignment = self.boundary_transfer_alignment(
@@ -539,6 +899,32 @@ impl MotionTracker {
         );
         let boundary_transfer_total =
             summarize_boundary_transfer_alignment(boundary_transfer_alignment.as_slice());
+        let sample_ticks = self
+            .previous_sample_tick
+            .map(|previous_tick| tick.saturating_sub(previous_tick))
+            .unwrap_or(0);
+        let boundary_motion_expected_cell_count = boundary_motion_expected_cell_count(
+            world.mesh().positions.as_slice(),
+            &world.mesh().nbr_offsets,
+            &world.mesh().nbrs,
+            self.previous_plate_id.as_slice(),
+            self.previous_plate_states.as_slice(),
+            self.previous_boundary_activity.as_slice(),
+            sample_ticks,
+        );
+        let boundary_motion_actual_cell_count = boundary_transfer_total.evaluated_cell_count;
+        let boundary_motion_response_ratio = boundary_motion_response_ratio(
+            boundary_motion_actual_cell_count,
+            boundary_motion_expected_cell_count,
+        );
+        let boundary_motion_underactive_risk = boundary_motion_underactive_risk(
+            boundary_motion_expected_cell_count,
+            boundary_motion_response_ratio,
+        );
+        let boundary_motion_overactive_risk = boundary_motion_overactive_risk(
+            boundary_motion_expected_cell_count,
+            boundary_motion_response_ratio,
+        );
 
         let myr_per_tick = (world.clock.real_years_per_tick / YEARS_PER_MYR).max(1e-6);
         let mut speed_sum = 0.0_f32;
@@ -577,10 +963,22 @@ impl MotionTracker {
         let mut max_boundary_thin_ratio = 0.0_f32;
         let mut eroded_core_ratio_sum = 0.0_f32;
         let mut min_eroded_core_ratio = 1.0_f32;
+        let mut plate_block_count_sum = 0.0_f32;
+        let mut max_plate_block_count = 0_u32;
+        let mut multi_block_plate_count = 0_u32;
+        let mut max_secondary_plate_block_ratio = 0.0_f32;
+        let mut weak_line_block_count_sum = 0.0_f32;
+        let mut max_weak_line_block_count = 0_u32;
+        let mut weak_line_multi_block_plate_count = 0_u32;
+        let mut max_secondary_weak_line_block_ratio = 0.0_f32;
         let mut enclosed_plate_risk_sum = 0.0_f32;
         let mut max_enclosed_plate_risk = 0.0_f32;
         let mut appendage_isolation_risk_sum = 0.0_f32;
         let mut max_appendage_isolation_risk = 0.0_f32;
+        let mut max_multiscale_neck_secondary_ratio = 0.0_f32;
+        let mut max_branch_area_ratio = 0.0_f32;
+        let mut max_branch_slenderness = 0.0_f32;
+        let mut persistent_branch_plate_count = 0_u32;
         let mut velocity_dirs = vec![None; plate_count];
         let mut plate_records = Vec::<PlateMotionRecord>::new();
 
@@ -640,12 +1038,36 @@ impl MotionTracker {
             eroded_core_ratio_sum += shape_records[pid].eroded_core_cell_ratio;
             min_eroded_core_ratio =
                 min_eroded_core_ratio.min(shape_records[pid].eroded_core_cell_ratio);
+            plate_block_count_sum += shape_records[pid].plate_block_count as f32;
+            max_plate_block_count = max_plate_block_count.max(shape_records[pid].plate_block_count);
+            if shape_records[pid].plate_block_count > 1 {
+                multi_block_plate_count = multi_block_plate_count.saturating_add(1);
+            }
+            max_secondary_plate_block_ratio =
+                max_secondary_plate_block_ratio.max(shape_records[pid].secondary_plate_block_ratio);
+            weak_line_block_count_sum += shape_records[pid].weak_line_plate_block_count as f32;
+            max_weak_line_block_count =
+                max_weak_line_block_count.max(shape_records[pid].weak_line_plate_block_count);
+            if shape_records[pid].weak_line_plate_block_count > 1 {
+                weak_line_multi_block_plate_count =
+                    weak_line_multi_block_plate_count.saturating_add(1);
+            }
+            max_secondary_weak_line_block_ratio = max_secondary_weak_line_block_ratio
+                .max(shape_records[pid].secondary_weak_line_plate_block_ratio);
             enclosed_plate_risk_sum += shape_records[pid].enclosed_plate_risk;
             max_enclosed_plate_risk =
                 max_enclosed_plate_risk.max(shape_records[pid].enclosed_plate_risk);
             appendage_isolation_risk_sum += shape_records[pid].appendage_isolation_risk;
             max_appendage_isolation_risk =
                 max_appendage_isolation_risk.max(shape_records[pid].appendage_isolation_risk);
+            max_multiscale_neck_secondary_ratio = max_multiscale_neck_secondary_ratio
+                .max(shape_records[pid].multiscale_neck_secondary_ratio);
+            max_branch_area_ratio = max_branch_area_ratio.max(shape_records[pid].branch_area_ratio);
+            max_branch_slenderness =
+                max_branch_slenderness.max(shape_records[pid].branch_slenderness);
+            if self.record_branch_area_ratio(pid, shape_records[pid].branch_area_ratio) {
+                persistent_branch_plate_count = persistent_branch_plate_count.saturating_add(1);
+            }
             drive_count = drive_count.saturating_add(1);
 
             let dir = normalized(cross3(state.angular_axis, centroid));
@@ -716,6 +1138,16 @@ impl MotionTracker {
                 component_count: shape_records[pid].component_count,
                 largest_component_ratio: shape_records[pid].largest_component_ratio,
                 detached_fragment_ratio: shape_records[pid].detached_fragment_ratio,
+                secondary_component_rift_boundary_ratio: shape_records[pid]
+                    .secondary_component_rift_boundary_ratio,
+                secondary_component_ridge_boundary_ratio: shape_records[pid]
+                    .secondary_component_ridge_boundary_ratio,
+                secondary_component_subduction_boundary_ratio: shape_records[pid]
+                    .secondary_component_subduction_boundary_ratio,
+                secondary_component_collision_boundary_ratio: shape_records[pid]
+                    .secondary_component_collision_boundary_ratio,
+                unsupported_detached_component_ratio: shape_records[pid]
+                    .unsupported_detached_component_ratio,
                 boundary_complexity: shape_records[pid].boundary_complexity,
                 boundary_complexity_growth,
                 boundary_complexity_growth_window_mean: boundary_complexity_window.mean,
@@ -731,6 +1163,15 @@ impl MotionTracker {
                 boundary_distance_max: shape_records[pid].boundary_distance_max,
                 boundary_thin_cell_ratio: shape_records[pid].boundary_thin_cell_ratio,
                 eroded_core_cell_ratio: shape_records[pid].eroded_core_cell_ratio,
+                plate_block_core_degree: shape_records[pid].plate_block_core_degree,
+                plate_block_count: shape_records[pid].plate_block_count,
+                largest_plate_block_ratio: shape_records[pid].largest_plate_block_ratio,
+                secondary_plate_block_ratio: shape_records[pid].secondary_plate_block_ratio,
+                weak_line_plate_block_count: shape_records[pid].weak_line_plate_block_count,
+                largest_weak_line_plate_block_ratio: shape_records[pid]
+                    .largest_weak_line_plate_block_ratio,
+                secondary_weak_line_plate_block_ratio: shape_records[pid]
+                    .secondary_weak_line_plate_block_ratio,
                 dominant_neighbor_plate_id: shape_records[pid].dominant_neighbor_plate_id,
                 dominant_neighbor_contact_ratio: shape_records[pid].dominant_neighbor_contact_ratio,
                 enclosed_plate_risk: shape_records[pid].enclosed_plate_risk,
@@ -741,6 +1182,11 @@ impl MotionTracker {
                 appendage_bridge_contact_ratio: shape_records[pid].appendage_bridge_contact_ratio,
                 appendage_foreign_contact_ratio: shape_records[pid].appendage_foreign_contact_ratio,
                 appendage_isolation_risk: shape_records[pid].appendage_isolation_risk,
+                multiscale_neck_width_cells: shape_records[pid].multiscale_neck_width_cells,
+                multiscale_neck_secondary_ratio: shape_records[pid].multiscale_neck_secondary_ratio,
+                branch_neck_width_cells: shape_records[pid].branch_neck_width_cells,
+                branch_area_ratio: shape_records[pid].branch_area_ratio,
+                branch_slenderness: shape_records[pid].branch_slenderness,
                 speed_km_per_myr,
                 cell_crossing_fraction_per_tick: crossing_fraction,
                 direction_persistence,
@@ -771,6 +1217,25 @@ impl MotionTracker {
 
         let reciprocal_churn_ratio =
             reciprocal_churn_ratio(self.previous_plate_id.as_slice(), plate_id.as_slice());
+        let mutual_exchange_ratio =
+            mutual_exchange_ratio(self.previous_plate_id.as_slice(), plate_id.as_slice());
+        let temporal_reversal_ratio = temporal_reversal_ratio(
+            self.previous_previous_plate_id.as_slice(),
+            self.previous_plate_id.as_slice(),
+            plate_id.as_slice(),
+        );
+        let (
+            temporal_reversal_previous_velocity_aligned_ratio,
+            temporal_reversal_current_velocity_aligned_ratio,
+        ) = temporal_reversal_velocity_alignment_ratios(
+            world.mesh().positions.as_slice(),
+            &world.mesh().nbr_offsets,
+            &world.mesh().nbrs,
+            self.previous_previous_plate_id.as_slice(),
+            self.previous_plate_id.as_slice(),
+            plate_id.as_slice(),
+            self.previous_plate_states.as_slice(),
+        );
         self.previous_centroids = centroids;
         self.previous_plate_states = plate_states
             .iter()
@@ -791,7 +1256,9 @@ impl MotionTracker {
                 }
             })
             .collect();
-        self.previous_plate_id = plate_id.clone();
+        self.previous_previous_plate_id =
+            std::mem::replace(&mut self.previous_plate_id, plate_id.clone());
+        self.previous_boundary_activity = boundary_activity.to_vec();
 
         MotionDiagnostics {
             mean_plate_speed_km_per_myr: mean_or_zero(speed_sum, speed_count),
@@ -800,6 +1267,10 @@ impl MotionTracker {
             max_cell_crossing_fraction_per_tick: max_crossing,
             mean_direction_persistence: mean_or_one(persistence_sum, persistence_count),
             reciprocal_churn_ratio,
+            mutual_exchange_ratio,
+            temporal_reversal_ratio,
+            temporal_reversal_previous_velocity_aligned_ratio,
+            temporal_reversal_current_velocity_aligned_ratio,
             mean_centroid_path_straightness: mean_or_one(straightness_sum, straightness_count),
             mean_euler_rotation_residual_km: mean_or_zero(
                 euler_residual_km_sum,
@@ -822,6 +1293,11 @@ impl MotionTracker {
             max_boundary_transfer_isolated_cell_ratio: max_boundary_transfer_isolated_cell_ratio(
                 boundary_transfer_alignment.as_slice(),
             ),
+            boundary_motion_expected_cell_count,
+            boundary_motion_actual_cell_count,
+            boundary_motion_response_ratio,
+            boundary_motion_underactive_risk,
+            boundary_motion_overactive_risk,
             mean_abs_plate_area_delta_ratio: mean_or_zero(abs_area_delta_ratio_sum, drive_count),
             max_abs_plate_area_delta_ratio: max_abs_area_delta_ratio,
             max_plate_area_growth_from_initial: max_area_growth_from_initial,
@@ -856,10 +1332,34 @@ impl MotionTracker {
             } else {
                 min_eroded_core_ratio
             },
+            mean_plate_block_count: mean_or_zero(plate_block_count_sum, drive_count),
+            max_plate_block_count,
+            multi_block_plate_ratio: mean_or_zero(multi_block_plate_count as f32, drive_count),
+            max_secondary_plate_block_ratio,
+            mean_weak_line_plate_block_count: mean_or_zero(weak_line_block_count_sum, drive_count),
+            max_weak_line_plate_block_count: max_weak_line_block_count,
+            weak_line_multi_block_plate_ratio: mean_or_zero(
+                weak_line_multi_block_plate_count as f32,
+                drive_count,
+            ),
+            max_secondary_weak_line_plate_block_ratio: max_secondary_weak_line_block_ratio,
             mean_enclosed_plate_risk: mean_or_zero(enclosed_plate_risk_sum, drive_count),
             max_enclosed_plate_risk,
             mean_appendage_isolation_risk: mean_or_zero(appendage_isolation_risk_sum, drive_count),
             max_appendage_isolation_risk,
+            max_multiscale_neck_secondary_ratio,
+            max_branch_area_ratio,
+            max_branch_slenderness,
+            persistent_branch_plate_ratio: mean_or_zero(
+                persistent_branch_plate_count as f32,
+                drive_count,
+            ),
+            nearest_generator_agreement_ratio: cvt.nearest_generator_agreement_ratio,
+            cvt_energy_ratio_from_initial,
+            mean_generator_centroid_distance_cells: cvt.mean_generator_centroid_distance_cells,
+            nearest_centroid_voronoi_agreement_ratio: centroid_voronoi
+                .nearest_generator_agreement_ratio,
+            centroid_voronoi_energy_ratio_from_initial,
             plates: plate_records,
         }
     }
@@ -875,6 +1375,8 @@ impl MotionTracker {
         self.initial_boundary_complexities.resize(plate_count, None);
         self.boundary_complexity_growth_windows
             .resize_with(plate_count, VecDeque::new);
+        self.branch_area_ratio_windows
+            .resize_with(plate_count, VecDeque::new);
     }
 
     fn boundary_complexity_growth(&mut self, plate: usize, current: f32) -> f32 {
@@ -889,6 +1391,18 @@ impl MotionTracker {
         } else {
             current / *initial
         }
+    }
+
+    fn record_branch_area_ratio(&mut self, plate: usize, ratio: f32) -> bool {
+        let window = &mut self.branch_area_ratio_windows[plate];
+        window.push_back(finite_or(ratio, 0.0).max(0.0));
+        while window.len() > BRANCH_PERSISTENCE_WINDOW_SAMPLES {
+            window.pop_front();
+        }
+        window.len() >= BRANCH_PERSISTENCE_WINDOW_SAMPLES
+            && window
+                .iter()
+                .all(|value| *value >= PERSISTENT_BRANCH_AREA_RATIO_THRESHOLD)
     }
 
     fn plate_area_growth_from_initial(&mut self, plate: usize, current: u32) -> f32 {
@@ -1099,6 +1613,52 @@ fn summarize_boundary_transfer_alignment(
     total
 }
 
+fn plate_weakness_proxy(
+    world: &frey_wasm::sim::world::World,
+    geology_state: &GeologyExecState,
+) -> Vec<f32> {
+    let cell_count = world.state.geology.plate_id.len();
+    let mut weakness = vec![0.0_f32; cell_count];
+    let vertex_states = geology_state
+        .as_ref()
+        .map(|state| state.vertex_states.as_slice())
+        .unwrap_or(&[]);
+    for (cell, value) in weakness.iter_mut().enumerate() {
+        let boundary = world
+            .state
+            .geology
+            .boundary_condition
+            .get(cell)
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0);
+        let runtime_stress = vertex_states
+            .get(cell)
+            .map(|state| finite_or(state.stress.abs(), 0.0))
+            .unwrap_or(0.0);
+        let internal_stress = world
+            .state
+            .geology
+            .geology_internal
+            .get(cell)
+            .map(|state| {
+                let tensor = state.stress;
+                finite_or(
+                    ((tensor.xx * tensor.xx + tensor.yy * tensor.yy).sqrt()
+                        + tensor.xy.abs() * 0.5)
+                        .abs(),
+                    0.0,
+                )
+            })
+            .unwrap_or(0.0);
+        *value = boundary
+            .max(runtime_stress)
+            .max(internal_stress)
+            .clamp(0.0, 1.0);
+    }
+    weakness
+}
+
 fn mean_boundary_transfer_largest_component_ratio(
     summaries: &[BoundaryTransferAlignmentSummary],
 ) -> f32 {
@@ -1293,10 +1853,97 @@ fn plate_centroids(
         .collect()
 }
 
+fn cvt_diagnostics(
+    positions: &[[f32; 3]],
+    plate_id: &[PlateId],
+    generators: &[[f32; 3]],
+    centroids: &[Option<[f32; 3]>],
+    mean_cell_spacing_radians: f32,
+) -> CvtDiagnostics {
+    if positions.len() != plate_id.len()
+        || generators.is_empty()
+        || plate_id
+            .iter()
+            .any(|plate| plate.as_usize() >= generators.len())
+    {
+        return CvtDiagnostics::default();
+    }
+    let mut agreement_count = 0_u32;
+    let mut energy_sum = 0.0_f32;
+    for (&position, &plate) in positions.iter().zip(plate_id) {
+        let nearest = generators
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| dot3(position, **a).total_cmp(&dot3(position, **b)))
+            .map(|(index, _)| index)
+            .unwrap_or(plate.as_usize());
+        if nearest == plate.as_usize() {
+            agreement_count = agreement_count.saturating_add(1);
+        }
+        let cosine = dot3(position, generators[plate.as_usize()]).clamp(-1.0, 1.0);
+        let distance = cosine.acos();
+        energy_sum += distance * distance;
+    }
+    let mut centroid_distance_sum = 0.0_f32;
+    let mut centroid_count = 0_u32;
+    for (generator, centroid) in generators.iter().zip(centroids) {
+        let Some(centroid) = centroid else {
+            continue;
+        };
+        centroid_distance_sum += dot3(*generator, *centroid).clamp(-1.0, 1.0).acos()
+            / mean_cell_spacing_radians.max(1e-6);
+        centroid_count = centroid_count.saturating_add(1);
+    }
+    CvtDiagnostics {
+        valid: true,
+        nearest_generator_agreement_ratio: agreement_count as f32 / positions.len().max(1) as f32,
+        energy: energy_sum / positions.len().max(1) as f32,
+        mean_generator_centroid_distance_cells: mean_or_zero(centroid_distance_sum, centroid_count),
+    }
+}
+
+fn centroid_voronoi_diagnostics(
+    positions: &[[f32; 3]],
+    plate_id: &[PlateId],
+    centroids: &[Option<[f32; 3]>],
+) -> CvtDiagnostics {
+    if positions.len() != plate_id.len() || centroids.iter().all(Option::is_none) {
+        return CvtDiagnostics::default();
+    }
+    let mut agreement_count = 0_u32;
+    let mut energy_sum = 0.0_f32;
+    let mut evaluated_count = 0_u32;
+    for (&position, &plate) in positions.iter().zip(plate_id) {
+        let Some(own_centroid) = centroids.get(plate.as_usize()).and_then(|value| *value) else {
+            continue;
+        };
+        let nearest = centroids
+            .iter()
+            .enumerate()
+            .filter_map(|(index, centroid)| centroid.map(|value| (index, value)))
+            .max_by(|(_, a), (_, b)| dot3(position, *a).total_cmp(&dot3(position, *b)))
+            .map(|(index, _)| index);
+        if nearest == Some(plate.as_usize()) {
+            agreement_count = agreement_count.saturating_add(1);
+        }
+        let distance = dot3(position, own_centroid).clamp(-1.0, 1.0).acos();
+        energy_sum += distance * distance;
+        evaluated_count = evaluated_count.saturating_add(1);
+    }
+    CvtDiagnostics {
+        valid: evaluated_count > 0,
+        nearest_generator_agreement_ratio: mean_or_zero(agreement_count as f32, evaluated_count),
+        energy: mean_or_zero(energy_sum, evaluated_count),
+        mean_generator_centroid_distance_cells: 0.0,
+    }
+}
+
 fn plate_shape_records(
     nbr_offsets: &[u32],
     nbrs: &[u32],
     plate_id: &[PlateId],
+    weakness: &[f32],
+    boundary_types: &[BoundaryType],
     plate_count: usize,
 ) -> Vec<PlateShapeRecord> {
     let total_cells = plate_id.len().max(1) as f32;
@@ -1326,6 +1973,11 @@ fn plate_shape_records(
             component_count: 0,
             largest_component_ratio: 0.0,
             detached_fragment_ratio: 0.0,
+            secondary_component_rift_boundary_ratio: 0.0,
+            secondary_component_ridge_boundary_ratio: 0.0,
+            secondary_component_subduction_boundary_ratio: 0.0,
+            secondary_component_collision_boundary_ratio: 0.0,
+            unsupported_detached_component_ratio: 0.0,
             boundary_complexity: 0.0,
             articulation_cell_count: 0,
             articulation_cell_ratio: 0.0,
@@ -1337,6 +1989,13 @@ fn plate_shape_records(
             boundary_distance_max: 0,
             boundary_thin_cell_ratio: 0.0,
             eroded_core_cell_ratio: 0.0,
+            plate_block_core_degree: 0,
+            plate_block_count: 0,
+            largest_plate_block_ratio: 0.0,
+            secondary_plate_block_ratio: 0.0,
+            weak_line_plate_block_count: 0,
+            largest_weak_line_plate_block_ratio: 0.0,
+            secondary_weak_line_plate_block_ratio: 0.0,
             dominant_neighbor_plate_id: u32::MAX,
             dominant_neighbor_contact_ratio: 0.0,
             enclosed_plate_risk: 0.0,
@@ -1346,6 +2005,11 @@ fn plate_shape_records(
             appendage_bridge_contact_ratio: 0.0,
             appendage_foreign_contact_ratio: 0.0,
             appendage_isolation_risk: 0.0,
+            multiscale_neck_width_cells: 0,
+            multiscale_neck_secondary_ratio: 0.0,
+            branch_neck_width_cells: 0,
+            branch_area_ratio: 0.0,
+            branch_slenderness: 0.0,
         };
         plate_count
     ];
@@ -1359,6 +2023,8 @@ fn plate_shape_records(
         }
         let mut component_count = 0_u32;
         let mut largest_component_cells = 0_u32;
+        let mut second_largest_component_cells = 0_u32;
+        let mut components = Vec::<Vec<usize>>::new();
         for start_cell in 0..plate_id.len() {
             if visited[start_cell] || plate_id[start_cell].as_usize() != plate {
                 continue;
@@ -1366,8 +2032,10 @@ fn plate_shape_records(
             visited[start_cell] = true;
             stack.push(start_cell);
             let mut component_cells = 0_u32;
+            let mut component = Vec::new();
             while let Some(cell) = stack.pop() {
                 component_cells = component_cells.saturating_add(1);
+                component.push(cell);
                 let start = nbr_offsets[cell] as usize;
                 let end = nbr_offsets[cell + 1] as usize;
                 for &neighbor_u32 in &nbrs[start..end] {
@@ -1383,23 +2051,71 @@ fn plate_shape_records(
                 }
             }
             component_count = component_count.saturating_add(1);
-            largest_component_cells = largest_component_cells.max(component_cells);
+            if component_cells > largest_component_cells {
+                second_largest_component_cells = largest_component_cells;
+                largest_component_cells = component_cells;
+            } else if component_cells > second_largest_component_cells {
+                second_largest_component_cells = component_cells;
+            }
+            components.push(component);
         }
+        components.sort_by_key(|component| std::cmp::Reverse(component.len()));
+        let secondary_regimes = components
+            .get(1)
+            .map(|component| {
+                component_boundary_regimes(component, nbr_offsets, nbrs, plate_id, boundary_types)
+            })
+            .unwrap_or_default();
         let largest_component_ratio = largest_component_cells as f32 / cells.max(1) as f32;
         let articulation_cell_count =
             articulation_cell_count(nbr_offsets, nbrs, plate_id, plate) as u32;
         let corridor = corridor_metrics(nbr_offsets, nbrs, plate_id, plate, cells as usize);
+        let block = plate_block_metrics(
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            plate,
+            cells as usize,
+            component_count,
+            largest_component_cells as usize,
+            second_largest_component_cells as usize,
+        );
+        let weak_line_block = weak_line_plate_block_metrics(
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            weakness,
+            plate,
+            cells as usize,
+        );
         let boundary_profile =
             boundary_distance_profile(nbr_offsets, nbrs, plate_id, plate, cells as usize);
         let enclosure = enclosure_metrics(nbr_offsets, nbrs, plate_id, plate, cells as usize);
         let appendage =
             appendage_isolation_metrics(nbr_offsets, nbrs, plate_id, plate, cells as usize, 3);
+        let multiscale = multiscale_shape_metrics(
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            plate,
+            cells as usize,
+            MULTISCALE_MAX_EROSION_CELLS,
+        );
         records[plate] = PlateShapeRecord {
             cell_count: cells,
             area_ratio: cells as f32 / total_cells,
             component_count,
             largest_component_ratio,
             detached_fragment_ratio: 1.0 - largest_component_ratio,
+            secondary_component_rift_boundary_ratio: secondary_regimes.rift,
+            secondary_component_ridge_boundary_ratio: secondary_regimes.ridge,
+            secondary_component_subduction_boundary_ratio: secondary_regimes.subduction,
+            secondary_component_collision_boundary_ratio: secondary_regimes.collision,
+            unsupported_detached_component_ratio: if secondary_regimes.causal_support() >= 0.5 {
+                0.0
+            } else {
+                1.0 - largest_component_ratio
+            },
             boundary_complexity: boundary_contacts[plate] as f32 / (cells as f32).sqrt().max(1.0),
             articulation_cell_count,
             articulation_cell_ratio: articulation_cell_count as f32 / cells.max(1) as f32,
@@ -1411,6 +2127,13 @@ fn plate_shape_records(
             boundary_distance_max: boundary_profile.max,
             boundary_thin_cell_ratio: boundary_profile.thin_ratio,
             eroded_core_cell_ratio: boundary_profile.eroded_core_ratio,
+            plate_block_core_degree: block.core_degree,
+            plate_block_count: block.block_count,
+            largest_plate_block_ratio: block.largest_block_ratio,
+            secondary_plate_block_ratio: block.secondary_block_ratio,
+            weak_line_plate_block_count: weak_line_block.block_count,
+            largest_weak_line_plate_block_ratio: weak_line_block.largest_block_ratio,
+            secondary_weak_line_plate_block_ratio: weak_line_block.secondary_block_ratio,
             dominant_neighbor_plate_id: enclosure.dominant_neighbor_plate_id,
             dominant_neighbor_contact_ratio: enclosure.dominant_neighbor_contact_ratio,
             enclosed_plate_risk: enclosure.enclosed_plate_risk,
@@ -1420,10 +2143,70 @@ fn plate_shape_records(
             appendage_bridge_contact_ratio: appendage.bridge_contact_ratio,
             appendage_foreign_contact_ratio: appendage.foreign_contact_ratio,
             appendage_isolation_risk: appendage.isolation_risk,
+            multiscale_neck_width_cells: multiscale.neck_width_cells,
+            multiscale_neck_secondary_ratio: multiscale.neck_secondary_ratio,
+            branch_neck_width_cells: multiscale.branch_neck_width_cells,
+            branch_area_ratio: multiscale.branch_area_ratio,
+            branch_slenderness: multiscale.branch_slenderness,
         };
     }
 
     records
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct ComponentBoundaryRegimes {
+    rift: f32,
+    ridge: f32,
+    subduction: f32,
+    collision: f32,
+}
+
+impl ComponentBoundaryRegimes {
+    fn causal_support(self) -> f32 {
+        (self.rift + self.ridge + self.subduction + self.collision).clamp(0.0, 1.0)
+    }
+}
+
+fn component_boundary_regimes(
+    component: &[usize],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    boundary_types: &[BoundaryType],
+) -> ComponentBoundaryRegimes {
+    let Some(&first) = component.first() else {
+        return Default::default();
+    };
+    let plate = plate_id[first];
+    let mut total = 0_u32;
+    let mut rift = 0_u32;
+    let mut ridge = 0_u32;
+    let mut subduction = 0_u32;
+    let mut collision = 0_u32;
+    for &cell in component {
+        let is_boundary = nbrs[nbr_offsets[cell] as usize..nbr_offsets[cell + 1] as usize]
+            .iter()
+            .any(|&neighbor| plate_id.get(neighbor as usize) != Some(&plate));
+        if !is_boundary {
+            continue;
+        }
+        total = total.saturating_add(1);
+        match boundary_types.get(cell).copied() {
+            Some(BoundaryType::Rift) => rift = rift.saturating_add(1),
+            Some(BoundaryType::Ridge) => ridge = ridge.saturating_add(1),
+            Some(BoundaryType::Subduction) => subduction = subduction.saturating_add(1),
+            Some(BoundaryType::Collision) => collision = collision.saturating_add(1),
+            _ => {}
+        }
+    }
+    let denominator = total.max(1) as f32;
+    ComponentBoundaryRegimes {
+        rift: rift as f32 / denominator,
+        ridge: ridge as f32 / denominator,
+        subduction: subduction as f32 / denominator,
+        collision: collision as f32 / denominator,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1663,6 +2446,245 @@ fn boundary_distance_profile(
     }
 }
 
+fn multiscale_shape_metrics(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+    plate_cells: usize,
+    max_erosion_cells: u32,
+) -> MultiscaleShapeMetrics {
+    if plate_cells == 0 {
+        return MultiscaleShapeMetrics::default();
+    }
+    let distances = plate_boundary_distances(nbr_offsets, nbrs, plate_id, plate);
+    let min_core_cells = MULTISCALE_MIN_CORE_CELLS
+        .max((plate_cells as f32 * MULTISCALE_MIN_CORE_RATIO).ceil() as usize);
+    let mut best = MultiscaleShapeMetrics::default();
+
+    for radius in 1..=max_erosion_cells {
+        let retained = distances
+            .iter()
+            .map(|&distance| distance != u32::MAX && distance >= radius)
+            .collect::<Vec<_>>();
+        let mut cores = masked_components(nbr_offsets, nbrs, plate_id, plate, &retained);
+        cores.retain(|component| component.len() >= min_core_cells);
+        cores.sort_by_key(|component| std::cmp::Reverse(component.len()));
+
+        if cores.len() >= 2 {
+            let secondary_ratio = cores[1].len() as f32 / plate_cells as f32;
+            if secondary_ratio > best.neck_secondary_ratio {
+                best.neck_width_cells = radius.saturating_mul(2);
+                best.neck_secondary_ratio = secondary_ratio;
+            }
+        }
+        if cores.is_empty() {
+            continue;
+        }
+
+        let opened =
+            dilate_mask_within_plate(nbr_offsets, nbrs, plate_id, plate, &retained, radius);
+        let residual = opened
+            .iter()
+            .enumerate()
+            .map(|(cell, &is_opened)| plate_id[cell].as_usize() == plate && !is_opened)
+            .collect::<Vec<_>>();
+        for branch in masked_components(nbr_offsets, nbrs, plate_id, plate, &residual) {
+            if branch.len() < 4 {
+                continue;
+            }
+            let bridge_width = branch_bridge_width(&branch, nbr_offsets, nbrs, &opened);
+            if bridge_width == 0 {
+                continue;
+            }
+            let diameter = component_graph_diameter(&branch, nbr_offsets, nbrs);
+            let half_width = branch
+                .iter()
+                .map(|&cell| distances[cell])
+                .filter(|distance| *distance != u32::MAX)
+                .max()
+                .unwrap_or(0);
+            let local_width = half_width.saturating_mul(2).saturating_add(1).max(1);
+            let slenderness = (diameter.saturating_add(1)) as f32 / local_width as f32;
+            let area_ratio = branch.len() as f32 / plate_cells as f32;
+            if slenderness > best.branch_slenderness
+                || slenderness == best.branch_slenderness && area_ratio > best.branch_area_ratio
+            {
+                best.branch_neck_width_cells = bridge_width;
+                best.branch_area_ratio = area_ratio;
+                best.branch_slenderness = slenderness;
+            }
+        }
+    }
+    best
+}
+
+fn plate_boundary_distances(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+) -> Vec<u32> {
+    let mut distances = vec![u32::MAX; plate_id.len()];
+    let mut queue = VecDeque::new();
+    for cell in 0..plate_id.len() {
+        if plate_id[cell].as_usize() != plate {
+            continue;
+        }
+        if cell_neighbors(cell, nbr_offsets, nbrs)
+            .iter()
+            .any(|&neighbor| plate_id[neighbor as usize].as_usize() != plate)
+        {
+            distances[cell] = 0;
+            queue.push_back(cell);
+        }
+    }
+    while let Some(cell) = queue.pop_front() {
+        let next = distances[cell].saturating_add(1);
+        for &neighbor in cell_neighbors(cell, nbr_offsets, nbrs) {
+            let neighbor = neighbor as usize;
+            if plate_id[neighbor].as_usize() == plate && distances[neighbor] > next {
+                distances[neighbor] = next;
+                queue.push_back(neighbor);
+            }
+        }
+    }
+    distances
+}
+
+fn masked_components(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+    mask: &[bool],
+) -> Vec<Vec<usize>> {
+    let mut visited = vec![false; plate_id.len()];
+    let mut queue = VecDeque::new();
+    let mut components = Vec::new();
+    for start in 0..plate_id.len() {
+        if visited[start] || !mask.get(start).copied().unwrap_or(false) {
+            continue;
+        }
+        visited[start] = true;
+        queue.push_back(start);
+        let mut component = Vec::new();
+        while let Some(cell) = queue.pop_front() {
+            component.push(cell);
+            for &neighbor in cell_neighbors(cell, nbr_offsets, nbrs) {
+                let neighbor = neighbor as usize;
+                if !visited[neighbor]
+                    && mask.get(neighbor).copied().unwrap_or(false)
+                    && plate_id[neighbor].as_usize() == plate
+                {
+                    visited[neighbor] = true;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
+}
+
+fn dilate_mask_within_plate(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+    seed: &[bool],
+    radius: u32,
+) -> Vec<bool> {
+    let mut opened = seed.to_vec();
+    let mut distance = vec![u32::MAX; plate_id.len()];
+    let mut queue = VecDeque::new();
+    for (cell, &is_seed) in seed.iter().enumerate() {
+        if is_seed {
+            distance[cell] = 0;
+            queue.push_back(cell);
+        }
+    }
+    while let Some(cell) = queue.pop_front() {
+        if distance[cell] >= radius {
+            continue;
+        }
+        let next = distance[cell].saturating_add(1);
+        for &neighbor in cell_neighbors(cell, nbr_offsets, nbrs) {
+            let neighbor = neighbor as usize;
+            if plate_id[neighbor].as_usize() == plate && distance[neighbor] > next {
+                distance[neighbor] = next;
+                opened[neighbor] = true;
+                queue.push_back(neighbor);
+            }
+        }
+    }
+    opened
+}
+
+fn branch_bridge_width(
+    branch: &[usize],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    opened: &[bool],
+) -> u32 {
+    let mut contacts = BTreeSet::new();
+    for &cell in branch {
+        for &neighbor in cell_neighbors(cell, nbr_offsets, nbrs) {
+            let neighbor = neighbor as usize;
+            if opened.get(neighbor).copied().unwrap_or(false) {
+                contacts.insert(neighbor);
+            }
+        }
+    }
+    contacts.len() as u32
+}
+
+fn component_graph_diameter(component: &[usize], nbr_offsets: &[u32], nbrs: &[u32]) -> u32 {
+    let Some(&start) = component.first() else {
+        return 0;
+    };
+    let membership = component.iter().copied().collect::<BTreeSet<_>>();
+    let (furthest, _) = furthest_component_cell(start, &membership, nbr_offsets, nbrs);
+    furthest_component_cell(furthest, &membership, nbr_offsets, nbrs).1
+}
+
+fn furthest_component_cell(
+    start: usize,
+    membership: &BTreeSet<usize>,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+) -> (usize, u32) {
+    let mut distance = BTreeMap::new();
+    let mut queue = VecDeque::new();
+    distance.insert(start, 0_u32);
+    queue.push_back(start);
+    let mut furthest = (start, 0_u32);
+    while let Some(cell) = queue.pop_front() {
+        let next = distance[&cell].saturating_add(1);
+        for &neighbor in cell_neighbors(cell, nbr_offsets, nbrs) {
+            let neighbor = neighbor as usize;
+            if membership.contains(&neighbor) && !distance.contains_key(&neighbor) {
+                distance.insert(neighbor, next);
+                queue.push_back(neighbor);
+                if next > furthest.1 {
+                    furthest = (neighbor, next);
+                }
+            }
+        }
+    }
+    furthest
+}
+
+fn cell_neighbors<'a>(cell: usize, nbr_offsets: &[u32], nbrs: &'a [u32]) -> &'a [u32] {
+    let Some(&start) = nbr_offsets.get(cell) else {
+        return &[];
+    };
+    let Some(&end) = nbr_offsets.get(cell + 1) else {
+        return &[];
+    };
+    nbrs.get(start as usize..end as usize).unwrap_or(&[])
+}
+
 fn percentile_u32(values: &[u32], q: f32) -> f32 {
     if values.is_empty() {
         return 0.0;
@@ -1704,6 +2726,149 @@ fn corridor_metrics(
         }
     }
     best
+}
+
+fn plate_block_metrics(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate: usize,
+    plate_cells: usize,
+    connected_component_count: u32,
+    largest_connected_component_cells: usize,
+    second_largest_connected_component_cells: usize,
+) -> PlateBlockMetrics {
+    if plate_cells == 0 {
+        return PlateBlockMetrics::default();
+    }
+
+    let mut best = PlateBlockMetrics {
+        core_degree: 0,
+        block_count: connected_component_count.max(1),
+        largest_block_ratio: largest_connected_component_cells as f32 / plate_cells as f32,
+        secondary_block_ratio: second_largest_connected_component_cells as f32 / plate_cells as f32,
+    };
+
+    for min_degree in CORRIDOR_CORE_DEGREE_THRESHOLDS {
+        let retained = plate_k_core(nbr_offsets, nbrs, plate_id, plate, min_degree);
+        let retained_cells = retained.iter().filter(|&&value| value).count();
+        if retained_cells == 0 {
+            continue;
+        }
+        let (component_count, largest, second_largest) =
+            retained_component_summary(nbr_offsets, nbrs, plate_id, plate, &retained);
+        if component_count == 0 || largest == 0 {
+            continue;
+        }
+        let metrics = PlateBlockMetrics {
+            core_degree: min_degree as u32,
+            block_count: component_count,
+            largest_block_ratio: largest as f32 / plate_cells as f32,
+            secondary_block_ratio: second_largest as f32 / plate_cells as f32,
+        };
+        if metrics.secondary_block_ratio > best.secondary_block_ratio
+            || (metrics.secondary_block_ratio == best.secondary_block_ratio
+                && metrics.block_count > best.block_count)
+        {
+            best = metrics;
+        }
+    }
+
+    best
+}
+
+fn weak_line_plate_block_metrics(
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    weakness: &[f32],
+    plate: usize,
+    plate_cells: usize,
+) -> PlateBlockMetrics {
+    if plate_cells == 0 || weakness.len() != plate_id.len() {
+        return PlateBlockMetrics {
+            core_degree: 0,
+            block_count: if plate_cells == 0 { 0 } else { 1 },
+            largest_block_ratio: if plate_cells == 0 { 0.0 } else { 1.0 },
+            secondary_block_ratio: 0.0,
+        };
+    }
+
+    let threshold = weak_line_threshold(plate_id, weakness, plate);
+    let mut retained = vec![false; plate_id.len()];
+    let mut retained_count = 0_usize;
+    for cell in 0..plate_id.len() {
+        if plate_id[cell].as_usize() == plate
+            && finite_or(weakness[cell], 0.0).clamp(0.0, 1.0) < threshold
+        {
+            retained[cell] = true;
+            retained_count = retained_count.saturating_add(1);
+        }
+    }
+    if retained_count == 0 {
+        return PlateBlockMetrics {
+            core_degree: 0,
+            block_count: 1,
+            largest_block_ratio: 0.0,
+            secondary_block_ratio: 0.0,
+        };
+    }
+
+    let (component_count, largest, second_largest) =
+        retained_component_summary(nbr_offsets, nbrs, plate_id, plate, &retained);
+    let largest_block_ratio = largest as f32 / plate_cells as f32;
+    let secondary_block_ratio = second_largest as f32 / plate_cells as f32;
+    if component_count < 2
+        || largest_block_ratio < WEAK_LINE_MIN_LARGEST_BLOCK_RATIO
+        || secondary_block_ratio < WEAK_LINE_MIN_SECONDARY_BLOCK_RATIO
+    {
+        return PlateBlockMetrics {
+            core_degree: 0,
+            block_count: 1,
+            largest_block_ratio,
+            secondary_block_ratio: 0.0,
+        };
+    }
+    PlateBlockMetrics {
+        core_degree: 0,
+        block_count: component_count.max(1),
+        largest_block_ratio,
+        secondary_block_ratio,
+    }
+}
+
+fn weak_line_threshold(plate_id: &[PlateId], weakness: &[f32], plate: usize) -> f32 {
+    let mut values = Vec::<f32>::new();
+    for (cell, &pid) in plate_id.iter().enumerate() {
+        if pid.as_usize() != plate {
+            continue;
+        }
+        values.push(finite_or(weakness.get(cell).copied().unwrap_or(0.0), 0.0).clamp(0.0, 1.0));
+    }
+    if values.is_empty() {
+        return 1.0;
+    }
+    values.sort_by(|a, b| a.total_cmp(b));
+    let min = values.first().copied().unwrap_or(0.0);
+    let max = values.last().copied().unwrap_or(0.0);
+    if max - min < 0.05 {
+        return 1.0;
+    }
+    percentile_f32(&values, 0.85).clamp(min + 1e-4, 0.99)
+}
+
+fn percentile_f32(values: &[f32], q: f32) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let rank = (values.len().saturating_sub(1) as f32) * q.clamp(0.0, 1.0);
+    let lower = rank.floor() as usize;
+    let upper = rank.ceil() as usize;
+    if lower == upper || upper >= values.len() {
+        return values[lower.min(values.len() - 1)];
+    }
+    let t = rank - lower as f32;
+    values[lower] + (values[upper] - values[lower]) * t
 }
 
 fn plate_k_core(
@@ -1934,6 +3099,137 @@ fn reciprocal_churn_ratio(previous: &[PlateId], current: &[PlateId]) -> f32 {
     }
 }
 
+fn mutual_exchange_ratio(previous: &[PlateId], current: &[PlateId]) -> f32 {
+    if previous.len() != current.len() || previous.is_empty() {
+        return 0.0;
+    }
+
+    let mut pair_counts = BTreeMap::<(u32, u32), (u32, u32)>::new();
+    for (&from, &to) in previous.iter().zip(current.iter()) {
+        if from == to {
+            continue;
+        }
+        let from = from.as_u32();
+        let to = to.as_u32();
+        let key = if from < to { (from, to) } else { (to, from) };
+        let counts = pair_counts.entry(key).or_insert((0, 0));
+        if from < to {
+            counts.0 = counts.0.saturating_add(1);
+        } else {
+            counts.1 = counts.1.saturating_add(1);
+        }
+    }
+
+    let mut mutual_sum = 0_u32;
+    let mut total_sum = 0_u32;
+    for (_, (forward, reverse)) in pair_counts {
+        mutual_sum = mutual_sum.saturating_add(forward.min(reverse).saturating_mul(2));
+        total_sum = total_sum.saturating_add(forward.saturating_add(reverse));
+    }
+    if total_sum == 0 {
+        0.0
+    } else {
+        mutual_sum as f32 / total_sum as f32
+    }
+}
+
+fn temporal_reversal_ratio(
+    previous_previous: &[PlateId],
+    previous: &[PlateId],
+    current: &[PlateId],
+) -> f32 {
+    if previous_previous.len() != previous.len()
+        || previous.len() != current.len()
+        || previous.is_empty()
+    {
+        return 0.0;
+    }
+    let mut previous_transfer_count = 0_u32;
+    let mut reversed_count = 0_u32;
+    for ((&before, &middle), &after) in previous_previous.iter().zip(previous).zip(current) {
+        if before == middle {
+            continue;
+        }
+        previous_transfer_count = previous_transfer_count.saturating_add(1);
+        if after == before {
+            reversed_count = reversed_count.saturating_add(1);
+        }
+    }
+    if previous_transfer_count == 0 {
+        0.0
+    } else {
+        reversed_count as f32 / previous_transfer_count as f32
+    }
+}
+
+fn temporal_reversal_velocity_alignment_ratios(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    previous_previous: &[PlateId],
+    previous: &[PlateId],
+    current: &[PlateId],
+    plate_states: &[Option<PlateKinematicsState>],
+) -> (f32, f32) {
+    if previous_previous.len() != previous.len()
+        || previous.len() != current.len()
+        || previous.len() != positions.len()
+    {
+        return (1.0, 1.0);
+    }
+
+    let mut previous_aligned = 0_u32;
+    let mut previous_evaluated = 0_u32;
+    let mut current_aligned = 0_u32;
+    let mut current_evaluated = 0_u32;
+    for cell in 0..current.len() {
+        let before = previous_previous[cell];
+        let middle = previous[cell];
+        if before == middle || current[cell] != before {
+            continue;
+        }
+        if let Some(alignment) = boundary_transfer_cell_alignment(
+            positions,
+            nbr_offsets,
+            nbrs,
+            previous_previous,
+            plate_states,
+            cell,
+            before,
+            middle,
+        ) {
+            previous_evaluated = previous_evaluated.saturating_add(1);
+            previous_aligned = previous_aligned.saturating_add(u32::from(alignment > 0.0));
+        }
+        if let Some(alignment) = boundary_transfer_cell_alignment(
+            positions,
+            nbr_offsets,
+            nbrs,
+            previous,
+            plate_states,
+            cell,
+            middle,
+            before,
+        ) {
+            current_evaluated = current_evaluated.saturating_add(1);
+            current_aligned = current_aligned.saturating_add(u32::from(alignment > 0.0));
+        }
+    }
+
+    (
+        if previous_evaluated == 0 {
+            1.0
+        } else {
+            previous_aligned as f32 / previous_evaluated as f32
+        },
+        if current_evaluated == 0 {
+            1.0
+        } else {
+            current_aligned as f32 / current_evaluated as f32
+        },
+    )
+}
+
 fn great_circle_distance_km(a: [f32; 3], b: [f32; 3]) -> f32 {
     let chord = length3([a[0] - b[0], a[1] - b[1], a[2] - b[2]]).clamp(0.0, 2.0);
     let angle = 2.0 * (0.5 * chord).asin();
@@ -1969,6 +3265,93 @@ fn plate_velocity_from_optional_state(
         finite_or(state.angular_axis[2], 0.0) * finite_or(state.angular_speed, 0.0),
     ];
     cross3(omega, pos)
+}
+
+fn boundary_motion_expected_cell_count(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    plate_id: &[PlateId],
+    plate_states: &[Option<PlateKinematicsState>],
+    boundary_activity: &[f32],
+    sample_ticks: u64,
+) -> f32 {
+    if sample_ticks == 0 || plate_id.is_empty() {
+        return 0.0;
+    }
+    let mut expected = 0.0_f32;
+    let sample_ticks = sample_ticks as f32;
+    for cell in 0..plate_id.len() {
+        if boundary_activity.get(cell).copied().unwrap_or(0.0) <= 0.0 {
+            continue;
+        }
+        let source_plate = plate_id[cell];
+        let source_velocity = plate_velocity_from_optional_state(
+            plate_states
+                .get(source_plate.as_usize())
+                .and_then(|state| state.as_ref()),
+            source_plate,
+            positions[cell],
+        );
+        let start = nbr_offsets[cell] as usize;
+        let end = nbr_offsets[cell + 1] as usize;
+        let mut best_cell_fraction = 0.0_f32;
+        for &neighbor_u32 in &nbrs[start..end] {
+            let neighbor = neighbor_u32 as usize;
+            if neighbor >= plate_id.len() || plate_id[neighbor] == source_plate {
+                continue;
+            }
+            let target_plate = plate_id[neighbor];
+            let target_velocity = plate_velocity_from_optional_state(
+                plate_states
+                    .get(target_plate.as_usize())
+                    .and_then(|state| state.as_ref()),
+                target_plate,
+                positions[neighbor],
+            );
+            let edge = [
+                positions[cell][0] - positions[neighbor][0],
+                positions[cell][1] - positions[neighbor][1],
+                positions[cell][2] - positions[neighbor][2],
+            ];
+            let edge_spacing = length3(edge).max(1e-5);
+            let normal = [
+                edge[0] / edge_spacing,
+                edge[1] / edge_spacing,
+                edge[2] / edge_spacing,
+            ];
+            let relative_velocity = [
+                target_velocity[0] - source_velocity[0],
+                target_velocity[1] - source_velocity[1],
+                target_velocity[2] - source_velocity[2],
+            ];
+            let cell_fraction = dot3(relative_velocity, normal).max(0.0) / edge_spacing;
+            best_cell_fraction = best_cell_fraction.max(finite_or(cell_fraction, 0.0));
+        }
+        expected += (best_cell_fraction * sample_ticks).clamp(0.0, 1.0);
+    }
+    expected
+}
+
+fn boundary_motion_response_ratio(actual_cell_count: u32, expected_cell_count: f32) -> f32 {
+    if expected_cell_count < 1.0 {
+        return 1.0;
+    }
+    finite_or(actual_cell_count as f32 / expected_cell_count, 1.0).max(0.0)
+}
+
+fn boundary_motion_underactive_risk(expected_cell_count: f32, response_ratio: f32) -> f32 {
+    if expected_cell_count < 4.0 {
+        return 0.0;
+    }
+    finite_or((0.5 - response_ratio) / 0.5, 0.0).clamp(0.0, 1.0)
+}
+
+fn boundary_motion_overactive_risk(expected_cell_count: f32, response_ratio: f32) -> f32 {
+    if expected_cell_count < 1.0 {
+        return 0.0;
+    }
+    finite_or((response_ratio - 2.0) / 2.0, 0.0).clamp(0.0, 1.0)
 }
 
 fn normalized(value: [f32; 3]) -> Option<[f32; 3]> {
@@ -2061,10 +3444,13 @@ fn env_f32(name: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::{
-        annotate_boundary_transfer_components, boundary_transfer_cell_alignment,
-        great_circle_distance_km, plate_shape_records, reciprocal_churn_ratio, rotate_unit_vector,
-        BoundaryTransferAlignmentSummary, MotionTracker, PlateId, PlateKinematicsState,
-        EARTH_MEAN_RADIUS_KM,
+        annotate_boundary_transfer_components, boundary_motion_expected_cell_count,
+        boundary_motion_overactive_risk, boundary_motion_response_ratio,
+        boundary_motion_underactive_risk, boundary_transfer_cell_alignment,
+        centroid_voronoi_diagnostics, great_circle_distance_km, multiscale_shape_metrics,
+        mutual_exchange_ratio, plate_shape_records, reciprocal_churn_ratio, rotate_unit_vector,
+        temporal_reversal_ratio, BoundaryTransferAlignmentSummary, MotionTracker, PlateId,
+        PlateKinematicsState, EARTH_MEAN_RADIUS_KM,
     };
 
     #[test]
@@ -2084,11 +3470,113 @@ mod tests {
     }
 
     #[test]
+    fn mutual_exchange_ratio_detects_one_way_motion() {
+        let previous = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
+        let current = vec![PlateId(1), PlateId(1), PlateId(1), PlateId(1)];
+
+        assert_eq!(mutual_exchange_ratio(&previous, &current), 0.0);
+    }
+
+    #[test]
+    fn mutual_exchange_ratio_detects_mutual_takeover() {
+        let previous = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
+        let current = vec![PlateId(1), PlateId(0), PlateId(0), PlateId(1)];
+
+        assert_eq!(mutual_exchange_ratio(&previous, &current), 1.0);
+    }
+
+    #[test]
+    fn temporal_reversal_ratio_detects_same_cell_return() {
+        let before = vec![PlateId(0), PlateId(0), PlateId(1)];
+        let middle = vec![PlateId(1), PlateId(1), PlateId(1)];
+        let after = vec![PlateId(0), PlateId(1), PlateId(0)];
+
+        assert_eq!(temporal_reversal_ratio(&before, &middle, &after), 0.5);
+    }
+
+    #[test]
+    fn branch_persistence_requires_four_consecutive_samples() {
+        let mut tracker = MotionTracker::default();
+        tracker.resize(1);
+
+        assert!(!tracker.record_branch_area_ratio(0, 0.2));
+        assert!(!tracker.record_branch_area_ratio(0, 0.2));
+        assert!(!tracker.record_branch_area_ratio(0, 0.2));
+        assert!(tracker.record_branch_area_ratio(0, 0.2));
+        assert!(!tracker.record_branch_area_ratio(0, 0.1));
+    }
+
+    #[test]
+    fn centroid_voronoi_agreement_is_model_independent() {
+        let positions = vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]];
+        let centroids = vec![Some([1.0, 0.0, 0.0]), Some([-1.0, 0.0, 0.0])];
+
+        let diagnostics =
+            centroid_voronoi_diagnostics(&positions, &[PlateId(0), PlateId(1)], &centroids);
+
+        assert_eq!(diagnostics.nearest_generator_agreement_ratio, 1.0);
+    }
+
+    #[test]
+    fn detached_component_regime_detects_subduction_support() {
+        let regimes = super::component_boundary_regimes(
+            &[0],
+            &[0, 1, 2],
+            &[1, 0],
+            &[PlateId(0), PlateId(1)],
+            &[
+                super::BoundaryType::Subduction,
+                super::BoundaryType::PassiveMargin,
+            ],
+        );
+
+        assert_eq!(regimes.subduction, 1.0);
+        assert_eq!(regimes.causal_support(), 1.0);
+    }
+
+    #[test]
     fn great_circle_distance_matches_quarter_circumference() {
         let distance = great_circle_distance_km([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
         let expected = std::f32::consts::FRAC_PI_2 * EARTH_MEAN_RADIUS_KM;
 
         assert!((distance - expected).abs() < 1e-3);
+    }
+
+    #[test]
+    fn boundary_motion_expected_count_tracks_relative_inflow() {
+        let positions = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let nbr_offsets = vec![0, 1, 2];
+        let nbrs = vec![1, 0];
+        let plate_id = vec![PlateId(0), PlateId(1)];
+        let states = vec![
+            Some(test_plate_state([0.0, 0.0, 1.0], 0.0)),
+            Some(test_plate_state([0.0, 0.0, -1.0], 1.0)),
+        ];
+        let boundary_activity = vec![1.0, 0.0];
+
+        let expected = boundary_motion_expected_cell_count(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &plate_id,
+            &states,
+            &boundary_activity,
+            1,
+        );
+
+        assert!(expected > 0.0);
+        assert!(expected <= 1.0);
+    }
+
+    #[test]
+    fn boundary_motion_risk_flags_underactive_and_overactive_updates() {
+        let under_response = boundary_motion_response_ratio(1, 10.0);
+        let over_response = boundary_motion_response_ratio(30, 10.0);
+
+        assert!(boundary_motion_underactive_risk(10.0, under_response) > 0.0);
+        assert_eq!(boundary_motion_overactive_risk(10.0, under_response), 0.0);
+        assert!(boundary_motion_overactive_risk(10.0, over_response) > 0.0);
+        assert_eq!(boundary_motion_underactive_risk(10.0, over_response), 0.0);
     }
 
     #[test]
@@ -2231,7 +3719,7 @@ mod tests {
         let nbrs = vec![1, 0, 2, 1, 3, 2];
         let plate_id = vec![PlateId(0), PlateId(1), PlateId(1), PlateId(0)];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 2);
 
         assert_eq!(records[0].cell_count, 2);
         assert_eq!(records[0].component_count, 2);
@@ -2271,7 +3759,7 @@ mod tests {
             PlateId(0),
         ];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 2);
 
         assert_eq!(records[1].dominant_neighbor_plate_id, 0);
         assert_eq!(records[1].dominant_neighbor_contact_ratio, 1.0);
@@ -2306,7 +3794,7 @@ mod tests {
             PlateId(1),
         ];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 2);
 
         assert!(records[0].appendage_core_cell_ratio > 0.0);
         assert!(records[0].appendage_largest_component_ratio > 0.0);
@@ -2327,7 +3815,7 @@ mod tests {
         ];
         let plate_id = vec![PlateId(0); 5];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 1);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 1);
 
         assert_eq!(records[0].component_count, 1);
         assert_eq!(records[0].detached_fragment_ratio, 0.0);
@@ -2345,7 +3833,7 @@ mod tests {
         ];
         let plate_id = vec![PlateId(0); 3];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 1);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 1);
 
         assert_eq!(records[0].component_count, 1);
         assert_eq!(records[0].articulation_cell_count, 0);
@@ -2391,13 +3879,16 @@ mod tests {
         let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
         let plate_id = vec![PlateId(0); adjacency.len()];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 1);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 1);
 
         assert_eq!(records[0].component_count, 1);
         assert_eq!(records[0].corridor_core_degree, 3);
         assert_eq!(records[0].corridor_core_component_count, 2);
         assert!((records[0].corridor_lobe_balance - 1.0).abs() < 1e-6);
         assert!((records[0].corridor_neck_risk - 0.4).abs() < 1e-6);
+        assert_eq!(records[0].plate_block_core_degree, 3);
+        assert_eq!(records[0].plate_block_count, 2);
+        assert!((records[0].secondary_plate_block_ratio - 0.4).abs() < 1e-6);
     }
 
     #[test]
@@ -2406,12 +3897,38 @@ mod tests {
         let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
         let plate_id = vec![PlateId(0); adjacency.len()];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 1);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 1);
 
         assert_eq!(records[0].component_count, 1);
         assert_eq!(records[0].corridor_core_degree, 0);
         assert_eq!(records[0].corridor_core_component_count, 0);
         assert_eq!(records[0].corridor_neck_risk, 0.0);
+        assert_eq!(records[0].plate_block_count, 1);
+        assert_eq!(records[0].secondary_plate_block_ratio, 0.0);
+    }
+
+    #[test]
+    fn plate_shape_records_detect_weak_line_between_blocks() {
+        let adjacency = vec![
+            vec![1, 2, 3, 4],
+            vec![0, 2, 3],
+            vec![0, 1, 3],
+            vec![0, 1, 2],
+            vec![0, 5],
+            vec![4, 6],
+            vec![5, 7, 8, 9],
+            vec![6, 8, 9],
+            vec![6, 7, 9],
+            vec![6, 7, 8],
+        ];
+        let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
+        let plate_id = vec![PlateId(0); adjacency.len()];
+        let weakness = vec![0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.0, 0.0, 0.0, 0.0];
+
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &weakness, &[], 1);
+
+        assert_eq!(records[0].weak_line_plate_block_count, 2);
+        assert!((records[0].secondary_weak_line_plate_block_ratio - 0.4).abs() < 1e-6);
     }
 
     #[test]
@@ -2436,7 +3953,7 @@ mod tests {
             PlateId(1),
         ];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 2);
 
         assert_eq!(records[0].boundary_distance_max, 2);
         assert_eq!(records[0].boundary_thin_cell_ratio, 1.0);
@@ -2469,11 +3986,111 @@ mod tests {
             PlateId(1),
         ];
 
-        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, 2);
+        let records = plate_shape_records(&nbr_offsets, &nbrs, &plate_id, &[], &[], 2);
 
         assert_eq!(records[0].boundary_distance_max, 3);
         assert!((records[0].boundary_thin_cell_ratio - 6.0 / 7.0).abs() < 1e-6);
         assert!((records[0].eroded_core_cell_ratio - 1.0 / 7.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn multiscale_shape_detects_lobes_joined_by_thin_neck() {
+        let width = 15;
+        let height = 7;
+        let adjacency = grid_adjacency(width, height);
+        let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
+        let mut plate_id = vec![PlateId(1); width * height];
+        for y in 1..=5 {
+            for x in 1..=5 {
+                plate_id[y * width + x] = PlateId(0);
+            }
+            for x in 9..=13 {
+                plate_id[y * width + x] = PlateId(0);
+            }
+        }
+        for x in 6..=8 {
+            plate_id[3 * width + x] = PlateId(0);
+        }
+        let plate_cells = plate_id
+            .iter()
+            .filter(|&&plate| plate == PlateId(0))
+            .count();
+
+        let metrics = multiscale_shape_metrics(&nbr_offsets, &nbrs, &plate_id, 0, plate_cells, 4);
+
+        assert!(metrics.neck_width_cells > 0);
+        assert!(metrics.neck_secondary_ratio > 0.1);
+    }
+
+    #[test]
+    fn multiscale_shape_detects_long_terminal_branch() {
+        let width = 15;
+        let height = 9;
+        let adjacency = grid_adjacency(width, height);
+        let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
+        let mut plate_id = vec![PlateId(1); width * height];
+        for y in 1..=7 {
+            for x in 1..=6 {
+                plate_id[y * width + x] = PlateId(0);
+            }
+        }
+        for x in 7..=13 {
+            plate_id[4 * width + x] = PlateId(0);
+        }
+        let plate_cells = plate_id
+            .iter()
+            .filter(|&&plate| plate == PlateId(0))
+            .count();
+
+        let metrics = multiscale_shape_metrics(&nbr_offsets, &nbrs, &plate_id, 0, plate_cells, 4);
+
+        assert!(metrics.branch_area_ratio > 0.05);
+        assert!(metrics.branch_slenderness >= 3.0);
+    }
+
+    #[test]
+    fn multiscale_shape_keeps_compact_region_unflagged() {
+        let width = 9;
+        let height = 9;
+        let adjacency = grid_adjacency(width, height);
+        let (nbr_offsets, nbrs) = adjacency_to_csr(&adjacency);
+        let mut plate_id = vec![PlateId(1); width * height];
+        for y in 1..=7 {
+            for x in 1..=7 {
+                plate_id[y * width + x] = PlateId(0);
+            }
+        }
+        let plate_cells = 49;
+
+        let metrics = multiscale_shape_metrics(&nbr_offsets, &nbrs, &plate_id, 0, plate_cells, 4);
+
+        assert_eq!(metrics.neck_secondary_ratio, 0.0);
+        assert!(
+            metrics.branch_area_ratio < 0.05,
+            "compact metrics: {metrics:?}"
+        );
+    }
+
+    fn grid_adjacency(width: usize, height: usize) -> Vec<Vec<usize>> {
+        let mut adjacency = vec![Vec::new(); width * height];
+        for y in 0..height {
+            for x in 0..width {
+                let cell = y * width + x;
+                if x > 0 {
+                    adjacency[cell].push(cell - 1);
+                }
+                if x + 1 < width {
+                    adjacency[cell].push(cell + 1);
+                }
+                if y > 0 {
+                    adjacency[cell].push(cell - width);
+                }
+                if y + 1 < height {
+                    adjacency[cell].push(cell + width);
+                }
+            }
+        }
+        adjacency
     }
 
     fn adjacency_to_csr(adjacency: &[Vec<usize>]) -> (Vec<u32>, Vec<u32>) {

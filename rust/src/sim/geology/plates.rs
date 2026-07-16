@@ -1710,12 +1710,12 @@ fn build_initial_plate_kinematics(
             0.0,
             1.0,
         );
-        let angular_speed = clamp(
-            rng.gen_range_f32(0.055, 0.16) * (1.0 - 0.35 * craton_mean)
-                + 0.02 * subduction_tendency,
-            0.025,
-            0.22,
+        let speed_km_per_myr = clamp(
+            rng.gen_range_f32(20.0, 90.0) * (1.0 - 0.25 * craton_mean) + 10.0 * subduction_tendency,
+            15.0,
+            110.0,
         );
+        let angular_speed = speed_km_per_myr / 6_371.0 * 5.0;
         out.push(InitialPlateKinematics {
             angular_axis,
             angular_speed,

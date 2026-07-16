@@ -1054,6 +1054,121 @@ pub struct GeologyDynamicsState {
     pub mantle_heat: Vec<f32>,
     #[serde(default)]
     pub cached_metrics: GeologyStepMetrics,
+    #[serde(default)]
+    pub boundary_front_accumulators: Vec<BoundaryFrontAccumulatorState>,
+    #[serde(default)]
+    pub plate_material: Vec<PlateMaterialState>,
+    #[serde(default)]
+    pub plate_area_targets: Vec<u32>,
+    #[serde(default)]
+    pub plate_influence_centers: Vec<[f32; 3]>,
+    #[serde(default)]
+    pub plate_velocity_centers: Vec<[f32; 3]>,
+    #[serde(default)]
+    pub surface_material: Vec<Vec<SurfaceMaterialState>>,
+    #[serde(default)]
+    pub surface_material_elements: Vec<SurfaceMaterialElementState>,
+    #[serde(default)]
+    pub previous_surface_plate_id: Vec<PlateId>,
+    #[serde(default)]
+    pub plate_surface_polygons: Vec<PlateSurfacePolygonState>,
+    #[serde(default)]
+    pub plate_boundary_topology: PlateBoundaryTopologyState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundaryTopologyState {
+    pub nodes: Vec<PlateBoundaryNodeState>,
+    pub segments: Vec<PlateBoundarySegmentState>,
+    pub components: Vec<PlateBoundaryComponentState>,
+    #[serde(default)]
+    pub half_edges: Vec<PlateBoundaryHalfEdgeState>,
+    #[serde(default)]
+    pub faces: Vec<PlateBoundaryFaceState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundaryNodeState {
+    pub position: [f32; 3],
+    pub triple_junction: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundarySegmentState {
+    pub nodes: [u32; 2],
+    pub left_plate: PlateId,
+    pub right_plate: PlateId,
+    pub triangle: u32,
+    pub residual_normal_area: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundaryComponentState {
+    pub plate_pair: [PlateId; 2],
+    pub segments: Vec<u32>,
+    pub closed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundaryHalfEdgeState {
+    pub origin: u32,
+    pub segment: u32,
+    pub twin: u32,
+    pub next: u32,
+    pub prev: u32,
+    pub face: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateBoundaryFaceState {
+    pub plate_id: PlateId,
+    pub boundaries: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SurfaceMaterialState {
+    pub plate_id: PlateId,
+    pub mass: f32,
+    pub oceanic_mass: f32,
+    pub age_mass: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SurfaceMaterialElementState {
+    pub plate_id: PlateId,
+    pub vertices: [[f32; 3]; 3],
+    pub area: f32,
+    pub oceanic_area: f32,
+    pub age_area: f32,
+    pub host_cell: u32,
+    #[serde(default = "default_surface_material_ownership_marker")]
+    pub ownership_marker: bool,
+}
+
+fn default_surface_material_ownership_marker() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateSurfacePolygonState {
+    pub plate_id: PlateId,
+    pub loops: Vec<Vec<[f32; 3]>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct BoundaryFrontAccumulatorState {
+    pub source_plate: u32,
+    pub target_plate: u32,
+    pub bucket: u32,
+    pub residual_cell_fraction: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct PlateMaterialState {
+    pub primary_plate: u32,
+    pub primary_weight: f32,
+    pub secondary_plate: u32,
+    pub secondary_weight: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -1088,6 +1203,16 @@ pub enum BoundaryType {
     PassiveMargin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ConvergentRegime {
+    #[default]
+    None,
+    ContinentalCollision,
+    IncipientSubduction,
+    Subduction,
+    Obduction,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct VertexCrustState {
     #[serde(default)]
@@ -1120,6 +1245,10 @@ pub struct VertexCrustState {
 pub struct BoundaryEdgeInternal {
     #[serde(default)]
     pub convergence_memory: f32,
+    #[serde(default)]
+    pub subduction_initiation_progress: f32,
+    #[serde(default)]
+    pub subduction_committed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1138,6 +1267,14 @@ pub struct BoundaryDynamicsState {
     pub edge_pairs_plate_hash: u64,
     #[serde(default)]
     pub edge_internal: Vec<BoundaryEdgeInternal>,
+    #[serde(default)]
+    pub edge_types: Vec<BoundaryType>,
+    #[serde(default)]
+    pub edge_activity: Vec<f32>,
+    #[serde(default)]
+    pub edge_convergent_regimes: Vec<ConvergentRegime>,
+    #[serde(default)]
+    pub edge_convergent_plate: Vec<Option<PlateId>>,
     #[serde(default)]
     pub rollback_fraction: Vec<f32>,
     #[serde(default)]
@@ -1164,6 +1301,56 @@ pub struct GeologyStepMetrics {
     pub boundary_activity: f32,
     pub plate_id_churn_rate: f32,
     pub boundary_crossing_substeps: f32,
+    pub boundary_topology_event_cell_count: f32,
+    pub boundary_topology_constrained_segment_count: f32,
+    pub boundary_motion_raw_expected_cell_count: f32,
+    pub boundary_motion_accumulated_expected_cell_count: f32,
+    pub boundary_motion_component_budget_cell_count: f32,
+    pub boundary_motion_transferable_component_budget_cell_count: f32,
+    pub boundary_motion_plate_consistency_budget_cell_count: f32,
+    pub boundary_motion_plate_consistency_deferred_cell_count: f32,
+    pub boundary_motion_plate_consistency_donor_limited_cell_count: f32,
+    pub boundary_motion_plate_consistency_outgoing_limited_cell_count: f32,
+    pub boundary_motion_plate_consistency_incoming_limited_cell_count: f32,
+    pub boundary_motion_plate_consistency_net_area_limited_cell_count: f32,
+    pub boundary_motion_plate_consistency_max_projected_out_ratio: f32,
+    pub boundary_motion_actual_transfer_cell_count: f32,
+    pub boundary_motion_patch_rejected_component_count: f32,
+    pub boundary_motion_patch_rejected_budget_cell_count: f32,
+    pub boundary_motion_source_fragment_rejected_component_count: f32,
+    pub boundary_motion_source_fragment_rejected_budget_cell_count: f32,
+    pub boundary_motion_target_disconnected_rejected_component_count: f32,
+    pub boundary_motion_target_disconnected_rejected_budget_cell_count: f32,
+    pub boundary_motion_budget_utilization_ratio: f32,
+    pub boundary_motion_plate_consistency_limited_ratio: f32,
+    pub boundary_motion_component_limited_ratio: f32,
+    pub material_reconstruction_hard_capacity_assigned_cell_count: f32,
+    pub material_reconstruction_closure_assigned_cell_count: f32,
+    pub material_reconstruction_rebalanced_cell_count: f32,
+    pub material_reconstruction_capacity_mismatch_cell_count: f32,
+    pub material_reconstruction_non_dominant_assignment_cell_count: f32,
+    pub material_reconstruction_mean_assigned_confidence: f32,
+    pub persistent_material_gap_ratio: f32,
+    pub persistent_material_overlap_ratio: f32,
+    pub persistent_material_unsupported_gap_ratio: f32,
+    pub persistent_material_subduction_overlap_ratio: f32,
+    pub persistent_material_collision_overlap_ratio: f32,
+    pub persistent_material_unsupported_overlap_ratio: f32,
+    pub persistent_material_element_count: f32,
+    pub persistent_material_ownership_marker_count: f32,
+    pub marker_empty_candidate_cell_count: f32,
+    pub marker_single_candidate_cell_count: f32,
+    pub marker_mixed_candidate_cell_count: f32,
+    pub marker_changed_empty_candidate_cell_count: f32,
+    pub marker_changed_single_candidate_cell_count: f32,
+    pub marker_changed_mixed_candidate_cell_count: f32,
+    pub marker_reversed_empty_candidate_cell_count: f32,
+    pub marker_reversed_single_candidate_cell_count: f32,
+    pub marker_reversed_mixed_candidate_cell_count: f32,
+    pub marker_changed_divergent_cell_count: f32,
+    pub marker_changed_subduction_cell_count: f32,
+    pub marker_changed_collision_cell_count: f32,
+    pub marker_changed_transform_cell_count: f32,
     pub orphan_cell_count: f32,
     pub single_cell_plate_count: f32,
     pub activity_scale: f32,

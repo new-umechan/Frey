@@ -16,6 +16,9 @@ plate_count_max:
 ocean_plate_ratio:
   type: f32
   value: 0.65
+plate_ownership_model:
+  type: u32
+  value: 7
 pre_plate_steps:
   type: u32
   value: 40

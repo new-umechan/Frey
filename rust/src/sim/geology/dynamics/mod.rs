@@ -1,25 +1,58 @@
 use crate::GeologyParams;
 
 mod boundary_dynamics;
+mod plate_boundary_topology;
+mod plate_influence;
 mod plate_ownership;
+#[allow(dead_code)] // Draft rigid polygon arrangement model; controls precede runtime use.
+mod plate_polygon_arrangement;
+#[allow(dead_code)] // Draft component-local cut model; runtime integration follows its controls.
+mod surface_boundary_cut;
+mod surface_boundary_sweep;
+mod surface_cell_geometry;
 mod surface_dynamics;
+#[allow(dead_code)] // Draft persistent finite-volume material model; controls precede runtime use.
+mod surface_material_elements;
+mod surface_material_overlap;
+mod surface_material_probe;
+mod surface_material_projection;
+mod surface_material_runtime;
+mod surface_material_transport;
+#[allow(dead_code)] // Draft spherical material Boolean model; controls precede runtime use.
+mod surface_plate_polygons;
+
+pub use surface_material_probe::{probe_surface_material_transport, SurfaceMaterialProbeReport};
 
 use crate::sim::geology_types::{CrustType, GeologyInternal, PlateId, StressTensor};
 use crate::sim::world::{
     BoundaryDynamicsState, BoundaryType, EraKind, GeologyDynamicsState, GeologyStepMetrics,
-    PlateKinematicsState, VertexCrustState, World,
+    PlateBoundaryTopologyState, PlateKinematicsState, PlateMaterialState, VertexCrustState, World,
 };
 
-use crate::sim::exec::math::{hash01, seeded_axis};
+use crate::sim::exec::math::{hash01, length3, seeded_axis};
 use boundary_dynamics::{
     plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics,
     ReclassifyBoundariesInput,
 };
-use plate_ownership::{apply_euler_front_advection, EulerFrontAdvectionInput};
+use plate_boundary_topology::{
+    advect_persistent_plate_boundary_process_arrangement,
+    advect_persistent_plate_boundary_topology, extract_plate_boundary_topology,
+    persistent_plate_boundary_topology, validate_plate_boundary_topology,
+};
+use plate_influence::{resolve_plate_ownership_by_influence, PlateInfluenceOwnershipInput};
+use plate_ownership::{
+    apply_euler_front_advection, EulerFrontAdvectionInput, EulerFrontAdvectionMetrics,
+};
 use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
+use surface_material_elements::{
+    update_persistent_surface_material_elements, update_surface_material_elements,
+    SurfaceMaterialElementUpdateInput,
+};
+use surface_material_runtime::{update_surface_material_ownership, SurfaceMaterialOwnershipInput};
 
 const ENVIRONMENT_GEOLOGY_ACTIVITY_TARGET: f32 = 0.02;
 const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
+const PLATE_MATERIAL_MIXING_CAP: f32 = 0.16;
 pub(super) const EARTH_MEAN_RADIUS_KM: f32 = 6_371.0;
 pub(super) const EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR: f32 = 50.0;
 pub(super) const YEARS_PER_MYR: f32 = 1_000_000.0;
@@ -121,6 +154,12 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     let nbrs = &mesh.nbrs;
     let heights = &world.state.geology.height;
     let plate_id = &world.state.geology.plate_id;
+    if dynamics.plate_material.len() != cell_count {
+        dynamics.plate_material = plate_material_from_plate_id(plate_id);
+    }
+    if dynamics.plate_area_targets.len() != dynamics.plate_states.len() {
+        dynamics.plate_area_targets = plate_cell_counts(plate_id, dynamics.plate_states.len());
+    }
     let activity_scale = geology_activity_scale(world);
 
     let plume_force = update_mantle_heat_and_plumes(
@@ -139,6 +178,23 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         world.clock.real_years_per_tick,
     );
 
+    if world.control.geology_params.plate_ownership_model >= 2
+        && dynamics.boundary_state.edge_pairs.is_empty()
+    {
+        reclassify_boundaries(
+            ReclassifyBoundariesInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_id,
+                plate_states: &dynamics.plate_states,
+                vertex_states: &dynamics.vertex_states,
+                params: &world.control.geology_params,
+            },
+            &mut dynamics.boundary_state,
+        );
+    }
+
     let mut next_vertex_states = advect_continuous_attributes(
         positions,
         nbr_offsets,
@@ -148,18 +204,404 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &dynamics.vertex_states,
         &world.control.geology_params,
     );
-    let mut next_plate_id = plate_id.to_vec();
-    let boundary_crossing_substeps = apply_euler_front_advection(
-        EulerFrontAdvectionInput {
+    let mut material_reconstruction_diagnostics = Default::default();
+    let mut persistent_material_gap_ratio = 0.0_f32;
+    let mut persistent_material_overlap_ratio = 0.0_f32;
+    let mut persistent_material_unsupported_gap_ratio = 0.0_f32;
+    let mut persistent_material_subduction_overlap_ratio = 0.0_f32;
+    let mut persistent_material_collision_overlap_ratio = 0.0_f32;
+    let mut persistent_material_unsupported_overlap_ratio = 0.0_f32;
+    let mut marker_ownership_diagnostics =
+        surface_material_elements::SurfaceMarkerOwnershipDiagnostics::default();
+    let (next_plate_id, next_plate_material, boundary_front_metrics) = if world
+        .control
+        .geology_params
+        .plate_ownership_model
+        == 8
+    {
+        let material = update_persistent_surface_material_elements(
+            SurfaceMaterialElementUpdateInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_id,
+                crust: &dynamics.vertex_states,
+                plate_states: &dynamics.plate_states,
+                boundary_state: &dynamics.boundary_state,
+                elements: &mut dynamics.surface_material_elements,
+            },
+            true,
+            &dynamics.previous_surface_plate_id,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "persistent material transport failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        if dynamics.plate_boundary_topology.segments.is_empty() {
+            let topology = extract_plate_boundary_topology(positions, nbr_offsets, nbrs, plate_id)
+                .expect("failed to extract shared plate boundary topology");
+            dynamics.plate_boundary_topology = persistent_plate_boundary_topology(&topology)
+                .expect("failed to persist shared plate boundary topology");
+        }
+        let (next_plate_id, diagnostics) = advect_persistent_plate_boundary_process_arrangement(
             positions,
             nbr_offsets,
             nbrs,
+            plate_id,
+            &dynamics.plate_states,
+            &dynamics.boundary_state,
+            Some(&dynamics.surface_material_elements),
+            &mut dynamics.plate_boundary_topology,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "incident-plate boundary advection failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        persistent_material_gap_ratio =
+            material.closure.residual_gap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_overlap_ratio =
+            material.closure.residual_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_unsupported_gap_ratio =
+            material.coverage.unsupported_gap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_subduction_overlap_ratio =
+            material.coverage.subduction_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_collision_overlap_ratio =
+            material.coverage.collision_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_unsupported_overlap_ratio =
+            material.coverage.unsupported_overlap_area / (4.0 * std::f32::consts::PI);
+        marker_ownership_diagnostics = material.marker_ownership;
+        for &parent in &diagnostics.plate_split_parent_ids {
+            let inherited = dynamics
+                .plate_states
+                .get(parent.as_usize())
+                .copied()
+                .unwrap_or_else(|| panic!("split parent plate {} has no kinematics", parent.0));
+            dynamics.plate_states.push(inherited);
+        }
+        for (cell, state) in next_vertex_states.iter_mut().enumerate() {
+            state.crust_type = material.crust_type[cell];
+            state.age = material.crust_age[cell].max(0.0);
+        }
+        dynamics.boundary_front_accumulators.clear();
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&next_plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: diagnostics.substeps,
+            topology_event_cell_count: diagnostics.topology_event_cell_count,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        let next_plate_material = plate_material_from_plate_id(&next_plate_id);
+        (next_plate_id, next_plate_material, boundary_front_metrics)
+    } else if matches!(world.control.geology_params.plate_ownership_model, 7 | 9) {
+        let apply_reactions = world.control.geology_params.plate_ownership_model == 7;
+        let update = update_persistent_surface_material_elements(
+            SurfaceMaterialElementUpdateInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_id,
+                crust: &dynamics.vertex_states,
+                plate_states: &dynamics.plate_states,
+                boundary_state: &dynamics.boundary_state,
+                elements: &mut dynamics.surface_material_elements,
+            },
+            apply_reactions,
+            &dynamics.previous_surface_plate_id,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "persistent material surface failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        persistent_material_gap_ratio =
+            update.closure.residual_gap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_overlap_ratio =
+            update.closure.residual_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_unsupported_gap_ratio =
+            update.coverage.unsupported_gap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_subduction_overlap_ratio =
+            update.coverage.subduction_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_collision_overlap_ratio =
+            update.coverage.collision_overlap_area / (4.0 * std::f32::consts::PI);
+        persistent_material_unsupported_overlap_ratio =
+            update.coverage.unsupported_overlap_area / (4.0 * std::f32::consts::PI);
+        marker_ownership_diagnostics = update.marker_ownership;
+        for (cell, state) in next_vertex_states.iter_mut().enumerate() {
+            state.crust_type = update.crust_type[cell];
+            state.age = update.crust_age[cell].max(0.0);
+        }
+        dynamics.boundary_front_accumulators.clear();
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&update.plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: 1,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        let next_plate_material = plate_material_from_plate_id(&update.plate_id);
+        (update.plate_id, next_plate_material, boundary_front_metrics)
+    } else if world.control.geology_params.plate_ownership_model == 5 {
+        if dynamics.plate_boundary_topology.segments.is_empty() {
+            let topology = extract_plate_boundary_topology(positions, nbr_offsets, nbrs, plate_id)
+                .expect("failed to extract shared plate boundary topology");
+            dynamics.plate_boundary_topology = persistent_plate_boundary_topology(&topology)
+                .expect("failed to persist shared plate boundary topology");
+        }
+        let (next_plate_id, diagnostics) = advect_persistent_plate_boundary_process_arrangement(
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            &dynamics.plate_states,
+            &dynamics.boundary_state,
+            None,
+            &mut dynamics.plate_boundary_topology,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "process boundary arrangement failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        for &parent in &diagnostics.plate_split_parent_ids {
+            let inherited = dynamics
+                .plate_states
+                .get(parent.as_usize())
+                .copied()
+                .unwrap_or_else(|| panic!("split parent plate {} has no kinematics", parent.0));
+            dynamics.plate_states.push(inherited);
+        }
+        dynamics.boundary_front_accumulators.clear();
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&next_plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: diagnostics.substeps,
+            topology_event_cell_count: diagnostics.topology_event_cell_count,
+            topology_constrained_segment_count: diagnostics.topology_constrained_segment_count,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        let next_plate_material = plate_material_from_plate_id(&next_plate_id);
+        (next_plate_id, next_plate_material, boundary_front_metrics)
+    } else if world.control.geology_params.plate_ownership_model == 4 {
+        let update = update_surface_material_elements(SurfaceMaterialElementUpdateInput {
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            crust: &dynamics.vertex_states,
             plate_states: &dynamics.plate_states,
             boundary_state: &dynamics.boundary_state,
-        },
-        &mut next_plate_id,
-        &mut next_vertex_states,
-    );
+            elements: &mut dynamics.surface_material_elements,
+        })
+        .unwrap_or_else(|error| {
+            panic!(
+                "finite-volume material ownership failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        for (cell, state) in next_vertex_states.iter_mut().enumerate() {
+            state.crust_type = update.crust_type[cell];
+            state.age = update.crust_age[cell].max(0.0);
+        }
+        let _material_diagnostics = (update.closure, update.reconstruction);
+        dynamics.boundary_front_accumulators.clear();
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&update.plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: 1,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        let next_plate_material = plate_material_from_plate_id(&update.plate_id);
+        (update.plate_id, next_plate_material, boundary_front_metrics)
+    } else if world.control.geology_params.plate_ownership_model == 3 {
+        if dynamics.plate_boundary_topology.segments.is_empty() {
+            let topology = extract_plate_boundary_topology(positions, nbr_offsets, nbrs, plate_id)
+                .expect("failed to extract shared plate boundary topology");
+            dynamics.plate_boundary_topology = persistent_plate_boundary_topology(&topology)
+                .expect("failed to persist shared plate boundary topology");
+        }
+        let (next_plate_id, diagnostics) = advect_persistent_plate_boundary_topology(
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            &dynamics.plate_states,
+            &mut dynamics.plate_boundary_topology,
+            &mut dynamics.plate_velocity_centers,
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "shared plate topology advection failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        for &parent in &diagnostics.plate_split_parent_ids {
+            let inherited = dynamics
+                .plate_states
+                .get(parent.as_usize())
+                .copied()
+                .unwrap_or_else(|| panic!("split parent plate {} has no kinematics", parent.0));
+            dynamics.plate_states.push(inherited);
+        }
+        dynamics.boundary_front_accumulators.clear();
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&next_plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: diagnostics.substeps,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        (
+            next_plate_id.clone(),
+            plate_material_from_plate_id(&next_plate_id),
+            boundary_front_metrics,
+        )
+    } else if world.control.geology_params.plate_ownership_model == 2 {
+        let transport = update_surface_material_ownership(SurfaceMaterialOwnershipInput {
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            crust: &dynamics.vertex_states,
+            plate_states: &dynamics.plate_states,
+            boundary_state: &dynamics.boundary_state,
+            surface_material: &mut dynamics.surface_material,
+        })
+        .unwrap_or_else(|error| {
+            panic!(
+                "surface material ownership failed at update {}: {error}",
+                dynamics.update_index
+            )
+        });
+        transport.apply_crust_samples(&mut next_vertex_states);
+        material_reconstruction_diagnostics = transport.reconstruction_diagnostics;
+        dynamics.boundary_front_accumulators.clear();
+        let next_plate_material = plate_material_from_plate_id(&transport.plate_id);
+        let changed_cell_count = plate_id
+            .iter()
+            .zip(&transport.plate_id)
+            .filter(|(before, after)| before != after)
+            .count() as u32;
+        let boundary_front_metrics = EulerFrontAdvectionMetrics {
+            substeps: 1,
+            raw_expected_cell_count: changed_cell_count as f32,
+            accumulated_expected_cell_count: changed_cell_count as f32,
+            component_budget_cell_count: changed_cell_count,
+            transferable_component_budget_cell_count: changed_cell_count,
+            plate_consistency_budget_cell_count: changed_cell_count,
+            actual_transfer_cell_count: changed_cell_count,
+            ..Default::default()
+        };
+        (
+            transport.plate_id,
+            next_plate_material,
+            boundary_front_metrics,
+        )
+    } else if world.control.geology_params.plate_ownership_model == 6 {
+        let mut next_plate_id = plate_id.to_vec();
+        let boundary_front_metrics = apply_euler_front_advection(
+            EulerFrontAdvectionInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_states: &dynamics.plate_states,
+                boundary_state: &dynamics.boundary_state,
+                accumulators: &mut dynamics.boundary_front_accumulators,
+                project_plate_consistency: false,
+                signed_accumulation: true,
+            },
+            &mut next_plate_id,
+            &mut next_vertex_states,
+        );
+        let next_plate_material = plate_material_from_plate_id(&next_plate_id);
+        (next_plate_id, next_plate_material, boundary_front_metrics)
+    } else if world.control.geology_params.plate_ownership_model == 1 {
+        let next_plate_id = resolve_plate_ownership_by_influence(PlateInfluenceOwnershipInput {
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_id,
+            plate_states: &dynamics.plate_states,
+            plate_area_targets: &dynamics.plate_area_targets,
+            plate_influence_centers: &mut dynamics.plate_influence_centers,
+        });
+        dynamics.boundary_front_accumulators.clear();
+        let next_plate_material = plate_material_from_plate_id(&next_plate_id);
+        (next_plate_id, next_plate_material, Default::default())
+    } else {
+        let mut next_plate_material = advect_plate_material(
+            positions,
+            nbr_offsets,
+            nbrs,
+            &dynamics.plate_material,
+            &dynamics.plate_states,
+        );
+        let mut next_plate_id = plate_id_from_material(&next_plate_material, plate_id);
+        let boundary_front_metrics = apply_euler_front_advection(
+            EulerFrontAdvectionInput {
+                positions,
+                nbr_offsets,
+                nbrs,
+                plate_states: &dynamics.plate_states,
+                boundary_state: &dynamics.boundary_state,
+                accumulators: &mut dynamics.boundary_front_accumulators,
+                project_plate_consistency: true,
+                signed_accumulation: false,
+            },
+            &mut next_plate_id,
+            &mut next_vertex_states,
+        );
+        sync_material_to_plate_id(&mut next_plate_material, &next_plate_id);
+        (next_plate_id, next_plate_material, boundary_front_metrics)
+    };
     let plate_id_churn_rate = plate_id_churn_rate(plate_id, &next_plate_id);
     let orphan_cell_count = orphan_cell_count(nbr_offsets, nbrs, &next_plate_id);
     let single_cell_plate_count = single_cell_plate_count(&next_plate_id);
@@ -170,7 +612,8 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         .boundary_reclassify_interval
         .max(1);
     dynamics.boundary_state.reclassify_interval_ticks = reclassify_interval;
-    if dynamics.boundary_state.steps_since_reclassify >= reclassify_interval
+    if world.control.geology_params.plate_ownership_model >= 2
+        || dynamics.boundary_state.steps_since_reclassify >= reclassify_interval
         || dynamics.boundary_state.steps_since_reclassify == 0
     {
         reclassify_boundaries(
@@ -225,9 +668,121 @@ pub(crate) fn run_geology_dynamics_step_with_state(
     metrics.plate_id_churn_rate = plate_id_churn_rate;
     metrics.orphan_cell_count = orphan_cell_count as f32;
     metrics.single_cell_plate_count = single_cell_plate_count as f32;
-    metrics.boundary_crossing_substeps = boundary_crossing_substeps as f32;
+    metrics.boundary_crossing_substeps = boundary_front_metrics.substeps as f32;
+    metrics.boundary_topology_event_cell_count =
+        boundary_front_metrics.topology_event_cell_count as f32;
+    metrics.boundary_topology_constrained_segment_count =
+        boundary_front_metrics.topology_constrained_segment_count as f32;
+    metrics.boundary_motion_raw_expected_cell_count =
+        boundary_front_metrics.raw_expected_cell_count;
+    metrics.boundary_motion_accumulated_expected_cell_count =
+        boundary_front_metrics.accumulated_expected_cell_count;
+    metrics.boundary_motion_component_budget_cell_count =
+        boundary_front_metrics.component_budget_cell_count as f32;
+    metrics.boundary_motion_transferable_component_budget_cell_count =
+        boundary_front_metrics.transferable_component_budget_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_budget_cell_count =
+        boundary_front_metrics.plate_consistency_budget_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_deferred_cell_count =
+        boundary_front_metrics.plate_consistency_deferred_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_donor_limited_cell_count =
+        boundary_front_metrics.plate_consistency_donor_limited_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_outgoing_limited_cell_count =
+        boundary_front_metrics.plate_consistency_outgoing_limited_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_incoming_limited_cell_count =
+        boundary_front_metrics.plate_consistency_incoming_limited_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_net_area_limited_cell_count =
+        boundary_front_metrics.plate_consistency_net_area_limited_cell_count as f32;
+    metrics.boundary_motion_plate_consistency_max_projected_out_ratio =
+        boundary_front_metrics.plate_consistency_max_projected_out_ratio;
+    metrics.boundary_motion_actual_transfer_cell_count =
+        boundary_front_metrics.actual_transfer_cell_count as f32;
+    metrics.boundary_motion_patch_rejected_component_count =
+        boundary_front_metrics.patch_rejected_component_count as f32;
+    metrics.boundary_motion_patch_rejected_budget_cell_count =
+        boundary_front_metrics.patch_rejected_budget_cell_count as f32;
+    metrics.boundary_motion_source_fragment_rejected_component_count =
+        boundary_front_metrics.source_fragment_rejected_component_count as f32;
+    metrics.boundary_motion_source_fragment_rejected_budget_cell_count =
+        boundary_front_metrics.source_fragment_rejected_budget_cell_count as f32;
+    metrics.boundary_motion_target_disconnected_rejected_component_count =
+        boundary_front_metrics.target_disconnected_rejected_component_count as f32;
+    metrics.boundary_motion_target_disconnected_rejected_budget_cell_count =
+        boundary_front_metrics.target_disconnected_rejected_budget_cell_count as f32;
+    let effective_budget = boundary_front_metrics
+        .plate_consistency_budget_cell_count
+        .min(boundary_front_metrics.transferable_component_budget_cell_count)
+        as f32;
+    metrics.boundary_motion_budget_utilization_ratio = if effective_budget > 0.0 {
+        boundary_front_metrics.actual_transfer_cell_count as f32 / effective_budget
+    } else {
+        1.0
+    };
+    metrics.boundary_motion_plate_consistency_limited_ratio = limited_ratio(
+        boundary_front_metrics.transferable_component_budget_cell_count as f32,
+        boundary_front_metrics.plate_consistency_budget_cell_count as f32,
+    );
+    metrics.boundary_motion_component_limited_ratio = limited_ratio(
+        boundary_front_metrics.accumulated_expected_cell_count,
+        boundary_front_metrics.component_budget_cell_count as f32,
+    );
+    metrics.material_reconstruction_hard_capacity_assigned_cell_count =
+        material_reconstruction_diagnostics.hard_capacity_assigned_cell_count as f32;
+    metrics.material_reconstruction_closure_assigned_cell_count =
+        material_reconstruction_diagnostics.closure_assigned_cell_count as f32;
+    metrics.material_reconstruction_rebalanced_cell_count =
+        material_reconstruction_diagnostics.rebalanced_cell_count as f32;
+    metrics.material_reconstruction_capacity_mismatch_cell_count =
+        material_reconstruction_diagnostics.capacity_mismatch_cell_count as f32;
+    metrics.material_reconstruction_non_dominant_assignment_cell_count =
+        material_reconstruction_diagnostics.non_dominant_assignment_cell_count as f32;
+    metrics.material_reconstruction_mean_assigned_confidence =
+        material_reconstruction_diagnostics.mean_assigned_material_confidence;
+    metrics.persistent_material_gap_ratio = persistent_material_gap_ratio;
+    metrics.persistent_material_overlap_ratio = persistent_material_overlap_ratio;
+    metrics.persistent_material_unsupported_gap_ratio = persistent_material_unsupported_gap_ratio;
+    metrics.persistent_material_subduction_overlap_ratio =
+        persistent_material_subduction_overlap_ratio;
+    metrics.persistent_material_collision_overlap_ratio =
+        persistent_material_collision_overlap_ratio;
+    metrics.persistent_material_unsupported_overlap_ratio =
+        persistent_material_unsupported_overlap_ratio;
+    metrics.persistent_material_element_count = dynamics.surface_material_elements.len() as f32;
+    metrics.persistent_material_ownership_marker_count = dynamics
+        .surface_material_elements
+        .iter()
+        .filter(|element| element.ownership_marker)
+        .count() as f32;
+    metrics.marker_empty_candidate_cell_count =
+        marker_ownership_diagnostics.empty_candidate_cell_count as f32;
+    metrics.marker_single_candidate_cell_count =
+        marker_ownership_diagnostics.single_candidate_cell_count as f32;
+    metrics.marker_mixed_candidate_cell_count =
+        marker_ownership_diagnostics.mixed_candidate_cell_count as f32;
+    metrics.marker_changed_empty_candidate_cell_count =
+        marker_ownership_diagnostics.changed_empty_candidate_cell_count as f32;
+    metrics.marker_changed_single_candidate_cell_count =
+        marker_ownership_diagnostics.changed_single_candidate_cell_count as f32;
+    metrics.marker_changed_mixed_candidate_cell_count =
+        marker_ownership_diagnostics.changed_mixed_candidate_cell_count as f32;
+    metrics.marker_reversed_empty_candidate_cell_count =
+        marker_ownership_diagnostics.reversed_empty_candidate_cell_count as f32;
+    metrics.marker_reversed_single_candidate_cell_count =
+        marker_ownership_diagnostics.reversed_single_candidate_cell_count as f32;
+    metrics.marker_reversed_mixed_candidate_cell_count =
+        marker_ownership_diagnostics.reversed_mixed_candidate_cell_count as f32;
+    metrics.marker_changed_divergent_cell_count =
+        marker_ownership_diagnostics.changed_divergent_cell_count as f32;
+    metrics.marker_changed_subduction_cell_count =
+        marker_ownership_diagnostics.changed_subduction_cell_count as f32;
+    metrics.marker_changed_collision_cell_count =
+        marker_ownership_diagnostics.changed_collision_cell_count as f32;
+    metrics.marker_changed_transform_cell_count =
+        marker_ownership_diagnostics.changed_transform_cell_count as f32;
 
     dynamics.vertex_states = next_vertex_states;
+    dynamics.plate_material = next_plate_material;
+    dynamics.previous_surface_plate_id = plate_id.to_vec();
     dynamics.cached_metrics = metrics;
     dynamics.update_index = dynamics.update_index.saturating_add(1);
     world.state.geology.height = next_height;
@@ -278,6 +833,16 @@ fn mean_abs_height_delta(before: &[f32], after: &[f32]) -> f32 {
         / count as f32
 }
 
+fn limited_ratio(demand: f32, cap: f32) -> f32 {
+    let demand = finite_or(demand, 0.0).max(0.0);
+    let cap = finite_or(cap, 0.0).max(0.0);
+    if demand <= 1e-6 {
+        0.0
+    } else {
+        ((demand - cap).max(0.0) / demand).clamp(0.0, 1.0)
+    }
+}
+
 fn plate_id_churn_rate(before: &[PlateId], after: &[PlateId]) -> f32 {
     let count = before.len().min(after.len());
     if count == 0 {
@@ -290,6 +855,157 @@ fn plate_id_churn_rate(before: &[PlateId], after: &[PlateId]) -> f32 {
         .filter(|(a, b)| a != b)
         .count();
     changed as f32 / count as f32
+}
+
+fn plate_material_from_plate_id(plate_id: &[PlateId]) -> Vec<PlateMaterialState> {
+    plate_id
+        .iter()
+        .map(|plate| PlateMaterialState {
+            primary_plate: plate.as_u32(),
+            primary_weight: 1.0,
+            secondary_plate: plate.as_u32(),
+            secondary_weight: 0.0,
+        })
+        .collect()
+}
+
+fn plate_id_from_material(material: &[PlateMaterialState], fallback: &[PlateId]) -> Vec<PlateId> {
+    material
+        .iter()
+        .enumerate()
+        .map(|(index, state)| {
+            if state.primary_weight >= state.secondary_weight && state.primary_weight > 1e-4 {
+                PlateId(state.primary_plate)
+            } else if state.secondary_weight > 1e-4 {
+                PlateId(state.secondary_plate)
+            } else {
+                fallback.get(index).copied().unwrap_or_default()
+            }
+        })
+        .collect()
+}
+
+fn sync_material_to_plate_id(material: &mut [PlateMaterialState], plate_id: &[PlateId]) {
+    for (state, plate) in material.iter_mut().zip(plate_id.iter().copied()) {
+        if PlateId(state.primary_plate) == plate {
+            state.primary_weight = state.primary_weight.max(0.75);
+            continue;
+        }
+        state.secondary_plate = state.primary_plate;
+        state.secondary_weight = (state.primary_weight * 0.25).clamp(0.0, 0.25);
+        state.primary_plate = plate.as_u32();
+        state.primary_weight = 0.75;
+    }
+}
+
+fn advect_plate_material(
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    material: &[PlateMaterialState],
+    plate_states: &[PlateKinematicsState],
+) -> Vec<PlateMaterialState> {
+    let mut next = material.to_vec();
+    for cell in 0..material.len() {
+        let state = material[cell];
+        let source_plate = PlateId(state.primary_plate);
+        let velocity = plate_velocity_for_cell(plate_states, source_plate, positions[cell]);
+        let start = nbr_offsets[cell] as usize;
+        let end = nbr_offsets[cell + 1] as usize;
+        let mut mixed = PlateMaterialMixer::default();
+        mixed.add(state.primary_plate, state.primary_weight);
+        mixed.add(state.secondary_plate, state.secondary_weight);
+        for &neighbor_u32 in &nbrs[start..end] {
+            let neighbor = neighbor_u32 as usize;
+            if neighbor >= material.len() {
+                continue;
+            }
+            let direction = [
+                positions[neighbor][0] - positions[cell][0],
+                positions[neighbor][1] - positions[cell][1],
+                positions[neighbor][2] - positions[cell][2],
+            ];
+            let distance = length3(direction).max(1e-5);
+            let alignment = dot3(
+                velocity,
+                [
+                    direction[0] / distance,
+                    direction[1] / distance,
+                    direction[2] / distance,
+                ],
+            )
+            .max(0.0);
+            let weight = (alignment / distance).clamp(0.0, PLATE_MATERIAL_MIXING_CAP);
+            if weight <= 1e-4 {
+                continue;
+            }
+            mixed.add(
+                material[neighbor].primary_plate,
+                material[neighbor].primary_weight * weight,
+            );
+            mixed.add(
+                material[neighbor].secondary_plate,
+                material[neighbor].secondary_weight * weight,
+            );
+        }
+        next[cell] = mixed.normalized();
+    }
+    next
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+#[derive(Default)]
+struct PlateMaterialMixer {
+    first_plate: u32,
+    first_weight: f32,
+    second_plate: u32,
+    second_weight: f32,
+}
+
+impl PlateMaterialMixer {
+    fn add(&mut self, plate: u32, weight: f32) {
+        let weight = finite_or(weight, 0.0).max(0.0);
+        if weight <= 1e-6 {
+            return;
+        }
+        if self.first_weight <= 0.0 || self.first_plate == plate {
+            self.first_plate = plate;
+            self.first_weight += weight;
+            return;
+        }
+        if self.second_weight <= 0.0 || self.second_plate == plate {
+            self.second_plate = plate;
+            self.second_weight += weight;
+            self.order();
+            return;
+        }
+        if weight > self.second_weight {
+            self.second_plate = plate;
+            self.second_weight = weight;
+            self.order();
+        }
+    }
+
+    fn normalized(mut self) -> PlateMaterialState {
+        self.order();
+        let sum = (self.first_weight + self.second_weight).max(1e-6);
+        PlateMaterialState {
+            primary_plate: self.first_plate,
+            primary_weight: self.first_weight / sum,
+            secondary_plate: self.second_plate,
+            secondary_weight: self.second_weight / sum,
+        }
+    }
+
+    fn order(&mut self) {
+        if self.second_weight > self.first_weight {
+            std::mem::swap(&mut self.first_plate, &mut self.second_plate);
+            std::mem::swap(&mut self.first_weight, &mut self.second_weight);
+        }
+    }
 }
 
 fn orphan_cell_count(nbr_offsets: &[u32], nbrs: &[u32], plate_id: &[PlateId]) -> usize {
@@ -326,6 +1042,16 @@ fn single_cell_plate_count(plate_id: &[PlateId]) -> usize {
         }
     }
     counts.into_iter().filter(|&count| count == 1).count()
+}
+
+fn plate_cell_counts(plate_id: &[PlateId], plate_count: usize) -> Vec<u32> {
+    let mut counts = vec![0_u32; plate_count];
+    for plate in plate_id.iter().copied() {
+        if let Some(count) = counts.get_mut(plate.as_usize()) {
+            *count = count.saturating_add(1);
+        }
+    }
+    counts
 }
 
 fn geology_activity_scale(world: &World) -> f32 {
@@ -426,6 +1152,14 @@ fn ensure_geology_dynamics(
         vertex_states[i].temperature = mantle_heat[i];
     }
 
+    let plate_boundary_topology = extract_plate_boundary_topology(
+        &world.mesh().positions,
+        &world.mesh().nbr_offsets,
+        &world.mesh().nbrs,
+        &world.state.geology.plate_id,
+    )
+    .and_then(|topology| persistent_plate_boundary_topology(&topology).ok())
+    .unwrap_or_else(PlateBoundaryTopologyState::default);
     *geology_state = Some(GeologyDynamicsState {
         update_index: 0,
         plate_states,
@@ -438,6 +1172,10 @@ fn ensure_geology_dynamics(
             edge_pairs: Vec::new(),
             edge_pairs_plate_hash: 0,
             edge_internal: Vec::new(),
+            edge_types: Vec::new(),
+            edge_activity: Vec::new(),
+            edge_convergent_regimes: Vec::new(),
+            edge_convergent_plate: Vec::new(),
             rollback_fraction: vec![0.0; cell_count],
             backarc_tension: vec![0.0; cell_count],
             slab_convergence_component: vec![0.0; cell_count],
@@ -450,6 +1188,16 @@ fn ensure_geology_dynamics(
         },
         mantle_heat,
         cached_metrics: GeologyStepMetrics::default(),
+        boundary_front_accumulators: Vec::new(),
+        plate_material: plate_material_from_plate_id(&world.state.geology.plate_id),
+        plate_area_targets: plate_cell_counts(&world.state.geology.plate_id, plate_count),
+        plate_influence_centers: Vec::new(),
+        plate_velocity_centers: Vec::new(),
+        surface_material: Vec::new(),
+        surface_material_elements: Vec::new(),
+        previous_surface_plate_id: world.state.geology.plate_id.clone(),
+        plate_surface_polygons: Vec::new(),
+        plate_boundary_topology,
     });
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];
@@ -499,6 +1247,17 @@ fn debug_validate_geology_state_with_state(
         world.state.geology.boundary_condition.len(),
         cell_count,
         "{stage}: geology.boundary_condition length mismatch"
+    );
+    let topology = extract_plate_boundary_topology(
+        &world.mesh().positions,
+        &world.mesh().nbr_offsets,
+        &world.mesh().nbrs,
+        &world.state.geology.plate_id,
+    )
+    .expect("plate boundary topology extraction must match the world mesh");
+    debug_assert!(
+        validate_plate_boundary_topology(&topology).is_valid(),
+        "{stage}: plate boundary topology invariants failed"
     );
 
     for (i, &height) in world.state.geology.height.iter().enumerate() {
@@ -676,10 +1435,12 @@ fn build_plate_states(
             continue;
         }
         let seed = plate as u32;
+        let speed_km_per_myr = 20.0 + 70.0 * hash01(seed ^ 0xc2b2_ae35);
+        let angular_speed = speed_km_per_myr / EARTH_MEAN_RADIUS_KM * 5.0;
         plate_states.push(PlateKinematicsState {
             angular_axis: seeded_axis(seed ^ 0x27d4_eb2f),
-            angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
-            reference_angular_speed: 0.06 + 0.10 * hash01(seed ^ 0xc2b2_ae35),
+            angular_speed,
+            reference_angular_speed: angular_speed,
             slab_pull_drive: 0.0,
             ridge_push_drive: 0.0,
             collision_drag: 0.0,

@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::sim::geology_types::{CrustType, PlateId};
 use crate::sim::world::{
-    BoundaryDynamicsState, BoundaryType, PlateKinematicsState, VertexCrustState,
+    BoundaryDynamicsState, BoundaryType, ConvergentRegime, PlateKinematicsState, VertexCrustState,
 };
 use crate::GeologyParams;
 
@@ -94,6 +96,13 @@ pub(super) fn reclassify_boundaries(
     let needs_rebuild_edge_pairs = boundary_state.edge_pairs.is_empty()
         || boundary_state.edge_pairs_plate_hash != current_plate_hash;
     if needs_rebuild_edge_pairs {
+        let previous_internal = boundary_state
+            .edge_pairs
+            .iter()
+            .copied()
+            .zip(boundary_state.edge_internal.iter().copied())
+            .map(|(pair, internal)| (ordered_edge_pair(pair), internal))
+            .collect::<HashMap<_, _>>();
         let mut edge_pairs = Vec::<[u32; 2]>::new();
         for i in 0..cell_count {
             let start = nbr_offsets[i] as usize;
@@ -108,7 +117,17 @@ pub(super) fn reclassify_boundaries(
         }
         boundary_state.edge_pairs = edge_pairs;
         boundary_state.edge_pairs_plate_hash = current_plate_hash;
-        boundary_state.edge_internal = vec![Default::default(); boundary_state.edge_pairs.len()];
+        boundary_state.edge_internal = boundary_state
+            .edge_pairs
+            .iter()
+            .copied()
+            .map(|pair| {
+                previous_internal
+                    .get(&ordered_edge_pair(pair))
+                    .copied()
+                    .unwrap_or_default()
+            })
+            .collect();
     } else if boundary_state.edge_internal.len() != boundary_state.edge_pairs.len() {
         boundary_state.edge_internal = vec![Default::default(); boundary_state.edge_pairs.len()];
     }
@@ -123,6 +142,8 @@ pub(super) fn reclassify_boundaries(
     let mut subduction_gate_edge = vec![0.0_f32; edge_pairs.len()];
     let mut edge_types = vec![BoundaryType::PassiveMargin; edge_pairs.len()];
     let mut edge_scores = vec![0.0_f32; edge_pairs.len()];
+    let mut edge_convergent_regimes = vec![ConvergentRegime::None; edge_pairs.len()];
+    let mut edge_convergent_plate = vec![None; edge_pairs.len()];
 
     for (eid, pair) in edge_pairs.iter().enumerate() {
         let i = pair[0] as usize;
@@ -147,25 +168,46 @@ pub(super) fn reclassify_boundaries(
         divergence_norm_edge[eid] = rel.divergence_norm;
         transform_norm_edge[eid] = rel.transform_norm;
         obliquity_edge[eid] = rel.obliquity;
-        let prev_memory = boundary_state
-            .edge_internal
-            .get(eid)
-            .map(|edge| edge.convergence_memory)
+        let edge_internal = &mut boundary_state.edge_internal[eid];
+        let prev_memory = edge_internal.convergence_memory;
+        let oceanic = densest_oceanic(vertex_states[i], vertex_states[j]);
+        let strongly_convergent = rel.rel_n < -CONVERGENT_THRESHOLD;
+        let immediately_eligible = bt == BoundaryType::Subduction;
+        let buoyancy = oceanic
+            .map(|state| oceanic_negative_buoyancy_proxy(state, params))
             .unwrap_or(0.0);
-        if bt != BoundaryType::Subduction && rel.rel_n > -DIVERGENT_THRESHOLD {
-            if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
-                let buoyancy = oceanic_negative_buoyancy_proxy(oceanic, params);
-                if prev_memory > 0.20 && buoyancy > 0.25 {
-                    bt = BoundaryType::Subduction;
-                    score = score.max(prev_memory * buoyancy);
-                }
-            }
+        let (progress, committed) = advance_subduction_initiation(
+            edge_internal.subduction_initiation_progress,
+            edge_internal.subduction_committed,
+            strongly_convergent,
+            oceanic.is_some(),
+            rel.convergence_norm,
+            buoyancy,
+            immediately_eligible,
+            params,
+        );
+        edge_internal.subduction_initiation_progress = progress;
+        edge_internal.subduction_committed = committed;
+        if committed {
+            bt = BoundaryType::Subduction;
+            score = score.max(progress);
         }
         edge_types[eid] = bt;
         edge_scores[eid] = finite_or(score, 0.0).clamp(0.0, 1.0);
+        if rel.rel_n < -CONVERGENT_THRESHOLD {
+            let (regime, candidate) = classify_convergent_regime(
+                vertex_states[i],
+                vertex_states[j],
+                plate_id[i],
+                plate_id[j],
+                bt,
+            );
+            edge_convergent_regimes[eid] = regime;
+            edge_convergent_plate[eid] = candidate;
+        }
 
         if bt == BoundaryType::Subduction {
-            if let Some(oceanic) = densest_oceanic(vertex_states[i], vertex_states[j]) {
+            if let Some(oceanic) = oceanic {
                 subduction_age_edge[eid] = finite_or(oceanic.age, 0.0).max(0.0);
                 subduction_density_edge[eid] = finite_or(oceanic.density, 0.0).max(0.0);
                 subduction_gate_edge[eid] =
@@ -314,6 +356,70 @@ pub(super) fn reclassify_boundaries(
         boundary_state.slab_rollback_component[i] =
             finite_or(boundary_state.slab_rollback_component[i] / denom, 0.0);
     }
+    boundary_state.edge_types = edge_types;
+    boundary_state.edge_activity = edge_scores;
+    boundary_state.edge_convergent_regimes = edge_convergent_regimes;
+    boundary_state.edge_convergent_plate = edge_convergent_plate;
+}
+
+fn advance_subduction_initiation(
+    progress: f32,
+    committed: bool,
+    strongly_convergent: bool,
+    has_oceanic_candidate: bool,
+    convergence_norm: f32,
+    negative_buoyancy: f32,
+    immediately_eligible: bool,
+    params: &GeologyParams,
+) -> (f32, bool) {
+    let rate = params.convergence_memory_rate.clamp(0.0, 1.0);
+    if !strongly_convergent || !has_oceanic_candidate {
+        return ((progress - rate).max(0.0), false);
+    }
+    if committed || immediately_eligible {
+        return (1.0, true);
+    }
+    let next = (progress + rate * convergence_norm * negative_buoyancy).clamp(0.0, 1.0);
+    let committed = next >= params.subduction_initiation_threshold.clamp(0.0, 1.0);
+    (next, committed)
+}
+
+fn ordered_edge_pair(pair: [u32; 2]) -> (u32, u32) {
+    if pair[0] < pair[1] {
+        (pair[0], pair[1])
+    } else {
+        (pair[1], pair[0])
+    }
+}
+
+fn classify_convergent_regime(
+    a: VertexCrustState,
+    b: VertexCrustState,
+    plate_a: PlateId,
+    plate_b: PlateId,
+    boundary_type: BoundaryType,
+) -> (ConvergentRegime, Option<PlateId>) {
+    if a.crust_type == CrustType::Continental && b.crust_type == CrustType::Continental {
+        return (ConvergentRegime::ContinentalCollision, None);
+    }
+    let candidate = match (
+        a.crust_type == CrustType::Oceanic,
+        b.crust_type == CrustType::Oceanic,
+    ) {
+        (true, false) => plate_a,
+        (false, true) => plate_b,
+        (true, true) if a.density > b.density => plate_a,
+        (true, true) if b.density > a.density => plate_b,
+        (true, true) if a.age >= b.age => plate_a,
+        (true, true) => plate_b,
+        (false, false) => return (ConvergentRegime::ContinentalCollision, None),
+    };
+    let regime = if boundary_type == BoundaryType::Subduction {
+        ConvergentRegime::Subduction
+    } else {
+        ConvergentRegime::IncipientSubduction
+    };
+    (regime, Some(candidate))
 }
 
 #[derive(Clone, Copy)]
@@ -355,8 +461,9 @@ fn relative_kinematics(
     let rel_n = dot(rel_v, edge_dir);
     let rel_mag = length3(rel_v);
     let rel_t = (rel_mag * rel_mag - rel_n * rel_n).max(0.0).sqrt();
-    let convergence = rel_n.max(0.0);
-    let divergence = (-rel_n).max(0.0);
+    // rel_n is the time derivative of endpoint separation: positive opens the edge.
+    let convergence = (-rel_n).max(0.0);
+    let divergence = rel_n.max(0.0);
     let obliquity = rel_t / (convergence + divergence + rel_t + 1e-5);
     RelativeKinematics {
         rel_n,
@@ -504,17 +611,17 @@ fn classify_boundary_pair(
     b: VertexCrustState,
     params: &GeologyParams,
 ) -> (BoundaryType, f32) {
-    if rel_n < -DIVERGENT_THRESHOLD {
+    if rel_n > DIVERGENT_THRESHOLD {
         let bt = if a.crust_type == CrustType::Continental && b.crust_type == CrustType::Continental
         {
             BoundaryType::Rift
         } else {
             BoundaryType::Ridge
         };
-        return (bt, (-rel_n * 8.0 + rel_t * 2.0).clamp(0.0, 1.0));
+        return (bt, (rel_n * 8.0 + rel_t * 2.0).clamp(0.0, 1.0));
     }
 
-    if rel_n > CONVERGENT_THRESHOLD {
+    if rel_n < -CONVERGENT_THRESHOLD {
         let mut bt = BoundaryType::Collision;
         let mut oceanic = None;
         if a.crust_type == CrustType::Oceanic {
@@ -539,7 +646,7 @@ fn classify_boundary_pair(
                 bt = BoundaryType::Subduction;
             }
         }
-        return (bt, (rel_n * 8.0 + rel_t).clamp(0.0, 1.0));
+        return (bt, (-rel_n * 8.0 + rel_t).clamp(0.0, 1.0));
     }
 
     if rel_t > TRANSFORM_THRESHOLD {
@@ -659,6 +766,131 @@ mod tests {
         }
     }
 
+    fn continental_state() -> VertexCrustState {
+        VertexCrustState {
+            crust_type: CrustType::Continental,
+            ..oceanic_state(0.0, 2_700.0)
+        }
+    }
+
+    fn opposing_z_rotation_states(left_speed: f32, right_speed: f32) -> Vec<PlateKinematicsState> {
+        let mut left = plate_state();
+        left.angular_axis = [0.0, 0.0, 1.0];
+        left.angular_speed = left_speed;
+        let mut right = plate_state();
+        right.angular_axis = [0.0, 0.0, 1.0];
+        right.angular_speed = right_speed;
+        vec![left, right]
+    }
+
+    #[test]
+    fn relative_normal_velocity_sign_matches_endpoint_separation() {
+        let left_position = [1.0, 0.0, 0.0];
+        let right_position = [0.995, 0.1, 0.0];
+        let divergent_states = opposing_z_rotation_states(-0.1, 0.1);
+        let convergent_states = opposing_z_rotation_states(0.1, -0.1);
+
+        let divergent = relative_kinematics(
+            left_position,
+            right_position,
+            divergent_states.first(),
+            divergent_states.get(1),
+            PlateId(0),
+            PlateId(1),
+        );
+        let convergent = relative_kinematics(
+            left_position,
+            right_position,
+            convergent_states.first(),
+            convergent_states.get(1),
+            PlateId(0),
+            PlateId(1),
+        );
+
+        assert!(divergent.rel_n > 0.0);
+        assert_eq!(divergent.convergence_norm, 0.0);
+        assert!(divergent.divergence_norm > 0.0);
+        assert!(convergent.rel_n < 0.0);
+        assert!(convergent.convergence_norm > 0.0);
+        assert_eq!(convergent.divergence_norm, 0.0);
+    }
+
+    #[test]
+    fn boundary_classification_uses_separation_sign() {
+        let crust = continental_state();
+        let params = GeologyParams::default();
+
+        assert_eq!(
+            classify_boundary_pair(0.1, 0.0, crust, crust, &params).0,
+            BoundaryType::Rift
+        );
+        assert_eq!(
+            classify_boundary_pair(-0.1, 0.0, crust, crust, &params).0,
+            BoundaryType::Collision
+        );
+    }
+
+    #[test]
+    fn convergent_regime_separates_collision_from_subduction_onset() {
+        let continental = continental_state();
+        let oceanic = oceanic_state(10.0, 2_950.0);
+
+        assert_eq!(
+            classify_convergent_regime(
+                continental,
+                continental,
+                PlateId(0),
+                PlateId(1),
+                BoundaryType::Collision,
+            ),
+            (ConvergentRegime::ContinentalCollision, None)
+        );
+        assert_eq!(
+            classify_convergent_regime(
+                oceanic,
+                continental,
+                PlateId(2),
+                PlateId(3),
+                BoundaryType::Collision,
+            ),
+            (ConvergentRegime::IncipientSubduction, Some(PlateId(2)))
+        );
+        assert_eq!(
+            classify_convergent_regime(
+                oceanic,
+                continental,
+                PlateId(2),
+                PlateId(3),
+                BoundaryType::Subduction,
+            ),
+            (ConvergentRegime::Subduction, Some(PlateId(2)))
+        );
+    }
+
+    #[test]
+    fn subduction_initiation_progress_commits_and_releases_from_kinematics() {
+        let mut params = GeologyParams::default();
+        params.convergence_memory_rate = 0.5;
+        params.subduction_initiation_threshold = 0.5;
+
+        let (progress, committed) =
+            advance_subduction_initiation(0.3, false, true, true, 1.0, 0.5, false, &params);
+        assert_eq!(progress, 0.55);
+        assert!(committed);
+
+        let (progress, committed) = advance_subduction_initiation(
+            progress, committed, true, true, 0.0, 0.0, false, &params,
+        );
+        assert_eq!(progress, 1.0);
+        assert!(committed);
+
+        let (progress, committed) = advance_subduction_initiation(
+            progress, committed, false, true, 0.0, 0.0, false, &params,
+        );
+        assert_eq!(progress, 0.5);
+        assert!(!committed);
+    }
+
     #[test]
     fn slab_pull_increases_plate_speed_more_than_passive_activity() {
         let plate_id = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
@@ -749,6 +981,35 @@ mod tests {
         let active_velocity = plate_velocity_from_state(Some(&active), PlateId(0), pos);
 
         assert_eq!(inactive_velocity, active_velocity);
+    }
+
+    #[test]
+    fn boundary_reclassification_persists_edge_type_for_material_reaction() {
+        let positions = vec![[1.0, 0.0, 0.0], [0.995, 0.1, 0.0]];
+        let nbr_offsets = vec![0, 1, 2];
+        let nbrs = vec![1, 0];
+        let plate_id = vec![PlateId(0), PlateId(1)];
+        let plate_states = opposing_z_rotation_states(-0.1, 0.1);
+        let vertex_states = vec![oceanic_state(20.0, 3_000.0); 2];
+        let mut boundary_state = BoundaryDynamicsState::default();
+
+        reclassify_boundaries(
+            ReclassifyBoundariesInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &plate_id,
+                plate_states: &plate_states,
+                vertex_states: &vertex_states,
+                params: &GeologyParams::default(),
+            },
+            &mut boundary_state,
+        );
+
+        assert_eq!(boundary_state.edge_pairs, vec![[0, 1]]);
+        assert_eq!(boundary_state.edge_types, vec![BoundaryType::Ridge]);
+        assert_eq!(boundary_state.edge_activity.len(), 1);
+        assert!(boundary_state.edge_activity[0] > 0.0);
     }
 
     #[test]

@@ -181,8 +181,16 @@ pub fn reduce_metrics_for_headless(
         land_ratio: land_cells as f32 / cell_count_f32,
         mean_height,
         height_std_dev: variance.max(0.0).sqrt(),
-        min_height: if min_height.is_finite() { min_height } else { 0.0 },
-        max_height: if max_height.is_finite() { max_height } else { 0.0 },
+        min_height: if min_height.is_finite() {
+            min_height
+        } else {
+            0.0
+        },
+        max_height: if max_height.is_finite() {
+            max_height
+        } else {
+            0.0
+        },
         mean_river_flux: sum_flux / cell_count_f32,
         max_river_flux: max_flux,
         top10_river_flux_sum: top_fluxes.iter().take(top_fluxes_len).sum::<f32>(),
