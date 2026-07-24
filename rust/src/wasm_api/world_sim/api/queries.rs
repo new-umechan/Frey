@@ -4,7 +4,6 @@ use js_sys::{Float32Array, Int32Array, Object, Uint32Array};
 use wasm_bindgen::prelude::*;
 
 use crate::application::world_dto::ViewDeltaQuery;
-use crate::application::world_explain_use_cases;
 use crate::application::world_query_use_cases;
 
 use super::super::WorldSimController;
@@ -181,22 +180,6 @@ impl WorldSimController {
             .map_err(|err| JsValue::from_str(&err))?;
         serde_wasm_bindgen::to_value(&response)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize metrics: {err}")))
-    }
-
-    /// クリックした 1 セルの、あるターゲット量 (現状は "aridity") の因果グラフを返す。
-    #[wasm_bindgen(js_name = explain_cell)]
-    pub fn explain_cell_js(
-        &self,
-        world_id: String,
-        cell_index: u32,
-        target: String,
-    ) -> Result<JsValue, JsValue> {
-        let response =
-            world_explain_use_cases::explain_cell(&self.service, &world_id, cell_index, &target)
-                .map_err(|err| JsValue::from_str(&err))?;
-        serde_wasm_bindgen::to_value(&response).map_err(|err| {
-            JsValue::from_str(&format!("failed to serialize explain response: {err}"))
-        })
     }
 
     #[wasm_bindgen(js_name = get_timeline_state)]

@@ -179,15 +179,6 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
         );
         return;
       }
-      case "explain_cell": {
-        const result = runtime.explain_cell(
-          request.payload.worldId,
-          request.payload.cellIndex,
-          request.payload.target,
-        );
-        post({ id: request.id, ok: true, kind: request.kind, payload: result });
-        return;
-      }
       case "list_checkpoint_ticks": {
         const result = runtime.list_checkpoint_ticks(request.payload.worldId);
         post({ id: request.id, ok: true, kind: request.kind, payload: result });
