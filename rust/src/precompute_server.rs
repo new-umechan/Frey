@@ -36,6 +36,7 @@ const DEFAULT_KEYFRAME_INTERVAL: u32 = 64;
 const DEFAULT_PRECOMPUTE_RETENTION_TICKS: usize = 2;
 const DEFAULT_FRAME_COMPRESSION: FrameCompression = FrameCompression::Zstd;
 const ZSTD_LEVEL: i32 = 3;
+const DEFAULT_PRECOMPUTE_PROGRESS_INTERVAL: u32 = 16;
 
 fn geology_fingerprint(params: &GeologyParams) -> Result<String, String> {
     serde_json::to_string(params)
@@ -454,6 +455,13 @@ struct PrecomputeTiming {
     delta_write: Duration,
     keyframe_write: Duration,
     manifest_write: Duration,
+    exec_geology_terrain: Duration,
+    exec_climate: Duration,
+    exec_glaciology: Duration,
+    exec_hydrology: Duration,
+    exec_ecology: Duration,
+    exec_society: Duration,
+    exec_transition: Duration,
 }
 
 impl PrecomputeTiming {
@@ -486,6 +494,37 @@ impl PrecomputeTiming {
             duration_ms(self.advance) / tick_count,
             duration_ms(self.delta_query) / tick_count,
             duration_ms(self.delta_write) / tick_count,
+        );
+    }
+
+    fn print_progress(&self, completed_ticks: u32, total_ticks: u32, elapsed: Duration) {
+        let completed = completed_ticks.max(1) as f64;
+        let elapsed_ms = duration_ms(elapsed);
+        let remaining_ticks = total_ticks.saturating_sub(completed_ticks) as f64;
+        let estimated_remaining_ms = elapsed_ms / completed * remaining_ticks;
+        eprintln!(
+            concat!(
+                "precompute progress tick={}/{} elapsed_ms={:.3} eta_ms={:.3} ",
+                "advance_ms={:.3} delta_query_ms={:.3} delta_write_ms={:.3} ",
+                "keyframe_write_ms={:.3} geology_ms={:.3} climate_ms={:.3} ",
+                "glaciology_ms={:.3} hydrology_ms={:.3} ecology_ms={:.3} ",
+                "society_ms={:.3} transition_ms={:.3}"
+            ),
+            completed_ticks,
+            total_ticks,
+            elapsed_ms,
+            estimated_remaining_ms,
+            duration_ms(self.advance),
+            duration_ms(self.delta_query),
+            duration_ms(self.delta_write),
+            duration_ms(self.keyframe_write),
+            duration_ms(self.exec_geology_terrain),
+            duration_ms(self.exec_climate),
+            duration_ms(self.exec_glaciology),
+            duration_ms(self.exec_hydrology),
+            duration_ms(self.exec_ecology),
+            duration_ms(self.exec_society),
+            duration_ms(self.exec_transition),
         );
     }
 }
@@ -988,6 +1027,14 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
     let mut timing = PrecomputeTiming::default();
+    let overall_start = Instant::now();
+    let progress_interval = std::env::var("FREY_PRECOMPUTE_PROGRESS_INTERVAL")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(DEFAULT_PRECOMPUTE_PROGRESS_INTERVAL)
+        .max(1);
+    let profile_modules =
+        std::env::var("FREY_PRECOMPUTE_PROFILE_MODULES").is_ok_and(|value| value == "true");
     let seed_dir = args.out_dir.join(&args.seed);
     if seed_dir.exists() {
         fs::remove_dir_all(&seed_dir).map_err(|err| {
@@ -1046,7 +1093,19 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
 
     for tick in 1..=args.ticks {
         let start = Instant::now();
-        world_use_cases::advance_timeline(&mut service, world_id.clone(), 1)?;
+        if profile_modules {
+            let profile = world_use_cases::exec_world_profiled(&mut service, world_id.clone(), 1)?;
+            timing.exec_geology_terrain +=
+                Duration::from_secs_f64(profile.exec_geology_terrain_ms / 1000.0);
+            timing.exec_climate += Duration::from_secs_f64(profile.exec_climate_ms / 1000.0);
+            timing.exec_glaciology += Duration::from_secs_f64(profile.exec_glaciology_ms / 1000.0);
+            timing.exec_hydrology += Duration::from_secs_f64(profile.exec_hydrology_ms / 1000.0);
+            timing.exec_ecology += Duration::from_secs_f64(profile.exec_ecology_ms / 1000.0);
+            timing.exec_society += Duration::from_secs_f64(profile.exec_society_ms / 1000.0);
+            timing.exec_transition += Duration::from_secs_f64(profile.exec_transition_ms / 1000.0);
+        } else {
+            world_use_cases::advance_timeline(&mut service, world_id.clone(), 1)?;
+        }
         timing.advance += start.elapsed();
         let start = Instant::now();
         let delta = world_query_use_cases::get_view_delta(
@@ -1089,6 +1148,9 @@ fn precompute_world(args: PrecomputeArgs) -> Result<(), String> {
                 &mut frames,
             )?;
             timing.keyframe_write += start.elapsed();
+        }
+        if tick % progress_interval == 0 || tick == args.ticks {
+            timing.print_progress(tick, args.ticks, overall_start.elapsed());
         }
     }
 

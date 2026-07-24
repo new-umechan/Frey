@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use frey_wasm::sim;
 use frey_wasm::sim::erosion::ErosionAutomatonState;
+use frey_wasm::sim::world::EraKind;
 use frey_wasm::sim::world::{FeedbackQueue, World};
 use frey_wasm::GeologyParams;
 use serde::Serialize;
@@ -18,6 +19,7 @@ struct Args {
     level: u32,
     seed: String,
     sample_interval: u32,
+    epoch: EraKind,
 }
 
 #[derive(Clone, Serialize)]
@@ -125,6 +127,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         level: DEFAULT_LEVEL,
         seed: DEFAULT_SEED.to_string(),
         sample_interval: DEFAULT_SAMPLE_INTERVAL,
+        epoch: EraKind::Crust,
     };
 
     let mut index = 0usize;
@@ -161,12 +164,27 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
                     .max(1);
                 index += 2;
             }
+            "--epoch" => {
+                args.epoch = match next_arg(argv, index, token)? {
+                    "crust" => EraKind::Crust,
+                    "environment" => EraKind::Environment,
+                    "life" => EraKind::Life,
+                    "civilization" => EraKind::Civilization,
+                    "history" => EraKind::History,
+                    _ => return Err(
+                        "--epoch must be one of: crust, environment, life, civilization, history"
+                            .to_string(),
+                    ),
+                };
+                index += 2;
+            }
             "--help" => {
                 eprintln!("Usage: cargo run --manifest-path rust/Cargo.toml --bin perf_native -- [options]");
                 eprintln!("  --ticks <n>");
                 eprintln!("  --seed <seed>");
                 eprintln!("  --level <n>");
                 eprintln!("  --sample-interval <n>");
+                eprintln!("  --epoch <crust|environment|life|civilization|history>");
                 std::process::exit(0);
             }
             _ => return Err(format!("Unknown argument: {token}")),
@@ -268,6 +286,11 @@ fn run(args: &Args) -> Result<PerfOutput, String> {
         args.level,
         geology_params.clone(),
     )?;
+    world.clock.epoch = args.epoch;
+    world.clock.tick = args.epoch.start_tick();
+    world.clock.real_years_per_tick = args.epoch.real_years_per_tick();
+    world.clock.runtime_tick_ms = args.epoch.runtime_tick_ms();
+    world.clock.budgets = args.epoch.budgets();
     let mut hydrology_state = Some(erosion_state);
     let mut feedback = FeedbackQueue::new(world.cell_count());
 

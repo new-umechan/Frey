@@ -77,6 +77,7 @@ fn should_run_debug_validation() -> bool {
 pub(crate) fn run_geology_dynamics_step_with_state(
     world: &mut World,
     geology_state: &mut crate::sim::exec::GeologyExecState,
+    plate_elapsed_years: f32,
 ) {
     if world.mesh().nbr_offsets.len() != world.state.geology.height.len() + 1 {
         return;
@@ -148,7 +149,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &mut dynamics.plate_states,
         &dynamics.boundary_state,
         &world.control.geology_params,
-        world.clock.real_years_per_tick,
+        plate_elapsed_years,
     );
 
     if dynamics.boundary_state.edge_pairs.is_empty() {

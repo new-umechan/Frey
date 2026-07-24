@@ -2,6 +2,7 @@ use crate::sim::exec::math::dot;
 use crate::sim::geology_types::{CrustType, PlateId};
 use crate::sim::world::{BoundaryDynamicsState, BoundaryType};
 use crate::sim::world::{PlateKinematicsState, SurfaceMaterialElementState, VertexCrustState};
+use std::time::{Duration, Instant};
 
 use super::surface_boundary_sweep::SweptBoundaryPlan;
 use super::surface_cell_geometry::build_barycentric_dual_cells;
@@ -107,11 +108,49 @@ pub(super) struct SurfaceMaterialElementUpdate {
     pub marker_ownership: SurfaceMarkerOwnershipDiagnostics,
 }
 
+#[derive(Default)]
+struct PersistentMaterialTiming {
+    advect_and_prune: Duration,
+    initial_projection: Duration,
+    boundary_plan: Duration,
+    reactions: Duration,
+    post_reaction_projection: Duration,
+    rasterize: Duration,
+    final_coverage: Duration,
+}
+
+impl PersistentMaterialTiming {
+    fn print(&self) {
+        eprintln!(
+            concat!(
+                "persistent-material timing advect_and_prune_ms={:.3} ",
+                "initial_projection_ms={:.3} boundary_plan_ms={:.3} reactions_ms={:.3} ",
+                "post_reaction_projection_ms={:.3} rasterize_ms={:.3} ",
+                "final_coverage_ms={:.3}"
+            ),
+            duration_ms(self.advect_and_prune),
+            duration_ms(self.initial_projection),
+            duration_ms(self.boundary_plan),
+            duration_ms(self.reactions),
+            duration_ms(self.post_reaction_projection),
+            duration_ms(self.rasterize),
+            duration_ms(self.final_coverage),
+        );
+    }
+}
+
+fn duration_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
+}
+
 pub(super) fn update_persistent_surface_material_elements(
     input: SurfaceMaterialElementUpdateInput<'_>,
     apply_reactions: bool,
     previous_previous_plate_id: &[PlateId],
 ) -> Result<SurfaceMaterialElementUpdate, String> {
+    let profile =
+        std::env::var("FREY_PROFILE_PERSISTENT_MATERIAL").is_ok_and(|value| value == "true");
+    let mut timing = PersistentMaterialTiming::default();
     if input.elements.is_empty() {
         *input.elements = initialize_surface_material_elements(
             input.positions,
@@ -121,14 +160,18 @@ pub(super) fn update_persistent_surface_material_elements(
             input.crust,
         )?;
     }
+    let start = Instant::now();
     advect_surface_material_elements(input.elements, input.plate_states)?;
     discard_subcell_material_dust(input.elements, input.positions.len());
+    timing.advect_and_prune += start.elapsed();
+    let start = Instant::now();
     let mut projection = project_surface_material_elements(
         input.elements,
         input.positions,
         input.nbr_offsets,
         input.nbrs,
     )?;
+    timing.initial_projection += start.elapsed();
     if projection.unassigned_element_count > 0 {
         return Err(format!(
             "{} persistent material elements were not projected: area={}, max_area={}",
@@ -137,6 +180,7 @@ pub(super) fn update_persistent_surface_material_elements(
             projection.max_unassigned_element_area
         ));
     }
+    let start = Instant::now();
     let bridge_projection = surface_projection_from_elements(&projection);
     let plan = super::surface_boundary_sweep::plan_swept_boundary_reactions(
         super::surface_boundary_sweep::SweptBoundaryInput {
@@ -151,6 +195,8 @@ pub(super) fn update_persistent_surface_material_elements(
             cell_capacity: Some(&projection.target_cell_areas),
         },
     );
+    timing.boundary_plan += start.elapsed();
+    let start = Instant::now();
     let mut closure = if apply_reactions {
         apply_persistent_material_reactions(
             input.elements,
@@ -163,6 +209,8 @@ pub(super) fn update_persistent_surface_material_elements(
     } else {
         MaterialCoverageClosureDiagnostics::default()
     };
+    timing.reactions += start.elapsed();
+    let start = Instant::now();
     discard_subcell_material_dust(input.elements, input.positions.len());
     projection = project_surface_material_elements(
         input.elements,
@@ -170,6 +218,8 @@ pub(super) fn update_persistent_surface_material_elements(
         input.nbr_offsets,
         input.nbrs,
     )?;
+    timing.post_reaction_projection += start.elapsed();
+    let start = Instant::now();
     let (plate_id, marker_ownership) = rasterize_persistent_material_surface(
         input.elements,
         input.positions,
@@ -180,15 +230,14 @@ pub(super) fn update_persistent_surface_material_elements(
         &projection,
         &plan,
     )?;
-    projection = project_surface_material_elements(
-        input.elements,
-        input.positions,
-        input.nbr_offsets,
-        input.nbrs,
-    )?;
+    timing.rasterize += start.elapsed();
+    let start = Instant::now();
+    // `rasterize_persistent_material_surface` only reads elements and projection, so the
+    // post-reaction projection remains the authoritative view for coverage and crust fields.
     closure.residual_gap_area = projection.uncovered_area;
     closure.residual_overlap_area = projection.overlap_area;
     let coverage = classify_material_coverage_regimes(&projection, input.boundary_state, &plan);
+    timing.final_coverage += start.elapsed();
     let mut crust_type = Vec::with_capacity(plate_id.len());
     let mut crust_age = Vec::with_capacity(plate_id.len());
     for (cell, &plate) in plate_id.iter().enumerate() {
@@ -206,6 +255,9 @@ pub(super) fn update_persistent_surface_material_elements(
             crust_type.push(CrustType::Oceanic);
             crust_age.push(0.0);
         }
+    }
+    if profile {
+        timing.print();
     }
     Ok(SurfaceMaterialElementUpdate {
         plate_id,
