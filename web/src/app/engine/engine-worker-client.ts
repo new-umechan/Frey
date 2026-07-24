@@ -10,6 +10,7 @@ import type {
   WorldDeltaResult,
   MetricsResult,
   FieldResult,
+  ExplainCellResult,
   HistoryTicksResult,
   TimelineAdvanceResult,
   TimelineStateResult,
@@ -198,6 +199,18 @@ export class EngineWorkerClient implements EngineClient {
       fieldKind,
       window,
     })) as FieldResult;
+  }
+
+  async explain_cell(
+    worldId: string,
+    cellIndex: number,
+    target: string,
+  ): Promise<ExplainCellResult> {
+    return (await this.request("explain_cell", {
+      worldId,
+      cellIndex,
+      target,
+    })) as ExplainCellResult;
   }
 
   async list_checkpoint_ticks(worldId: string): Promise<HistoryTicksResult> {

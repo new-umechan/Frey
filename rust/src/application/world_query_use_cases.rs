@@ -121,6 +121,33 @@ pub(crate) fn get_field(
             u32_data: None,
             i32_data: None,
         },
+        // 因果グラフのノードは公開フィールドに対応させる規約のため、地形由来の
+        // 緯度・内陸度も公開する。
+        // 参照: docs/decisions/260724-causal-graph-over-published-fields.md
+        "latitude" => {
+            let latitude = &world_ref.projections.terrain.latitude;
+            FieldResponse {
+                field_kind,
+                stride,
+                cell_count: latitude.len() as u32,
+                sampled_count: sampled_len(latitude.len(), stride),
+                f32_data: Some(sample_f32(latitude, stride)),
+                u32_data: None,
+                i32_data: None,
+            }
+        }
+        "distance_from_ocean" => {
+            let distance = world_ref.distance_from_ocean_values();
+            FieldResponse {
+                field_kind,
+                stride,
+                cell_count: distance.len() as u32,
+                sampled_count: sampled_len(distance.len(), stride),
+                f32_data: Some(sample_f32(distance, stride)),
+                u32_data: None,
+                i32_data: None,
+            }
+        }
         "lake_depth" => FieldResponse {
             field_kind,
             stride,

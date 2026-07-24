@@ -105,6 +105,39 @@ export interface ViewDeltaResult {
 
 export type WorldDeltaResult = ViewDeltaResult;
 export type FieldResult = Record<string, unknown>;
+
+// 因果グラフの1ノード。Rust 側 ExplainNode の写像。
+export interface ExplainNodeResult {
+  id: string;
+  label: string;
+  value: number;
+  unit: string;
+  // 陸セル平均を基準にした符号付き z-score。
+  anomaly: number;
+  // モデルの式から厳密配分できるノードだけ入る寄与率 [%]。それ以外は null。
+  contribution_pct: number | null;
+}
+
+// 因果グラフの有向辺。`from` が `to` を駆動する。
+export interface ExplainEdgeResult {
+  from: string;
+  to: string;
+  // +1: from が増えると to が増える / -1: 減らす。
+  sign: number;
+  contribution_pct: number | null;
+}
+
+// explain_cell の応答。1セル・1ターゲットの因果グラフ。
+export interface ExplainCellResult {
+  cell_index: number;
+  target: string;
+  target_value: number;
+  target_label: string;
+  is_land: boolean;
+  nodes: ExplainNodeResult[];
+  edges: ExplainEdgeResult[];
+  summary: string;
+}
 export type TimelineAdvanceResult = {
   world_id: string;
   tick: number;
@@ -176,6 +209,11 @@ export interface EngineClient {
     fieldKind: string,
     window: number,
   ) => Promise<FieldResult>;
+  explain_cell: (
+    worldId: string,
+    cellIndex: number,
+    target: string,
+  ) => Promise<ExplainCellResult>;
   list_checkpoint_ticks: (worldId: string) => Promise<HistoryTicksResult>;
   list_history_ticks: (worldId: string) => Promise<HistoryTicksResult>;
   seek_world_to_tick: (worldId: string, tick: number) => Promise<void>;
