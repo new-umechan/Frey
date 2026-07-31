@@ -114,8 +114,8 @@
     background:
         linear-gradient(
             to right,
-            #a8b0b8 0%,
-            #a8b0b8 var(--seek-progress),
+            var(--accent-off) 0%,
+            var(--accent-off) var(--seek-progress),
             var(--line) var(--seek-progress),
             var(--line) 100%
         );
@@ -128,7 +128,7 @@
     margin-top: -4px;
     border: 0;
     border-radius: 50%;
-    background: #a8b0b8;
+    background: var(--accent-off);
 }
 
 .seek-slider::-moz-range-track {
@@ -141,7 +141,7 @@
 .seek-slider::-moz-range-progress {
     height: 4px;
     border-radius: 2px;
-    background: #a8b0b8;
+    background: var(--accent-off);
 }
 
 .seek-slider::-moz-range-thumb {
@@ -149,7 +149,7 @@
     height: 12px;
     border: 0;
     border-radius: 50%;
-    background: #a8b0b8;
+    background: var(--accent-off);
 }
 
 .seek-range-labels {
@@ -194,7 +194,7 @@
 }
 
 .view-context-suffix {
-    color: #81888e;
+    color: var(--graytext);
     font-size: 16px;
     font-weight: 400;
     display: inline-flex;

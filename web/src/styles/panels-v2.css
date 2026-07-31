@@ -1,0 +1,262 @@
+/*
+ * v2 フローティングパネル(Figma: 357-95 レイヤー / 357-96 因果関係)。
+ * サイドバーのボタンから開閉する半透明ガラス調のパネル。
+ */
+
+.v2-panel {
+    position: absolute;
+    z-index: 14;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: var(--font-ui);
+    color: var(--v2-maincolor);
+}
+
+.v2-panel[hidden] {
+    display: none;
+}
+
+.v2-panel {
+    min-width: 220px;
+    min-height: 120px;
+}
+
+/* ドラッグ/リサイズで自由配置になったパネル */
+.v2-panel.is-freeform {
+    right: auto;
+    bottom: auto;
+}
+
+/* リサイズハンドル(端・角)。JS が生成して各パネルに付ける。 */
+.v2-resize-handle {
+    position: absolute;
+    z-index: 5;
+    touch-action: none;
+}
+
+.v2-resize-handle--n {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.v2-resize-handle--s {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.v2-resize-handle--e {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.v2-resize-handle--w {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.v2-resize-handle--ne,
+.v2-resize-handle--nw,
+.v2-resize-handle--se,
+.v2-resize-handle--sw {
+    z-index: 6;
+    width: 12px;
+    height: 12px;
+}
+
+.v2-resize-handle--ne {
+    top: 0;
+    right: 0;
+    cursor: nesw-resize;
+}
+
+.v2-resize-handle--nw {
+    top: 0;
+    left: 0;
+    cursor: nwse-resize;
+}
+
+.v2-resize-handle--se {
+    bottom: 0;
+    right: 0;
+    cursor: nwse-resize;
+}
+
+.v2-resize-handle--sw {
+    bottom: 0;
+    left: 0;
+    cursor: nesw-resize;
+}
+
+/* 配置(Figma 310-51 のレイアウト基準。サイドバー幅60pxを避ける) */
+.v2-panel--layer {
+    top: 88px;
+    left: 92px;
+    width: 300px;
+}
+
+.v2-panel--causal {
+    right: 40px;
+    bottom: 96px;
+    width: 360px;
+    min-height: 360px;
+}
+
+/* タイトルバー(ドラッグして移動) */
+.v2-panel__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 46px;
+    padding: 0 20px;
+    background: var(--v2-bg3-60);
+    backdrop-filter: blur(4px);
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+    flex: none;
+}
+
+.v2-panel__title-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.v2-panel__title-icon {
+    display: block;
+}
+
+.v2-panel__title-text {
+    font-size: 16px;
+    line-height: normal;
+}
+
+.v2-panel--causal .v2-panel__title-text {
+    font-size: 18px;
+}
+
+.v2-panel__title-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.v2-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.12s ease;
+}
+
+.v2-icon-button:hover,
+.v2-icon-button:focus-visible {
+    opacity: 1;
+    outline: none;
+}
+
+.v2-icon-button img {
+    display: block;
+}
+
+/* 本体 */
+.v2-panel__body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 12px 30px 16px;
+    background: var(--v2-bg2-60);
+    backdrop-filter: blur(4px);
+    overflow: auto;
+}
+
+.v2-panel__body--graph {
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    padding: 16px;
+}
+
+/* レイヤー項目 */
+.v2-layer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.v2-layer-item--row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.v2-layer-item__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.v2-layer-item__icon {
+    display: block;
+}
+
+.v2-layer-item__name {
+    font-size: 14px;
+    /* Figma は v1_bg(#ecf0f3)を、暗いパネル上の明るい文字色として使う */
+    color: #ecf0f3;
+}
+
+/* 凡例(気温グラデ + 目盛り) */
+.v2-layer-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 24px;
+}
+
+.v2-legend-gradient {
+    height: 20px;
+    border-radius: 12px;
+}
+
+.v2-legend-gradient--temp {
+    /* -20(寒色)→ 60(暖色) */
+    background: linear-gradient(to right, #454ccb, #e16969);
+}
+
+.v2-legend-scale {
+    display: flex;
+    justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: #ecf0f3;
+}
+
+/*
+ * v2 レイヤーパネルが従来のフローティング凡例を置き換えるため、旧凡例は隠す。
+ * (レイヤーパネルへのライブ凡例データ配線は次段)
+ */
+.climate-legend-panel,
+.domesticates-legend-panel {
+    display: none;
+}

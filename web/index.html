@@ -11,10 +11,180 @@
             <div class="viewport-panel" id="viewport-panel" aria-label="world viewport">
                 <canvas id="mesh-canvas" aria-label="world mesh viewport"></canvas>
                 <canvas id="loading-overlay-canvas" aria-hidden="true"></canvas>
+                <nav class="icon-sidebar" aria-label="ツールバー">
+                    <a class="icon-sidebar__logo" href="#" aria-label="Frey">
+                        <img src="/icons/frey-logo.svg" alt="Frey" width="28" height="29" />
+                    </a>
+                    <div class="icon-sidebar__group">
+                        <button
+                            type="button"
+                            class="sidebar-button"
+                            id="sidebar-layers-button"
+                            aria-label="レイヤー"
+                        >
+                            <img
+                                class="sidebar-button__icon"
+                                src="/icons/ic-layers.svg"
+                                alt=""
+                                width="24"
+                                height="24"
+                            />
+                            <span class="sidebar-tooltip" role="tooltip">
+                                <span class="sidebar-tooltip__label">レイヤー</span>
+                                <span class="sidebar-tooltip__count">1</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="sidebar-button"
+                            id="sidebar-causal-button"
+                            aria-label="因果関係"
+                        >
+                            <img
+                                class="sidebar-button__icon sidebar-button__icon--graph"
+                                src="/icons/ic-graph.svg"
+                                alt=""
+                                width="20"
+                                height="20"
+                            />
+                            <span class="sidebar-tooltip" role="tooltip">
+                                <span class="sidebar-tooltip__label">因果関係</span>
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="sidebar-icon"
+                            id="sidebar-history-button"
+                            aria-label="履歴"
+                        >
+                            <img src="/icons/ic-history.svg" alt="" width="24" height="24" />
+                            <span class="sidebar-tooltip" role="tooltip">
+                                <span class="sidebar-tooltip__label">履歴</span>
+                            </span>
+                        </button>
+                    </div>
+                </nav>
                 <header class="brand-block" aria-hidden="true">
                     <h1>Frey</h1>
                     <p>プレートから文明までの<br />惑星シミュレータ</p>
                 </header>
+
+                <section
+                    class="v2-panel v2-panel--layer"
+                    id="layer-panel"
+                    aria-label="レイヤー"
+                    hidden
+                >
+                    <header class="v2-panel__title">
+                        <div class="v2-panel__title-main">
+                            <img
+                                class="v2-panel__title-icon"
+                                src="/icons/ic-layers.svg"
+                                width="28"
+                                height="28"
+                                alt=""
+                            />
+                            <span class="v2-panel__title-text">レイヤー</span>
+                        </div>
+                        <div class="v2-panel__title-actions">
+                            <button
+                                type="button"
+                                class="v2-icon-button"
+                                aria-label="レイヤーを追加"
+                            >
+                                <img src="/icons/ic-add.svg" width="24" height="24" alt="" />
+                            </button>
+                            <button
+                                type="button"
+                                class="v2-icon-button"
+                                data-close="layer-panel"
+                                aria-label="閉じる"
+                            >
+                                <img src="/icons/ic-close.svg" width="24" height="24" alt="" />
+                            </button>
+                        </div>
+                    </header>
+                    <div class="v2-panel__body">
+                        <div class="v2-layer-item">
+                            <div class="v2-layer-item__head">
+                                <img
+                                    class="v2-layer-item__icon"
+                                    src="/icons/ic-layers.svg"
+                                    width="20"
+                                    height="20"
+                                    alt=""
+                                />
+                                <span class="v2-layer-item__name">気温</span>
+                            </div>
+                            <div class="v2-layer-legend">
+                                <div
+                                    class="v2-legend-gradient v2-legend-gradient--temp"
+                                ></div>
+                                <div class="v2-legend-scale">
+                                    <span>-20</span><span>20</span><span>60</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="v2-layer-item v2-layer-item--row">
+                            <div class="v2-layer-item__head">
+                                <img
+                                    class="v2-layer-item__icon"
+                                    src="/icons/ic-layers.svg"
+                                    width="20"
+                                    height="20"
+                                    alt=""
+                                />
+                                <span class="v2-layer-item__name">降水量</span>
+                            </div>
+                            <button
+                                type="button"
+                                class="v2-icon-button"
+                                aria-label="表示切替"
+                            >
+                                <img
+                                    src="/icons/ic-visibility-off.svg"
+                                    width="20"
+                                    height="20"
+                                    alt=""
+                                />
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <section
+                    class="v2-panel v2-panel--causal"
+                    id="causal-panel"
+                    aria-label="因果関係"
+                    hidden
+                >
+                    <header class="v2-panel__title">
+                        <div class="v2-panel__title-main">
+                            <img
+                                class="v2-panel__title-icon"
+                                src="/icons/ic-graph.svg"
+                                width="24"
+                                height="24"
+                                alt=""
+                            />
+                            <span class="v2-panel__title-text">因果関係</span>
+                        </div>
+                        <div class="v2-panel__title-actions">
+                            <button
+                                type="button"
+                                class="v2-icon-button"
+                                data-close="causal-panel"
+                                aria-label="閉じる"
+                            >
+                                <img src="/icons/ic-close.svg" width="24" height="24" alt="" />
+                            </button>
+                        </div>
+                    </header>
+                    <div
+                        class="v2-panel__body v2-panel__body--graph"
+                        id="causal-graph"
+                    ></div>
+                </section>
 
                 <section
                     id="playback-overlay"

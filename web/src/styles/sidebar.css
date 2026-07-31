@@ -1,0 +1,165 @@
+/*
+ * 左アイコンサイドバー(Figma: 310-51 内の Frame 100 / 353-299 point / 353-315 speakBubble)。
+ * ダークな v2 デザイン。現状のライトな本体とはテーマが異なる(全体のダーク移行は別件)。
+ */
+
+.icon-sidebar {
+    --v2-bg1: #030303;
+    --v2-fg-gray: #81888e;
+    --v2-fg-lightblue: #91acc5;
+    --v2-maincolor: #e5eaee;
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 15;
+    width: 60px;
+    padding-top: 34px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--v2-bg1);
+}
+
+/* ブランドロゴ(サイドバー上部)。Figma の brand テキストヘッダーはこれに置き換わる。 */
+.icon-sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+}
+
+.icon-sidebar__logo img {
+    display: block;
+    width: 28px;
+    height: 29px;
+}
+
+/* ボタン群。ロゴとの間隔 101px、ボタン間 24px。 */
+.icon-sidebar__group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    margin-top: 101px;
+}
+
+/* レイヤー / 因果関係ボタン(point コンポーネント: 44x44、角丸8、アイコン中央)。 */
+.sidebar-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: var(--v2-bg1);
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.sidebar-button:hover,
+.sidebar-button:focus-visible {
+    background: #1b1f24;
+    outline: none;
+}
+
+.sidebar-button.is-active {
+    background: #272a2e;
+}
+
+.sidebar-button__icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+}
+
+/* 因果グラフのアイコンは 24px スロット内で 20px(Figma の p2)。 */
+.sidebar-button__icon--graph {
+    width: 20px;
+    height: 20px;
+}
+
+/* 履歴(ボックスなしの素のアイコン、24px)。 */
+.sidebar-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.sidebar-icon img {
+    display: block;
+    width: 24px;
+    height: 24px;
+}
+
+/* ホバー時のツールチップ(speakBubble: 353-315)。ボタンの右に、左向きの三角付きで出る。 */
+.sidebar-tooltip {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 12px);
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background: var(--v2-bg1);
+    box-shadow: 0 0 4px rgba(145, 172, 197, 0.32);
+    font-size: 14px;
+    line-height: normal;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+/* 左向きの三角(吹き出しの尾)。吹き出しと同色。 */
+.sidebar-tooltip::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -7px;
+    transform: translateY(-50%);
+    border-style: solid;
+    border-width: 6px 8px 6px 0;
+    border-color: transparent var(--v2-bg1) transparent transparent;
+}
+
+.sidebar-tooltip__label {
+    color: var(--v2-maincolor);
+}
+
+.sidebar-tooltip__count {
+    color: var(--v2-fg-gray);
+}
+
+.sidebar-button:hover .sidebar-tooltip,
+.sidebar-button:focus-visible .sidebar-tooltip,
+.sidebar-icon:hover .sidebar-tooltip,
+.sidebar-icon:focus-visible .sidebar-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/*
+ * 旧ブランドヘッダー(テキストの "Frey")は 60px サイドバーと位置が衝突するため隠す。
+ * Figma ではサイドバー上部のロゴに置き換わっている。
+ */
+.brand-block {
+    display: none;
+}

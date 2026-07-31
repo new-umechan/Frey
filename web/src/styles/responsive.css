@@ -17,7 +17,7 @@
     }
 
     .sidebar {
-        border-top: 1px solid #d8dde2;
+        border-top: 1px solid var(--line);
     }
 
     .sidebar-body {

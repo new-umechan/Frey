@@ -1,13 +1,26 @@
 :root {
-    --bg: #ecf0f3;
-    --panel: #e5eaee;
-    --text: #2a2c2d;
+    /* v2 ダークテーマ(Figma)。旧ライトテーマから移行。 */
+    --bg: #030303;
+    --panel: #16191e;
+    --panel-translucent: rgba(22, 25, 30, 0.92);
+    --text: #e5eaee;
     --graytext: #81888e;
-    --accent: #769cbf;
-    --accent-off: #a8b0b8;
-    --line: #dfe6eb;
-    --danger: #ad3d3d;
+    --accent: #91acc5;
+    --accent-off: #5c6b7a;
+    --line: #272a2e;
+    --danger: #d05656;
     --sidebar-width: 256px;
+
+    /* Figma v2 生トークン */
+    --v2-bg1: #030303;
+    --v2-bg2-60: rgba(39, 42, 46, 0.6);
+    --v2-bg3-60: rgba(56, 61, 68, 0.6);
+    --v2-fg-gray: #81888e;
+    --v2-fg-lightblue: #91acc5;
+    --v2-maincolor: #e5eaee;
+
+    /* v2 UI フォント(Figma のパネル/ツールチップ) */
+    --font-ui: "Sawarabi Gothic", "Noto Sans JP", sans-serif;
 }
 
 *,

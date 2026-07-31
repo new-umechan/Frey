@@ -28,7 +28,7 @@
 
 #status-message {
     font-family: "Noto Sans JP", sans-serif;
-    color: #ad3d3d;
+    color: var(--danger);
     font-size: 14px;
     max-height: 4.2em;
     overflow: hidden;
@@ -111,7 +111,7 @@
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: #dbe1e5;
+    background: #aeb6bf;
     transition: transform 160ms ease;
 }
 
@@ -145,14 +145,14 @@
     padding: 4px 16px;
     border: 0;
     border-radius: 4px;
-    background: #f3f5f7;
+    background: var(--panel);
     color: var(--text);
     font-family: "JetBrains Mono", monospace;
     font-size: 16px;
 }
 
 .seed-form input:focus-visible {
-    outline: 1px solid #3a89d3;
+    outline: 1px solid var(--accent);
     outline-offset: 0;
 }
 
@@ -182,9 +182,9 @@
 .demo-seed-option {
     width: 100%;
     min-height: 46px;
-    border: 1px solid #ccd3d9;
+    border: 1px solid var(--line);
     border-radius: 4px;
-    background: #f3f5f7;
+    background: var(--panel);
     color: var(--text);
     display: grid;
     gap: 3px;
@@ -195,12 +195,12 @@
 }
 
 .demo-seed-option[aria-checked="true"] {
-    border-color: #3a89d3;
-    background: #eaf2fa;
+    border-color: var(--accent);
+    background: rgba(145, 172, 197, 0.14);
 }
 
 .demo-seed-option:focus-visible {
-    outline: 1px solid #3a89d3;
+    outline: 1px solid var(--accent);
     outline-offset: 2px;
 }
 
@@ -234,7 +234,7 @@
     height: 260px;
     overflow: auto;
     scrollbar-width: thin;
-    scrollbar-color: #81888e transparent;
+    scrollbar-color: var(--graytext) transparent;
 }
 
 .event-log-list::-webkit-scrollbar {
@@ -246,7 +246,7 @@
 }
 
 .event-log-list::-webkit-scrollbar-thumb {
-    background: #81888e;
+    background: var(--graytext);
     border-radius: 999px;
 }
 
@@ -289,5 +289,5 @@
 }
 
 .event-log-entry.is-important {
-    color: #ad3d3d;
+    color: var(--danger);
 }
