@@ -105,6 +105,35 @@ export interface ViewDeltaResult {
 
 export type WorldDeltaResult = ViewDeltaResult;
 export type FieldResult = Record<string, unknown>;
+
+// 因果ストーリーの1ノード。Rust 側 ExplainNode の写像。
+export interface ExplainNodeResult {
+  id: string;
+  label: string;
+  // 属する分野。地形 / 気候 / 水文 / 植生。
+  module: string;
+  value: number;
+  unit: string;
+  // その地点の姿を決めた要因か。UI が視覚的に強調する。
+  decisive: boolean;
+}
+
+// 因果ストーリーの有向辺。from が to を決めている。
+export interface ExplainEdgeResult {
+  from: string;
+  to: string;
+  decisive: boolean;
+}
+
+// explain_cell の応答。1地点の「なぜこの姿なのか」の因果グラフ。
+export interface ExplainCellResult {
+  cell_index: number;
+  headline: string;
+  summary: string;
+  is_land: boolean;
+  nodes: ExplainNodeResult[];
+  edges: ExplainEdgeResult[];
+}
 export type TimelineAdvanceResult = {
   world_id: string;
   tick: number;
@@ -176,6 +205,11 @@ export interface EngineClient {
     fieldKind: string,
     window: number,
   ) => Promise<FieldResult>;
+  explain_cell: (
+    worldId: string,
+    cellIndex: number,
+    target: string,
+  ) => Promise<ExplainCellResult>;
   list_checkpoint_ticks: (worldId: string) => Promise<HistoryTicksResult>;
   list_history_ticks: (worldId: string) => Promise<HistoryTicksResult>;
   seek_world_to_tick: (worldId: string, tick: number) => Promise<void>;

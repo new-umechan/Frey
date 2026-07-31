@@ -50,6 +50,11 @@ export type EngineWorkerRequest =
     }
   | {
       id: number;
+      kind: "explain_cell";
+      payload: { worldId: string; cellIndex: number; target: string };
+    }
+  | {
+      id: number;
       kind: "list_checkpoint_ticks";
       payload: { worldId: string };
     }

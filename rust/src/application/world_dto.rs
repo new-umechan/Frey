@@ -324,3 +324,37 @@ pub(crate) struct TimelineStateResponse {
     pub max_estimated_bytes: Option<f64>,
     pub tick_boundary: String,
 }
+
+/// 因果ストーリーの1ノード。クリックした地点の、ある分野の量。
+/// 参照: docs/decisions/260724-causal-story-cross-module-trace.md
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ExplainNode {
+    pub id: String,
+    pub label: String,
+    /// 属する分野。地形 / 気候 / 水文 / 植生。
+    pub module: String,
+    pub value: f32,
+    pub unit: String,
+    /// その地点の姿を決めた要因か。UI が視覚的に強調する。
+    pub decisive: bool,
+}
+
+/// 因果ストーリーの有向辺。`from` が `to` を決めている(モデルの依存関係に一致)。
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ExplainEdge {
+    pub from: String,
+    pub to: String,
+    pub decisive: bool,
+}
+
+/// `explain_cell` の応答。1地点の「なぜこの姿なのか」を分野横断の因果グラフで返す。
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ExplainCellResponse {
+    pub cell_index: u32,
+    /// 起点の姿。例: "砂漠"。
+    pub headline: String,
+    pub summary: String,
+    pub is_land: bool,
+    pub nodes: Vec<ExplainNode>,
+    pub edges: Vec<ExplainEdge>,
+}

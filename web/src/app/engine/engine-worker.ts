@@ -166,6 +166,15 @@ workerScope.onmessage = async (event: MessageEvent<EngineWorkerRequest>) => {
         post({ id: request.id, ok: true, kind: request.kind, payload: result });
         return;
       }
+      case "explain_cell": {
+        const result = runtime.explain_cell(
+          request.payload.worldId,
+          request.payload.cellIndex,
+          request.payload.target,
+        );
+        post({ id: request.id, ok: true, kind: request.kind, payload: result });
+        return;
+      }
       case "get_field": {
         const result = runtime.get_field(
           request.payload.worldId,

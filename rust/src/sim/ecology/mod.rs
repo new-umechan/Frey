@@ -207,3 +207,45 @@ fn derive_flooding(river_flow: f32, height: f32, max_flow: f32) -> f32 {
     let lowland_factor = (1.0 - (height / ALPINE_THRESHOLD.max(1e-5))).clamp(0.0, 1.0);
     (normalized_flow * lowland_factor).clamp(0.0, 1.0)
 }
+
+/// 植生の種類を決めた主要因。因果ストーリー(explain)がどのノードを決め手として
+/// 強調するかに使う。
+/// 参照: docs/decisions/260724-causal-story-cross-module-trace.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BiomeFactor {
+    /// 標高(高山)
+    Elevation,
+    /// 気温(ツンドラ・気温帯)
+    Temperature,
+    /// 降水量(砂漠)
+    Precipitation,
+    /// 河川氾濫(湿地)
+    Flooding,
+}
+
+/// `classify_biome` と同じカスケード・同じ定数で、その地点の植生を決めた要因を返す。
+/// 分岐や閾値を変えたら両方を直すこと。
+pub(crate) fn biome_decisive_factor(
+    tree_cover: f32,
+    temperature: f32,
+    precipitation: f32,
+    river_flow: f32,
+    height: f32,
+    max_flow: f32,
+) -> BiomeFactor {
+    let flooding = derive_flooding(river_flow, height, max_flow);
+    if height > ALPINE_THRESHOLD {
+        return BiomeFactor::Elevation;
+    }
+    if temperature < TUNDRA_THRESHOLD {
+        return BiomeFactor::Temperature;
+    }
+    if precipitation < DESERT_THRESHOLD {
+        return BiomeFactor::Precipitation;
+    }
+    if flooding > WETLAND_THRESHOLD && tree_cover < WETLAND_TREE_THRESHOLD {
+        return BiomeFactor::Flooding;
+    }
+    // 森林・サバンナ・草原・亜寒帯林: 気温帯が主因。
+    BiomeFactor::Temperature
+}

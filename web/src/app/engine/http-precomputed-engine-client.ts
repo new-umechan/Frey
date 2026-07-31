@@ -3,6 +3,7 @@ import type {
     ExecWorldSliceAndDeltaResult,
     ExecWorldSliceResult,
     FieldResult,
+    ExplainCellResult,
     HistoryTicksResult,
     InitWorldResult,
     MeshGenerationResult,
@@ -186,6 +187,18 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     ): Promise<FieldResult> {
         return await this.request<FieldResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/field/${encodeURIComponent(fieldKind)}?lod=${encodeURIComponent(String(window))}`,
+        );
+    }
+
+    // 事前計算サーバーはライブの World を持たず、explain はライブ状態を要するため未対応。
+    // サーバー側 explain 実装が入るまでは呼び出し側で握りつぶす想定。
+    async explain_cell(
+        _worldId: string,
+        _cellIndex: number,
+        _target: string,
+    ): Promise<ExplainCellResult> {
+        throw new Error(
+            "explain_cell is not yet supported on the precomputed (HTTP) engine",
         );
     }
 
