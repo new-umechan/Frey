@@ -11,6 +11,7 @@ import { type PlaybackControlsElements } from "../../components/dom";
 import { type PlaybackState, type RuntimeState } from "../runtime/state";
 import { type EngineClient } from "../engine/engine-client";
 import { type CoreBuffers, type SyncWorldResult } from "../sim/sync/types";
+import { updateYearsAgoDisplay } from "../ui/sim-time";
 
 const PLAYBACK_OVERLAY_IDLE_MS = 3600;
 const UI_HISTORY_STEP_TICKS = 8;
@@ -187,6 +188,7 @@ export function createPlaybackController({
     function syncPlaybackUi() {
         noteKnownTick(getWorldTick());
         playbackControls.currentTick.textContent = String(getWorldTick());
+        updateYearsAgoDisplay(getWorldTick());
         updateMaxTickLabel();
         playbackControls.playToggleButton.innerHTML = playbackState.isPlaying ? PAUSE_ICON : PLAY_ICON;
         playbackControls.playToggleButton.setAttribute("aria-label", playbackState.isPlaying ? "停止" : "再生");

@@ -12,8 +12,23 @@ interface PanelBinding {
 
 const PANEL_BINDINGS: PanelBinding[] = [
     { buttonId: "sidebar-layers-button", panelId: "layer-panel" },
-    { buttonId: "sidebar-causal-button", panelId: "causal-panel" },
 ];
+
+/** あるパネルを閉じると連動して閉じる従属パネル。 */
+const DEPENDENT_PANELS: Record<string, string[]> = {
+    // レイヤーパネルを閉じたら「レイヤーを追加」サブパネルも閉じる。
+    "layer-panel": ["layer-add-panel"],
+};
+
+function hidePanel(panelId: string): void {
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.hidden = true;
+    }
+    for (const dependentId of DEPENDENT_PANELS[panelId] ?? []) {
+        hidePanel(dependentId);
+    }
+}
 
 const RESIZE_DIRECTIONS = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
 const MIN_WIDTH = 220;
@@ -138,10 +153,27 @@ export function setupV2Panels(): void {
         }
         button.addEventListener("click", () => {
             const nowHidden = !panel.hidden;
-            panel.hidden = nowHidden;
+            if (nowHidden) {
+                hidePanel(panelId);
+            } else {
+                panel.hidden = false;
+            }
             setButtonActive(buttonId, !nowHidden);
         });
 
+        const title = panel.querySelector<HTMLElement>(".v2-panel__title");
+        if (title) {
+            makeDraggable(panel, title);
+        }
+        makeResizable(panel);
+    }
+
+    // トグル対象外だが移動/リサイズはできるパネル(レイヤー追加パネルなど)。
+    for (const panelId of ["layer-add-panel"]) {
+        const panel = document.getElementById(panelId);
+        if (!panel) {
+            continue;
+        }
         const title = panel.querySelector<HTMLElement>(".v2-panel__title");
         if (title) {
             makeDraggable(panel, title);
@@ -156,10 +188,7 @@ export function setupV2Panels(): void {
             if (!panelId) {
                 return;
             }
-            const panel = document.getElementById(panelId);
-            if (panel) {
-                panel.hidden = true;
-            }
+            hidePanel(panelId);
             const binding = PANEL_BINDINGS.find((b) => b.panelId === panelId);
             if (binding) {
                 setButtonActive(binding.buttonId, false);

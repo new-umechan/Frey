@@ -1,5 +1,6 @@
 import { createApp } from "./app/app";
 import { setupBackgroundMusic } from "./app/bootstrap/background-music";
+import { setupMeta } from "./app/ui/meta";
 import { setupV2Panels } from "./app/ui/v2-panels";
 import { formatStatusError } from "./app/state/status-error";
 
@@ -23,6 +24,7 @@ function showInitializationError(error: unknown) {
 async function main() {
     setupBackgroundMusic();
     setupV2Panels();
+    setupMeta();
     const app = await createApp();
 
     function frame(nowMs: number) {

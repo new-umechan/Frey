@@ -4,6 +4,7 @@ import { type EraMetrics, type EraScaleConfig, type EraScaleWeightFields } from 
 import { type PlateHoverController } from "../input/plate-hover";
 import { type TerrainRenderer } from "../visualizers/terrain-renderer";
 import { type CoreBuffers } from "../sim/sync/types";
+import { renderYearsAgo } from "../ui/sim-time";
 
 interface CameraController {
     setSurfaceMode: (nextMode: string) => void;
@@ -124,7 +125,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
             currentEraMetrics,
         );
         const preset = getEraScalePreset(currentEraScale);
-        statusEraLabel.textContent = `時代: ${preset.label}`;
+        renderYearsAgo(statusEraLabel, getWorldTick());
         setStatus(`Ready (${state.currentSeed}) | ${preset.label} / 1Tick=${currentEraMetrics.tickLabel}`);
         if (getActiveWorldId() && previousEra !== currentEraScale) {
             const previousLabel = getEraScalePreset(previousEra).label;

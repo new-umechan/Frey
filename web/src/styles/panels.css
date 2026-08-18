@@ -35,12 +35,6 @@
     text-overflow: ellipsis;
 }
 
-#era-scale-tick-label {
-    font-family: "JetBrains Mono", monospace;
-    color: var(--text);
-    font-size: 14px;
-}
-
 .stats-list {
     margin: 0;
     display: grid;

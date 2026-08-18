@@ -30,6 +30,8 @@ export type LayerKind = (typeof LAYER_KIND)[keyof typeof LAYER_KIND];
 export interface EraScaleConfig {
     label: string;
     tickLabel: string;
+    /** 1tick あたりの実年数(生値)。tickLabel と対応。年前表示の計算に使う。 */
+    realYearsPerTick: number;
     runtimeTickMs: number;
     weights: Record<WorldSubsystemKey, number>;
 }
@@ -38,30 +40,35 @@ export const ERA_SCALE_PRESETS: Record<string, EraScaleConfig> = Object.freeze({
     crust: {
         label: "地殻形成期",
         tickLabel: "500万年",
+        realYearsPerTick: 5_000_000,
         runtimeTickMs: 70,
         weights: { geology: 4.0, climate: 0.0, ecology: 0.0, civilization: 0.0 },
     },
     environment: {
         label: "環境形成期",
         tickLabel: "100万年",
+        realYearsPerTick: 1_000_000,
         runtimeTickMs: 150,
         weights: { geology: 3.0, climate: 3.0, ecology: 1.0, civilization: 0.0 },
     },
     life: {
         label: "先史期",
         tickLabel: "1000年",
+        realYearsPerTick: 1_000,
         runtimeTickMs: 110,
         weights: { geology: 2.0, climate: 3.0, ecology: 4.0, civilization: 1.0 },
     },
     civilization: {
         label: "文明成立期",
         tickLabel: "100年",
+        realYearsPerTick: 100,
         runtimeTickMs: 90,
         weights: { geology: 1.0, climate: 2.0, ecology: 2.0, civilization: 4.0 },
     },
     history: {
         label: "歴史展開期",
         tickLabel: "1年",
+        realYearsPerTick: 1,
         runtimeTickMs: 70,
         weights: { geology: 1.0, climate: 1.0, ecology: 1.0, civilization: 4.0 },
     },

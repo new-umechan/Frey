@@ -12,6 +12,27 @@
     overflow: hidden;
     font-family: var(--font-ui);
     color: var(--v2-maincolor);
+    /* 表示(hidden 解除)のたびに再生される登場アニメーション。
+       上のタイトルから下の本体へ、上から下に段階的に開く(Material の展開)。 */
+    animation: v2-panel-in 320ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+@keyframes v2-panel-in {
+    from {
+        opacity: 0.5;
+        clip-path: inset(0 0 100% 0 round 8px);
+    }
+
+    to {
+        opacity: 1;
+        clip-path: inset(0 0 0 0 round 8px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .v2-panel {
+        animation: none;
+    }
 }
 
 .v2-panel[hidden] {
@@ -115,6 +136,20 @@
     min-height: 360px;
 }
 
+/* レイヤー追加パネル(＋ で開く。ドラッグ元) */
+.v2-panel--picker {
+    top: 88px;
+    left: 410px;
+    width: 240px;
+    max-height: 60vh;
+}
+
+/* ドロップ受付中のレイヤーパネルの強調 */
+.v2-panel.is-drop-target {
+    outline: 1px dashed var(--v2-fg-lightblue);
+    outline-offset: -2px;
+}
+
 /* タイトルバー(ドラッグして移動) */
 .v2-panel__title {
     display: flex;
@@ -138,6 +173,8 @@
 
 .v2-panel__title-icon {
     display: block;
+    width: 24px;
+    height: 24px;
 }
 
 .v2-panel__title-text {
@@ -189,6 +226,10 @@
     overflow: auto;
 }
 
+.v2-panel--layer .v2-panel__body {
+    padding-top: 16px;
+}
+
 .v2-panel__body--graph {
     flex: 1;
     align-items: center;
@@ -199,21 +240,101 @@
 
 /* レイヤー項目 */
 .v2-layer-item {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 16px;
 }
 
-.v2-layer-item--row {
+/* ドラッグハンドル + head(名前) + 目トグルの行 */
+.v2-layer-item__row {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+}
+
+.v2-layer-item__row .v2-layer-item__head {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Notion 風のドラッグハンドル(ホバー時だけ表示) */
+.v2-layer-drag-handle {
+    flex: none;
+    color: var(--v2-fg-gray);
+    font-size: 20px;
+    line-height: 1;
+    cursor: grab;
+    user-select: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.v2-layer-item:active .v2-layer-drag-handle {
+    cursor: grabbing;
+}
+
+/* 目トグル / ハンドルはホバー(またはフォーカス)時だけ表示 */
+.v2-layer-item__row .v2-icon-button {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.v2-layer-item:hover .v2-icon-button,
+.v2-layer-item:focus-within .v2-icon-button,
+.v2-layer-item:hover .v2-layer-drag-handle,
+.v2-layer-item:focus-within .v2-layer-drag-handle {
+    opacity: 1;
+}
+
+/* 非表示レイヤー: 名前を淡く、目アイコンは常時表示(非表示だと分かるように) */
+.v2-layer-item--hidden .v2-layer-item__name {
+    color: var(--v2-fg-gray);
+}
+
+.v2-layer-item--hidden .v2-icon-button {
+    opacity: 1;
+}
+
+/* 並び替え中の状態と挿入位置の線 */
+.v2-layer-item.is-dragging {
+    opacity: 0.4;
+}
+
+/* 挿入線は item の外側(32px の隙間の中央)に置く */
+.v2-layer-item.is-drop-above::before,
+.v2-layer-item.is-drop-below::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--v2-fg-lightblue);
+    pointer-events: none;
+}
+
+.v2-layer-item.is-drop-above::before {
+    top: -17px;
+}
+
+.v2-layer-item.is-drop-below::after {
+    bottom: -17px;
 }
 
 .v2-layer-item__head {
     display: flex;
     align-items: center;
     gap: 12px;
+    /* controller は button として描画する。button リセット。 */
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
 }
 
 .v2-layer-item__icon {
@@ -224,6 +345,80 @@
     font-size: 14px;
     /* Figma は v1_bg(#ecf0f3)を、暗いパネル上の明るい文字色として使う */
     color: #ecf0f3;
+}
+
+/* 指標ピッカー(＋ で開く) */
+.v2-layer-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.v2-layer-picker__group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.v2-layer-picker__heading {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--v2-fg-gray);
+}
+
+.v2-layer-picker__item {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: #ecf0f3;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    text-align: left;
+    cursor: grab;
+    transition: background 0.12s ease;
+}
+
+.v2-layer-picker__item:active {
+    cursor: grabbing;
+}
+
+.v2-layer-empty {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--v2-fg-gray);
+}
+
+/* 現在の時間スケールで計算されていないレイヤー/指標 */
+.v2-layer-item--uncomputed {
+    opacity: 0.55;
+}
+
+.v2-layer-note {
+    margin: 0;
+    padding-left: 32px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--v2-fg-gray);
+}
+
+.v2-layer-picker__item.is-uncomputed {
+    color: var(--v2-fg-gray);
+    opacity: 0.6;
+}
+
+.v2-layer-picker__item:hover,
+.v2-layer-picker__item:focus-visible {
+    background: rgba(145, 172, 197, 0.14);
+    outline: none;
+}
+
+.v2-layer-picker__item.is-added {
+    color: var(--v2-fg-lightblue);
 }
 
 /* 凡例(気温グラデ + 目盛り) */
@@ -259,4 +454,74 @@
 .climate-legend-panel,
 .domesticates-legend-panel {
     display: none;
+}
+
+/*
+ * 右上メタ(Figma 357-94)。時代 / seed / tick を右寄せで表示。
+ * seed はクリックで inline 編集(既存の #seed-form を再利用)。
+ */
+.v2-meta {
+    position: absolute;
+    top: 34px;
+    right: 40px;
+    z-index: 13;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+}
+
+.v2-meta__era {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 20px;
+    line-height: 1.45;
+    color: var(--v2-fg-lightblue);
+}
+
+.v2-meta__seed-line {
+    line-height: 1.45;
+}
+
+.v2-meta__tick {
+    margin: 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--v2-fg-gray);
+}
+
+.v2-meta__seed-display {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    color: var(--v2-fg-gray);
+    cursor: text;
+    transition: color 0.12s ease;
+}
+
+.v2-meta__seed-display:hover,
+.v2-meta__seed-display:focus-visible {
+    color: var(--v2-maincolor);
+    outline: none;
+}
+
+.v2-meta__seed-form input {
+    width: 128px;
+    padding: 2px 6px;
+    text-align: right;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--v2-maincolor);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+}
+
+.v2-meta__seed-form input:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 0;
 }

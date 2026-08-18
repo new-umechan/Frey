@@ -36,23 +36,6 @@
                         </button>
                         <button
                             type="button"
-                            class="sidebar-button"
-                            id="sidebar-causal-button"
-                            aria-label="因果関係"
-                        >
-                            <img
-                                class="sidebar-button__icon sidebar-button__icon--graph"
-                                src="/icons/ic-graph.svg"
-                                alt=""
-                                width="20"
-                                height="20"
-                            />
-                            <span class="sidebar-tooltip" role="tooltip">
-                                <span class="sidebar-tooltip__label">因果関係</span>
-                            </span>
-                        </button>
-                        <button
-                            type="button"
                             class="sidebar-icon"
                             id="sidebar-history-button"
                             aria-label="履歴"
@@ -90,6 +73,7 @@
                             <button
                                 type="button"
                                 class="v2-icon-button"
+                                id="layer-add-button"
                                 aria-label="レイヤーを追加"
                             >
                                 <img src="/icons/ic-add.svg" width="24" height="24" alt="" />
@@ -104,87 +88,65 @@
                             </button>
                         </div>
                     </header>
-                    <div class="v2-panel__body">
-                        <div class="v2-layer-item">
-                            <div class="v2-layer-item__head">
-                                <img
-                                    class="v2-layer-item__icon"
-                                    src="/icons/ic-layers.svg"
-                                    width="20"
-                                    height="20"
-                                    alt=""
-                                />
-                                <span class="v2-layer-item__name">気温</span>
-                            </div>
-                            <div class="v2-layer-legend">
-                                <div
-                                    class="v2-legend-gradient v2-legend-gradient--temp"
-                                ></div>
-                                <div class="v2-legend-scale">
-                                    <span>-20</span><span>20</span><span>60</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="v2-layer-item v2-layer-item--row">
-                            <div class="v2-layer-item__head">
-                                <img
-                                    class="v2-layer-item__icon"
-                                    src="/icons/ic-layers.svg"
-                                    width="20"
-                                    height="20"
-                                    alt=""
-                                />
-                                <span class="v2-layer-item__name">降水量</span>
-                            </div>
-                            <button
-                                type="button"
-                                class="v2-icon-button"
-                                aria-label="表示切替"
-                            >
-                                <img
-                                    src="/icons/ic-visibility-off.svg"
-                                    width="20"
-                                    height="20"
-                                    alt=""
-                                />
-                            </button>
-                        </div>
-                    </div>
+                    <!-- 中身は createLayerPanelController が動的に描画する -->
+                    <div class="v2-panel__body"></div>
                 </section>
 
                 <section
-                    class="v2-panel v2-panel--causal"
-                    id="causal-panel"
-                    aria-label="因果関係"
+                    class="v2-panel v2-panel--picker"
+                    id="layer-add-panel"
+                    aria-label="レイヤーを追加"
                     hidden
                 >
                     <header class="v2-panel__title">
                         <div class="v2-panel__title-main">
-                            <img
-                                class="v2-panel__title-icon"
-                                src="/icons/ic-graph.svg"
-                                width="24"
-                                height="24"
-                                alt=""
-                            />
-                            <span class="v2-panel__title-text">因果関係</span>
+                            <span class="v2-panel__title-text">レイヤーを追加</span>
                         </div>
                         <div class="v2-panel__title-actions">
                             <button
                                 type="button"
                                 class="v2-icon-button"
-                                data-close="causal-panel"
+                                data-close="layer-add-panel"
                                 aria-label="閉じる"
                             >
                                 <img src="/icons/ic-close.svg" width="24" height="24" alt="" />
                             </button>
                         </div>
                     </header>
-                    <div
-                        class="v2-panel__body v2-panel__body--graph"
-                        id="causal-graph"
-                    ></div>
+                    <!-- 中身は createLayerPanelController が描画(ドラッグ元) -->
+                    <div class="v2-panel__body" id="layer-add-body"></div>
                 </section>
+
+                <aside class="v2-meta" aria-label="現在の状態">
+                    <p class="v2-meta__era" id="status-era">現在</p>
+                    <div class="v2-meta__seed-line">
+                        <button
+                            type="button"
+                            class="v2-meta__seed-display"
+                            id="seed-display"
+                        >
+                            seed = alpha
+                        </button>
+                        <form
+                            id="seed-form"
+                            class="v2-meta__seed-form"
+                            autocomplete="off"
+                            hidden
+                        >
+                            <label class="visually-hidden" for="seed-input">Seed</label>
+                            <input
+                                id="seed-input"
+                                name="seed"
+                                type="text"
+                                value="alpha"
+                                maxlength="64"
+                            />
+                        </form>
+                    </div>
+                    <p class="v2-meta__tick" id="era-scale-tick-label">
+                        1tick = 100万年
+                    </p>
+                </aside>
 
                 <section
                     id="playback-overlay"
@@ -288,8 +250,6 @@
                     <div class="sidebar-main">
                         <section class="panel status-panel">
                             <h2>Status</h2>
-                            <p id="status-era">時代: 環境形成期</p>
-                            <p id="era-scale-tick-label">1Tick: 100万年</p>
                             <p id="status-message" hidden>Initialization failed</p>
                             <div class="visually-hidden" aria-hidden="true">
                                 <span id="stat-level">-</span>
@@ -308,16 +268,6 @@
                                     <span class="toggle-slider" aria-hidden="true"></span>
                                 </span>
                             </label>
-                            <form id="seed-form" class="seed-form" autocomplete="off">
-                                <label for="seed-input">S: Seed</label>
-                                <input
-                                    id="seed-input"
-                                    name="seed"
-                                    type="text"
-                                    value="alpha"
-                                    maxlength="64"
-                                />
-                            </form>
                         </section>
 
                         <section class="panel">

@@ -66,6 +66,10 @@ export function resolveOverlayMetricColor(metricKey: string, value: number, out:
     }
 }
 
+export function getMetricRange(metricKey: string): [number, number] | null {
+    return metricRange(metricKey);
+}
+
 function metricRange(metricKey: string): [number, number] | null {
     switch (metricKey) {
         case "temperature":

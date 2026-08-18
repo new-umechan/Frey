@@ -3,6 +3,8 @@ import { createMutableStateStore, createWorldState, type AppState, type WorldSta
 import { type EraMetrics } from "../state/era-presets";
 import { type RuntimeState } from "../runtime/state";
 import { type CoreBuffers } from "../sim/sync/types";
+import { setYearsPerTick } from "../ui/sim-time";
+import { setEraBudgets } from "../state/era-runtime";
 
 export interface RuntimeStoreOptions {
     basePositions: Float32Array;
@@ -59,6 +61,10 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         getCurrentEraMetrics: () => currentEraMetrics,
         setCurrentEraMetrics: (nextMetrics: EraMetrics) => {
             currentEraMetrics = nextMetrics;
+            // runtime 由来の実年数を年前表示へ反映(全 era metrics 更新の中心経路)。
+            setYearsPerTick(nextMetrics.realYearsPerTick);
+            // 計算予算を共有(計算されていない指標のグレーアウトに使う)。
+            setEraBudgets(nextMetrics.budgets);
         },
         getCurrentTerrainData: mutableStateStore.getCurrentTerrainData,
         setCurrentTerrainData: (nextData: CoreBuffers | null) => {

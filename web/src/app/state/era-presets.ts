@@ -12,6 +12,8 @@ export type { EraScaleConfig, WorldSubsystemKey };
 export interface EraMetrics {
     key: string;
     tickLabel: string;
+    /** 1tick あたりの実年数(生値)。年前表示の計算に使う。 */
+    realYearsPerTick: number;
     runtimeTickMs: number;
     budgets: Record<WorldSubsystemKey, number>;
 }
@@ -34,6 +36,7 @@ export function createEraMetrics(key = DEFAULT_ERA_SCALE): EraMetrics {
     return {
         key,
         tickLabel: preset.tickLabel,
+        realYearsPerTick: preset.realYearsPerTick,
         runtimeTickMs: Number.isFinite(preset.runtimeTickMs) ? preset.runtimeTickMs : 120,
         budgets: {
             geology: Number(preset.weights.geology ?? 0),
@@ -46,9 +49,12 @@ export function createEraMetrics(key = DEFAULT_ERA_SCALE): EraMetrics {
 
 export function buildEraMetricsFromRuntime(era: string, runtimeMetrics: MetricsResult): EraMetrics {
     const fallback = createEraMetrics(era);
+    const runtimeYears = Number(runtimeMetrics.real_years_per_tick) || 0;
+    const realYearsPerTick = runtimeYears > 0 ? runtimeYears : fallback.realYearsPerTick;
     return {
         key: Object.hasOwn(ERA_SCALE_PRESETS, era) ? era : DEFAULT_ERA_SCALE,
-        tickLabel: formatRealYearsPerTick(Number(runtimeMetrics.real_years_per_tick) || 0),
+        tickLabel: formatRealYearsPerTick(realYearsPerTick),
+        realYearsPerTick,
         runtimeTickMs: Number(runtimeMetrics.runtime_tick_ms) || fallback.runtimeTickMs,
         budgets: {
             geology: Number(runtimeMetrics.budgets.geology) || 0,
@@ -74,7 +80,7 @@ export function renderEraScaleControls(
     currentEraMetrics: EraMetrics
 ): void {
     eraScaleSelect.value = currentEraScale;
-    eraScaleTickLabel.textContent = `1Tick: ${currentEraMetrics.tickLabel}`;
+    eraScaleTickLabel.textContent = `1tick = ${currentEraMetrics.tickLabel}`;
     eraScaleWeightFields.geology.textContent = currentEraMetrics.budgets.geology.toFixed(2);
     eraScaleWeightFields.climate.textContent = currentEraMetrics.budgets.climate.toFixed(2);
     eraScaleWeightFields.ecology.textContent = currentEraMetrics.budgets.ecology.toFixed(2);

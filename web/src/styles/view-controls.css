@@ -1,6 +1,6 @@
 .playback-overlay {
     position: absolute;
-    left: 48px;
+    left: 92px;
     right: 53px;
     bottom: 45px;
     z-index: 8;
@@ -35,7 +35,7 @@
 .glyph-button {
     border: 0;
     background: transparent;
-    color: GrayText;
+    color: var(--v2-maincolor);
     width: 24px;
     height: 24px;
     padding: 0;
@@ -75,8 +75,8 @@
 .playback-tick {
     margin: 0;
     color: var(--graytext);
-    font-family: "JetBrains Mono", monospace;
-    font-size: 16px;
+    font-family: "Noto Sans JP", sans-serif;
+    font-size: 14px;
     line-height: 1;
     white-space: nowrap;
     text-align: right;
@@ -114,10 +114,10 @@
     background:
         linear-gradient(
             to right,
-            var(--accent-off) 0%,
-            var(--accent-off) var(--seek-progress),
-            var(--line) var(--seek-progress),
-            var(--line) 100%
+            var(--v2-fg-lightblue) 0%,
+            var(--v2-fg-lightblue) var(--seek-progress),
+            #383d44 var(--seek-progress),
+            #383d44 100%
         );
 }
 
@@ -128,20 +128,20 @@
     margin-top: -4px;
     border: 0;
     border-radius: 50%;
-    background: var(--accent-off);
+    background: var(--v2-fg-lightblue);
 }
 
 .seek-slider::-moz-range-track {
     height: 4px;
     border: 0;
     border-radius: 2px;
-    background: var(--line);
+    background: #383d44;
 }
 
 .seek-slider::-moz-range-progress {
     height: 4px;
     border-radius: 2px;
-    background: var(--accent-off);
+    background: var(--v2-fg-lightblue);
 }
 
 .seek-slider::-moz-range-thumb {
@@ -149,7 +149,7 @@
     height: 12px;
     border: 0;
     border-radius: 50%;
-    background: var(--accent-off);
+    background: var(--v2-fg-lightblue);
 }
 
 .seek-range-labels {

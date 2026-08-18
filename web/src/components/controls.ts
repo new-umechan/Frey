@@ -5,6 +5,7 @@ import {
     bindPlaybackUiEvents,
 } from "./controls/ui-event-bindings";
 import { createViewCuiController } from "./controls/view-cui-controller";
+import { createLayerPanelController } from "./controls/layer-panel-controller";
 import {
     type PlaybackControlsElements,
     type PerfControlsElements,
@@ -155,6 +156,11 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         getCurrentCellMetric,
         onViewModeChange,
         onCellMetricChange,
+    });
+    createLayerPanelController({
+        getCurrentCellMetric,
+        onCellMetricChange,
+        onViewModeChange,
     });
 
     bindPlaybackUiEvents({
