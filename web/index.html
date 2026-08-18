@@ -148,6 +148,10 @@
                     </p>
                 </aside>
 
+                <p id="status-message" class="status-overlay" hidden>
+                    Initialization failed
+                </p>
+
                 <section
                     id="playback-overlay"
                     class="playback-overlay"
@@ -245,72 +249,34 @@
                 ></div>
             </div>
 
-            <aside class="sidebar" id="sidebar" aria-label="sidebar">
-                <div class="sidebar-body" id="sidebar-body">
-                    <div class="sidebar-main">
-                        <section class="panel status-panel">
-                            <h2>Status</h2>
-                            <p id="status-message" hidden>Initialization failed</p>
-                            <div class="visually-hidden" aria-hidden="true">
-                                <span id="stat-level">-</span>
-                                <span id="stat-seed">-</span>
-                                <span id="stat-plates">-</span>
-                                <span id="stat-land">-</span>
-                            </div>
-                        </section>
-
-                        <section class="panel">
-                            <h2>Setting</h2>
-                            <label class="toggle-row" for="debug-mode-toggle">
-                                <span>D: Debug</span>
-                                <span class="toggle-switch">
-                                    <input id="debug-mode-toggle" type="checkbox" />
-                                    <span class="toggle-slider" aria-hidden="true"></span>
-                                </span>
-                            </label>
-                        </section>
-
-                        <section class="panel">
-                            <h2>
-                                View
-                                <span class="view-context-suffix" id="view-cui-context"></span>
-                            </h2>
-                            <div class="view-cui" id="view-cui">
-                                <div class="view-tree" id="view-cui-options" aria-live="polite"></div>
-                            </div>
-                            <div class="visually-hidden" aria-hidden="true">
-                                <label class="view-item">
-                                    <input type="radio" name="view-mode" value="normal" checked />
-                                    <span>1: 通常（現在）</span>
-                                </label>
-                                <label class="view-item">
-                                    <input type="radio" name="view-mode" value="metric" />
-                                    <span>2: 指標</span>
-                                </label>
-                            </div>
-                        </section>
-                    </div>
-
-                    <section class="panel history-panel">
-                        <h2>History</h2>
-                        <ul class="event-log-list" id="event-log-list" aria-live="polite"></ul>
-                    </section>
-
-                    <select id="era-scale-select" class="visually-hidden" aria-hidden="true" tabindex="-1">
-                        <option value="crust">地殻形成期</option>
-                        <option value="environment">環境形成期</option>
-                        <option value="life">先史期</option>
-                        <option value="civilization">文明成立期</option>
-                        <option value="history">歴史展開期</option>
-                    </select>
-                    <div class="visually-hidden" aria-hidden="true">
-                        <span id="era-weight-geology">-</span>
-                        <span id="era-weight-climate">-</span>
-                        <span id="era-weight-ecology">-</span>
-                        <span id="era-weight-civilization">-</span>
-                    </div>
-                </div>
-            </aside>
+            <!--
+                旧・固定右サイドバーは Figma v2 で廃止。可視 UI はメタ表示/レイヤーパネル
+                へ移設済み。以下は、まだコントローラが id 参照する要素の保持先。
+                履歴(event-log)は Stage 4 の履歴パネル、debug は Stage 5 の撤去まで隠し持つ。
+            -->
+            <div class="visually-hidden" id="legacy-dom-holders" aria-hidden="true">
+                <span id="stat-level">-</span>
+                <span id="stat-seed">-</span>
+                <span id="stat-plates">-</span>
+                <span id="stat-land">-</span>
+                <input id="debug-mode-toggle" type="checkbox" />
+                <span id="view-cui-context"></span>
+                <div id="view-cui-options"></div>
+                <input type="radio" name="view-mode" value="normal" checked />
+                <input type="radio" name="view-mode" value="metric" />
+                <ul id="event-log-list"></ul>
+                <select id="era-scale-select" tabindex="-1">
+                    <option value="crust">地殻形成期</option>
+                    <option value="environment">環境形成期</option>
+                    <option value="life">先史期</option>
+                    <option value="civilization">文明成立期</option>
+                    <option value="history">歴史展開期</option>
+                </select>
+                <span id="era-weight-geology">-</span>
+                <span id="era-weight-climate">-</span>
+                <span id="era-weight-ecology">-</span>
+                <span id="era-weight-civilization">-</span>
+            </div>
         </main>
 
         <script type="module" src="/src/main.ts"></script>
