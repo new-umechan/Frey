@@ -745,12 +745,18 @@ mod tests {
         let (retained, remainder) =
             cut_spherical_polygon_by_area_fraction(&polygon, center, toward, 0.35).unwrap();
         let frame = GnomonicFrame::new(center).unwrap();
-        let full_area = signed_area(&frame.project_polygon(&polygon).unwrap()).abs();
-        let retained_area = signed_area(&frame.project_polygon(&retained).unwrap()).abs();
-        let remainder_area = signed_area(&frame.project_polygon(&remainder).unwrap()).abs();
+        let full_spherical_area = spherical_polygon_area_vertices(&polygon).unwrap();
+        let retained_spherical_area = spherical_polygon_area_vertices(&retained).unwrap();
+        let full_projected_area = signed_area(&frame.project_polygon(&polygon).unwrap()).abs();
+        let retained_projected_area =
+            signed_area(&frame.project_polygon(&retained).unwrap()).abs();
+        let remainder_projected_area =
+            signed_area(&frame.project_polygon(&remainder).unwrap()).abs();
 
-        assert!((retained_area / full_area - 0.35).abs() < 1e-5);
-        assert!((retained_area + remainder_area - full_area).abs() < 1e-5);
+        assert!((retained_spherical_area / full_spherical_area - 0.35).abs() < 1e-5);
+        assert!(
+            (retained_projected_area + remainder_projected_area - full_projected_area).abs() < 1e-5
+        );
         assert!(
             retained
                 .iter()
