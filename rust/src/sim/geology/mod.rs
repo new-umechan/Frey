@@ -80,27 +80,11 @@ pub(crate) fn update_geology(
     if budget == 0 {
         return;
     }
-    let Some(plate_elapsed_years) = plate_dynamics_elapsed_years(
-        world.clock.epoch,
-        world.clock.tick,
+    dynamics::run_geology_dynamics_step_with_state(
+        world,
+        geology_state,
         world.clock.real_years_per_tick,
-    ) else {
-        return;
-    };
-    dynamics::run_geology_dynamics_step_with_state(world, geology_state, plate_elapsed_years);
-}
-
-fn plate_dynamics_elapsed_years(
-    epoch: crate::sim::world::EraKind,
-    tick: u64,
-    years_per_tick: f32,
-) -> Option<f32> {
-    let interval = epoch.plate_update_interval_ticks();
-    let epoch_tick = tick.saturating_sub(epoch.start_tick());
-    if (epoch_tick + 1) % interval != 0 {
-        return None;
-    }
-    Some(years_per_tick * interval as f32)
+    );
 }
 
 pub(crate) fn step_async_erosion_automaton(
@@ -112,37 +96,3 @@ pub(crate) fn step_async_erosion_automaton(
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod cadence_tests {
-    use super::plate_dynamics_elapsed_years;
-    use crate::sim::world::EraKind;
-
-    #[test]
-    fn environment_updates_after_each_five_myr_window() {
-        assert_eq!(
-            plate_dynamics_elapsed_years(
-                EraKind::Environment,
-                800,
-                EraKind::Environment.real_years_per_tick(),
-            ),
-            None
-        );
-        assert_eq!(
-            plate_dynamics_elapsed_years(
-                EraKind::Environment,
-                804,
-                EraKind::Environment.real_years_per_tick(),
-            ),
-            Some(5_000_000.0)
-        );
-    }
-
-    #[test]
-    fn crust_keeps_its_existing_per_tick_cadence() {
-        assert_eq!(
-            plate_dynamics_elapsed_years(EraKind::Crust, 0, EraKind::Crust.real_years_per_tick(),),
-            Some(5_000_000.0)
-        );
-    }
-}

@@ -1,4 +1,5 @@
 use super::*;
+use crate::common::mesh::{build_neighbors, generate_icosphere};
 use crate::sim::exec::modules::MODULE_DECLARATIONS;
 use crate::sim::polity::PolityRelation;
 use crate::sim::world::{
@@ -30,6 +31,39 @@ fn build_test_world() -> World {
         vertex_buoyancy: vec![0.0; 4],
         geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); 4],
         boundary_condition: vec![0.0; 4],
+        smoothing_limited_cells_ratio: 0.0,
+        mean_smoothing_factor: 1.0,
+        zero_mean_adjusted_cells_ratio: 0.0,
+        zero_mean_mean_abs_correction: 0.0,
+        zero_mean_std_delta: 0.0,
+    };
+    World::new(mesh, geology)
+}
+
+fn build_global_test_world() -> World {
+    let (positions, indices) = generate_icosphere(1);
+    let (nbr_offsets, nbrs) = build_neighbors(positions.len(), &indices);
+    let cell_count = positions.len();
+    let mesh = WorldMesh {
+        positions,
+        nbr_offsets,
+        nbrs,
+    };
+    let geology = GeologyState {
+        height: (0..cell_count)
+            .map(|cell| [0.45, 0.15, -0.25, 0.05][cell % 4])
+            .collect(),
+        lake_depth: vec![0.0; cell_count],
+        plate_id: (0..cell_count)
+            .map(|cell| PlateId((cell >= cell_count / 2) as u32))
+            .collect(),
+        plate_emergence_regime: Default::default(),
+        plate_emergence_fallback: Default::default(),
+        initial_plate_kinematics: Vec::new(),
+        volcanism: vec![0.0; cell_count],
+        vertex_buoyancy: vec![0.0; cell_count],
+        geology_internal: vec![crate::sim::geology_types::GeologyInternal::default(); cell_count],
+        boundary_condition: vec![0.0; cell_count],
         smoothing_limited_cells_ratio: 0.0,
         mean_smoothing_factor: 1.0,
         zero_mean_adjusted_cells_ratio: 0.0,
@@ -237,7 +271,7 @@ fn hydrology_flow_step_refreshes_public_lake_flags_on_skip() {
 
 #[test]
 fn geology_step_preserves_crust_land_ratio_target() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     let mut geology_state = Some(crate::sim::world::GeologyDynamicsState {
         update_index: 0,
         plate_states: Vec::new(),
@@ -260,12 +294,12 @@ fn geology_step_preserves_crust_land_ratio_target() {
         .iter()
         .filter(|value| **value > 0.0)
         .count();
-    assert_eq!(land_cells, 2);
+    assert_eq!(land_cells, world.cell_count() / 2);
 }
 
 #[test]
 fn exec_world_advances_tick_and_sets_budget_to_one() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::History;
     world.clock.tick = 1_445;
     exec_world(&mut world);
@@ -278,7 +312,7 @@ fn exec_world_advances_tick_and_sets_budget_to_one() {
 
 #[test]
 fn climate_water_budget_residual_stays_bounded() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::Environment;
     exec_world(&mut world);
 
@@ -289,8 +323,8 @@ fn climate_water_budget_residual_stays_bounded() {
 
 #[test]
 fn exec_world_slice_matches_full_tick_execution() {
-    let mut full_world = build_test_world();
-    let mut sliced_world = build_test_world();
+    let mut full_world = build_global_test_world();
+    let mut sliced_world = build_global_test_world();
     let mut sliced_feedback = crate::sim::world::FeedbackQueue::new(sliced_world.cell_count());
     full_world.clock.epoch = EraKind::Environment;
     sliced_world.clock.epoch = EraKind::Environment;
@@ -737,7 +771,7 @@ fn feedback_mode_helpers_follow_declarations() {
 
 #[test]
 fn exec_world_profiled_uses_declared_profile_categories() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::Environment;
 
     let breakdown = exec_world_profiled(&mut world);
@@ -754,7 +788,7 @@ fn exec_world_profiled_uses_declared_profile_categories() {
 
 #[test]
 fn feedback_queue_applies_entries_on_next_tick() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 1;
@@ -802,7 +836,7 @@ fn feedback_queue_applies_entries_on_next_tick() {
 
 #[test]
 fn feedback_payload_trigger_epoch_transition_is_ignored() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     let mut feedback = crate::sim::world::FeedbackQueue::new(world.cell_count());
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 1;
@@ -822,7 +856,7 @@ fn feedback_payload_trigger_epoch_transition_is_ignored() {
 
 #[test]
 fn fixed_tick_transition_changes_era_at_end_of_tick() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::Crust;
     world.clock.tick = 799;
 
@@ -834,7 +868,7 @@ fn fixed_tick_transition_changes_era_at_end_of_tick() {
 
 #[test]
 fn fixed_tick_transition_keeps_era_before_boundary() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::Environment;
     world.clock.tick = 1_298;
 
@@ -846,7 +880,7 @@ fn fixed_tick_transition_keeps_era_before_boundary() {
 
 #[test]
 fn fixed_tick_transition_matches_all_remaining_boundaries() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
 
     world.clock.epoch = EraKind::Environment;
     world.clock.tick = 1_299;
@@ -869,25 +903,34 @@ fn fixed_tick_transition_matches_all_remaining_boundaries() {
 
 #[test]
 fn conflict_generates_region_components_and_updates_relations() {
-    let mut world = build_test_world();
+    let mut world = build_global_test_world();
     world.clock.epoch = EraKind::History;
-    world.state.population.population = vec![20.0, 18.0, 0.0, 0.0];
-    world.state.population.birth_rate = vec![0.02, 0.02, 0.0, 0.0];
-    world.state.population.death_rate = vec![0.01, 0.01, 0.0, 0.0];
-    world.state.subsistence.food_energy_mean = vec![0.9, 0.9, 0.0, 0.0];
-    world.state.ecology.soil_fertility = vec![0.9, 0.8, 0.0, 0.0];
+    let cell_count = world.cell_count();
+    let neighboring_cell = world.mesh().nbrs[world.mesh().nbr_offsets[0] as usize] as usize;
+    world.state.population.population = vec![0.0; cell_count];
+    world.state.population.population[0] = 20.0;
+    world.state.population.population[neighboring_cell] = 18.0;
+    world.state.population.birth_rate = vec![0.0; cell_count];
+    world.state.population.birth_rate[0] = 0.02;
+    world.state.population.birth_rate[neighboring_cell] = 0.02;
+    world.state.population.death_rate = vec![0.0; cell_count];
+    world.state.population.death_rate[0] = 0.01;
+    world.state.population.death_rate[neighboring_cell] = 0.01;
+    world.state.subsistence.food_energy_mean = vec![0.0; cell_count];
+    world.state.subsistence.food_energy_mean[0] = 0.9;
+    world.state.subsistence.food_energy_mean[neighboring_cell] = 0.9;
+    world.state.ecology.soil_fertility = vec![0.0; cell_count];
+    world.state.ecology.soil_fertility[0] = 0.9;
+    world.state.ecology.soil_fertility[neighboring_cell] = 0.8;
 
     exec_world(&mut world);
 
     assert!(world.entities.iter_regions().count() >= 1);
-    assert_eq!(
-        world
-            .relations
-            .polity_relations
-            .get(&(PolityId(1), PolityId(2)))
-            .map(|relation| relation.at_war),
-        Some(true)
-    );
+    assert!(world
+        .relations
+        .polity_relations
+        .values()
+        .any(|relation| relation.at_war));
 }
 
 #[test]

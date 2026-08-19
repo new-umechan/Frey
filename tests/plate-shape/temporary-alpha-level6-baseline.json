@@ -1,0 +1,146 @@
+{
+  "status": "Temporary",
+  "baseline_commit": "847e091",
+  "purpose": "統合期間中に既知の細線・分断を許容しつつ、plate shapeの追加悪化を防ぐ",
+  "seed": "alpha",
+  "level": 6,
+  "ticks": 120,
+  "record_every": 20,
+  "samples": [
+    {
+      "tick": 40,
+      "metrics": {
+        "plate_count": { "baseline": 9, "min": 8, "max": 10 },
+        "max_component_count": { "baseline": 7, "max": 10 },
+        "max_detached_fragment_ratio": { "baseline": 0.020680606, "max": 0.03 },
+        "orphan_cell_count": { "baseline": 4, "max": 7 },
+        "single_cell_plate_count": { "baseline": 0, "max": 0 },
+        "max_boundary_complexity_growth": {
+          "baseline": 2.1486392,
+          "max": 2.68
+        },
+        "max_corridor_neck_risk": { "baseline": 0.018697614, "max": 0.028 },
+        "max_boundary_thin_cell_ratio": { "baseline": 0.4564797, "max": 0.54 },
+        "max_plate_block_count": { "baseline": 7, "max": 10 },
+        "multi_block_plate_ratio": { "baseline": 0.22222222, "max": 0.35 },
+        "max_secondary_plate_block_ratio": {
+          "baseline": 0.019109948,
+          "max": 0.028
+        },
+        "max_appendage_isolation_risk": {
+          "baseline": 0.0037825059,
+          "max": 0.01
+        },
+        "max_multiscale_neck_secondary_ratio": {
+          "baseline": 0.068343006,
+          "max": 0.093
+        },
+        "max_branch_area_ratio": { "baseline": 0.065764025, "max": 0.089 },
+        "max_branch_slenderness": { "baseline": 9.666667, "max": 13 },
+        "persistent_branch_plate_ratio": { "baseline": 0, "max": 0 }
+      }
+    },
+    {
+      "tick": 80,
+      "metrics": {
+        "plate_count": { "baseline": 9, "min": 8, "max": 10 },
+        "max_component_count": { "baseline": 5, "max": 7 },
+        "max_detached_fragment_ratio": { "baseline": 0.02128321, "max": 0.031 },
+        "orphan_cell_count": { "baseline": 5, "max": 8 },
+        "single_cell_plate_count": { "baseline": 0, "max": 0 },
+        "max_boundary_complexity_growth": {
+          "baseline": 1.5368046,
+          "max": 1.95
+        },
+        "max_corridor_neck_risk": { "baseline": 0.018272426, "max": 0.027 },
+        "max_boundary_thin_cell_ratio": { "baseline": 1, "max": 1 },
+        "max_plate_block_count": { "baseline": 5, "max": 7 },
+        "multi_block_plate_ratio": { "baseline": 0.33333334, "max": 0.46 },
+        "max_secondary_plate_block_ratio": {
+          "baseline": 0.02097176,
+          "max": 0.031
+        },
+        "max_appendage_isolation_risk": {
+          "baseline": 0.0130718965,
+          "max": 0.021
+        },
+        "max_multiscale_neck_secondary_ratio": {
+          "baseline": 0.01290794,
+          "max": 0.026
+        },
+        "max_branch_area_ratio": { "baseline": 0.010989011, "max": 0.024 },
+        "max_branch_slenderness": { "baseline": 10, "max": 13 },
+        "persistent_branch_plate_ratio": { "baseline": 0, "max": 0 }
+      }
+    },
+    {
+      "tick": 100,
+      "metrics": {
+        "plate_count": { "baseline": 9, "min": 8, "max": 10 },
+        "max_component_count": { "baseline": 41, "max": 51 },
+        "max_detached_fragment_ratio": {
+          "baseline": 0.022796333,
+          "max": 0.033
+        },
+        "orphan_cell_count": { "baseline": 26, "max": 34 },
+        "single_cell_plate_count": { "baseline": 0, "max": 0 },
+        "max_boundary_complexity_growth": {
+          "baseline": 3.0921583,
+          "max": 3.82
+        },
+        "max_corridor_neck_risk": { "baseline": 0.003951368, "max": 0.028 },
+        "max_boundary_thin_cell_ratio": { "baseline": 0.7089611, "max": 0.81 },
+        "max_plate_block_count": { "baseline": 41, "max": 51 },
+        "multi_block_plate_ratio": { "baseline": 0.22222222, "max": 0.35 },
+        "max_secondary_plate_block_ratio": {
+          "baseline": 0.0069908816,
+          "max": 0.031
+        },
+        "max_appendage_isolation_risk": {
+          "baseline": 0.0058776885,
+          "max": 0.013
+        },
+        "max_multiscale_neck_secondary_ratio": {
+          "baseline": 0.25297382,
+          "max": 0.314
+        },
+        "max_branch_area_ratio": { "baseline": 0.012912482, "max": 0.026 },
+        "max_branch_slenderness": { "baseline": 10, "max": 13 },
+        "persistent_branch_plate_ratio": { "baseline": 0, "max": 0 }
+      }
+    },
+    {
+      "tick": 120,
+      "metrics": {
+        "plate_count": { "baseline": 9, "min": 8, "max": 10 },
+        "max_component_count": { "baseline": 38, "max": 47 },
+        "max_detached_fragment_ratio": {
+          "baseline": 0.013457656,
+          "max": 0.022
+        },
+        "orphan_cell_count": { "baseline": 20, "max": 26 },
+        "single_cell_plate_count": { "baseline": 0, "max": 0 },
+        "max_boundary_complexity_growth": { "baseline": 2.353471, "max": 2.93 },
+        "max_corridor_neck_risk": { "baseline": 0.0021248967, "max": 0.008 },
+        "max_boundary_thin_cell_ratio": { "baseline": 0.57645464, "max": 0.67 },
+        "max_plate_block_count": { "baseline": 38, "max": 47 },
+        "multi_block_plate_ratio": { "baseline": 0.22222222, "max": 0.35 },
+        "max_secondary_plate_block_ratio": {
+          "baseline": 0.00480048,
+          "max": 0.011
+        },
+        "max_appendage_isolation_risk": {
+          "baseline": 0.009304114,
+          "max": 0.017
+        },
+        "max_multiscale_neck_secondary_ratio": {
+          "baseline": 0.025770308,
+          "max": 0.041
+        },
+        "max_branch_area_ratio": { "baseline": 0.20953238, "max": 0.262 },
+        "max_branch_slenderness": { "baseline": 15, "max": 19 },
+        "persistent_branch_plate_ratio": { "baseline": 0, "max": 0 }
+      }
+    }
+  ]
+}

@@ -1,15 +1,18 @@
 use crate::sim::exec::math::{cross3, dot};
 use crate::sim::geology_types::PlateId;
 use crate::sim::world::{PlateKinematicsState, SurfaceMaterialState, VertexCrustState};
+use smallvec::SmallVec;
 
 use super::surface_cell_geometry::build_barycentric_dual_cells;
 use super::surface_material_projection::{
-    deposit_projected_mass_components, finish_projection_diagnostics, SurfaceMaterialProjection,
+    SurfaceMaterialProjection, deposit_projected_mass_components, finish_projection_diagnostics,
 };
 use super::surface_material_transport::{nearest_mesh_cell, rotate_unit_vector};
 
 const AREA_EPSILON: f32 = 1e-10;
 const PROJECTION_EPSILON: f32 = 1e-6;
+const OVERLAP_RELATIVE_EPSILON: f32 = 1e-6;
+type Polygon2 = SmallVec<[Point2; 12]>;
 
 pub(super) struct DualCellRemapInput<'a> {
     pub positions: &'a [[f32; 3]],
@@ -212,7 +215,7 @@ fn remap_source_material(
 }
 
 pub(super) struct PolygonOverlapFractions {
-    pub fractions: Vec<PolygonOverlapFraction>,
+    pub fractions: SmallVec<[PolygonOverlapFraction; 7]>,
     pub tested_candidate_count: u32,
 }
 
@@ -233,20 +236,28 @@ pub(super) fn polygon_overlap_fractions(
 ) -> Option<PolygonOverlapFractions> {
     let frame = GnomonicFrame::new(center)?;
     let subject = frame.project_polygon(polygon)?;
+    let subject_area = signed_area(&subject).abs();
+    if !subject_area.is_finite() || subject_area <= 0.0 {
+        return None;
+    }
     let mut tested_candidate_count = 0_u32;
-    let mut overlaps = Vec::with_capacity(7);
+    let mut overlaps = SmallVec::<[(usize, f32, [f32; 3]); 7]>::new();
     for target in target_candidates(host, nbr_offsets, nbrs) {
         tested_candidate_count = tested_candidate_count.saturating_add(1);
         let target_polygon = dual_cells.get(target)?;
         let clip_polygon = frame.project_polygon(target_polygon)?;
         let clipped = clip_polygon_intersection(&subject, &clip_polygon);
         let area = signed_area(&clipped).abs();
-        if area > AREA_EPSILON {
+        // This is a projection partition, not a material-pruning step. The
+        // fragment lifetime is controlled by `discard_subcell_material_dust`.
+        // Filter only numerical slivers relative to this subject polygon;
+        // a global area cutoff incorrectly discards an entire thin fragment.
+        if area.is_finite() && area > subject_area * OVERLAP_RELATIVE_EPSILON {
             overlaps.push((target, area, frame.polygon_centroid(&clipped)?));
         }
     }
     let total_area = overlaps.iter().map(|(_, area, _)| *area).sum::<f32>();
-    if !total_area.is_finite() || total_area <= AREA_EPSILON {
+    if !total_area.is_finite() || total_area <= 0.0 {
         return None;
     }
     Some(PolygonOverlapFractions {
@@ -260,6 +271,56 @@ pub(super) fn polygon_overlap_fractions(
             .collect(),
         tested_candidate_count,
     })
+}
+
+pub(super) fn polygon_overlap_failure_details(
+    polygon: &[[f32; 3]],
+    center: [f32; 3],
+    host: usize,
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> String {
+    let Some(frame) = GnomonicFrame::new(center) else {
+        return "stage=frame".to_string();
+    };
+    let Some(subject) = frame.project_polygon(polygon) else {
+        return format!(
+            "stage=subject_projection vertex_dot_min={:.9}",
+            polygon
+                .iter()
+                .map(|point| dot(*point, center))
+                .fold(f32::INFINITY, f32::min)
+        );
+    };
+    let mut projected_candidates = 0usize;
+    let mut nonempty_clips = 0usize;
+    let mut max_clip_area = 0.0_f32;
+    for target in target_candidates(host, nbr_offsets, nbrs) {
+        let Some(target_polygon) = dual_cells.get(target) else {
+            continue;
+        };
+        let Some(clip_polygon) = frame.project_polygon(target_polygon) else {
+            continue;
+        };
+        projected_candidates += 1;
+        let clipped = clip_polygon_intersection(&subject, &clip_polygon);
+        if clipped.len() >= 3 {
+            nonempty_clips += 1;
+        }
+        max_clip_area = max_clip_area.max(signed_area(&clipped).abs());
+    }
+    let max_edge_angle = polygon
+        .iter()
+        .zip(polygon.iter().cycle().skip(1))
+        .take(polygon.len())
+        .map(|(&a, &b)| dot(a, b).clamp(-1.0, 1.0).acos())
+        .fold(0.0_f32, f32::max);
+    format!(
+        "stage=clip host={host} subject_area={:.12} projected_candidates={projected_candidates} \
+         nonempty_clips={nonempty_clips} max_clip_area={max_clip_area:.12} max_edge_angle={max_edge_angle:.9}",
+        signed_area(&subject).abs(),
+    )
 }
 
 pub(super) fn cut_spherical_polygon_by_area_fraction(
@@ -357,8 +418,9 @@ fn rotate_polygon(polygon: &[[f32; 3]], state: &PlateKinematicsState) -> Option<
         .collect()
 }
 
-fn target_candidates(host: usize, nbr_offsets: &[u32], nbrs: &[u32]) -> Vec<usize> {
-    let mut candidates = vec![host];
+fn target_candidates(host: usize, nbr_offsets: &[u32], nbrs: &[u32]) -> SmallVec<[usize; 7]> {
+    let mut candidates = SmallVec::new();
+    candidates.push(host);
     if let Some(neighbors) = cell_neighbors(host, nbr_offsets, nbrs) {
         candidates.extend(neighbors.iter().map(|&cell| cell as usize));
     }
@@ -393,11 +455,11 @@ impl GnomonicFrame {
         })
     }
 
-    fn project_polygon(&self, polygon: &[[f32; 3]]) -> Option<Vec<Point2>> {
+    fn project_polygon(&self, polygon: &[[f32; 3]]) -> Option<Polygon2> {
         let mut projected = polygon
             .iter()
             .map(|&point| self.project(point))
-            .collect::<Option<Vec<_>>>()?;
+            .collect::<Option<Polygon2>>()?;
         if signed_area(&projected) < 0.0 {
             projected.reverse();
         }
@@ -434,21 +496,21 @@ fn clipped_polygon_area(subject: &[Point2], clip_polygon: &[Point2]) -> f32 {
     signed_area(&clip_polygon_intersection(subject, clip_polygon)).abs()
 }
 
-fn clip_polygon_intersection(subject: &[Point2], clip_polygon: &[Point2]) -> Vec<Point2> {
-    let mut output = subject.to_vec();
+fn clip_polygon_intersection(subject: &[Point2], clip_polygon: &[Point2]) -> Polygon2 {
+    let mut output = subject.iter().copied().collect::<Polygon2>();
     for index in 0..clip_polygon.len() {
         let clip_start = clip_polygon[index];
         let clip_end = clip_polygon[(index + 1) % clip_polygon.len()];
         output = clip_against_edge(&output, clip_start, clip_end);
         if output.len() < 3 {
-            return Vec::new();
+            return Polygon2::new();
         }
     }
     output
 }
 
-fn clip_against_edge(subject: &[Point2], clip_start: Point2, clip_end: Point2) -> Vec<Point2> {
-    let mut output = Vec::new();
+fn clip_against_edge(subject: &[Point2], clip_start: Point2, clip_end: Point2) -> Polygon2 {
+    let mut output = Polygon2::new();
     let Some(mut previous) = subject.last().copied() else {
         return output;
     };
@@ -474,8 +536,8 @@ fn clip_half_plane(
     normal: Point2,
     threshold: f32,
     retain_above: bool,
-) -> Vec<Point2> {
-    let mut output = Vec::new();
+) -> Polygon2 {
+    let mut output = Polygon2::new();
     let Some(mut previous) = polygon.last().copied() else {
         return output;
     };
@@ -503,11 +565,7 @@ fn clip_half_plane(
 
 fn half_plane_value(point: Point2, normal: Point2, threshold: f32, retain_above: bool) -> f32 {
     let value = dot2(point, normal) - threshold;
-    if retain_above {
-        value
-    } else {
-        -value
-    }
+    if retain_above { value } else { -value }
 }
 
 fn is_inside(point: Point2, edge_start: Point2, edge_end: Point2) -> bool {
@@ -523,7 +581,14 @@ fn line_intersection(
     let segment = subtract(segment_end, segment_start);
     let edge = subtract(edge_end, edge_start);
     let denominator = cross2(segment, edge);
-    if denominator.abs() <= PROJECTION_EPSILON {
+    let scale = (dot2(segment, segment) * dot2(edge, edge)).sqrt();
+    // Parallelism is dimensionless. An absolute epsilon rejects legitimate
+    // intersections for tiny material fragments whose coordinate-scale cross
+    // product is below 1e-6.
+    if !denominator.is_finite()
+        || !scale.is_finite()
+        || denominator.abs() <= 16.0 * f32::EPSILON * scale
+    {
         return None;
     }
     let fraction = cross2(subtract(edge_start, segment_start), edge) / denominator;
@@ -562,7 +627,7 @@ fn polygon_centroid(polygon: &[Point2]) -> Option<Point2> {
         x_sum += (a.x + b.x) * cross;
         y_sum += (a.y + b.y) * cross;
     }
-    if cross_sum.abs() <= AREA_EPSILON {
+    if !cross_sum.is_finite() || cross_sum == 0.0 {
         return None;
     }
     Some(Point2 {
@@ -732,6 +797,20 @@ mod tests {
     }
 
     #[test]
+    fn clipping_keeps_intersection_for_a_tiny_non_parallel_segment() {
+        let intersection = line_intersection(
+            Point2 { x: 0.0, y: -2e-6 },
+            Point2 { x: 0.0, y: 2e-6 },
+            Point2 { x: -0.01, y: 0.0 },
+            Point2 { x: 0.01, y: 0.0 },
+        )
+        .expect("tiny non-parallel segments must intersect");
+
+        assert!(intersection.x.abs() < 1e-8);
+        assert!(intersection.y.abs() < 1e-8);
+    }
+
+    #[test]
     fn spherical_area_cut_creates_one_shared_partition() {
         let center = normalized([1.0, 0.0, 0.0]).unwrap();
         let polygon = vec![
@@ -748,8 +827,7 @@ mod tests {
         let full_spherical_area = spherical_polygon_area_vertices(&polygon).unwrap();
         let retained_spherical_area = spherical_polygon_area_vertices(&retained).unwrap();
         let full_projected_area = signed_area(&frame.project_polygon(&polygon).unwrap()).abs();
-        let retained_projected_area =
-            signed_area(&frame.project_polygon(&retained).unwrap()).abs();
+        let retained_projected_area = signed_area(&frame.project_polygon(&retained).unwrap()).abs();
         let remainder_projected_area =
             signed_area(&frame.project_polygon(&remainder).unwrap()).abs();
 

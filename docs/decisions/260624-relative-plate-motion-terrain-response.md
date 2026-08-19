@@ -29,11 +29,15 @@ Accepted
 rel_v = v_b - v_a
 n = unit(pos_b - pos_a)
 
-C = max(0, dot(rel_v, n))
-D = max(0, -dot(rel_v, n))
+relative_normal_velocity = dot(rel_v, n)
+C = max(0, -relative_normal_velocity)
+D = max(0, relative_normal_velocity)
 T = length(rel_v - dot(rel_v, n) * n)
 obliquity = T / (C + D + T + eps)
 ```
+
+`relative_normal_velocity` は境界 edge の端点間距離の時間微分として扱う。
+正は発散、負は収束である。
 
 初期生成では `BoundaryEdge` に `convergence`、`divergence`、`transform`、
 `obliquity`、`strength` を保持し、`apply_boundary_model` はこれらから

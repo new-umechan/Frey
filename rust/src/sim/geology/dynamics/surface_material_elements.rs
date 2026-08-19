@@ -4,12 +4,13 @@ use crate::sim::world::{BoundaryDynamicsState, BoundaryType};
 use crate::sim::world::{PlateKinematicsState, SurfaceMaterialElementState, VertexCrustState};
 use std::time::{Duration, Instant};
 
-use super::surface_boundary_sweep::SweptBoundaryPlan;
+use super::surface_boundary_sweep::{SweptBoundaryPlan, SweptDivergentCell};
 use super::surface_cell_geometry::build_barycentric_dual_cells;
 #[cfg(test)]
 use super::surface_material_overlap::spherical_polygon_area_vertices;
 use super::surface_material_overlap::{
-    cut_spherical_polygon_by_area_fraction, polygon_overlap_fractions,
+    cut_spherical_polygon_by_area_fraction, polygon_overlap_failure_details,
+    polygon_overlap_fractions,
 };
 use super::surface_material_projection::{ProjectedPlateMaterial, SurfaceMaterialProjection};
 use super::surface_material_transport::{nearest_mesh_cell, rotate_unit_vector};
@@ -20,6 +21,9 @@ const MIN_REPRESENTABLE_CELL_FRACTION: f32 = 1e-3;
 // them makes the f32 gnomonic projection less stable without preserving useful
 // ownership history.
 const NUMERICAL_DUST_CELL_FRACTION: f32 = 1e-4;
+const MIN_ELEMENTS_PER_PROJECTION_WORKER: usize = 4_096;
+const MAX_ELEMENTS_PER_PROJECTION_BATCH: usize = 131_072;
+const NO_PROJECTION_FAILURE: u32 = u32::MAX;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct SurfaceMaterialElementProjection {
@@ -114,6 +118,10 @@ struct PersistentMaterialTiming {
     initial_projection: Duration,
     boundary_plan: Duration,
     reactions: Duration,
+    subduction_reactions: Duration,
+    ridge_reactions: Duration,
+    subduction_reaction_cell_count: usize,
+    ridge_reaction_cell_count: usize,
     post_reaction_projection: Duration,
     rasterize: Duration,
     final_coverage: Duration,
@@ -125,6 +133,8 @@ impl PersistentMaterialTiming {
             concat!(
                 "persistent-material timing advect_and_prune_ms={:.3} ",
                 "initial_projection_ms={:.3} boundary_plan_ms={:.3} reactions_ms={:.3} ",
+                "subduction_reactions_ms={:.3} ridge_reactions_ms={:.3} ",
+                "subduction_reaction_cells={} ridge_reaction_cells={} ",
                 "post_reaction_projection_ms={:.3} rasterize_ms={:.3} ",
                 "final_coverage_ms={:.3}"
             ),
@@ -132,6 +142,10 @@ impl PersistentMaterialTiming {
             duration_ms(self.initial_projection),
             duration_ms(self.boundary_plan),
             duration_ms(self.reactions),
+            duration_ms(self.subduction_reactions),
+            duration_ms(self.ridge_reactions),
+            self.subduction_reaction_cell_count,
+            self.ridge_reaction_cell_count,
             duration_ms(self.post_reaction_projection),
             duration_ms(self.rasterize),
             duration_ms(self.final_coverage),
@@ -160,16 +174,20 @@ pub(super) fn update_persistent_surface_material_elements(
             input.crust,
         )?;
     }
+    let dual_cells =
+        build_barycentric_dual_cells(input.positions, input.nbr_offsets, input.nbrs)
+            .ok_or_else(|| "failed to build target dual cells for material elements".to_string())?;
     let start = Instant::now();
     advect_surface_material_elements(input.elements, input.plate_states)?;
     discard_subcell_material_dust(input.elements, input.positions.len());
     timing.advect_and_prune += start.elapsed();
     let start = Instant::now();
-    let mut projection = project_surface_material_elements(
+    let mut projection = project_surface_material_elements_with_dual_cells(
         input.elements,
         input.positions,
         input.nbr_offsets,
         input.nbrs,
+        &dual_cells,
     )?;
     timing.initial_projection += start.elapsed();
     if projection.unassigned_element_count > 0 {
@@ -197,14 +215,16 @@ pub(super) fn update_persistent_surface_material_elements(
     );
     timing.boundary_plan += start.elapsed();
     let start = Instant::now();
+    timing.subduction_reaction_cell_count = plan.subduction_cells.len();
+    timing.ridge_reaction_cell_count = plan.divergent_cells.len();
     let mut closure = if apply_reactions {
         apply_persistent_material_reactions(
             input.elements,
             &projection,
             &plan,
             input.positions,
-            input.nbr_offsets,
-            input.nbrs,
+            &dual_cells,
+            &mut timing,
         )?
     } else {
         MaterialCoverageClosureDiagnostics::default()
@@ -212,11 +232,12 @@ pub(super) fn update_persistent_surface_material_elements(
     timing.reactions += start.elapsed();
     let start = Instant::now();
     discard_subcell_material_dust(input.elements, input.positions.len());
-    projection = project_surface_material_elements(
+    projection = project_surface_material_elements_with_dual_cells(
         input.elements,
         input.positions,
         input.nbr_offsets,
         input.nbrs,
+        &dual_cells,
     )?;
     timing.post_reaction_projection += start.elapsed();
     let start = Instant::now();
@@ -283,10 +304,11 @@ fn apply_persistent_material_reactions(
     projection: &SurfaceMaterialElementProjection,
     plan: &SweptBoundaryPlan,
     positions: &[[f32; 3]],
-    nbr_offsets: &[u32],
-    nbrs: &[u32],
+    dual_cells: &[Vec<[f32; 3]>],
+    timing: &mut PersistentMaterialTiming,
 ) -> Result<MaterialCoverageClosureDiagnostics, String> {
     let mut diagnostics = MaterialCoverageClosureDiagnostics::default();
+    let start = Instant::now();
     let mut removal = std::collections::BTreeMap::<(usize, PlateId), f32>::new();
     for assignment in &plan.subduction_cells {
         let cell = assignment.cell as usize;
@@ -351,60 +373,142 @@ fn apply_persistent_material_reactions(
             )?;
         }
     }
+    timing.subduction_reactions += start.elapsed();
 
-    let dual_cells = build_barycentric_dual_cells(positions, nbr_offsets, nbrs)
-        .ok_or_else(|| "failed to build dual cells for ridge material".to_string())?;
-    for assignment in &plan.divergent_cells {
-        let cell = assignment.cell as usize;
-        let Some((&center, polygon, materials, &target_area)) = positions
-            .get(cell)
-            .zip(dual_cells.get(cell))
-            .zip(projection.cells.get(cell))
-            .zip(projection.target_cell_areas.get(cell))
-            .map(|(((center, polygon), materials), area)| (center, polygon, materials, area))
-        else {
-            continue;
-        };
-        let projected_area = materials.iter().map(|material| material.area).sum::<f32>();
-        let gap_area = (target_area - projected_area).max(0.0);
-        if gap_area <= AREA_EPSILON {
-            continue;
-        }
-        let cell_moment = spherical_polygon_first_moment(polygon)
-            .ok_or_else(|| format!("ridge cell {cell} has no first moment"))?;
-        let mut gap_moment = cell_moment;
-        for material in materials {
-            for axis in 0..3 {
-                gap_moment[axis] -= material.first_moment[axis];
-            }
-        }
-        let gap_plate = PlateId(u32::MAX);
-        let mut phases = materials.clone();
-        phases.push(ProjectedElementMaterial {
-            plate_id: gap_plate,
-            area: gap_area,
-            first_moment: gap_moment,
-            ..Default::default()
-        });
-        phases.sort_by_key(|phase| phase.plate_id);
-        let partition = reconstruct_multimaterial_mof(polygon, center, &phases)
-            .ok_or_else(|| format!("failed to reconstruct ridge gap in cell {cell}"))?;
-        let support = partition
-            .into_iter()
-            .find_map(|(phase, support)| (phase.plate_id == gap_plate).then_some(support))
-            .ok_or_else(|| format!("ridge gap phase is missing in cell {cell}"))?;
-        append_element_polygon(
-            elements,
-            assignment.accreting_plate,
-            cell,
-            &support,
-            1.0,
-            0.0,
-            false,
-        )?;
-        diagnostics.ridge_created_area += gap_area;
+    let start = Instant::now();
+    for reaction in
+        reconstruct_ridge_materials(&plan.divergent_cells, projection, positions, dual_cells)?
+    {
+        diagnostics.ridge_created_area += reaction.created_area;
+        elements.extend(reaction.elements);
     }
+    timing.ridge_reactions += start.elapsed();
     Ok(diagnostics)
+}
+
+#[derive(Default)]
+struct RidgeMaterialReaction {
+    elements: Vec<SurfaceMaterialElementState>,
+    created_area: f32,
+}
+
+fn reconstruct_ridge_materials(
+    assignments: &[SweptDivergentCell],
+    projection: &SurfaceMaterialElementProjection,
+    positions: &[[f32; 3]],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> Result<Vec<RidgeMaterialReaction>, String> {
+    #[cfg(target_family = "wasm")]
+    {
+        return assignments
+            .iter()
+            .map(|assignment| {
+                reconstruct_ridge_material(assignment, projection, positions, dual_cells)
+            })
+            .collect();
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        let worker_count = std::thread::available_parallelism()
+            .map(|count| count.get())
+            .unwrap_or(1)
+            .min(assignments.len());
+        if worker_count <= 1 {
+            return assignments
+                .iter()
+                .map(|assignment| {
+                    reconstruct_ridge_material(assignment, projection, positions, dual_cells)
+                })
+                .collect();
+        }
+        let chunk_size = assignments.len().div_ceil(worker_count);
+        std::thread::scope(|scope| {
+            let workers = assignments
+                .chunks(chunk_size)
+                .map(|chunk| {
+                    scope.spawn(move || {
+                        chunk
+                            .iter()
+                            .map(|assignment| {
+                                reconstruct_ridge_material(
+                                    assignment, projection, positions, dual_cells,
+                                )
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut reactions = Vec::with_capacity(assignments.len());
+            for worker in workers {
+                let chunk = worker
+                    .join()
+                    .map_err(|_| "ridge material worker panicked".to_string())??;
+                reactions.extend(chunk);
+            }
+            Ok(reactions)
+        })
+    }
+}
+
+fn reconstruct_ridge_material(
+    assignment: &SweptDivergentCell,
+    projection: &SurfaceMaterialElementProjection,
+    positions: &[[f32; 3]],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> Result<RidgeMaterialReaction, String> {
+    let cell = assignment.cell as usize;
+    let Some((&center, polygon, materials, &target_area)) = positions
+        .get(cell)
+        .zip(dual_cells.get(cell))
+        .zip(projection.cells.get(cell))
+        .zip(projection.target_cell_areas.get(cell))
+        .map(|(((center, polygon), materials), area)| (center, polygon, materials, area))
+    else {
+        return Ok(RidgeMaterialReaction::default());
+    };
+    let projected_area = materials.iter().map(|material| material.area).sum::<f32>();
+    let gap_area = (target_area - projected_area).max(0.0);
+    if gap_area <= AREA_EPSILON {
+        return Ok(RidgeMaterialReaction::default());
+    }
+    let cell_moment = spherical_polygon_first_moment(polygon)
+        .ok_or_else(|| format!("ridge cell {cell} has no first moment"))?;
+    let mut gap_moment = cell_moment;
+    for material in materials {
+        for axis in 0..3 {
+            gap_moment[axis] -= material.first_moment[axis];
+        }
+    }
+    let gap_plate = PlateId(u32::MAX);
+    let mut phases = materials.clone();
+    phases.push(ProjectedElementMaterial {
+        plate_id: gap_plate,
+        area: gap_area,
+        first_moment: gap_moment,
+        ..Default::default()
+    });
+    phases.sort_by_key(|phase| phase.plate_id);
+    let partition = reconstruct_multimaterial_mof(polygon, center, &phases)
+        .ok_or_else(|| format!("failed to reconstruct ridge gap in cell {cell}"))?;
+    let support = partition
+        .into_iter()
+        .find_map(|(phase, support)| (phase.plate_id == gap_plate).then_some(support))
+        .ok_or_else(|| format!("ridge gap phase is missing in cell {cell}"))?;
+    let mut elements = Vec::new();
+    append_element_polygon(
+        &mut elements,
+        assignment.accreting_plate,
+        cell,
+        &support,
+        1.0,
+        0.0,
+        false,
+    )?;
+    Ok(RidgeMaterialReaction {
+        elements,
+        created_area: gap_area,
+    })
 }
 
 fn append_element_polygon(
@@ -1326,6 +1430,7 @@ pub(super) fn advect_surface_material_elements(
     Ok(())
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn project_surface_material_elements(
     elements: &mut [SurfaceMaterialElementState],
     positions: &[[f32; 3]],
@@ -1334,6 +1439,25 @@ pub(super) fn project_surface_material_elements(
 ) -> Result<SurfaceMaterialElementProjection, String> {
     let dual_cells = build_barycentric_dual_cells(positions, nbr_offsets, nbrs)
         .ok_or_else(|| "failed to build target dual cells for material elements".to_string())?;
+    project_surface_material_elements_with_dual_cells(
+        elements,
+        positions,
+        nbr_offsets,
+        nbrs,
+        &dual_cells,
+    )
+}
+
+fn project_surface_material_elements_with_dual_cells(
+    elements: &mut [SurfaceMaterialElementState],
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> Result<SurfaceMaterialElementProjection, String> {
+    if dual_cells.len() != positions.len() {
+        return Err("target dual cell count does not match mesh positions".to_string());
+    }
     let target_cell_areas = dual_cells
         .iter()
         .enumerate()
@@ -1344,8 +1468,157 @@ pub(super) fn project_surface_material_elements(
         target_cell_areas,
         ..Default::default()
     };
+    for batch in elements.chunks_mut(MAX_ELEMENTS_PER_PROJECTION_BATCH) {
+        let chunks =
+            compute_element_projection_chunks(batch, positions, nbr_offsets, nbrs, dual_cells)?;
+        merge_element_projection_chunks(batch, chunks, &mut projection);
+    }
+    for (materials, &target_area) in projection.cells.iter().zip(&projection.target_cell_areas) {
+        let projected_area = materials.iter().map(|material| material.area).sum::<f32>();
+        projection.uncovered_area += (target_area - projected_area).max(0.0);
+        projection.overlap_area += (projected_area - target_area).max(0.0);
+        projection.absolute_coverage_error += (projected_area - target_area).abs();
+    }
+    Ok(projection)
+}
+
+fn merge_element_projection_chunks(
+    elements: &[SurfaceMaterialElementState],
+    chunks: Vec<ElementProjectionChunk>,
+    projection: &mut SurfaceMaterialElementProjection,
+) {
+    let mut element_offset = 0usize;
+    for chunk in chunks {
+        for work in chunk.elements {
+            let element = &elements[element_offset];
+            element_offset += 1;
+            projection.input_area += element.area;
+            if work.failure_index != NO_PROJECTION_FAILURE {
+                let details = &chunk.failures[work.failure_index as usize];
+                projection.unassigned_element_count =
+                    projection.unassigned_element_count.saturating_add(1);
+                projection.unassigned_element_area += element.area;
+                projection.max_unassigned_element_area =
+                    projection.max_unassigned_element_area.max(element.area);
+                eprintln!(
+                    "persistent material projection failed element_area={:.12} {details}",
+                    element.area,
+                );
+                continue;
+            }
+            let overlap_start = work.overlap_start as usize;
+            let overlap_end = overlap_start + work.overlap_len as usize;
+            for overlap in &chunk.overlaps[overlap_start..overlap_end] {
+                let target = overlap.target;
+                let fraction = overlap.fraction;
+                let area = element.area * fraction;
+                deposit_element_material(
+                    &mut projection.cells[target],
+                    element,
+                    area,
+                    fraction,
+                    overlap.centroid,
+                );
+                projection.projected_area += area;
+            }
+        }
+    }
+    debug_assert_eq!(element_offset, elements.len());
+}
+
+struct ElementProjectionWork {
+    overlap_start: u32,
+    overlap_len: u8,
+    failure_index: u32,
+}
+
+struct ElementProjectionChunk {
+    elements: Vec<ElementProjectionWork>,
+    overlaps: Vec<super::surface_material_overlap::PolygonOverlapFraction>,
+    failures: Vec<String>,
+}
+
+fn compute_element_projection_chunks(
+    elements: &mut [SurfaceMaterialElementState],
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> Result<Vec<ElementProjectionChunk>, String> {
+    if elements.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        return Ok(vec![compute_element_projection_chunk(
+            elements,
+            positions,
+            nbr_offsets,
+            nbrs,
+            dual_cells,
+        )?]);
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        let useful_worker_count = elements.len().div_ceil(MIN_ELEMENTS_PER_PROJECTION_WORKER);
+        let worker_count = std::thread::available_parallelism()
+            .map(|count| count.get())
+            .unwrap_or(1)
+            .min(useful_worker_count)
+            .max(1);
+        if worker_count == 1 {
+            return Ok(vec![compute_element_projection_chunk(
+                elements,
+                positions,
+                nbr_offsets,
+                nbrs,
+                dual_cells,
+            )?]);
+        }
+        let chunk_size = elements.len().div_ceil(worker_count);
+        std::thread::scope(|scope| {
+            let workers = elements
+                .chunks_mut(chunk_size)
+                .map(|chunk| {
+                    scope.spawn(move || {
+                        compute_element_projection_chunk(
+                            chunk,
+                            positions,
+                            nbr_offsets,
+                            nbrs,
+                            dual_cells,
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut chunks = Vec::with_capacity(workers.len());
+            for worker in workers {
+                chunks.push(
+                    worker
+                        .join()
+                        .map_err(|_| "surface material projection worker panicked".to_string())??,
+                );
+            }
+            Ok(chunks)
+        })
+    }
+}
+
+fn compute_element_projection_chunk(
+    elements: &mut [SurfaceMaterialElementState],
+    positions: &[[f32; 3]],
+    nbr_offsets: &[u32],
+    nbrs: &[u32],
+    dual_cells: &[Vec<[f32; 3]>],
+) -> Result<ElementProjectionChunk, String> {
+    let mut chunk = ElementProjectionChunk {
+        elements: Vec::with_capacity(elements.len()),
+        overlaps: Vec::with_capacity(elements.len().saturating_mul(2)),
+        failures: Vec::new(),
+    };
     for element in elements {
-        projection.input_area += element.area;
         let center = normalized([
             element.vertices[0][0] + element.vertices[1][0] + element.vertices[2][0],
             element.vertices[0][1] + element.vertices[1][1] + element.vertices[2][1],
@@ -1361,6 +1634,8 @@ pub(super) fn project_surface_material_elements(
         )
         .ok_or_else(|| "material element has no target host cell".to_string())?;
         element.host_cell = host as u32;
+        let overlap_start = u32::try_from(chunk.overlaps.len())
+            .map_err(|_| "surface material projection overlap count exceeds u32".to_string())?;
         let Some(overlap) = polygon_overlap_fractions(
             &element.vertices,
             center,
@@ -1369,34 +1644,34 @@ pub(super) fn project_surface_material_elements(
             nbrs,
             &dual_cells,
         ) else {
-            projection.unassigned_element_count =
-                projection.unassigned_element_count.saturating_add(1);
-            projection.unassigned_element_area += element.area;
-            projection.max_unassigned_element_area =
-                projection.max_unassigned_element_area.max(element.area);
+            let details = polygon_overlap_failure_details(
+                &element.vertices,
+                center,
+                host,
+                nbr_offsets,
+                nbrs,
+                &dual_cells,
+            );
+            let failure_index = u32::try_from(chunk.failures.len())
+                .map_err(|_| "surface material projection failure count exceeds u32".to_string())?;
+            chunk.failures.push(details);
+            chunk.elements.push(ElementProjectionWork {
+                overlap_start,
+                overlap_len: 0,
+                failure_index,
+            });
             continue;
         };
-        for overlap in overlap.fractions {
-            let target = overlap.target;
-            let fraction = overlap.fraction;
-            let area = element.area * fraction;
-            deposit_element_material(
-                &mut projection.cells[target],
-                element,
-                area,
-                fraction,
-                overlap.centroid,
-            );
-            projection.projected_area += area;
-        }
+        let overlap_len = u8::try_from(overlap.fractions.len())
+            .map_err(|_| "one material element overlaps more than 255 cells".to_string())?;
+        chunk.overlaps.extend(overlap.fractions);
+        chunk.elements.push(ElementProjectionWork {
+            overlap_start,
+            overlap_len,
+            failure_index: NO_PROJECTION_FAILURE,
+        });
     }
-    for (materials, &target_area) in projection.cells.iter().zip(&projection.target_cell_areas) {
-        let projected_area = materials.iter().map(|material| material.area).sum::<f32>();
-        projection.uncovered_area += (target_area - projected_area).max(0.0);
-        projection.overlap_area += (projected_area - target_area).max(0.0);
-        projection.absolute_coverage_error += (projected_area - target_area).abs();
-    }
-    Ok(projection)
+    Ok(chunk)
 }
 
 fn deposit_element_material(

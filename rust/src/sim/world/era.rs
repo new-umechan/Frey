@@ -12,8 +12,6 @@ pub enum EraKind {
 }
 
 impl EraKind {
-    pub const PLATE_UPDATE_REFERENCE_YEARS: f32 = 5_000_000.0;
-
     pub fn as_key(self) -> &'static str {
         match self {
             EraKind::Crust => "crust",
@@ -69,12 +67,6 @@ impl EraKind {
         }
     }
 
-    pub fn plate_update_interval_ticks(self) -> u64 {
-        (Self::PLATE_UPDATE_REFERENCE_YEARS / self.real_years_per_tick())
-            .ceil()
-            .max(1.0) as u64
-    }
-
     pub fn start_tick(self) -> u64 {
         match self {
             EraKind::Crust => 0,
@@ -103,14 +95,5 @@ mod tests {
     #[test]
     fn crust_tick_represents_five_myr() {
         assert_eq!(EraKind::Crust.real_years_per_tick(), 5_000_000.0);
-    }
-
-    #[test]
-    fn plate_update_intervals_preserve_the_crust_time_quantum() {
-        assert_eq!(EraKind::Crust.plate_update_interval_ticks(), 1);
-        assert_eq!(EraKind::Environment.plate_update_interval_ticks(), 5);
-        assert_eq!(EraKind::Life.plate_update_interval_ticks(), 5_000);
-        assert_eq!(EraKind::Civilization.plate_update_interval_ticks(), 50_000);
-        assert_eq!(EraKind::History.plate_update_interval_ticks(), 5_000_000);
     }
 }

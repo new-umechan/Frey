@@ -803,14 +803,14 @@ mod tests {
         let normal_world = init_world(
             &mut normal_service,
             "seed-profile-equivalence".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init normal world");
         let profiled_world = init_world(
             &mut profiled_service,
             "seed-profile-equivalence".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init profiled world");
@@ -854,14 +854,14 @@ mod tests {
         let restored_world = init_world(
             &mut restored_service,
             "seed-restore-equivalence".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init restored world");
         let direct_world = init_world(
             &mut direct_service,
             "seed-restore-equivalence".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init direct world");
@@ -1199,7 +1199,7 @@ mod tests {
         let world = init_world(
             &mut service,
             "seed-seek-history-retain".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init world");
@@ -1221,14 +1221,14 @@ mod tests {
         let direct_world = init_world(
             &mut direct_service,
             "seed-seek-beyond-head".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init direct world");
         let seek_world = init_world(
             &mut seek_service,
             "seed-seek-beyond-head".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init seek world");
@@ -1260,7 +1260,7 @@ mod tests {
         let world = init_world(
             &mut service,
             "seed-rewind-advance-reuse".to_string(),
-            1,
+            2,
             default_init_config(),
         )
         .expect("init world");
@@ -1283,7 +1283,7 @@ mod tests {
         let world = init_world(
             &mut service,
             "seed-headless-history".to_string(),
-            1,
+            2,
             InitWorldConfig {
                 geology_params: None,
                 simulation_rate: None,

@@ -1189,6 +1189,8 @@ pub struct BoundaryDynamicsState {
     #[serde(default)]
     pub edge_convergent_plate: Vec<Option<PlateId>>,
     #[serde(default)]
+    pub subducting_plate: Vec<Option<PlateId>>,
+    #[serde(default)]
     pub rollback_fraction: Vec<f32>,
     #[serde(default)]
     pub backarc_tension: Vec<f32>,

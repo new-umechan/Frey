@@ -987,3 +987,173 @@ pub(super) fn trig_hash01(pos: [f32; 3], seed: u32) -> f32 {
     let s = (pos[0] * 12.9898 + pos[1] * 78.233 + pos[2] * 37.719 + seedf * 0.12345).sin();
     fract01(s * 43_758.547)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plate_attr(is_ocean: bool) -> PlateAttr {
+        PlateAttr {
+            is_ocean,
+            velocity: [0.0; 3],
+            drift_axis_primary: [0.0; 3],
+            drift_axis_secondary: [0.0; 3],
+            drift_mix_axis: [0.0; 3],
+            drift_variability: 0.0,
+            base_height: 0.0,
+            base_weight: 0.0,
+        }
+    }
+
+    fn boundary_strip() -> (Vec<[f32; 3]>, Vec<u32>, Vec<u32>, Vec<PlateId>) {
+        let cell_count = 20;
+        let mut positions = Vec::with_capacity(cell_count);
+        let mut nbr_offsets = Vec::with_capacity(cell_count + 1);
+        let mut nbrs = Vec::with_capacity(cell_count * 2 - 2);
+        let mut plate_id = Vec::with_capacity(cell_count);
+
+        for i in 0..cell_count {
+            let angle = (i as f32 - 9.5) * 0.03;
+            positions.push([angle.cos(), angle.sin(), 0.0]);
+            plate_id.push(if i < 10 { PlateId(0) } else { PlateId(1) });
+            nbr_offsets.push(nbrs.len() as u32);
+            if i > 0 {
+                nbrs.push((i - 1) as u32);
+            }
+            if i + 1 < cell_count {
+                nbrs.push((i + 1) as u32);
+            }
+        }
+        nbr_offsets.push(nbrs.len() as u32);
+
+        (positions, nbr_offsets, nbrs, plate_id)
+    }
+
+    #[test]
+    fn artificial_subduction_strip_places_trench_and_arc_on_opposite_sides() {
+        let (positions, nbr_offsets, nbrs, plate_id) = boundary_strip();
+        let attributes = vec![plate_attr(true), plate_attr(false)];
+        let mut vertex_lithosphere = vec![
+            VertexLithosphere {
+                age_norm: 0.4,
+                weight: 0.4,
+                buoyancy: 0.2,
+                competence: 0.5,
+            };
+            positions.len()
+        ];
+        for lithosphere in &mut vertex_lithosphere[..10] {
+            lithosphere.age_norm = 1.0;
+            lithosphere.weight = 1.0;
+            lithosphere.buoyancy = -0.5;
+        }
+        let boundary_edges = vec![BoundaryEdge {
+            a: 9,
+            b: 10,
+            plate_a: 0,
+            plate_b: 1,
+            boundary_type: EdgeReliefType::Convergent,
+            strength: 1.0,
+            obliquity: 0.0,
+            convergence: 1.0,
+            divergence: 0.0,
+            transform: 0.0,
+        }];
+        let params = GeologyParams::default();
+        let mut height = vec![0.0; positions.len()];
+
+        let fields = apply_boundary_model(
+            BoundaryModelInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &plate_id,
+                attributes: &attributes,
+                vertex_lithosphere: &vertex_lithosphere,
+                boundary_edges: &boundary_edges,
+                params: &params,
+            },
+            &mut height,
+        );
+
+        assert!(height[..10].iter().copied().fold(f32::INFINITY, f32::min) < 0.0);
+        assert!(
+            height[10..]
+                .iter()
+                .copied()
+                .fold(f32::NEG_INFINITY, f32::max)
+                > 0.0
+        );
+        assert!(fields.debug_trench_strength[..10]
+            .iter()
+            .any(|value| *value > 0.0));
+        assert!(fields.debug_trench_strength[10..]
+            .iter()
+            .all(|value| *value == 0.0));
+        assert!(fields.debug_arc_strength[..10]
+            .iter()
+            .all(|value| *value == 0.0));
+        assert!(fields.debug_arc_strength[10..]
+            .iter()
+            .any(|value| *value > 0.0));
+        assert!(height[0].abs() < height[9].abs());
+        assert!(
+            height[19].abs()
+                < height[10..]
+                    .iter()
+                    .map(|value| value.abs())
+                    .fold(0.0, f32::max)
+        );
+    }
+
+    #[test]
+    fn artificial_oceanic_divergence_strip_is_symmetric_and_ridge_centered() {
+        let (positions, nbr_offsets, nbrs, plate_id) = boundary_strip();
+        let attributes = vec![plate_attr(true), plate_attr(true)];
+        let vertex_lithosphere = vec![
+            VertexLithosphere {
+                age_norm: 0.5,
+                weight: 0.5,
+                buoyancy: 0.0,
+                competence: 0.5,
+            };
+            positions.len()
+        ];
+        let boundary_edges = vec![BoundaryEdge {
+            a: 9,
+            b: 10,
+            plate_a: 0,
+            plate_b: 1,
+            boundary_type: EdgeReliefType::Divergent,
+            strength: 1.0,
+            obliquity: 0.0,
+            convergence: 0.0,
+            divergence: 1.0,
+            transform: 0.0,
+        }];
+        let params = GeologyParams::default();
+        let mut height = vec![0.0; positions.len()];
+
+        let _ = apply_boundary_model(
+            BoundaryModelInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &plate_id,
+                attributes: &attributes,
+                vertex_lithosphere: &vertex_lithosphere,
+                boundary_edges: &boundary_edges,
+                params: &params,
+            },
+            &mut height,
+        );
+
+        assert!(height[9] > 0.0);
+        assert!(height[10] > 0.0);
+        for offset in 0..10 {
+            assert!((height[9 - offset] - height[10 + offset]).abs() <= 1e-6);
+        }
+        assert!(height[0] < height[9]);
+        assert!(height[19] < height[10]);
+    }
+}

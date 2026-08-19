@@ -545,6 +545,11 @@ fn ensure_geology_dynamics(
         None => true,
     };
     if !needs_rebuild {
+        if let Some(state) = geology_state.as_mut() {
+            if state.boundary_state.subducting_plate.len() != cell_count {
+                state.boundary_state.subducting_plate = vec![None; cell_count];
+            }
+        }
         return false;
     }
 
@@ -620,6 +625,7 @@ fn ensure_geology_dynamics(
             edge_activity: Vec::new(),
             edge_convergent_regimes: Vec::new(),
             edge_convergent_plate: Vec::new(),
+            subducting_plate: vec![None; cell_count],
             rollback_fraction: vec![0.0; cell_count],
             backarc_tension: vec![0.0; cell_count],
             slab_convergence_component: vec![0.0; cell_count],
@@ -723,6 +729,11 @@ fn debug_validate_geology_state_with_state(
         "{stage}: runtime.geology_dynamics.boundary_state.activity length mismatch"
     );
     debug_assert_eq!(
+        dynamics.boundary_state.subducting_plate.len(),
+        cell_count,
+        "{stage}: runtime.geology_dynamics.boundary_state.subducting_plate length mismatch"
+    );
+    debug_assert_eq!(
         dynamics.boundary_state.rollback_fraction.len(),
         cell_count,
         "{stage}: runtime.geology_dynamics.boundary_state.rollback_fraction length mismatch"
@@ -754,6 +765,16 @@ fn debug_validate_geology_state_with_state(
             plate_id.as_u32(),
             dynamics.plate_states.len()
         );
+    }
+    for (i, subducting_plate) in dynamics.boundary_state.subducting_plate.iter().enumerate() {
+        if let Some(plate_id) = subducting_plate {
+            debug_assert!(
+                plate_id.as_usize() < dynamics.plate_states.len(),
+                "{stage}: subducting_plate[{i}]={} is out of range for plate_states={}",
+                plate_id.as_u32(),
+                dynamics.plate_states.len()
+            );
+        }
     }
 
     for (i, &mantle_heat) in dynamics.mantle_heat.iter().enumerate() {

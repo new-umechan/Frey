@@ -2,51 +2,41 @@
 
 ## Status
 
-Draft
+Accepted
 
 ## Context
 
-`precompute_world` regenerates a level-6, 1600-tick store serially. A failed long-running
-simulation currently reports its aggregate timing only after the final manifest is written, so a
-panic late in the run loses the information needed to distinguish simulation, view-delta,
-compression, and durable-write costs. The default developer command consequently has an
-unbounded feedback cycle as the model and stored fields grow.
+Level-6, 1600-tick store generation was dominated by persistent-material projection. Late failures
+also lacked enough periodic timing to identify whether simulation or store output was responsible.
+Optimization must preserve deterministic fixed-seed output and the scientific model.
 
-## Proposal
+## Decision
 
-First add periodic, cumulative phase timing to precompute. The report must expose elapsed time,
-completed ticks, and the time spent in world advancement, delta construction, delta encoding and
-write, and keyframe write. The interval is configurable and defaults to 16 ticks.
+- Emit periodic cumulative timing for world advancement, delta construction/write, and keyframes.
+  Keep module and persistent-material phase profiles opt-in.
+- Reuse projections when no intervening stage mutates persistent material.
+- On native builds, parallelize independent ridge-gap reconstruction and persistent-element
+  projection. WebAssembly remains sequential.
+- Workers may update only their assigned element hosts and produce private overlap records. Deposit
+  records on the main thread in original element, candidate-cell, and overlap order, preserving the
+  floating-point accumulation order.
+- Process projection in batches of at most 131,072 elements, merging each batch before starting the
+  next. This bounds temporary overlap storage without changing result order.
+- Keep global topology and cross-cell reactions ordered.
+- Retain level-6, 1600-tick generation as the release validation workload.
 
-An opt-in module profile records the geology, climate, glaciology, hydrology, ecology, society,
-and transition portions of every precompute tick. It is diagnostic-only and may add profiling
-overhead, so it is not enabled in normal store generation.
+## Validation
 
-Persistent material has a separate opt-in phase profile because it has distinct advection,
-projection, boundary-reaction, and rasterization stages. It remains confined to that module to
-avoid coupling measurement fields into the serialized world state.
+On a 32-logical-CPU host, each late projection fell from about 510-560 ms to 35-53 ms. The
+`alpha`, level-6, 120-tick output exactly matched the sequential result after removing `run_id` and
+was repeatable across parallel runs. Its wall time fell from about 130 to 29-30 seconds.
 
-After collecting a level-6 baseline, evaluate optimizations in this order:
-
-1. Preserve atomic store publication while batching durability barriers rather than syncing every
-   delta file.
-2. Pipeline immutable delta encoding and file writes behind the sequential world advancement
-   loop, with bounded memory and deterministic frame ordering.
-3. Parallelize independent per-cell and per-element phases inside a tick. Global topology,
-   boundary reactions, and floating-point reductions remain ordered reduction phases so that a
-   fixed seed remains reproducible.
-
-Before introducing concurrency, eliminate duplicate projection passes when no intervening stage
-mutates persistent material. This is a semantics-preserving local optimization and establishes a
-baseline for subsequent parallel work.
-
-The 1600-tick level-6 generation remains the release validation workload. Shorter and/or lower
-resolution stores are developer feedback workloads, not replacements for that validation.
+The 1600-tick release run completed in 550.43 seconds with 338.40 ms/tick world advancement and
+about 1.74 GiB peak RSS. It passed the former failure points at ticks 986 and 1244. Commands and
+validation gates are recorded in `docs/operations/bench/geology/validation.md`.
 
 ## Consequences
 
-- The first change adds small logging overhead but makes late failures diagnosable.
-- I/O pipelining and data-parallel phases require measured speedups and deterministic regression
-  checks before adoption.
-- Changing fragment removal thresholds is a model decision and must be documented separately; it
-  is not a performance optimization.
+- Native precompute uses all available logical CPUs and increases host contention.
+- Batching bounds projection intermediates, but world state and allocator retention still grow.
+- Fragment thresholds remain model decisions, not performance tuning.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Rejected
 
 ## Context
 
@@ -47,5 +47,6 @@ clockの境界で決定論的に切り捨てる。
 ## Trade-off
 
 これはplate tectonicsを500万年のoperator splittingとして近似する。Environment内の短期的なplate境界変化は
-解像しないが、現行の粗いmeshと既存のCrust時間校正より細かい地質応答を主張しない。plate運動と気候・水文を
-毎tick強結合する必要が判明した場合、このdecisionはRejectedにする。
+解像しない。plate速度・boundary reaction・persistent material更新は非線形であり、5回の逐次更新を1回の
+更新へ置換しても同じ境界形状にならない。tick 800のplate viewで不自然に入り組んだ境界が確認されたため、
+この近似は採用しない。

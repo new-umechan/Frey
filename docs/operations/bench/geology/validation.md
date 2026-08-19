@@ -69,6 +69,89 @@ Earth 実データ比較ベンチは `docs/operations/bench/geology/solo.md` を
 - 定性評価:
     - 定量評価を通したあとに手動で読む
 
+## 統合期間中の暫定 shape gate
+
+モジュール統合期間中は、高速化直前の `847e091`、`alpha`、level 6を暫定baselineとする。
+tick 40、80、100、120で既知の細線や小さな分断を含むため、これは望ましいplate形状の
+correctness基準ではない。改善方向の変化を許容しつつ、component、detached fragment、
+orphan、細枝、境界複雑度がbaselineからさらに悪化することだけを検出する。
+反応の発生tickが多少前後することを許すため、局所shape比率の上限にはtick 40から120までの
+baseline包絡を用いる。plate数、single-cell plate、component数などの構造指標はtickごとの
+上限を維持する。
+
+```bash
+pnpm test:plate-shape:temporary
+```
+
+release buildでtick 120まで実行する手動の重いgateであり、通常の短時間CIには含めない。
+基準値と一時的な許容上限は
+`tests/plate-shape/temporary-alpha-level6-baseline.json` に置く。
+plate topologyを本格的に改善するときはこのbaselineを更新せず、正しいshape契約を別途採用して
+この暫定gateを削除する。
+
+## Precompute長期性能検証
+
+投影、persistent material、store生成経路を変更したときは、短いshape gateを通したあとに
+既存storeとは別の出力先でlevel 6、1600 tickを完走させる。
+
+```bash
+cargo build --release --manifest-path rust/Cargo.toml \
+    --features precompute_server --bin precompute_world
+FREY_PRECOMPUTE_PROGRESS_INTERVAL=64 \
+    rust/target/release/precompute_world \
+    --seed alpha \
+    --level 6 \
+    --ticks 1600 \
+    --out-dir /tmp/frey-precompute-validation \
+    --keyframe-interval 64
+```
+
+最低限、tick 986と1244を越えて完走すること、`persistent material projection failed`が
+出ていないこと、最終行の`advance_ms_per_tick`を記録することを確認する。
+2026-07-31の32 logical CPU環境での基準は、wall time 550.43秒、
+`advance_ms_per_tick=338.400`、最大RSS約1.74 GiBである。
+出力先は検証専用とし、通常のpreview storeを上書きしない。
+
+## Plate motion terrain response verification
+
+プレート相対運動から地形変化への変換を変更するときは、実地球データとの比較より先に、
+人工的な境界条件による verification を実行する。
+
+最低限、次を分けて確認する。
+
+1. 相対速度の法線・接線成分への分解
+2. 収束、発散、横ずれの分類
+3. subducting / overriding side の判定
+4. uplift / subsidence の符号と局在
+5. 法線速度と接線速度を個別に変えたときの応答
+
+法線速度は境界 edge の端点間距離の時間微分として扱い、正を発散、負を収束とする。
+純粋な横ずれでは、収束・発散に固有な forcing が発生しないことを確認する。
+
+verification の失敗は、次の順序で切り分ける。
+
+- 法線速度の符号が違う場合は相対速度分解を見る
+- 分解が正しく境界種別が違う場合は境界分類を見る
+- 境界種別が正しく地形の側や符号が違う場合は地形 forcing を見る
+- raw forcing が正しく最終 delta が違う場合は diffusion、isostasy、clamp を見る
+
+現在の ETOPO 絶対標高と 1 tick の `delta height` は直接比較しない。
+海溝深度、山地高度、山地幅は、長期積分した `height` の validation で扱う。
+詳しい fixture、合否条件、mutation checks は
+`docs/decisions/260717-plate-motion-terrain-response-verification.md` を参照する。
+
+現在の自動 verification は次で実行する。
+
+```bash
+cargo test --manifest-path rust/Cargo.toml --lib sim::geology::boundaries::tests
+cargo test --manifest-path rust/Cargo.toml --lib sim::geology::dynamics::boundary_dynamics::tests
+cargo test --manifest-path rust/Cargo.toml --lib sim::geology::dynamics::surface_dynamics::tests
+```
+
+最初の test は帯状の人工境界に対する trench / arc の片側性と oceanic ridge の対称性、
+2 番目は速度成分、符号、境界分類、球面回転、3 番目は runtime forcing の符号、
+速度依存性、上盤・下盤の鏡映を確認する。
+
 ## Pre-plate emergence の確認
 
 Damage-first 初期化を変更したときは、長期 bench の前に pre-plate emergence を先に確認する。

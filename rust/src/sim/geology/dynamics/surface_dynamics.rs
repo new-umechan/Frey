@@ -44,6 +44,82 @@ pub(super) struct SurfaceUpdateOutput<'a> {
     pub next_vertex_buoyancy: &'a mut [f32],
 }
 
+#[derive(Clone, Copy)]
+struct BoundarySurfaceForcingInput {
+    boundary_type: BoundaryType,
+    convergence: f32,
+    divergence: f32,
+    obliquity: f32,
+    subduction_gate: f32,
+    compressive: f32,
+    tensile: f32,
+    volcanism: f32,
+    rollback_fraction: f32,
+    slab_rollback: f32,
+    is_subducting: bool,
+    is_overriding: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct BoundarySurfaceForcing {
+    tectonic_uplift: f32,
+    volcanic_uplift: f32,
+    tectonic_subsidence: f32,
+}
+
+fn boundary_surface_forcing(
+    input: BoundarySurfaceForcingInput,
+    params: &GeologyParams,
+) -> BoundarySurfaceForcing {
+    let collision_uplift = if input.boundary_type == BoundaryType::Collision {
+        params.tectonic_uplift_gain.max(0.0) * input.convergence * (1.0 - 0.40 * input.obliquity)
+    } else {
+        0.0
+    };
+    let arc_uplift = if input.boundary_type == BoundaryType::Subduction && input.is_overriding {
+        0.35 * params.tectonic_uplift_gain.max(0.0) * input.convergence * input.subduction_gate
+    } else {
+        0.0
+    };
+    let ridge_uplift = if input.boundary_type == BoundaryType::Ridge {
+        0.20 * params.tectonic_uplift_gain.max(0.0) * input.divergence
+    } else {
+        0.0
+    };
+    let trench_subsidence =
+        if input.boundary_type == BoundaryType::Subduction && input.is_subducting {
+            params.trench_gain.max(0.0)
+                * params.tectonic_subsidence_gain.max(0.0)
+                * input.convergence
+                * input.subduction_gate
+        } else {
+            0.0
+        };
+    let backarc_subsidence =
+        if input.boundary_type == BoundaryType::Subduction && input.is_overriding {
+            params.tectonic_subsidence_gain.max(0.0) * input.rollback_fraction * input.slab_rollback
+        } else {
+            0.0
+        };
+    let rift_subsidence = if input.boundary_type == BoundaryType::Rift {
+        params.tectonic_subsidence_gain.max(0.0) * input.divergence
+    } else {
+        0.0
+    };
+
+    BoundarySurfaceForcing {
+        tectonic_uplift: params.tectonic_uplift_gain.max(0.0) * input.compressive
+            + collision_uplift
+            + arc_uplift
+            + ridge_uplift,
+        volcanic_uplift: input.volcanism * params.volcanic_uplift_gain.max(0.0),
+        tectonic_subsidence: params.tectonic_subsidence_gain.max(0.0) * input.tensile
+            + trench_subsidence
+            + backarc_subsidence
+            + rift_subsidence,
+    }
+}
+
 pub(super) fn apply_stress_and_surface_update(
     input: SurfaceUpdateInput<'_>,
     output: &mut SurfaceUpdateOutput<'_>,
@@ -188,6 +264,9 @@ pub(super) fn apply_stress_and_surface_update(
         let start = nbr_offsets[i] as usize;
         let end = nbr_offsets[i + 1] as usize;
         let plate_i = plate_id[i];
+        let subducting_plate = boundary_state.subducting_plate.get(i).copied().flatten();
+        let is_subducting = subducting_plate == Some(plate_i);
+        let is_overriding = subducting_plate.is_some() && !is_subducting;
         let height_i = heights[i];
         let neighbors = &nbrs[start..end];
         let mut nbr_sum = 0.0;
@@ -283,7 +362,7 @@ pub(super) fn apply_stress_and_surface_update(
             0.0
         };
 
-        state.arc_volcanism = if boundary_type == BoundaryType::Subduction {
+        state.arc_volcanism = if boundary_type == BoundaryType::Subduction && is_overriding {
             boundary_activity
                 * (0.45 + 0.55 * subduction_gate)
                 * (0.35 + 0.65 * subduction_memory)
@@ -314,46 +393,27 @@ pub(super) fn apply_stress_and_surface_update(
         )
         .max(0.0);
 
-        let collision_uplift_bias = if boundary_type == BoundaryType::Collision {
-            params.tectonic_uplift_gain.max(0.0) * convergence * (1.0 - 0.40 * obliquity)
-        } else {
-            0.0
-        };
-        let arc_uplift_bias = if boundary_type == BoundaryType::Subduction {
-            0.35 * params.tectonic_uplift_gain.max(0.0) * convergence * subduction_gate
-        } else {
-            0.0
-        };
-        let ridge_uplift_bias = if boundary_type == BoundaryType::Ridge {
-            0.20 * params.tectonic_uplift_gain.max(0.0) * divergence
-        } else {
-            0.0
-        };
-        let tectonic_uplift = params.tectonic_uplift_gain.max(0.0) * compressive
-            + collision_uplift_bias
-            + arc_uplift_bias
-            + ridge_uplift_bias;
-        let volcanic_uplift = volcanism * params.volcanic_uplift_gain.max(0.0);
+        let forcing = boundary_surface_forcing(
+            BoundarySurfaceForcingInput {
+                boundary_type,
+                convergence,
+                divergence,
+                obliquity,
+                subduction_gate,
+                compressive,
+                tensile,
+                volcanism,
+                rollback_fraction,
+                slab_rollback: slab_roll,
+                is_subducting,
+                is_overriding,
+            },
+            params,
+        );
+        let tectonic_uplift = forcing.tectonic_uplift;
+        let volcanic_uplift = forcing.volcanic_uplift;
         let uplift = tectonic_uplift + volcanic_uplift;
-        let trench_subsidence_bias = if boundary_type == BoundaryType::Subduction {
-            params.trench_gain.max(0.0)
-                * params.tectonic_subsidence_gain.max(0.0)
-                * convergence
-                * subduction_gate
-        } else {
-            0.0
-        };
-        let backarc_subsidence_bias =
-            params.tectonic_subsidence_gain.max(0.0) * rollback_fraction * slab_roll;
-        let rift_subsidence_bias = if boundary_type == BoundaryType::Rift {
-            params.tectonic_subsidence_gain.max(0.0) * divergence
-        } else {
-            0.0
-        };
-        let tectonic_subsidence = params.tectonic_subsidence_gain.max(0.0) * tensile
-            + trench_subsidence_bias
-            + backarc_subsidence_bias
-            + rift_subsidence_bias;
+        let tectonic_subsidence = forcing.tectonic_subsidence;
         let thermal_subsidence = if state.crust_type == CrustType::Oceanic {
             let age_norm = (state.age / params.age_ref.max(1e-4)).clamp(0.0, 1.0);
             params.thermal_subsidence_gain.max(0.0) * age_norm.sqrt() * activity_scale
@@ -1302,8 +1362,9 @@ fn finite_or(value: f32, fallback: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_stress_and_surface_update, enforce_zero_mean_endogenous_height_change,
-        smoothing_limiter, SurfaceUpdateInput, SurfaceUpdateOutput,
+        apply_stress_and_surface_update, boundary_surface_forcing,
+        enforce_zero_mean_endogenous_height_change, smoothing_limiter, BoundarySurfaceForcingInput,
+        SurfaceUpdateInput, SurfaceUpdateOutput,
     };
     use crate::sim::exec::{GEOLOGY_HEIGHT_MAX, GEOLOGY_HEIGHT_MIN};
     use crate::sim::geology_types::{CrustType, PlateId, StressTensor};
@@ -1325,6 +1386,185 @@ mod tests {
             backarc_volcanism: 0.0,
             stress_tensor: StressTensor::default(),
         }
+    }
+
+    fn direct_forcing_input(boundary_type: BoundaryType) -> BoundarySurfaceForcingInput {
+        BoundarySurfaceForcingInput {
+            boundary_type,
+            convergence: 0.0,
+            divergence: 0.0,
+            obliquity: 0.0,
+            subduction_gate: 1.0,
+            compressive: 0.0,
+            tensile: 0.0,
+            volcanism: 0.0,
+            rollback_fraction: 0.0,
+            slab_rollback: 0.0,
+            is_subducting: false,
+            is_overriding: false,
+        }
+    }
+
+    fn run_two_cell_subduction(subducting_plate: PlateId) -> (Vec<f32>, Vec<f32>) {
+        let nbr_offsets = vec![0, 0, 0];
+        let nbrs = vec![];
+        let heights = vec![-0.08, -0.08];
+        let plate_id = vec![PlateId(0), PlateId(1)];
+        let boundary_state = BoundaryDynamicsState {
+            dominant_type: vec![BoundaryType::Subduction; 2],
+            activity: vec![0.8; 2],
+            convergence_component: vec![1.0; 2],
+            subduction_gate: vec![1.0; 2],
+            subducting_plate: vec![Some(subducting_plate); 2],
+            ..BoundaryDynamicsState::default()
+        };
+        let mantle_heat = vec![0.4; 2];
+        let plume_force = vec![0.0; 2];
+        let params = GeologyParams::default();
+        let mut next_vertex_states = vec![oceanic_vertex(&params); 2];
+        let mut next_height = heights.clone();
+        let mut next_volcanism = vec![0.0; 2];
+        let mut next_vertex_buoyancy = vec![0.0; 2];
+        let mut output = SurfaceUpdateOutput {
+            next_vertex_states: &mut next_vertex_states,
+            next_height: &mut next_height,
+            next_volcanism: &mut next_volcanism,
+            next_vertex_buoyancy: &mut next_vertex_buoyancy,
+        };
+
+        let _ = apply_stress_and_surface_update(
+            SurfaceUpdateInput {
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                heights: &heights,
+                plate_id: &plate_id,
+                boundary_state: &boundary_state,
+                mantle_heat: &mantle_heat,
+                plume_force: &plume_force,
+                activity_scale: 1.0,
+                params: &params,
+            },
+            &mut output,
+        );
+
+        (next_height, next_volcanism)
+    }
+
+    #[test]
+    fn subduction_forcing_separates_subducting_and_overriding_sides() {
+        let params = GeologyParams::default();
+        let subducting = boundary_surface_forcing(
+            BoundarySurfaceForcingInput {
+                convergence: 1.0,
+                is_subducting: true,
+                ..direct_forcing_input(BoundaryType::Subduction)
+            },
+            &params,
+        );
+        let overriding = boundary_surface_forcing(
+            BoundarySurfaceForcingInput {
+                convergence: 1.0,
+                volcanism: 0.5,
+                is_overriding: true,
+                ..direct_forcing_input(BoundaryType::Subduction)
+            },
+            &params,
+        );
+
+        assert!(subducting.tectonic_subsidence > 0.0);
+        assert_eq!(subducting.tectonic_uplift, 0.0);
+        assert_eq!(subducting.volcanic_uplift, 0.0);
+        assert_eq!(overriding.tectonic_subsidence, 0.0);
+        assert!(overriding.tectonic_uplift > 0.0);
+        assert!(overriding.volcanic_uplift > 0.0);
+    }
+
+    #[test]
+    fn artificial_subduction_boundary_places_relief_on_the_intended_sides() {
+        let (height, volcanism) = run_two_cell_subduction(PlateId(0));
+
+        assert!(height[0] < height[1]);
+        assert_eq!(volcanism[0], 0.0);
+        assert!(volcanism[1] > 0.0);
+    }
+
+    #[test]
+    fn mirrored_subduction_boundary_mirrors_the_surface_response() {
+        let (forward_height, forward_volcanism) = run_two_cell_subduction(PlateId(0));
+        let (mirrored_height, mirrored_volcanism) = run_two_cell_subduction(PlateId(1));
+
+        assert!((forward_height[0] - mirrored_height[1]).abs() <= 1e-6);
+        assert!((forward_height[1] - mirrored_height[0]).abs() <= 1e-6);
+        assert!((forward_volcanism[0] - mirrored_volcanism[1]).abs() <= 1e-6);
+        assert!((forward_volcanism[1] - mirrored_volcanism[0]).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn normal_boundary_forcing_is_monotonic_with_normal_speed() {
+        let params = GeologyParams::default();
+        let forcing = |convergence| {
+            boundary_surface_forcing(
+                BoundarySurfaceForcingInput {
+                    convergence,
+                    is_subducting: true,
+                    ..direct_forcing_input(BoundaryType::Subduction)
+                },
+                &params,
+            )
+            .tectonic_subsidence
+        };
+
+        assert_eq!(forcing(0.0), 0.0);
+        assert!(forcing(0.5) > forcing(0.25));
+        assert!(forcing(1.0) > forcing(0.5));
+    }
+
+    #[test]
+    fn divergent_and_transform_forcing_remain_distinct() {
+        let params = GeologyParams::default();
+        let ridge = boundary_surface_forcing(
+            BoundarySurfaceForcingInput {
+                divergence: 1.0,
+                ..direct_forcing_input(BoundaryType::Ridge)
+            },
+            &params,
+        );
+        let rift = boundary_surface_forcing(
+            BoundarySurfaceForcingInput {
+                divergence: 1.0,
+                ..direct_forcing_input(BoundaryType::Rift)
+            },
+            &params,
+        );
+        let transform =
+            boundary_surface_forcing(direct_forcing_input(BoundaryType::Transform), &params);
+
+        assert!(ridge.tectonic_uplift > 0.0);
+        assert_eq!(ridge.tectonic_subsidence, 0.0);
+        assert_eq!(rift.tectonic_uplift, 0.0);
+        assert!(rift.tectonic_subsidence > 0.0);
+        assert_eq!(transform.tectonic_uplift, 0.0);
+        assert_eq!(transform.tectonic_subsidence, 0.0);
+        assert_eq!(transform.volcanic_uplift, 0.0);
+    }
+
+    #[test]
+    fn obliquity_does_not_increase_convergence_specific_forcing() {
+        let params = GeologyParams::default();
+        let forcing = |obliquity| {
+            boundary_surface_forcing(
+                BoundarySurfaceForcingInput {
+                    convergence: 1.0,
+                    obliquity,
+                    ..direct_forcing_input(BoundaryType::Collision)
+                },
+                &params,
+            )
+            .tectonic_uplift
+        };
+
+        assert!(forcing(0.5) <= forcing(0.0));
+        assert!(forcing(1.0) <= forcing(0.5));
     }
 
     #[test]
@@ -1535,6 +1775,7 @@ mod tests {
             let boundary_state = BoundaryDynamicsState {
                 dominant_type: vec![BoundaryType::Subduction],
                 activity: vec![0.1],
+                subducting_plate: vec![Some(PlateId(1))],
                 slab_convergence_component: vec![slab_convergence],
                 slab_rollback_component: vec![0.0],
                 ..BoundaryDynamicsState::default()

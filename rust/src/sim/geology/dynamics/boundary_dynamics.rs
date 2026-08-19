@@ -91,6 +91,9 @@ pub(super) fn reclassify_boundaries(
     if boundary_state.subduction_gate.len() != cell_count {
         boundary_state.subduction_gate = vec![0.0; cell_count];
     }
+    if boundary_state.subducting_plate.len() != cell_count {
+        boundary_state.subducting_plate = vec![None; cell_count];
+    }
 
     let current_plate_hash = plate_id_signature(plate_id);
     let needs_rebuild_edge_pairs = boundary_state.edge_pairs.is_empty()
@@ -225,6 +228,7 @@ pub(super) fn reclassify_boundaries(
     boundary_state.transform_component.fill(0.0);
     boundary_state.obliquity.fill(0.0);
     boundary_state.subduction_gate.fill(0.0);
+    boundary_state.subducting_plate.fill(None);
     for (eid, pair) in edge_pairs.iter().enumerate() {
         let bt = edge_types[eid];
         let score = edge_scores[eid];
@@ -237,6 +241,7 @@ pub(super) fn reclassify_boundaries(
                 boundary_state.transform_component[cell] = transform_norm_edge[eid];
                 boundary_state.obliquity[cell] = obliquity_edge[eid];
                 boundary_state.subduction_gate[cell] = subduction_gate_edge[eid];
+                boundary_state.subducting_plate[cell] = edge_convergent_plate[eid];
             }
         }
     }
@@ -458,8 +463,15 @@ fn relative_kinematics(
         vel_j[1] - vel_i[1],
         vel_j[2] - vel_i[2],
     ];
-    let rel_n = dot(rel_v, edge_dir);
-    let rel_mag = length3(rel_v);
+    decompose_relative_kinematics(rel_v, edge_dir)
+}
+
+fn decompose_relative_kinematics(
+    relative_velocity: [f32; 3],
+    boundary_normal: [f32; 3],
+) -> RelativeKinematics {
+    let rel_n = dot(relative_velocity, boundary_normal);
+    let rel_mag = length3(relative_velocity);
     let rel_t = (rel_mag * rel_mag - rel_n * rel_n).max(0.0).sqrt();
     // rel_n is the time derivative of endpoint separation: positive opens the edge.
     let convergence = (-rel_n).max(0.0);
@@ -831,6 +843,87 @@ mod tests {
     }
 
     #[test]
+    fn relative_kinematics_separates_normal_and_tangent_components() {
+        let normal = [1.0, 0.0, 0.0];
+
+        let convergent = decompose_relative_kinematics([-0.1, 0.0, 0.0], normal);
+        let divergent = decompose_relative_kinematics([0.1, 0.0, 0.0], normal);
+        let transform = decompose_relative_kinematics([0.0, 0.1, 0.0], normal);
+
+        assert!(convergent.convergence_norm > 0.0);
+        assert_eq!(convergent.divergence_norm, 0.0);
+        assert_eq!(convergent.transform_norm, 0.0);
+        assert!(divergent.divergence_norm > 0.0);
+        assert_eq!(divergent.convergence_norm, 0.0);
+        assert_eq!(divergent.transform_norm, 0.0);
+        assert_eq!(transform.convergence_norm, 0.0);
+        assert_eq!(transform.divergence_norm, 0.0);
+        assert!(transform.transform_norm > 0.0);
+    }
+
+    #[test]
+    fn tangent_velocity_does_not_change_normal_components() {
+        let normal = [1.0, 0.0, 0.0];
+        let without_tangent = decompose_relative_kinematics([-0.08, 0.0, 0.0], normal);
+        let with_tangent = decompose_relative_kinematics([-0.08, 0.12, 0.0], normal);
+
+        assert!((with_tangent.rel_n - without_tangent.rel_n).abs() <= 1e-6);
+        assert!((with_tangent.convergence_norm - without_tangent.convergence_norm).abs() <= 1e-6);
+        assert_eq!(
+            with_tangent.divergence_norm,
+            without_tangent.divergence_norm
+        );
+        assert!(with_tangent.transform_norm > without_tangent.transform_norm);
+    }
+
+    #[test]
+    fn swapping_edge_endpoints_preserves_physical_components() {
+        let forward = decompose_relative_kinematics([-0.08, 0.12, 0.0], [1.0, 0.0, 0.0]);
+        let reversed = decompose_relative_kinematics([0.08, -0.12, 0.0], [-1.0, 0.0, 0.0]);
+
+        assert!((forward.rel_n - reversed.rel_n).abs() <= 1e-6);
+        assert!((forward.rel_t - reversed.rel_t).abs() <= 1e-6);
+        assert!((forward.convergence_norm - reversed.convergence_norm).abs() <= 1e-6);
+        assert!((forward.divergence_norm - reversed.divergence_norm).abs() <= 1e-6);
+        assert!((forward.transform_norm - reversed.transform_norm).abs() <= 1e-6);
+        assert!((forward.obliquity - reversed.obliquity).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn relative_kinematics_is_invariant_under_global_rotation() {
+        fn rotate_z(vector: [f32; 3], angle: f32) -> [f32; 3] {
+            let (sin, cos) = angle.sin_cos();
+            [
+                cos * vector[0] - sin * vector[1],
+                sin * vector[0] + cos * vector[1],
+                vector[2],
+            ]
+        }
+
+        let relative_velocity = [-0.08, 0.12, 0.03];
+        let boundary_normal = [1.0, 0.0, 0.0];
+        let reference = decompose_relative_kinematics(relative_velocity, boundary_normal);
+
+        for angle in [
+            std::f32::consts::FRAC_PI_2,
+            std::f32::consts::PI,
+            -std::f32::consts::FRAC_PI_2,
+        ] {
+            let rotated = decompose_relative_kinematics(
+                rotate_z(relative_velocity, angle),
+                rotate_z(boundary_normal, angle),
+            );
+
+            assert!((reference.rel_n - rotated.rel_n).abs() <= 1e-6);
+            assert!((reference.rel_t - rotated.rel_t).abs() <= 1e-6);
+            assert!((reference.convergence_norm - rotated.convergence_norm).abs() <= 1e-6);
+            assert!((reference.divergence_norm - rotated.divergence_norm).abs() <= 1e-6);
+            assert!((reference.transform_norm - rotated.transform_norm).abs() <= 1e-6);
+            assert!((reference.obliquity - rotated.obliquity).abs() <= 1e-6);
+        }
+    }
+
+    #[test]
     fn convergent_regime_separates_collision_from_subduction_onset() {
         let continental = continental_state();
         let oceanic = oceanic_state(10.0, 2_950.0);
@@ -1010,6 +1103,37 @@ mod tests {
         assert_eq!(boundary_state.edge_types, vec![BoundaryType::Ridge]);
         assert_eq!(boundary_state.edge_activity.len(), 1);
         assert!(boundary_state.edge_activity[0] > 0.0);
+    }
+
+    #[test]
+    fn boundary_reclassification_records_the_subducting_plate() {
+        let positions = vec![[1.0, 0.0, 0.0], [0.995, 0.1, 0.0]];
+        let nbr_offsets = vec![0, 1, 2];
+        let nbrs = vec![1, 0];
+        let plate_id = vec![PlateId(0), PlateId(1)];
+        let plate_states = opposing_z_rotation_states(0.1, -0.1);
+        let vertex_states = vec![oceanic_state(100.0, 3_200.0), continental_state()];
+        let mut boundary_state = BoundaryDynamicsState::default();
+
+        reclassify_boundaries(
+            ReclassifyBoundariesInput {
+                positions: &positions,
+                nbr_offsets: &nbr_offsets,
+                nbrs: &nbrs,
+                plate_id: &plate_id,
+                plate_states: &plate_states,
+                vertex_states: &vertex_states,
+                params: &GeologyParams::default(),
+            },
+            &mut boundary_state,
+        );
+
+        assert_eq!(boundary_state.edge_types, vec![BoundaryType::Subduction]);
+        assert_eq!(boundary_state.edge_convergent_plate, vec![Some(PlateId(0))]);
+        assert_eq!(
+            boundary_state.subducting_plate,
+            vec![Some(PlateId(0)), Some(PlateId(0))]
+        );
     }
 
     #[test]
