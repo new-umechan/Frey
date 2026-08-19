@@ -129,19 +129,28 @@
     width: 300px;
 }
 
-.v2-panel--causal {
-    right: 40px;
-    bottom: 96px;
-    width: 360px;
-    min-height: 360px;
-}
-
 /* レイヤー追加パネル(＋ で開く。ドラッグ元) */
 .v2-panel--picker {
     top: 88px;
     left: 410px;
     width: 240px;
     max-height: 60vh;
+}
+
+/* 履歴パネル(履歴ボタン / 「2」キーで開く) */
+.v2-panel--history {
+    top: 88px;
+    right: 40px;
+    width: 300px;
+    min-height: 300px;
+    max-height: 70vh;
+}
+
+/* パネル内では固定高をやめ、本体に合わせて伸縮・スクロール */
+.v2-panel--history .event-log-list {
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 /* ドロップ受付中のレイヤーパネルの強調 */
@@ -180,10 +189,6 @@
 .v2-panel__title-text {
     font-size: 16px;
     line-height: normal;
-}
-
-.v2-panel--causal .v2-panel__title-text {
-    font-size: 18px;
 }
 
 .v2-panel__title-actions {
@@ -228,14 +233,6 @@
 
 .v2-panel--layer .v2-panel__body {
     padding-top: 16px;
-}
-
-.v2-panel__body--graph {
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    min-height: 300px;
-    padding: 16px;
 }
 
 /* レイヤー項目 */

@@ -1,8 +1,8 @@
 /**
- * v2 フローティングパネル(レイヤー / 因果関係)の開閉・移動・リサイズ。
- * - サイドバーのアイコンボタンでトグルし、パネルの × で閉じる。
+ * v2 フローティングパネル(レイヤー / レイヤー追加)の開閉・移動・リサイズ。
+ * - サイドバーのアイコンボタン、または「1」キーでトグルし、パネルの × で閉じる。
  * - タイトルバーをドラッグして移動、端/角をドラッグしてリサイズ。
- * 参照: docs/decisions/260724-causal-story-cross-module-trace.md, Figma 357-95 / 357-96
+ * 参照: Figma 357-95
  */
 
 interface PanelBinding {
@@ -12,7 +12,14 @@ interface PanelBinding {
 
 const PANEL_BINDINGS: PanelBinding[] = [
     { buttonId: "sidebar-layers-button", panelId: "layer-panel" },
+    { buttonId: "sidebar-history-button", panelId: "history-panel" },
 ];
+
+/** 数字キー(物理キー)→ 開閉するパネル。 */
+const KEY_PANEL: Record<string, string> = {
+    Digit1: "layer-panel",
+    Digit2: "history-panel",
+};
 
 /** あるパネルを閉じると連動して閉じる従属パネル。 */
 const DEPENDENT_PANELS: Record<string, string[]> = {
@@ -27,6 +34,24 @@ function hidePanel(panelId: string): void {
     }
     for (const dependentId of DEPENDENT_PANELS[panelId] ?? []) {
         hidePanel(dependentId);
+    }
+}
+
+/** パネルの開閉。サイドバーボタンのクリックとキーボードから共用する。 */
+export function togglePanelById(panelId: string): void {
+    const panel = document.getElementById(panelId);
+    if (!panel) {
+        return;
+    }
+    const nowHidden = !panel.hidden;
+    if (nowHidden) {
+        hidePanel(panelId);
+    } else {
+        panel.hidden = false;
+    }
+    const binding = PANEL_BINDINGS.find((b) => b.panelId === panelId);
+    if (binding) {
+        setButtonActive(binding.buttonId, !nowHidden);
     }
 }
 
@@ -144,22 +169,45 @@ function makeResizable(panel: HTMLElement): void {
     }
 }
 
+function isTypingTarget(target: EventTarget | null): boolean {
+    return (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+    );
+}
+
 export function setupV2Panels(): void {
+    // 「1」レイヤー / 「2」履歴 の開閉(入力欄フォーカス中・修飾キー・IME変換中は無効)。
+    // event.code は IME/レイアウト非依存の物理キー(event.key は IME で全角等になりうる)。
+    document.addEventListener("keydown", (event) => {
+        if (
+            event.defaultPrevented ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.altKey ||
+            event.isComposing
+        ) {
+            return;
+        }
+        if (isTypingTarget(event.target)) {
+            return;
+        }
+        const panelId = KEY_PANEL[event.code];
+        if (panelId) {
+            event.preventDefault();
+            togglePanelById(panelId);
+        }
+    });
+
     for (const { buttonId, panelId } of PANEL_BINDINGS) {
         const button = document.getElementById(buttonId);
         const panel = document.getElementById(panelId);
         if (!button || !panel) {
             continue;
         }
-        button.addEventListener("click", () => {
-            const nowHidden = !panel.hidden;
-            if (nowHidden) {
-                hidePanel(panelId);
-            } else {
-                panel.hidden = false;
-            }
-            setButtonActive(buttonId, !nowHidden);
-        });
+        button.addEventListener("click", () => togglePanelById(panelId));
 
         const title = panel.querySelector<HTMLElement>(".v2-panel__title");
         if (title) {

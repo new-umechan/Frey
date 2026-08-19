@@ -86,26 +86,6 @@
     height: 20px;
 }
 
-/* 履歴(ボックスなしの素のアイコン、24px)。 */
-.sidebar-icon {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
-}
-
-.sidebar-icon img {
-    display: block;
-    width: 24px;
-    height: 24px;
-}
-
 /* ホバー時のツールチップ(speakBubble: 353-315)。ボタンの右に、左向きの三角付きで出る。 */
 .sidebar-tooltip {
     position: absolute;
@@ -149,9 +129,7 @@
 }
 
 .sidebar-button:hover .sidebar-tooltip,
-.sidebar-button:focus-visible .sidebar-tooltip,
-.sidebar-icon:hover .sidebar-tooltip,
-.sidebar-icon:focus-visible .sidebar-tooltip {
+.sidebar-button:focus-visible .sidebar-tooltip {
     opacity: 1;
     visibility: visible;
 }
