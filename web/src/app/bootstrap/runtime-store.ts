@@ -10,7 +10,6 @@ export interface RuntimeStoreOptions {
     basePositions: Float32Array;
     indices: Uint32Array;
     createEraMetrics: (era: string) => EraMetrics;
-    debugEnabled?: boolean;
     initialSeed?: string;
 }
 
@@ -32,7 +31,6 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         basePositions,
         indices,
         createEraMetrics,
-        debugEnabled,
         initialSeed,
     } = options;
 
@@ -43,7 +41,6 @@ export function createRuntimeStore(options: RuntimeStoreOptions): RuntimeStore {
         currentEraMetrics,
     });
     const mutableStateStore = createMutableStateStore({
-        debugEnabled,
         initialSeed,
     });
 

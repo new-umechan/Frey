@@ -14,7 +14,6 @@ export interface ViewModeControllerOptions {
     getCurrentTerrainData: () => CoreBuffers | null;
     getCurrentSurfaceMode: () => string;
     getWorldTick: () => number;
-    getDebugEnabled: () => boolean;
     setCurrentViewMode: (nextMode: string) => void;
     setCurrentCellMetric: (nextMetric: string) => void;
 }
@@ -37,7 +36,6 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
         getCurrentTerrainData,
         getCurrentSurfaceMode,
         getWorldTick,
-        getDebugEnabled,
         setCurrentViewMode,
         setCurrentCellMetric,
     } = options;
@@ -51,7 +49,6 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
         syncVisibleFieldsForCurrentView();
         terrainRenderer.applyTerrainMaterialState(
             normalizedMode,
-            getDebugEnabled(),
             getCurrentCellMetric(),
         );
         const currentTerrainData = getCurrentTerrainData();
@@ -76,7 +73,6 @@ export function createViewModeController(options: ViewModeControllerOptions): Vi
         }
         terrainRenderer.applyTerrainMaterialState(
             getCurrentViewMode(),
-            getDebugEnabled(),
             normalizedMetric,
         );
         const currentTerrainData = getCurrentTerrainData();

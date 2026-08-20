@@ -9,15 +9,8 @@ import { type WorldChangeset, type WorldDirtyCells, type WorldDeltaApplyResult }
 
 export type TypedArray = Float32Array | Int32Array | Uint32Array;
 
-export interface TectonicDebugBuffers {
-    trench: TypedArray;
-    arc: TypedArray;
-    backarc: TypedArray;
-    oceanOceanArc: TypedArray;
-}
-
 export interface CoreBuffers {
-    [key: string]: TypedArray | TectonicDebugBuffers | undefined;
+    [key: string]: TypedArray | undefined;
     heightData: TypedArray;
     lakeDepth: TypedArray;
     plateId: TypedArray;
@@ -65,7 +58,6 @@ export interface CoreBuffers {
     livestockAvailableSheep: TypedArray;
     livestockAvailablePig: TypedArray;
     livestockAvailableCamel: TypedArray;
-    tectonicDebug?: TectonicDebugBuffers;
 }
 
 export interface SyncOptions {

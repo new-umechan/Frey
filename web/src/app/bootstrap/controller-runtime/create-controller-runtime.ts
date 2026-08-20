@@ -31,7 +31,6 @@ export interface ControllerDeps {
 export interface RuntimeDomRefs {
     seedForm: HTMLFormElement;
     seedInput: HTMLInputElement;
-    debugToggleInput: HTMLInputElement;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
     eraScaleWeightFields: EraScaleWeightFields;
@@ -68,7 +67,6 @@ function createRuntimeContext(options: ControllerDeps): RuntimeContext {
     const dom: RuntimeDomRefs = {
         seedForm: elements.seedForm,
         seedInput: elements.seedInput,
-        debugToggleInput: elements.debugToggleInput,
         eraScaleSelect: elements.eraScaleSelect,
         eraScaleTickLabel: elements.eraScaleTickLabel,
         eraScaleWeightFields: elements.eraScaleWeightFields,

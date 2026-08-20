@@ -13,16 +13,13 @@ interface CameraController {
 
 export interface WorldUiController {
     setSurfaceMode: (nextMode: string) => void;
-    setDebugModeEnabled: (nextEnabled: boolean) => void;
     setEraScale: (nextEraScale: string, metrics?: EraMetrics | null) => void;
 }
 
 export interface WorldUiControllerOptions {
     cameraController: CameraController;
     terrainRenderer: TerrainRenderer;
-    wireframe: { visible: boolean };
     plateHover: PlateHoverController;
-    debugToggleInput: HTMLInputElement;
     statusEraLabel: HTMLElement;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
@@ -52,9 +49,7 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
     const {
         cameraController,
         terrainRenderer,
-        wireframe,
         plateHover,
-        debugToggleInput,
         statusEraLabel,
         eraScaleSelect,
         eraScaleTickLabel,
@@ -93,20 +88,6 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
         plateHover.hidePopup();
     };
 
-    const setDebugModeEnabled = (nextEnabled: boolean) => {
-        const state = getState();
-        const debugEnabled = Boolean(nextEnabled);
-        setState({ debugEnabled });
-        debugToggleInput.checked = debugEnabled;
-        wireframe.visible = debugEnabled && cameraController.getSurfaceMode() === "globe";
-        terrainRenderer.applyTerrainMaterialState(
-            state.currentViewMode,
-            debugEnabled,
-            state.currentCellMetric,
-        );
-        plateHover.syncDebugMode();
-    };
-
     const setEraScale = (nextEraScale: string, metrics: EraMetrics | null = null) => {
         const state = getState();
         const previousEra = state.currentEraScale;
@@ -139,7 +120,6 @@ export function createWorldUiController(options: WorldUiControllerOptions): Worl
 
     return {
         setSurfaceMode,
-        setDebugModeEnabled,
         setEraScale,
     };
 }

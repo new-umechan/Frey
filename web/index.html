@@ -296,14 +296,12 @@
             <!--
                 旧・固定右サイドバーは Figma v2 で廃止。可視 UI はメタ表示/レイヤーパネル
                 へ移設済み。以下は、まだコントローラが id 参照する要素の保持先。
-                履歴(event-log)は Stage 4 の履歴パネル、debug は Stage 5 の撤去まで隠し持つ。
             -->
             <div class="visually-hidden" id="legacy-dom-holders" aria-hidden="true">
                 <span id="stat-level">-</span>
                 <span id="stat-seed">-</span>
                 <span id="stat-plates">-</span>
                 <span id="stat-land">-</span>
-                <input id="debug-mode-toggle" type="checkbox" />
                 <span id="view-cui-context"></span>
                 <div id="view-cui-options"></div>
                 <input type="radio" name="view-mode" value="normal" checked />

@@ -16,9 +16,7 @@ interface KeyboardHandlerOptions {
         handleDigitSelect: (key: string) => boolean;
     };
     seedInput: HTMLInputElement;
-    getDebugEnabled: () => boolean;
     getCurrentSurfaceMode: () => string;
-    onToggleDebug: (enabled: boolean) => void;
     onToggleSurface: (mode: string) => void;
     onTogglePlay: () => void;
     onStepForward: () => void;
@@ -30,9 +28,7 @@ export function createGlobalKeyboardHandler({
     controlHelp,
     viewCui,
     seedInput,
-    getDebugEnabled,
     getCurrentSurfaceMode,
-    onToggleDebug,
     onToggleSurface,
     onTogglePlay,
     onStepForward,
@@ -96,12 +92,6 @@ export function createGlobalKeyboardHandler({
             event.preventDefault();
             seedInput.focus();
             seedInput.select();
-            return;
-        }
-
-        if (lowerKey === "d") {
-            event.preventDefault();
-            onToggleDebug(!getDebugEnabled());
             return;
         }
 

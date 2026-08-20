@@ -15,7 +15,6 @@ export interface GlobeScene {
     mapControls: OrbitControls;
     geometry: THREE.BufferGeometry;
     sphere: THREE.Mesh;
-    wireframe: THREE.Mesh;
     halo: THREE.Mesh;
     terrainMaterial: TerrainMaterialController;
 }
@@ -71,18 +70,6 @@ export function createGlobeScene(canvas: HTMLCanvasElement, indices: Uint32Array
     sphere.position.setX(PLANET_CENTER_X);
     scene.add(sphere);
 
-    const wireframe = new THREE.Mesh(
-        geometry,
-        new THREE.MeshBasicMaterial({
-            color: "#2f2b22",
-            wireframe: true,
-            transparent: true,
-            opacity: 0.08,
-        }),
-    );
-    wireframe.position.setX(PLANET_CENTER_X);
-    scene.add(wireframe);
-
     const keyLight = new THREE.DirectionalLight("#f1f6ff", 1.05);
     keyLight.position.set(1.3, 1.4, 1.2);
     scene.add(keyLight);
@@ -113,7 +100,6 @@ export function createGlobeScene(canvas: HTMLCanvasElement, indices: Uint32Array
         mapControls,
         geometry,
         sphere,
-        wireframe,
         halo,
         terrainMaterial,
     };

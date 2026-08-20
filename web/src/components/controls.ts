@@ -27,7 +27,6 @@ export interface SetupUiControlsOptions {
     viewportPanel: HTMLDivElement;
     sidebarToggle: HTMLButtonElement | null;
     eraScaleSelect: HTMLSelectElement;
-    debugToggleInput: HTMLInputElement;
     viewModeInputs: HTMLInputElement[];
     controlHelpModal: HTMLDivElement | null;
     controlHelpCloseButton: HTMLButtonElement | null;
@@ -40,12 +39,10 @@ export interface SetupUiControlsOptions {
     onResize: () => void;
     onSidebarToggle: () => void;
     canvasInputHandlers?: CanvasInputHandlers;
-    onDebugToggle: (enabled: boolean) => void;
     onEraScaleChange: (value: string, isDisabled: boolean) => void;
     onViewModeChange: (mode: string) => void;
     onCellMetricChange: (metric: string) => void;
     onToggleSurface: (mode: string) => void;
-    onToggleDebug: (enabled: boolean) => void;
     onTogglePlay: () => void;
     onStepForward: () => void;
     onRewind: () => void;
@@ -54,7 +51,6 @@ export interface SetupUiControlsOptions {
     onEventLogJump: (tickText: string) => void;
     onRunPerfBenchmark: () => void;
     onCopyPerfBenchmark: () => void;
-    getDebugEnabled: () => boolean;
     getCurrentSurfaceMode: () => string;
     getCurrentCellMetric: () => string;
     onSubmitSeed: (seed: string) => Promise<void>;
@@ -67,7 +63,6 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         viewportPanel,
         sidebarToggle,
         eraScaleSelect,
-        debugToggleInput,
         viewModeInputs,
         controlHelpModal,
         controlHelpCloseButton,
@@ -80,12 +75,10 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         onResize,
         onSidebarToggle,
         canvasInputHandlers = {},
-        onDebugToggle,
         onEraScaleChange,
         onViewModeChange,
         onCellMetricChange,
         onToggleSurface,
-        onToggleDebug,
         onTogglePlay,
         onStepForward,
         onRewind,
@@ -94,7 +87,6 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         onEventLogJump,
         onRunPerfBenchmark,
         onCopyPerfBenchmark,
-        getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentCellMetric,
         onSubmitSeed,
@@ -142,10 +134,6 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         }
     }, { capture: true, passive: false });
 
-    debugToggleInput.addEventListener("change", () => {
-        onDebugToggle(debugToggleInput.checked);
-    });
-
     eraScaleSelect.addEventListener("change", () => {
         onEraScaleChange(eraScaleSelect.value, eraScaleSelect.disabled);
     });
@@ -177,9 +165,7 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         controlHelp,
         viewCui,
         seedInput,
-        getDebugEnabled,
         getCurrentSurfaceMode,
-        onToggleDebug,
         onToggleSurface,
         onTogglePlay,
         onStepForward,

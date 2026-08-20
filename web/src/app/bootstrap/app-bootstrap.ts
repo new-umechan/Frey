@@ -40,7 +40,6 @@ interface BindRuntimeUiOptions {
     sceneRuntime: SceneRuntime;
     controllerRuntime: {
         perfUiEnabled: boolean;
-        setDebugModeEnabled: (enabled: boolean) => void;
         setEraScale: (era: string) => void;
         setViewMode: (mode: string) => void;
         setCellMetric: (metric: string) => void;
@@ -69,7 +68,6 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         canvas: elements.canvas,
         viewportPanel: elements.viewportPanel,
         sidebarToggle: elements.sidebarToggle,
-        debugToggleInput: elements.debugToggleInput,
         eraScaleSelect: elements.eraScaleSelect,
         eraScaleTickLabel: elements.eraScaleTickLabel,
         eraScaleWeightFields: elements.eraScaleWeightFields,
@@ -86,7 +84,6 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         setSidebarOpen: elements.setSidebarOpen,
         plateHover: sceneRuntime.plateHover,
         globePinchFocusController: sceneRuntime.globePinchFocusController,
-        setDebugModeEnabled: controllerRuntime.setDebugModeEnabled,
         setEraScale: controllerRuntime.setEraScale,
         setViewMode: controllerRuntime.setViewMode,
         setCellMetric: controllerRuntime.setCellMetric,
@@ -94,7 +91,6 @@ function bindRuntimeUi(options: BindRuntimeUiOptions) {
         playbackController: controllerRuntime.playbackController,
         runPerf: controllerRuntime.runPerf,
         copyPerfResult: controllerRuntime.copyPerfResult,
-        getDebugEnabled: () => getState().debugEnabled,
         getCurrentSurfaceMode: () => getState().currentSurfaceMode,
         getCurrentCellMetric: () => getState().currentCellMetric,
         getCurrentEraScale: () => getState().currentEraScale,
@@ -129,7 +125,6 @@ export async function bootstrapAppRuntime(options: BootstrapAppRuntimeOptions) {
         basePositions,
         indices,
         createEraMetrics,
-        debugEnabled: elements.debugToggleInput.checked,
         initialSeed,
     });
 

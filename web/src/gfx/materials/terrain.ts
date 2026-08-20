@@ -41,7 +41,6 @@ export interface TerrainMaterialController {
     material: THREE.MeshStandardMaterial;
     setViewMode(mode: string): void;
     setCellMetric(metricKey: string): void;
-    setDebugEnabled(enabled: boolean): void;
     setSeaLevelOffset(offset: number): void;
     setRiverMaskTexture(texture: THREE.Texture): void;
     dispose(): void;
@@ -58,16 +57,11 @@ export function createTerrainMaterial(): TerrainMaterialController {
     const uniforms = {
         uViewMode: { value: 0.0 },
         uMetricKind: { value: 0.0 },
-        uDebugEnabled: { value: 0.0 },
         uSeaLevelOffset: { value: 0.0 },
         uRiverMask: { value: emptyRiverMask as THREE.Texture },
         uSeaColor: { value: srgbHexToLinearRgb("#12406a") },
         uLakeColor: { value: srgbHexToLinearRgb("#2f82c7") },
         uRiverColor: { value: srgbHexToLinearRgb("#4ca3dd") },
-        uDebugTrenchColor: { value: srgbHexToLinearRgb("#ff355e") },
-        uDebugBackarcColor: { value: srgbHexToLinearRgb("#7b61ff") },
-        uDebugArcColor: { value: srgbHexToLinearRgb("#ffb000") },
-        uDebugOceanOceanArcColor: { value: srgbHexToLinearRgb("#2aff7a") },
     };
 
     const material = new THREE.MeshStandardMaterial({
@@ -87,19 +81,11 @@ attribute float terrainHeight;
 attribute float terrainMetric;
 attribute float terrainMetricOverlay;
 attribute float terrainLakeDepth;
-attribute float terrainDebugTrench;
-attribute float terrainDebugArc;
-attribute float terrainDebugBackarc;
-attribute float terrainDebugOceanOceanArc;
 attribute vec2 terrainUv;
 varying float vTerrainHeight;
 varying float vTerrainMetric;
 varying float vTerrainMetricOverlay;
 varying float vTerrainLakeDepth;
-varying float vTerrainDebugTrench;
-varying float vTerrainDebugArc;
-varying float vTerrainDebugBackarc;
-varying float vTerrainDebugOceanOceanArc;
 varying vec2 vTerrainUv;`,
             )
             .replace(
@@ -109,10 +95,6 @@ vTerrainHeight = terrainHeight;
 vTerrainMetric = terrainMetric;
 vTerrainMetricOverlay = terrainMetricOverlay;
 vTerrainLakeDepth = terrainLakeDepth;
-vTerrainDebugTrench = terrainDebugTrench;
-vTerrainDebugArc = terrainDebugArc;
-vTerrainDebugBackarc = terrainDebugBackarc;
-vTerrainDebugOceanOceanArc = terrainDebugOceanOceanArc;
 vTerrainUv = terrainUv;`,
             );
 
@@ -122,24 +104,15 @@ vTerrainUv = terrainUv;`,
                 `#include <common>
 uniform float uViewMode;
 uniform float uMetricKind;
-uniform float uDebugEnabled;
 uniform float uSeaLevelOffset;
 uniform sampler2D uRiverMask;
 uniform vec3 uSeaColor;
 uniform vec3 uLakeColor;
 uniform vec3 uRiverColor;
-uniform vec3 uDebugTrenchColor;
-uniform vec3 uDebugBackarcColor;
-uniform vec3 uDebugArcColor;
-uniform vec3 uDebugOceanOceanArcColor;
 varying float vTerrainHeight;
 varying float vTerrainMetric;
 varying float vTerrainMetricOverlay;
 varying float vTerrainLakeDepth;
-varying float vTerrainDebugTrench;
-varying float vTerrainDebugArc;
-varying float vTerrainDebugBackarc;
-varying float vTerrainDebugOceanOceanArc;
 varying vec2 vTerrainUv;
 
 float freyLerp(float a, float b, float t) {
@@ -314,25 +287,6 @@ vec3 freyNormalModeColor(float h, float lakeDepth, float riverMask) {
         c = mix(c, uRiverColor, 0.85);
     }
     return c;
-}
-
-vec3 freyApplyDebugOverlay(vec3 color) {
-    if (uDebugEnabled < 0.5 || uViewMode > 0.5) {
-        return color;
-    }
-    if (vTerrainDebugTrench > 0.01) {
-        color = mix(color, uDebugTrenchColor, min(vTerrainDebugTrench * 0.90, 0.80));
-    }
-    if (vTerrainDebugBackarc > 0.01) {
-        color = mix(color, uDebugBackarcColor, min(vTerrainDebugBackarc * 0.60, 0.55));
-    }
-    if (vTerrainDebugArc > 0.01) {
-        color = mix(color, uDebugArcColor, min(vTerrainDebugArc * 0.95, 0.85));
-    }
-    if (vTerrainDebugOceanOceanArc > 0.01) {
-        color = mix(color, uDebugOceanOceanArcColor, min(vTerrainDebugOceanOceanArc, 0.95));
-    }
-    return color;
 }`,
             )
             .replace(
@@ -348,12 +302,11 @@ if (uViewMode > 0.5 && uMetricKind >= 13.5 && uMetricKind < 14.5 && vTerrainMetr
     float overlayAlpha = mix(0.22, 0.46, hatch);
     terrainColor = mix(terrainColor, overlayColor, overlayAlpha);
 }
-terrainColor = freyApplyDebugOverlay(terrainColor);
 diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v8";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v9";
 
     const controller: TerrainMaterialController = {
         material,
@@ -362,9 +315,6 @@ diffuseColor.rgb = terrainColor;`,
         },
         setCellMetric(metricKey) {
             uniforms.uMetricKind.value = metricKeyToNumber(metricKey);
-        },
-        setDebugEnabled(enabled) {
-            uniforms.uDebugEnabled.value = enabled ? 1.0 : 0.0;
         },
         setSeaLevelOffset(offset) {
             uniforms.uSeaLevelOffset.value = Number.isFinite(offset) ? offset : 0.0;

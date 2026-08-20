@@ -83,11 +83,9 @@ export interface AppState {
     currentViewMode: string;
     currentCellMetric: string;
     currentEraScale: string;
-    debugEnabled: boolean;
 }
 
 export function createMutableStateStore(options: {
-    debugEnabled?: boolean;
     initialSeed?: string;
 }) {
     let activeWorldId: string | null = null;
@@ -97,7 +95,6 @@ export function createMutableStateStore(options: {
     let currentViewMode = DEFAULT_VIEW_MODE;
     let currentCellMetric = DEFAULT_CELL_METRIC;
     let currentEraScale = DEFAULT_ERA_SCALE;
-    let debugEnabled = Boolean(options.debugEnabled);
 
     const stateSetters: Record<string, (value: unknown) => void> = {
         currentSeed: (value) => {
@@ -115,9 +112,6 @@ export function createMutableStateStore(options: {
         currentEraScale: (value) => {
             currentEraScale = String(value);
         },
-        debugEnabled: (value) => {
-            debugEnabled = Boolean(value);
-        },
     };
 
     const getState = (): AppState => {
@@ -127,7 +121,6 @@ export function createMutableStateStore(options: {
             currentViewMode,
             currentCellMetric,
             currentEraScale,
-            debugEnabled,
         };
     };
 

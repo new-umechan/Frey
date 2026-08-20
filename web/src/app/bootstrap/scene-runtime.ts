@@ -46,7 +46,6 @@ export interface SceneRuntimeOptions {
 export interface SceneRuntime {
     cameraController: CameraController;
     terrainRenderer: TerrainRenderer;
-    wireframe: { visible: boolean };
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
     loadingOverlayController: LoadingOverlayController;
@@ -82,7 +81,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         mapControls,
         geometry,
         sphere,
-        wireframe,
         halo,
         terrainMaterial,
     }: GlobeScene = createGlobeScene(canvas, indices);
@@ -93,12 +91,10 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         globeControls,
         mapControls,
         sphere,
-        wireframe,
         halo,
         resizeViewport,
         viewportPanel,
         renderer,
-        isDebugEnabled: () => getState().debugEnabled,
     });
 
     setupTerrainGeometryAttributes({
@@ -107,7 +103,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
         basePositions,
         currentViewMode: DEFAULT_VIEW_MODE,
         currentCellMetric: getState().currentCellMetric,
-        debugEnabled: getState().debugEnabled,
     });
 
     const metricCellOverlay = createMetricCellOverlayLayer(metricCellOverlayMesh);
@@ -130,9 +125,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
             terrainMaterial.material.opacity = enabled ? 0 : 1;
             terrainMaterial.material.depthWrite = !enabled;
             terrainMaterial.material.colorWrite = !enabled;
-            wireframe.visible = enabled
-                ? false
-                : (getState().debugEnabled && getState().currentSurfaceMode === "globe");
         },
     });
     const climateUiController = createClimateUiController({
@@ -147,7 +139,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     const plateHover = createPlateHover({
         canvas,
         sphere,
-        geometry,
         viewportPanel,
         plateHoverPopup,
         getState: () => ({
@@ -183,7 +174,6 @@ export function createSceneRuntime(options: SceneRuntimeOptions): SceneRuntime {
     return {
         cameraController,
         terrainRenderer,
-        wireframe,
         plateHover,
         globePinchFocusController,
         loadingOverlayController,

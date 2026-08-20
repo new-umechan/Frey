@@ -161,7 +161,7 @@
 
 /*
  * 旧・固定右サイドバーは Figma v2 で廃止。機能はメタ表示/レイヤーパネルへ移設済み。
- * まだ id 参照される要素(view-cui, event-log, era-scale, stats, debug-toggle 等)を
+ * まだ id 参照される要素(view-cui, era-scale, stats 等)を
  * 保持するため DOM は残し、表示だけ消す。
  */
 .sidebar {

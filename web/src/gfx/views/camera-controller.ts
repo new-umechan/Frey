@@ -17,12 +17,10 @@ interface CameraControllerOptions {
     globeControls: OrbitLikeControls;
     mapControls: MapLikeControls;
     sphere: THREE.Mesh;
-    wireframe: THREE.Mesh;
     halo: THREE.Mesh;
     resizeViewport: (panel: HTMLElement, globeCam: THREE.PerspectiveCamera, mapCam: THREE.OrthographicCamera, renderer: THREE.WebGLRenderer) => void;
     viewportPanel: HTMLElement;
     renderer: THREE.WebGLRenderer;
-    isDebugEnabled: () => boolean;
 }
 
 export function createCameraController({
@@ -31,12 +29,10 @@ export function createCameraController({
     globeControls,
     mapControls,
     sphere,
-    wireframe,
     halo,
     resizeViewport,
     viewportPanel,
     renderer,
-    isDebugEnabled,
 }: CameraControllerOptions) {
     const GLOBE_CAMERA_DISTANCE = 3.2;
     const centerX = sphere.position.x;
@@ -57,7 +53,6 @@ export function createCameraController({
             mapControls.enabled = true;
             mapControls.enablePan = true;
             sphere.visible = true;
-            wireframe.visible = false;
             halo.visible = false;
             return;
         }
@@ -70,7 +65,6 @@ export function createCameraController({
         globeControls.enabled = true;
         mapControls.enabled = false;
         sphere.visible = true;
-        wireframe.visible = isDebugEnabled() && currentSurfaceMode === "globe";
         halo.visible = true;
         globeControls.update();
     }

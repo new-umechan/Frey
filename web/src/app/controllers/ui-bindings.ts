@@ -69,7 +69,6 @@ interface CreateUiHandlersOptions {
     seedForm: HTMLFormElement;
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
-    setDebugModeEnabled: (enabled: boolean) => void;
     setViewMode: (mode: string) => void;
     setCellMetric: (metric: string) => void;
     setSurfaceMode: (mode: string) => void;
@@ -95,7 +94,6 @@ function createUiHandlers(options: CreateUiHandlersOptions) {
         seedForm,
         plateHover,
         globePinchFocusController,
-        setDebugModeEnabled,
         setViewMode,
         setCellMetric,
         setSurfaceMode,
@@ -125,11 +123,9 @@ function createUiHandlers(options: CreateUiHandlersOptions) {
             plateHover,
             globePinchFocusController,
         }),
-        onDebugToggle: setDebugModeEnabled,
         onViewModeChange: setViewMode,
         onCellMetricChange: setCellMetric,
         onToggleSurface: setSurfaceMode,
-        onToggleDebug: setDebugModeEnabled,
         onTogglePlay: playbackController.handleTogglePlay,
         onStepForward: playbackController.handleStepForward,
         onRewind: playbackController.handleRewind,
@@ -146,7 +142,6 @@ export interface BindAppUiControlsOptions {
     canvas: HTMLCanvasElement;
     viewportPanel: HTMLDivElement;
     sidebarToggle: HTMLButtonElement | null;
-    debugToggleInput: HTMLInputElement;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
     eraScaleWeightFields: EraScaleWeightFields;
@@ -163,7 +158,6 @@ export interface BindAppUiControlsOptions {
     setSidebarOpen: ((isOpen: boolean) => void) | undefined;
     plateHover: PlateHoverController;
     globePinchFocusController: GlobePinchFocusController;
-    setDebugModeEnabled: (enabled: boolean) => void;
     setEraScale: (value: string) => void;
     setViewMode: (mode: string) => void;
     setCellMetric: (metric: string) => void;
@@ -171,7 +165,6 @@ export interface BindAppUiControlsOptions {
     playbackController: PlaybackController;
     runPerf: () => void;
     copyPerfResult: () => void;
-    getDebugEnabled: () => boolean;
     getCurrentSurfaceMode: () => string;
     getCurrentCellMetric: () => string;
     getCurrentEraScale: () => string;
@@ -185,7 +178,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         canvas,
         viewportPanel,
         sidebarToggle,
-        debugToggleInput,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
@@ -202,7 +194,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         setSidebarOpen,
         plateHover,
         globePinchFocusController,
-        setDebugModeEnabled,
         setEraScale,
         setViewMode,
         setCellMetric,
@@ -210,7 +201,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         playbackController,
         runPerf,
         copyPerfResult,
-        getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentCellMetric,
         getCurrentEraScale,
@@ -229,7 +219,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         seedForm,
         plateHover,
         globePinchFocusController,
-        setDebugModeEnabled,
         setViewMode,
         setCellMetric,
         setSurfaceMode,
@@ -248,7 +237,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         canvas,
         viewportPanel,
         sidebarToggle,
-        debugToggleInput,
         eraScaleSelect,
         viewModeInputs,
         controlHelpModal,
@@ -262,12 +250,10 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         onResize,
         onSidebarToggle: handlers.onSidebarToggle,
         canvasInputHandlers: handlers.canvasInputHandlers,
-        onDebugToggle: handlers.onDebugToggle,
         onEraScaleChange: handlers.onEraScaleChange,
         onViewModeChange: handlers.onViewModeChange,
         onCellMetricChange: handlers.onCellMetricChange,
         onToggleSurface: handlers.onToggleSurface,
-        onToggleDebug: handlers.onToggleDebug,
         onTogglePlay: handlers.onTogglePlay,
         onStepForward: handlers.onStepForward,
         onRewind: handlers.onRewind,
@@ -276,7 +262,6 @@ export function bindAppUiControls(options: BindAppUiControlsOptions) {
         onEventLogJump: handlers.onEventLogJump,
         onRunPerfBenchmark: handlers.onRunPerfBenchmark,
         onCopyPerfBenchmark: handlers.onCopyPerfBenchmark,
-        getDebugEnabled,
         getCurrentSurfaceMode,
         getCurrentCellMetric,
         onSubmitSeed: handlers.onSubmitSeed,

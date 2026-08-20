@@ -20,7 +20,7 @@ function resolveEventTone(entry: EventLogEntry) {
     if (type === "era-changed" || type === "error" || type === "fatal" || hasFailureKeyword(entry)) {
         return "important";
     }
-    if (type === "world-generated" || type === "info" || type === "debug") {
+    if (type === "world-generated" || type === "info") {
         return "muted";
     }
     return "normal";

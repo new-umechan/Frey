@@ -49,9 +49,7 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
     const worldUiController = createWorldUiController({
         cameraController: context.scene.cameraController,
         terrainRenderer: context.scene.terrainRenderer,
-        wireframe: context.scene.wireframe,
         plateHover: context.scene.plateHover,
-        debugToggleInput: context.dom.debugToggleInput,
         statusEraLabel: context.dom.statusEraLabel,
         eraScaleSelect: context.dom.eraScaleSelect,
         eraScaleTickLabel: context.dom.eraScaleTickLabel,
@@ -75,12 +73,10 @@ function createWorldUiRuntime(context: RuntimeContext, playbackControllerRef: Pl
 
     const {
         setSurfaceMode,
-        setDebugModeEnabled,
         setEraScale,
     } = worldUiController;
 
     return {
-        setDebugModeEnabled,
         setEraScale,
         setSurfaceModeWithPinchReset: (nextMode: string) => {
             context.scene.globePinchFocusController.reset();
@@ -162,7 +158,6 @@ function createViewModeRuntime(context: RuntimeContext, syncVisibleFieldsForCurr
         getCurrentTerrainData: context.store.getCurrentTerrainData,
         getCurrentSurfaceMode: () => context.store.getState().currentSurfaceMode,
         getWorldTick: () => context.store.world.tick,
-        getDebugEnabled: () => context.store.getState().debugEnabled,
         setCurrentViewMode: (nextMode: string) => {
             context.store.setState({ currentViewMode: nextMode });
         },
@@ -279,7 +274,6 @@ function createPerfControllers(context: RuntimeContext, playbackControllerRef: P
 export function createRuntimeControllers(context: RuntimeContext) {
     const playbackControllerRef: PlaybackRef = { current: null };
     const {
-        setDebugModeEnabled,
         setEraScale,
         setSurfaceModeWithPinchReset,
     } = createWorldUiRuntime(context, playbackControllerRef);
@@ -323,7 +317,6 @@ export function createRuntimeControllers(context: RuntimeContext) {
 
     return {
         perfUiEnabled,
-        setDebugModeEnabled,
         setEraScale,
         setViewMode,
         setCellMetric,

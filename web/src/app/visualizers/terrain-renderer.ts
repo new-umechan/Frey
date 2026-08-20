@@ -8,7 +8,6 @@ import { supportsMetricOverlay } from "./metric-overlay-style";
 interface TerrainMaterialController {
     setRiverMaskTexture: (texture: THREE.Texture) => void;
     setViewMode: (mode: string) => void;
-    setDebugEnabled: (enabled: boolean) => void;
     setCellMetric: (metric: string) => void;
     setSeaLevelOffset: (offset: number) => void;
 }
@@ -72,7 +71,6 @@ export interface TerrainRenderer {
     ) => void;
     applyTerrainMaterialState: (
         currentViewMode: string,
-        debugEnabled: boolean,
         currentCellMetric: string,
     ) => void;
     setSeaLevelOffset: (offset: number) => void;
@@ -165,16 +163,6 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         updateMetricAttribute(currentTerrainData);
         if (currentTerrainData.lakeDepth) {
             ensureAttribute("terrainLakeDepth", currentTerrainData.lakeDepth, 1);
-        }
-        if (currentTerrainData.tectonicDebug) {
-            ensureAttribute("terrainDebugTrench", currentTerrainData.tectonicDebug.trench, 1);
-            ensureAttribute("terrainDebugArc", currentTerrainData.tectonicDebug.arc, 1);
-            ensureAttribute("terrainDebugBackarc", currentTerrainData.tectonicDebug.backarc, 1);
-            ensureAttribute(
-                "terrainDebugOceanOceanArc",
-                currentTerrainData.tectonicDebug.oceanOceanArc,
-                1,
-            );
         }
     }
 
@@ -405,11 +393,10 @@ export function createTerrainRenderer(options: TerrainRendererOptions): TerrainR
         });
     }
 
-    function applyTerrainMaterialState(currentViewMode: string, debugEnabled: boolean, currentCellMetric: string) {
+    function applyTerrainMaterialState(currentViewMode: string, currentCellMetric: string) {
         currentMetricKey = currentCellMetric;
         currentViewModeForGeometry = currentViewMode === "metric" ? "metric" : "normal";
         terrainMaterial.setViewMode(currentViewMode);
-        terrainMaterial.setDebugEnabled(debugEnabled);
         terrainMaterial.setCellMetric(currentCellMetric);
         const currentMetricAttribute = geometry.getAttribute("terrainMetric");
         if (currentMetricAttribute) {

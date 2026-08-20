@@ -157,7 +157,6 @@ export interface AppElements {
     statusMessage: HTMLElement;
     statusEraLabel: HTMLElement;
     plateHoverPopup: HTMLDivElement;
-    debugToggleInput: HTMLInputElement;
     eraScaleSelect: HTMLSelectElement;
     eraScaleTickLabel: HTMLElement;
     eraScaleWeightFields: EraScaleWeightFields;
@@ -191,7 +190,6 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
     const statusMessage = requireElement("status-message", HTMLElement);
     const statusEraLabel = requireElement("status-era", HTMLElement);
     const plateHoverPopup = requireElement("plate-hover-popup", HTMLDivElement);
-    const debugToggleInput = requireElement("debug-mode-toggle", HTMLInputElement);
     const eraScaleSelect = requireElement("era-scale-select", HTMLSelectElement);
     const eraScaleTickLabel = requireElement("era-scale-tick-label", HTMLElement);
 
@@ -231,7 +229,6 @@ export function collectAppElements(options: { perfEnabled?: boolean } = {}): App
         statusMessage,
         statusEraLabel,
         plateHoverPopup,
-        debugToggleInput,
         eraScaleSelect,
         eraScaleTickLabel,
         eraScaleWeightFields,
