@@ -181,6 +181,28 @@ pnpm build
 
 `web/public/demo-seeds.json` は公開 demo の seed catalog で、先頭の seed が初期 world になる。`VITE_FREY_DEMO_SEEDS_URL` を指定しない場合は従来通り任意 seed 入力を表示する。
 
+## Pages へのデプロイ
+
+GitHub Actions の `Deploy Pages Demo` workflow は、`precompute_server` の公開 HTTPS URL を
+受け取り、HTTP engine 用に Web を build して Cloudflare Pages へ deploy する。GitHub repository
+には次の Actions secrets を登録する。
+
+- `CLOUDFLARE_API_TOKEN`: Pages の編集権限を持つ Cloudflare API token。
+- `CLOUDFLARE_ACCOUNT_ID`: deploy 先の Cloudflare account ID。
+
+初回は Cloudflare dashboard で Pages project を作成する。独自ドメインをまだ使わない場合、
+project 名を `frey-demo` とすれば `https://frey-demo.pages.dev` が公開 URL になる。
+
+### 固定ドメインなしの確認
+
+`cloudflared tunnel --url http://127.0.0.1:8787` はランダムな
+`https://*.trycloudflare.com` URL を出力する。この URL を workflow の `api_base` に入力する。
+server の `FREY_CORS_ORIGINS` には、Pages の URL を設定する。
+
+Quick Tunnel の URL は再起動ごとに変わり、テスト用途に限られる。そのため URL が変わった後は、
+新しい `api_base` を指定して workflow を再実行する。常設公開へ移るときだけ、Cloudflare 管理の
+独自 domain と named tunnel の hostname を設定する。
+
 ## mameta systemd 運用
 
 `precompute_server` は生成途中の store を読む前提ではない。公開中の server が参照する store とは別 directory に precompute し、生成完了後に symlink を差し替えて server を restart する。

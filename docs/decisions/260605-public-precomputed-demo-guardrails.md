@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft
+Accepted
 
 ## Context
 
@@ -25,6 +25,10 @@ Web 側に公開 seed 一覧を持たせるだけでは、直接 HTTP request �
 - `FREY_DISABLE_PRECOMPUTE_REQUESTS=true` の場合、未計算 seed の queue 作成を拒否する。
 - `FREY_CORS_ORIGINS` が指定された場合、CORS origin をその一覧に限定する。
 
+公開 UI は Cloudflare Pages、API は外部 host 上の `precompute_server` を
+Cloudflare Tunnel 経由で公開する。world の事前計算と store の保持は外部 host で行い、
+Cloudflare Worker/R2 への移植はこの公開方式の範囲に含めない。
+
 既存の開発挙動を保つため、これらの env が未指定の場合は従来通り permissive CORS と
 未計算 seed の queue 記録を許可する。
 
@@ -35,13 +39,6 @@ Web 側に公開 seed 一覧を持たせるだけでは、直接 HTTP request �
   abuse surface を小さくできる。
 - rate limit、認証、observability は proxy/hosting 側の責務として残る。
 
-## Unresolved
-
-- 公開 seed 一覧を Web 静的 JSON と server env のどちらから正本化するか。
-- 同時接続数が増えた場合に、単一 mutex と JSON response size がどの程度ボトルネックになるか。
-
-## Close when
-
-- 公開デモの制限方針を採用する場合は `Accepted` にし、実装済み仕様を `docs/reference/interface/precomputed_server_api.md` へ反映する。
-- 公開デモの制限を hosting/proxy 側へ寄せる場合は `Rejected` にし、理由を残す。
-- 別の公開 API 方針へ置き換える場合は `Superseded` にし、置換先を明示する。
+現在の API 制限と運用手順は
+`docs/reference/interface/precomputed_server_api.md` および
+`docs/operations/precomputed_server.md` を正本とする。

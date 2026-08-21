@@ -1,0 +1,57 @@
+name: Deploy Pages Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "Cloudflare Pages project name"
+        required: true
+        default: "frey-demo"
+        type: string
+      api_base:
+        description: "Public HTTPS URL of precompute_server, without a trailing slash"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --version 0.13.1 --locked
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build public demo
+        env:
+          VITE_FREY_ENGINE: http
+          VITE_FREY_API_BASE: ${{ inputs.api_base }}
+          VITE_FREY_DEMO_SEEDS_URL: /demo-seeds.json
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name ${{ inputs.project_name }} --branch main
