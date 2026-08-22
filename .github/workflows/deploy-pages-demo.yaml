@@ -1,16 +1,25 @@
 name: Deploy Pages Demo
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-pages-demo.yaml"
+      - "config/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "rust/**"
+      - "web/**"
   workflow_dispatch:
     inputs:
       project_name:
         description: "Cloudflare Pages project name"
-        required: true
-        default: "frey-demo"
+        required: false
         type: string
       api_base:
         description: "Public HTTPS URL of precompute_server, without a trailing slash"
-        required: true
+        required: false
         type: string
 
 jobs:
@@ -18,7 +27,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    concurrency:
+      group: deploy-pages-demo-production
+      cancel-in-progress: true
+    env:
+      PAGES_PROJECT: ${{ inputs.project_name || vars.FREY_PAGES_PROJECT }}
+      API_BASE: ${{ inputs.api_base || vars.FREY_PUBLIC_API_BASE }}
     steps:
+      - name: Validate deploy configuration
+        run: |
+          test -n "$PAGES_PROJECT" || (echo "Missing FREY_PAGES_PROJECT repository variable" >&2; exit 1)
+          test -n "$API_BASE" || (echo "Missing FREY_PUBLIC_API_BASE repository variable" >&2; exit 1)
+          case "$API_BASE" in
+            https://*) ;;
+            *) echo "API base must be a public HTTPS URL" >&2; exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -45,7 +69,7 @@ jobs:
       - name: Build public demo
         env:
           VITE_FREY_ENGINE: http
-          VITE_FREY_API_BASE: ${{ inputs.api_base }}
+          VITE_FREY_API_BASE: ${{ env.API_BASE }}
           VITE_FREY_DEMO_SEEDS_URL: /demo-seeds.json
         run: pnpm build
 
@@ -54,4 +78,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name ${{ inputs.project_name }} --branch main
+          command: pages deploy dist --project-name ${{ env.PAGES_PROJECT }} --branch main

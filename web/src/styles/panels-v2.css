@@ -426,6 +426,32 @@
     padding-left: 24px;
 }
 
+.v2-layer-legend--biome {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    padding-left: 32px;
+}
+
+.v2-biome-legend-item {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    color: #ecf0f3;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.v2-biome-legend-swatch {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    border: 1px solid rgba(236, 240, 243, 0.5);
+    border-radius: 2px;
+}
+
 .v2-legend-gradient {
     height: 20px;
     border-radius: 12px;

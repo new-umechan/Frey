@@ -133,6 +133,14 @@ SSH 越しに見る場合は、手元の machine から `5173` を転送して `
 pnpm dev:wasm
 ```
 
+ローカルの事前計算データや WASM build を使わず、公開済み `precompute_server` で UI を確認する場合:
+
+```bash
+FREY_REMOTE_API_BASE=https://frey-api.example.com pnpm dev:remote
+```
+
+`pnpm dev:remote` は Vite の `/api` proxy を公開 API に向けるため、ブラウザから API への CORS 設定は不要である。必要なら `FREY_REMOTE_SEED=beta` で初期 seed を選ぶ。この経路は表示と UI 操作の確認用であり、ローカルの Rust/WASM 実装変更や未公開の seed は反映しない。
+
 個別に Vite app を起動する場合:
 
 ```bash
@@ -184,11 +192,12 @@ pnpm build
 ## Pages へのデプロイ
 
 GitHub Actions の `Deploy Pages Demo` workflow は、`precompute_server` の公開 HTTPS URL を
-受け取り、HTTP engine 用に Web を build して Cloudflare Pages へ deploy する。GitHub repository
-には次の Actions secrets を登録する。
+受け取り、HTTP engine 用に Web を build して Cloudflare Pages へ deploy する。`main` への Web build 対象の push で自動実行され、Actions 画面からの手動実行時は入力値で設定を上書きできる。GitHub repository には次の Actions secrets と variables を登録する。
 
 - `CLOUDFLARE_API_TOKEN`: Pages の編集権限を持つ Cloudflare API token。
 - `CLOUDFLARE_ACCOUNT_ID`: deploy 先の Cloudflare account ID。
+- `FREY_PAGES_PROJECT` (Actions variable): Cloudflare Pages project 名。例: `frey-demo`。
+- `FREY_PUBLIC_API_BASE` (Actions variable): 公開 `precompute_server` の末尾 slash なし HTTPS URL。
 
 初回は Cloudflare dashboard で Pages project を作成する。独自ドメインをまだ使わない場合、
 project 名を `frey-demo` とすれば `https://frey-demo.pages.dev` が公開 URL になる。

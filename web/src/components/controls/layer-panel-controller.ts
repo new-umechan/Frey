@@ -1,5 +1,10 @@
 import * as THREE from "three";
-import { getMetricCategories, type CellMetricDef } from "../../app/visualizers/cell-metric";
+import {
+    biomeLegendItems,
+    getMetricCategories,
+    isBiomeMetric,
+    type CellMetricDef,
+} from "../../app/visualizers/cell-metric";
 import {
     getMetricRange,
     resolveOverlayMetricColor,
@@ -216,6 +221,9 @@ export function createLayerPanelController(options: {
     }
 
     function buildLegend(metricKey: string): HTMLElement | null {
+        if (isBiomeMetric(metricKey)) {
+            return buildBiomeLegend();
+        }
         const def = byKey.get(metricKey);
         const gradient = gradientCss(metricKey);
         const range = getMetricRange(metricKey);
@@ -237,6 +245,25 @@ export function createLayerPanelController(options: {
             scale.append(span);
         }
         legend.append(scale);
+        return legend;
+    }
+
+    function buildBiomeLegend(): HTMLElement {
+        const legend = document.createElement("div");
+        legend.className = "v2-layer-legend v2-layer-legend--biome";
+        legend.setAttribute("aria-label", "気候種の凡例");
+        for (const { label, color } of biomeLegendItems()) {
+            const item = document.createElement("div");
+            item.className = "v2-biome-legend-item";
+            const swatch = document.createElement("span");
+            swatch.className = "v2-biome-legend-swatch";
+            swatch.style.backgroundColor = color;
+            swatch.setAttribute("aria-hidden", "true");
+            const name = document.createElement("span");
+            name.textContent = label;
+            item.append(swatch, name);
+            legend.append(item);
+        }
         return legend;
     }
 

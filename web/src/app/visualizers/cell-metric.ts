@@ -22,17 +22,19 @@ const CROPS = Object.freeze([
     "yam",
 ] as const);
 const LIVESTOCK = Object.freeze(["cattle", "horse", "sheep", "pig", "camel"] as const);
-const BIOME_LABELS = Object.freeze([
-    "熱帯林",
-    "サバンナ",
-    "砂漠",
-    "草原",
-    "温帯林",
-    "針葉樹林",
-    "ツンドラ",
-    "湿地",
-    "高山帯",
-]);
+export const BIOME_LEGEND_ITEMS = Object.freeze([
+    { label: "熱帯林", color: "#217a45" },
+    { label: "サバンナ", color: "#a6a52a" },
+    { label: "砂漠", color: "#d49a52" },
+    { label: "草原", color: "#78a850" },
+    { label: "温帯林", color: "#3f9453" },
+    { label: "針葉樹林", color: "#285c52" },
+    { label: "ツンドラ", color: "#b0c2cc" },
+    { label: "湿地", color: "#397c9e" },
+    { label: "高山帯", color: "#8f939c" },
+] as const);
+
+const BIOME_LABELS = Object.freeze(BIOME_LEGEND_ITEMS.map((item) => item.label));
 
 function biomeLabelFromId(value: number): string {
     const index = Math.trunc(value);
@@ -310,6 +312,10 @@ export function isBiomeMetric(metricKey: string): boolean {
 
 export function biomeLabels(): readonly string[] {
     return BIOME_LABELS;
+}
+
+export function biomeLegendItems(): readonly (typeof BIOME_LEGEND_ITEMS)[number][] {
+    return BIOME_LEGEND_ITEMS;
 }
 
 export function formatBiomeLabel(value: number): string {

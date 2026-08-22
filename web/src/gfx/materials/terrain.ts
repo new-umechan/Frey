@@ -236,15 +236,15 @@ vec3 paletteWindDirection(float u, float v) {
 
 vec3 paletteBiome(float value) {
     float biome = floor(max(value, 0.0) + 0.5);
-    if (biome < 0.5) return vec3(0.13, 0.45, 0.24); // TropicalForest
-    if (biome < 1.5) return vec3(0.49, 0.62, 0.23); // Savanna
-    if (biome < 2.5) return vec3(0.83, 0.73, 0.47); // Desert
-    if (biome < 3.5) return vec3(0.58, 0.69, 0.37); // Grassland
-    if (biome < 4.5) return vec3(0.24, 0.52, 0.26); // TemperateForest
-    if (biome < 5.5) return vec3(0.17, 0.32, 0.22); // BorealForest
-    if (biome < 6.5) return vec3(0.72, 0.76, 0.80); // Tundra
-    if (biome < 7.5) return vec3(0.22, 0.45, 0.58); // Wetland
-    return vec3(0.55, 0.57, 0.61); // Alpine
+    if (biome < 0.5) return vec3(0.13, 0.48, 0.27); // TropicalForest
+    if (biome < 1.5) return vec3(0.65, 0.65, 0.16); // Savanna
+    if (biome < 2.5) return vec3(0.83, 0.60, 0.32); // Desert
+    if (biome < 3.5) return vec3(0.47, 0.66, 0.31); // Grassland
+    if (biome < 4.5) return vec3(0.25, 0.58, 0.33); // TemperateForest
+    if (biome < 5.5) return vec3(0.16, 0.36, 0.32); // BorealForest
+    if (biome < 6.5) return vec3(0.69, 0.76, 0.80); // Tundra
+    if (biome < 7.5) return vec3(0.22, 0.49, 0.62); // Wetland
+    return vec3(0.56, 0.58, 0.61); // Alpine
 }
 
 vec3 freyMetricModeColor(float kind) {
