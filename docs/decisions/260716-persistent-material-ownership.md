@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded
+
+Superseded by `260822-topology-preserving-material-front.md`.
 
 ## Context
 
@@ -60,3 +62,9 @@ element は球面上の区分的測地三角形であり、内部変形を解か
 
 方式比較用の実行分岐、不要な topology / influence / front ownership state は削除する。
 比較結果と棄却理由はこの decision document に残し、現在の挙動は `docs/reference/modules/geology.md` を正本とする。
+
+## Outcome
+
+persistent material elementは地殻物質履歴の正本として維持する。一方、独立剛体移流したelementのgap/overlapを
+排他的 `plate_id` へ直接rasterizeすると連結性を壊すことが長期seriesで判明したため、plate ownershipの正本は
+[topology-preserving shared front](260822-topology-preserving-material-front.md)へ移した。

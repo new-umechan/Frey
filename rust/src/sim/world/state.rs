@@ -1058,6 +1058,16 @@ pub struct GeologyDynamicsState {
     pub surface_material_elements: Vec<SurfaceMaterialElementState>,
     #[serde(default)]
     pub previous_surface_plate_id: Vec<PlateId>,
+    #[serde(default)]
+    pub boundary_front_accumulators: Vec<BoundaryFrontAccumulatorState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct BoundaryFrontAccumulatorState {
+    pub source_plate: u32,
+    pub target_plate: u32,
+    pub bucket: u32,
+    pub residual_cell_fraction: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

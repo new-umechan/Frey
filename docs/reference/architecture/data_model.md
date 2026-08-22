@@ -315,6 +315,13 @@ struct BoundaryDynamicsState {
     slab_convergence_component: Vec<f32>,
     slab_rollback_component: Vec<f32>,
 }
+
+struct BoundaryFrontAccumulatorState {
+    source_plate: u32,
+    target_plate: u32,
+    bucket: u32,
+    residual_cell_fraction: f32,
+}
 ```
 
 `BoundaryEdgeInternal` は境界edgeごとの収束履歴のみを保持する。
@@ -325,6 +332,10 @@ struct BoundaryDynamicsState {
 `dominant_type` と `activity` は reclassify 間隔中に使う境界分類 cache として保持する。
 境界分類の正本入力は `plate_id` / plate dynamics / edge geometry であり、
 `dominant_type` は分類更新時に再計算可能な派生 cache として扱う。
+
+`BoundaryFrontAccumulatorState` は共有境界componentの1 cell未満の移動量をtick間で保持する。
+source、target、球面bucketでcomponentを対応付け、整数cellへ達した分だけ連続patchとして移す。
+これはmaterial markerのcoverage状態とは独立した、排他的 `plate_id` frontのruntime状態である。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。
 `age`・`thickness`・`density` は連続属性として移流する。

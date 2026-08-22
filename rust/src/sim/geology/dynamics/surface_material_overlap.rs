@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 
 use super::surface_cell_geometry::build_barycentric_dual_cells;
 use super::surface_material_projection::{
-    SurfaceMaterialProjection, deposit_projected_mass_components, finish_projection_diagnostics,
+    deposit_projected_mass_components, finish_projection_diagnostics, SurfaceMaterialProjection,
 };
 use super::surface_material_transport::{nearest_mesh_cell, rotate_unit_vector};
 
@@ -565,7 +565,11 @@ fn clip_half_plane(
 
 fn half_plane_value(point: Point2, normal: Point2, threshold: f32, retain_above: bool) -> f32 {
     let value = dot2(point, normal) - threshold;
-    if retain_above { value } else { -value }
+    if retain_above {
+        value
+    } else {
+        -value
+    }
 }
 
 fn is_inside(point: Point2, edge_start: Point2, edge_end: Point2) -> bool {

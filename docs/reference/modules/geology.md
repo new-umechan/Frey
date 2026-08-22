@@ -52,15 +52,18 @@
 地形生成に必要な違いを表すための簡略化である。
 
 高さ、熱、火山活動のような連続量は、近傍セルへなめらかに伝わる。
-プレート所属は、プレートごとに永続化した球面上の material element から再構成する。
-element は初期プレートの表面を三角形として保持し、プレートの Euler 運動に従って移流する。
-固定メッシュへの投影は観測と地形接続のために行うもので、投影されたセル値を物質の正本として
-再膨張することはしない。
+プレート所属の正本は、固定icosphere上で全球を排他的に覆う `plate_id` である。共有境界の相対Euler速度から
+境界を横切る移動量を求め、小数cell分を境界componentごとに蓄積する。整数cellへ達したら連続したpatchとして
+移し、移動前後のplateが分断・孤立しない場合だけ所属変更を確定する。
+
+これとは別に、プレートごとに永続化した球面上のmaterial elementが地殻物質を保持する。elementは初期プレートの
+表面を三角形として保持し、プレートのEuler運動に従って移流する。固定メッシュへの投影は地殻組成、年齢、
+coverage診断のために行い、markerの重なりや隙間から `plate_id` を再構成しない。
 
 移流後は、境界の発散・収束・衝突に応じて material を更新する。
 発散では新しい海洋 material を追加し、沈み込みでは条件を満たした海洋側を除去する。
-衝突や変換境界では、重複と隙間を局所的に補正する。その後、投影された material から各セルの
-plate、地殻組成、地殻年齢を読み直す。
+衝突や変換境界では、重複と隙間を局所的に補正する。その後、投影されたmaterialから各セルの地殻組成と
+地殻年齢を読み直す。materialのgap/overlapは物質収支の診断として残すが、プレート所属には変換しない。
 
 これは球面 polygon の厳密な連続体移流ではなく、球面三角形 element と固定メッシュ投影による近似である。
 element は内部変形せず剛体回転し、衝突時の上下関係や新しい海嶺 material の生成はメッシュ解像度で扱う。
@@ -87,7 +90,8 @@ element は内部変形せず剛体回転し、衝突時の上下関係や新し
 - 氷、水、堆積物は、長い時間で地形に戻る外力として扱う
 
 実装方式の選定理由と比較した方式の履歴は、
-[persistent material ownership の decision document](../../decisions/260716-persistent-material-ownership.md) に記録する。
+[shared plate front の decision document](../../decisions/260822-topology-preserving-material-front.md) と
+[persistent material の decision document](../../decisions/260716-persistent-material-ownership.md) に記録する。
 
 ## 意図的な近似
 

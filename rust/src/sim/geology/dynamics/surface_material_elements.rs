@@ -104,7 +104,6 @@ pub(super) struct SurfaceMaterialElementUpdateInput<'a> {
 }
 
 pub(super) struct SurfaceMaterialElementUpdate {
-    pub plate_id: Vec<PlateId>,
     pub crust_type: Vec<CrustType>,
     pub crust_age: Vec<f32>,
     pub closure: MaterialCoverageClosureDiagnostics,
@@ -281,7 +280,6 @@ pub(super) fn update_persistent_surface_material_elements(
         timing.print();
     }
     Ok(SurfaceMaterialElementUpdate {
-        plate_id,
         crust_type,
         crust_age,
         closure,
@@ -344,8 +342,15 @@ fn apply_persistent_material_reactions(
             if let Some(remaining) = removal.get_mut(&key) {
                 *remaining = (*remaining - amount).max(0.0);
             }
-            let retained_fraction = (element.area - amount) / element.area.max(AREA_EPSILON);
-            if retained_fraction <= AREA_EPSILON {
+            let retained_area = (element.area - amount).max(0.0);
+            let retained_fraction = retained_area / element.area.max(AREA_EPSILON);
+            let dust_area = projection
+                .target_cell_areas
+                .get(element.host_cell as usize)
+                .copied()
+                .unwrap_or(0.0)
+                * NUMERICAL_DUST_CELL_FRACTION;
+            if retained_area <= dust_area.max(AREA_EPSILON) {
                 continue;
             }
             let center = normalized([
@@ -370,7 +375,13 @@ fn apply_persistent_material_reactions(
                 element.oceanic_area / element.area.max(AREA_EPSILON),
                 element.age_area / element.area.max(AREA_EPSILON),
                 element.ownership_marker,
-            )?;
+            )
+            .map_err(|error| {
+                format!(
+                    "{error}: subduction cell={}, plate={}, retained_area={retained_area}",
+                    element.host_cell, element.plate_id.0
+                )
+            })?;
         }
     }
     timing.subduction_reactions += start.elapsed();
@@ -469,7 +480,8 @@ fn reconstruct_ridge_material(
     };
     let projected_area = materials.iter().map(|material| material.area).sum::<f32>();
     let gap_area = (target_area - projected_area).max(0.0);
-    if gap_area <= AREA_EPSILON {
+    let dust_area = target_area * NUMERICAL_DUST_CELL_FRACTION;
+    if gap_area <= dust_area.max(AREA_EPSILON) {
         return Ok(RidgeMaterialReaction::default());
     }
     let cell_moment = spherical_polygon_first_moment(polygon)
@@ -504,7 +516,8 @@ fn reconstruct_ridge_material(
         1.0,
         0.0,
         false,
-    )?;
+    )
+    .map_err(|error| format!("{error}: ridge cell={cell}, gap_area={gap_area}"))?;
     Ok(RidgeMaterialReaction {
         elements,
         created_area: gap_area,
@@ -760,7 +773,7 @@ fn rasterize_persistent_material_surface(
     let mut diagnostics = SurfaceMarkerOwnershipDiagnostics::default();
     for (cell, (&candidate_count, (&before, &after))) in candidate_counts
         .iter()
-        .zip(previous.iter().zip(&plate_id))
+        .zip(previous.iter().zip(plate_id.iter()))
         .enumerate()
     {
         match candidate_count {
@@ -1800,6 +1813,35 @@ mod tests {
         assert!((projection.input_area - 4.0 * std::f32::consts::PI).abs() < 1e-4);
         assert!(projection.uncovered_area < 1e-5);
         assert!(projection.overlap_area < 1e-5);
+    }
+
+    #[test]
+    fn ridge_reaction_ignores_gap_below_material_dust_threshold() {
+        let target_area = 1.0;
+        let gap_area = NUMERICAL_DUST_CELL_FRACTION * 0.5;
+        let projection = SurfaceMaterialElementProjection {
+            cells: vec![vec![ProjectedElementMaterial {
+                plate_id: PlateId(0),
+                area: target_area - gap_area,
+                ..Default::default()
+            }]],
+            target_cell_areas: vec![target_area],
+            ..Default::default()
+        };
+        let reaction = reconstruct_ridge_material(
+            &SweptDivergentCell {
+                cell: 0,
+                accreting_plate: PlateId(0),
+                mass: gap_area,
+            },
+            &projection,
+            &[[1.0, 0.0, 0.0]],
+            &[Vec::new()],
+        )
+        .unwrap();
+
+        assert!(reaction.elements.is_empty());
+        assert_eq!(reaction.created_area, 0.0);
     }
 
     #[test]

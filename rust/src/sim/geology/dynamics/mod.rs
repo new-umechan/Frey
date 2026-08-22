@@ -2,6 +2,7 @@ use crate::GeologyParams;
 
 mod boundary_dynamics;
 mod plate_metrics;
+mod plate_ownership;
 mod surface_boundary_sweep;
 mod surface_cell_geometry;
 mod surface_dynamics;
@@ -24,7 +25,7 @@ use boundary_dynamics::{
     plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics,
     ReclassifyBoundariesInput,
 };
-use plate_metrics::EulerFrontAdvectionMetrics;
+use plate_ownership::{apply_euler_front_advection, EulerFrontAdvectionInput};
 use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
 use surface_material_elements::{
     update_persistent_surface_material_elements, SurfaceMaterialElementUpdateInput,
@@ -213,22 +214,21 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         state.crust_type = update.crust_type[cell];
         state.age = update.crust_age[cell].max(0.0);
     }
-    let changed_cell_count = plate_id
-        .iter()
-        .zip(&update.plate_id)
-        .filter(|(before, after)| before != after)
-        .count() as u32;
-    let boundary_front_metrics = EulerFrontAdvectionMetrics {
-        substeps: 1,
-        raw_expected_cell_count: changed_cell_count as f32,
-        accumulated_expected_cell_count: changed_cell_count as f32,
-        component_budget_cell_count: changed_cell_count,
-        transferable_component_budget_cell_count: changed_cell_count,
-        plate_consistency_budget_cell_count: changed_cell_count,
-        actual_transfer_cell_count: changed_cell_count,
-        ..Default::default()
-    };
-    let next_plate_id = update.plate_id;
+    let mut next_plate_id = plate_id.to_vec();
+    let boundary_front_metrics = apply_euler_front_advection(
+        EulerFrontAdvectionInput {
+            positions,
+            nbr_offsets,
+            nbrs,
+            plate_states: &dynamics.plate_states,
+            boundary_state: &dynamics.boundary_state,
+            accumulators: &mut dynamics.boundary_front_accumulators,
+            project_plate_consistency: true,
+            signed_accumulation: false,
+        },
+        &mut next_plate_id,
+        &mut next_vertex_states,
+    );
     let plate_id_churn_rate = plate_id_churn_rate(plate_id, &next_plate_id);
     let orphan_cell_count = orphan_cell_count(nbr_offsets, nbrs, &next_plate_id);
     let single_cell_plate_count = single_cell_plate_count(&next_plate_id);
@@ -640,6 +640,7 @@ fn ensure_geology_dynamics(
         cached_metrics: GeologyStepMetrics::default(),
         surface_material_elements: Vec::new(),
         previous_surface_plate_id: world.state.geology.plate_id.clone(),
+        boundary_front_accumulators: Vec::new(),
     });
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];

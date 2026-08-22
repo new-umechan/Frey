@@ -64,7 +64,14 @@ fn factor_label(factor: BiomeFactor) -> &'static str {
     }
 }
 
-fn node(id: &str, label: &str, module: &str, value: f32, unit: &str, decisive: bool) -> ExplainNode {
+fn node(
+    id: &str,
+    label: &str,
+    module: &str,
+    value: f32,
+    unit: &str,
+    decisive: bool,
+) -> ExplainNode {
     ExplainNode {
         id: id.to_string(),
         label: label.to_string(),
@@ -157,8 +164,14 @@ fn explain_biome(
     let latitude = inputs.latitude.get(i).copied().unwrap_or(0.0);
     let max_flow = inputs.river_flow.iter().copied().fold(0.0_f32, f32::max);
 
-    let factor =
-        biome_decisive_factor(tree_cover, temperature, precipitation, river_flow, height, max_flow);
+    let factor = biome_decisive_factor(
+        tree_cover,
+        temperature,
+        precipitation,
+        river_flow,
+        height,
+        max_flow,
+    );
 
     // 起点(いま見えている姿)。
     let mut nodes = vec![node("biome", biome_label(biome), "植生", 0.0, "", false)];
@@ -168,7 +181,14 @@ fn explain_biome(
     // 上流は次段の拡張で扱う)。
     match factor {
         BiomeFactor::Precipitation => {
-            nodes.push(node("precipitation", "降水量", "気候", precipitation, "mm", true));
+            nodes.push(node(
+                "precipitation",
+                "降水量",
+                "気候",
+                precipitation,
+                "mm",
+                true,
+            ));
             edges.push(edge("precipitation", "biome", true));
         }
         BiomeFactor::Temperature => {
@@ -190,7 +210,11 @@ fn explain_biome(
         }
     }
 
-    let summary = format!("{}。主な要因は{}。", biome_label(biome), factor_label(factor));
+    let summary = format!(
+        "{}。主な要因は{}。",
+        biome_label(biome),
+        factor_label(factor)
+    );
 
     Ok(ExplainCellResponse {
         cell_index,
