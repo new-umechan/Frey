@@ -210,6 +210,7 @@ fn hydrology_mfd_skips_in_later_eras_without_height_change_and_low_activity() {
         surface_material_elements: Vec::new(),
         previous_surface_plate_id: Vec::new(),
         boundary_front_accumulators: Vec::new(),
+        boundary_front_elapsed_years: 0.0,
     });
 
     assert!(!super::geology::should_run_hydrology_mfd_for_geology(
@@ -283,6 +284,7 @@ fn geology_step_preserves_crust_land_ratio_target() {
         surface_material_elements: Vec::new(),
         previous_surface_plate_id: Vec::new(),
         boundary_front_accumulators: Vec::new(),
+        boundary_front_elapsed_years: 0.0,
     });
     world.clock.epoch = EraKind::Crust;
     world.clock.transition.last_land_ratio = 0.5;

@@ -1060,6 +1060,8 @@ pub struct GeologyDynamicsState {
     pub previous_surface_plate_id: Vec<PlateId>,
     #[serde(default)]
     pub boundary_front_accumulators: Vec<BoundaryFrontAccumulatorState>,
+    #[serde(default)]
+    pub boundary_front_elapsed_years: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]

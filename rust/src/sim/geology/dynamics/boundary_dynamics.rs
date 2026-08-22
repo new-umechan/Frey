@@ -9,7 +9,9 @@ use crate::GeologyParams;
 use crate::sim::exec::math::{cross3, dot, length3, seeded_axis};
 use crate::sim::exec::{lerp, CONVERGENT_THRESHOLD, DIVERGENT_THRESHOLD, TRANSFORM_THRESHOLD};
 
-use super::{EARTH_MEAN_RADIUS_KM, EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR, YEARS_PER_MYR};
+use super::{
+    EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR, PLATE_KINEMATIC_REFERENCE_STEP_MYR, YEARS_PER_MYR,
+};
 
 const EXPECTED_MOBILE_LID_DRIVE: f32 = 0.30;
 const MAX_NORMALIZED_DRIVE: f32 = 1.8;
@@ -495,12 +497,27 @@ pub(super) fn plate_velocity_for_cell(
     plate_velocity_from_state(plate_states.get(plate_id.as_usize()), plate_id, pos)
 }
 
+pub(super) fn plate_kinematics_for_elapsed_years(
+    plate_states: &[PlateKinematicsState],
+    elapsed_years: f32,
+) -> Vec<PlateKinematicsState> {
+    let elapsed_myr = finite_or(elapsed_years / YEARS_PER_MYR, 0.0).max(0.0);
+    let step_scale = elapsed_myr / PLATE_KINEMATIC_REFERENCE_STEP_MYR;
+    plate_states
+        .iter()
+        .cloned()
+        .map(|mut state| {
+            state.angular_speed *= step_scale;
+            state
+        })
+        .collect()
+}
+
 pub(super) fn update_plate_kinematics(
     plate_id: &[PlateId],
     plate_states: &mut [PlateKinematicsState],
     boundary_state: &BoundaryDynamicsState,
     params: &GeologyParams,
-    years_per_tick: f32,
 ) {
     if plate_states.is_empty() {
         return;
@@ -557,7 +574,6 @@ pub(super) fn update_plate_kinematics(
     }
 
     let gain = params.plate_motion_gain.max(0.0);
-    let myr_per_tick = finite_or(years_per_tick / YEARS_PER_MYR, 0.0).max(0.0);
     for pid in 0..plate_states.len() {
         let denom = plate_boundary_count[pid].max(1) as f32;
         let activity = finite_or(plate_activity[pid] / denom, 0.0).clamp(0.0, 1.0);
@@ -575,42 +591,18 @@ pub(super) fn update_plate_kinematics(
         let drag = 1.0 + 2.0 * collision_drag;
         let target_speed_km_per_myr =
             EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR * gain * normalized_driving_strength / drag;
-        let force_target_angular_speed = finite_or(
-            target_speed_km_per_myr / EARTH_MEAN_RADIUS_KM * myr_per_tick,
-            0.0,
-        )
-        .clamp(0.0, 0.30);
-        let reference_angular_speed = finite_or(
+        let reference_angular_step = finite_or(
             plate_states[pid].reference_angular_speed,
             plate_states[pid].angular_speed,
         )
-        .max(plate_states[pid].angular_speed)
         .clamp(0.0, 0.30);
-        let basal_target_angular_speed = (reference_angular_speed * 0.35 * gain).clamp(0.0, 0.30);
-        let basal_target_speed_km_per_myr =
-            basal_target_angular_speed * EARTH_MEAN_RADIUS_KM / myr_per_tick.max(1e-6);
-        let target_angular_speed = force_target_angular_speed
-            .max(basal_target_angular_speed)
-            .clamp(0.0, 0.30);
-        let response = if target_angular_speed >= plate_states[pid].angular_speed {
-            0.22
-        } else {
-            0.08
-        };
-        plate_states[pid].angular_speed = finite_or(
-            lerp(
-                plate_states[pid].angular_speed,
-                target_angular_speed,
-                response,
-            ),
-            target_angular_speed,
-        )
-        .clamp(0.0, 0.30);
+        let kinematic_angular_step = (reference_angular_step * gain).clamp(0.0, 0.30);
+        plate_states[pid].angular_speed = kinematic_angular_step;
         plate_states[pid].slab_pull_drive = slab_pull_drive;
         plate_states[pid].ridge_push_drive = ridge_push_drive;
         plate_states[pid].collision_drag = collision_drag;
         plate_states[pid].force_target_speed_km_per_myr = target_speed_km_per_myr;
-        plate_states[pid].basal_target_speed_km_per_myr = basal_target_speed_km_per_myr;
+        plate_states[pid].basal_target_speed_km_per_myr = 0.0;
         plate_states[pid].activity =
             finite_or(lerp(plate_states[pid].activity, activity, 0.20), activity).clamp(0.0, 1.0);
     }
@@ -985,7 +977,7 @@ mod tests {
     }
 
     #[test]
-    fn slab_pull_increases_plate_speed_more_than_passive_activity() {
+    fn slab_pull_is_diagnostic_not_kinematic_authority() {
         let plate_id = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
         let mut plate_states = vec![plate_state(), plate_state()];
         let mut boundary_state = BoundaryDynamicsState {
@@ -1006,30 +998,28 @@ mod tests {
             &mut plate_states,
             &boundary_state,
             &GeologyParams::default(),
-            5_000_000.0,
         );
 
-        assert!(plate_states[0].angular_speed > plate_states[1].angular_speed);
+        assert_eq!(plate_states[0].angular_speed, plate_states[1].angular_speed);
         assert!(plate_states[0].slab_pull_drive > plate_states[0].ridge_push_drive);
         assert_eq!(plate_states[1].slab_pull_drive, 0.0);
         assert!(plate_states[0].force_target_speed_km_per_myr > 0.0);
 
         boundary_state.slab_convergence_component.fill(0.0);
         boundary_state.slab_rollback_component.fill(0.0);
-        let slab_driven_speed = plate_states[0].angular_speed;
+        let kinematic_speed = plate_states[0].angular_speed;
         update_plate_kinematics(
             &plate_id,
             &mut plate_states,
             &boundary_state,
             &GeologyParams::default(),
-            5_000_000.0,
         );
 
-        assert!(plate_states[0].angular_speed < slab_driven_speed);
+        assert_eq!(plate_states[0].angular_speed, kinematic_speed);
     }
 
     #[test]
-    fn basal_reference_motion_prevents_late_speed_collapse() {
+    fn reference_kinematics_is_stable_across_updates() {
         let plate_id = vec![PlateId(0), PlateId(0), PlateId(1), PlateId(1)];
         let mut plate_states = vec![plate_state(), plate_state()];
         plate_states[0].angular_speed = 0.10;
@@ -1048,12 +1038,38 @@ mod tests {
                 &mut plate_states,
                 &boundary_state,
                 &GeologyParams::default(),
-                5_000_000.0,
             );
         }
 
-        assert!(plate_states[0].angular_speed >= 0.035);
-        assert!(plate_states[1].angular_speed >= 0.028);
+        assert_eq!(plate_states[0].angular_speed, 0.10);
+        assert_eq!(plate_states[1].angular_speed, 0.08);
+
+        update_plate_kinematics(
+            &plate_id,
+            &mut plate_states,
+            &boundary_state,
+            &GeologyParams::default(),
+        );
+
+        assert_eq!(plate_states[0].angular_speed, 0.10);
+        assert_eq!(plate_states[1].angular_speed, 0.08);
+    }
+
+    #[test]
+    fn elapsed_time_scales_finite_euler_rotation_linearly() {
+        let state = PlateKinematicsState {
+            angular_speed: 0.10,
+            reference_angular_speed: 0.10,
+            ..plate_state()
+        };
+
+        let five_myr = plate_kinematics_for_elapsed_years(&[state], 5_000_000.0);
+        let one_myr = plate_kinematics_for_elapsed_years(&[state], 1_000_000.0);
+        let one_year = plate_kinematics_for_elapsed_years(&[state], 1.0);
+
+        assert!((five_myr[0].angular_speed - 0.10).abs() < 1e-6);
+        assert!((one_myr[0].angular_speed - 0.02).abs() < 1e-6);
+        assert!((one_year[0].angular_speed - 0.10 / 5_000_000.0).abs() < 1e-12);
     }
 
     #[test]

@@ -663,7 +663,7 @@ fn rasterize_persistent_material_surface(
         if hard_cell_count.get(&plate).copied().unwrap_or(0) > 0 {
             continue;
         }
-        let seed = (0..labels.len())
+        let exposed_seed = (0..labels.len())
             .filter(|&cell| labels[cell].is_none() && candidates[cell].contains(&plate))
             .filter_map(|cell| {
                 let area = projection.cells[cell]
@@ -676,6 +676,26 @@ fn rasterize_persistent_material_surface(
                 a.1.cmp(&b.1)
                     .then_with(|| a.2.total_cmp(&b.2))
                     .then_with(|| b.0.cmp(&a.0))
+            });
+        // Plate lifecycle events are not implemented yet. If subduction filtering hides every
+        // ownership marker for a plate that still owns material, preserve one projected seed so
+        // the diagnostic raster does not silently turn full occlusion into plate deletion.
+        let seed = exposed_seed
+            .or_else(|| {
+                (0..labels.len())
+                    .filter(|&cell| labels[cell].is_none())
+                    .filter_map(|cell| {
+                        let area = projection.cells[cell]
+                            .iter()
+                            .find(|material| material.plate_id == plate)?
+                            .area;
+                        Some((cell, usize::from(previous[cell] == plate), area))
+                    })
+                    .max_by(|a, b| {
+                        a.1.cmp(&b.1)
+                            .then_with(|| a.2.total_cmp(&b.2))
+                            .then_with(|| b.0.cmp(&a.0))
+                    })
             })
             .ok_or_else(|| format!("plate {} has no exposed material seed", plate.0))?;
         labels[seed.0] = Some(plate);

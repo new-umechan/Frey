@@ -2,9 +2,13 @@
 
 ## Status
 
-Accepted
+Superseded
 
 ## Context
+
+Superseded by `260822-kinematic-euler-boundary-advection.md` for plate speed and ownership direction.
+Crust の 5 Myr tick、
+境界分類、surface forcing に関する記述だけが現行仕様として残る。
 
 Crust era の plate ownership transfer は、boundary activity と隣接 plate の
 inflow だけで `plate_id` を更新していた。

@@ -322,6 +322,12 @@ struct BoundaryFrontAccumulatorState {
     bucket: u32,
     residual_cell_fraction: f32,
 }
+
+struct GeologyDynamicsState {
+    // other runtime fields
+    boundary_front_accumulators: Vec<BoundaryFrontAccumulatorState>,
+    boundary_front_elapsed_years: f32,
+}
 ```
 
 `BoundaryEdgeInternal` は境界edgeごとの収束履歴のみを保持する。
@@ -333,8 +339,12 @@ struct BoundaryFrontAccumulatorState {
 境界分類の正本入力は `plate_id` / plate dynamics / edge geometry であり、
 `dominant_type` は分類更新時に再計算可能な派生 cache として扱う。
 
-`BoundaryFrontAccumulatorState` は共有境界componentの1 cell未満の移動量をtick間で保持する。
-source、target、球面bucketでcomponentを対応付け、整数cellへ達した分だけ連続patchとして移す。
+`BoundaryFrontAccumulatorState` は共有境界 component の符号付き未処理進行量を tick 間で保持する。
+ordered plate pair と球面 bucket で component を対応付け、逆向き候補は進行量と相殺し、
+整数 cell へ達した分だけ連続 patch として移す。
+front span と plate-level throughput の上限は 5 Myr reference step に対する実時間幅の比で縮尺する。
+`GeologyDynamicsState.boundary_front_elapsed_years` はこの積分器の時間刻みを保持し、epoch 境界で刻みが
+変わった場合は旧刻みの accumulator を破棄する。
 これはmaterial markerのcoverage状態とは独立した、排他的 `plate_id` frontのruntime状態である。
 
 `plate_id` と `crust_type` は離散属性として境界通過で切り替える。

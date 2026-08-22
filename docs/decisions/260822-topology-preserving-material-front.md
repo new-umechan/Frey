@@ -2,9 +2,13 @@
 
 ## Status
 
-Accepted
+Superseded
 
 ## Context
+
+Superseded by `260822-kinematic-euler-boundary-advection.md` for boundary velocity and signed progress.
+Topology guard と排他的 `plate_id` authority は維持するが、境界速度と符号付き進行量は
+同 decision に置き換えられた。
 
 persistent material element は地殻物質の位置、面積、海洋性、年齢を保持できる。一方、plate ごとに
 独立に剛体移流した element は全球の排他的 partition ではないため、収束で overlap、発散で gap が生じる。

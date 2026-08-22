@@ -2,9 +2,14 @@
 
 ## Status
 
-Draft
+Superseded
 
 ## Context
+
+Superseded by `260822-kinematic-euler-boundary-advection.md`.
+同 decision で初期 Euler rotation を kinematics の正本とし、
+force target と basal floor の混合を廃止したため、この提案は置き換えられた。drive diagnostics は残すが、
+plate speed の authority にはしない。
 
 Crust runtime の plate motion は、boundary classification から得た
 slab convergence / rollback / ridge activity を使って速度を更新している。

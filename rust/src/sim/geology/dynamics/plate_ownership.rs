@@ -25,6 +25,7 @@ pub(super) struct EulerFrontAdvectionInput<'a> {
     pub plate_states: &'a [PlateKinematicsState],
     pub boundary_state: &'a BoundaryDynamicsState,
     pub accumulators: &'a mut Vec<BoundaryFrontAccumulatorState>,
+    pub throughput_scale: f32,
     pub project_plate_consistency: bool,
     pub signed_accumulation: bool,
 }
@@ -78,19 +79,26 @@ impl FrontComponent {
         }
     }
 
-    fn transfer_budget(&self) -> usize {
+    fn transfer_budget(&self, throughput_scale: f32) -> usize {
         if self.cells.is_empty() {
             return 0;
         }
-        let front_span_cap = 2.0 * (self.cells.len() as f32).sqrt();
+        let base_front_span_cap = 2.0 * (self.cells.len() as f32).sqrt();
+        let front_span_cap = scaled_discrete_cap(base_front_span_cap, throughput_scale);
         let expected_cells = finite_or(self.accumulated_cell_fraction, 0.0)
             .clamp(0.0, self.cells.len() as f32)
             .min(front_span_cap);
-        let whole_cells = expected_cells.floor() as usize;
-        let fractional_cell = if expected_cells.fract() >= 0.5 { 1 } else { 0 };
-        whole_cells
-            .saturating_add(fractional_cell)
-            .min(self.cells.len())
+        (expected_cells.floor() as usize).min(self.cells.len())
+    }
+}
+
+fn scaled_discrete_cap(base_cap: f32, throughput_scale: f32) -> f32 {
+    let base_cap = finite_or(base_cap, 0.0).max(0.0);
+    let throughput_scale = finite_or(throughput_scale, 0.0).max(0.0);
+    if base_cap <= 0.0 || throughput_scale <= 0.0 {
+        0.0
+    } else {
+        (base_cap * throughput_scale).max(1.0)
     }
 }
 
@@ -99,6 +107,7 @@ pub(super) fn apply_euler_front_advection(
     plate_id_next: &mut [PlateId],
     vertex_states: &mut [VertexCrustState],
 ) -> EulerFrontAdvectionMetrics {
+    let throughput_scale = finite_or(input.throughput_scale, 0.0).max(0.0);
     let mut plate_sizes = plate_cell_counts(plate_id_next);
     let donor_floor = runtime_boundary_crossing_donor_floor(plate_id_next.len());
     let current_crust = vertex_states
@@ -128,7 +137,10 @@ pub(super) fn apply_euler_front_advection(
     components.sort_by(|a, b| {
         b.support_density()
             .total_cmp(&a.support_density())
-            .then_with(|| b.transfer_budget().cmp(&a.transfer_budget()))
+            .then_with(|| {
+                b.transfer_budget(throughput_scale)
+                    .cmp(&a.transfer_budget(throughput_scale))
+            })
             .then_with(|| b.score_sum.total_cmp(&a.score_sum))
             .then_with(|| a.target_plate.as_u32().cmp(&b.target_plate.as_u32()))
     });
@@ -137,25 +149,24 @@ pub(super) fn apply_euler_front_advection(
     } else {
         BTreeMap::new()
     };
-
     let component_budget_cell_count = components
         .iter()
-        .map(|component| component.transfer_budget() as u32)
+        .map(|component| component.transfer_budget(throughput_scale) as u32)
         .sum::<u32>();
     let transferable_component_budget_cell_count = components
         .iter()
         .filter(|component| component_can_transfer(component, &plate_sizes, donor_floor))
-        .map(|component| component.transfer_budget() as u32)
+        .map(|component| component.transfer_budget(throughput_scale) as u32)
         .sum::<u32>();
     let projected_component_budgets = if input.project_plate_consistency {
-        project_component_budgets(&components, &plate_sizes, donor_floor)
+        project_component_budgets(&components, &plate_sizes, donor_floor, throughput_scale)
     } else {
         ProjectedComponentBudgets {
             budgets: components
                 .iter()
                 .map(|component| {
                     if component_can_transfer(component, &plate_sizes, donor_floor) {
-                        component.transfer_budget()
+                        component.transfer_budget(throughput_scale)
                     } else {
                         0
                     }
@@ -284,6 +295,22 @@ pub(super) fn apply_euler_front_advection(
     *input.accumulators = next_accumulators;
 
     metrics
+}
+
+pub(super) fn reset_front_accumulators_for_timestep_change(
+    accumulators: &mut Vec<BoundaryFrontAccumulatorState>,
+    previous_elapsed_years: &mut f32,
+    elapsed_years: f32,
+) {
+    let current = finite_or(elapsed_years, 0.0).max(0.0);
+    let previous = finite_or(*previous_elapsed_years, 0.0).max(0.0);
+    let scale = current.abs().max(previous.abs()).max(1.0);
+    let timestep_is_unknown = previous <= 0.0 && !accumulators.is_empty();
+    let timestep_changed = previous > 0.0 && (current - previous).abs() > 1e-6 * scale;
+    if timestep_is_unknown || timestep_changed {
+        accumulators.clear();
+    }
+    *previous_elapsed_years = current;
 }
 
 fn prepare_signed_component_accumulation(
@@ -580,10 +607,16 @@ fn project_component_budgets(
     components: &[FrontComponent],
     plate_sizes: &[usize],
     donor_floor: usize,
+    throughput_scale: f32,
 ) -> ProjectedComponentBudgets {
     let mut remaining_outgoing = plate_sizes
         .iter()
-        .map(|&size| plate_consistency_throughput_cap(size))
+        .map(|&size| {
+            scaled_discrete_cap(
+                plate_consistency_throughput_cap(size) as f32,
+                throughput_scale,
+            ) as usize
+        })
         .collect::<Vec<_>>();
     let mut remaining_incoming = remaining_outgoing.clone();
     let net_delta_caps = plate_sizes
@@ -599,7 +632,7 @@ fn project_component_budgets(
     for component in components {
         let source_plate = component.source_plate.as_usize();
         let target_plate = component.target_plate.as_usize();
-        let proposed_budget = component.transfer_budget();
+        let proposed_budget = component.transfer_budget(throughput_scale);
         if source_plate >= plate_sizes.len()
             || target_plate >= plate_sizes.len()
             || !component_can_transfer(component, plate_sizes, donor_floor)
@@ -771,13 +804,33 @@ fn oriented_edge_candidate(
 ) -> Option<(usize, FrontCandidate)> {
     let cell_plate = plate_id[cell];
     let neighbor_plate = plate_id[neighbor];
-    let cell_velocity = plate_velocity_for_cell(plate_states, cell_plate, positions[cell]);
-    let neighbor_velocity =
-        plate_velocity_for_cell(plate_states, neighbor_plate, positions[neighbor]);
+    let midpoint = normalize([
+        positions[cell][0] + positions[neighbor][0],
+        positions[cell][1] + positions[neighbor][1],
+        positions[cell][2] + positions[neighbor][2],
+    ])?;
+    let (low_cell, high_cell) = if cell_plate.as_u32() < neighbor_plate.as_u32() {
+        (cell, neighbor)
+    } else {
+        (neighbor, cell)
+    };
+    let low_plate = plate_id[low_cell];
+    let high_plate = plate_id[high_cell];
+    let low_velocity = plate_velocity_for_cell(plate_states, low_plate, midpoint);
+    let high_velocity = plate_velocity_for_cell(plate_states, high_plate, midpoint);
+    let boundary_velocity = boundary_velocity_for_edge(
+        low_plate,
+        high_plate,
+        low_velocity,
+        high_velocity,
+        boundary_state,
+        cell,
+        neighbor,
+    );
     let edge = [
-        positions[cell][0] - positions[neighbor][0],
-        positions[cell][1] - positions[neighbor][1],
-        positions[cell][2] - positions[neighbor][2],
+        positions[high_cell][0] - positions[low_cell][0],
+        positions[high_cell][1] - positions[low_cell][1],
+        positions[high_cell][2] - positions[low_cell][2],
     ];
     let edge_spacing = length(edge).max(1e-5);
     let normal = [
@@ -785,19 +838,14 @@ fn oriented_edge_candidate(
         edge[1] / edge_spacing,
         edge[2] / edge_spacing,
     ];
-    let relative_velocity = [
-        neighbor_velocity[0] - cell_velocity[0],
-        neighbor_velocity[1] - cell_velocity[1],
-        neighbor_velocity[2] - cell_velocity[2],
-    ];
-    let signed_flux = dot(relative_velocity, normal);
+    let signed_flux = dot(boundary_velocity, normal);
     if signed_flux.abs() <= 1e-6 {
         return None;
     }
     let (source_cell, target_cell, score) = if signed_flux > 0.0 {
-        (cell, neighbor, signed_flux)
+        (high_cell, low_cell, signed_flux)
     } else {
-        (neighbor, cell, -signed_flux)
+        (low_cell, high_cell, -signed_flux)
     };
     let source_plate = plate_id[source_cell];
     let target_plate = plate_id[target_cell];
@@ -824,6 +872,36 @@ fn oriented_edge_candidate(
             edge_spacing,
         },
     ))
+}
+
+fn boundary_velocity_for_edge(
+    low_plate: PlateId,
+    high_plate: PlateId,
+    low_velocity: [f32; 3],
+    high_velocity: [f32; 3],
+    boundary_state: &BoundaryDynamicsState,
+    cell: usize,
+    neighbor: usize,
+) -> [f32; 3] {
+    let subducting_plate = [cell, neighbor]
+        .into_iter()
+        .filter_map(|index| {
+            boundary_state
+                .subducting_plate
+                .get(index)
+                .copied()
+                .flatten()
+        })
+        .find(|plate| *plate == low_plate || *plate == high_plate);
+    match subducting_plate {
+        Some(plate) if plate == low_plate => high_velocity,
+        Some(plate) if plate == high_plate => low_velocity,
+        _ => [
+            0.5 * (low_velocity[0] + high_velocity[0]),
+            0.5 * (low_velocity[1] + high_velocity[1]),
+            0.5 * (low_velocity[2] + high_velocity[2]),
+        ],
+    }
 }
 
 fn collect_front_components(
@@ -1068,6 +1146,14 @@ fn length(v: [f32; 3]) -> f32 {
     dot(v, v).sqrt()
 }
 
+fn normalize(v: [f32; 3]) -> Option<[f32; 3]> {
+    let magnitude = length(v);
+    if !magnitude.is_finite() || magnitude <= 1e-6 {
+        return None;
+    }
+    Some([v[0] / magnitude, v[1] / magnitude, v[2] / magnitude])
+}
+
 fn front_bucket(position: [f32; 3]) -> u32 {
     let z = position[2].clamp(-1.0, 1.0);
     let lon = position[1].atan2(position[0]);
@@ -1093,22 +1179,26 @@ fn quantize_bucket_axis(value: f32, span: f32, resolution: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_front_candidates, collect_front_components, front_bucket, lookup_residual,
-        patch_can_transfer_without_fragmenting_source, plate_consistency_throughput_cap,
-        project_component_budgets, retain_component_residual, select_contiguous_front_patch,
-        FrontCandidate, FrontComponent, PatchRejectReason,
+        boundary_velocity_for_edge, collect_front_candidates, collect_front_components,
+        front_bucket, lookup_residual, patch_can_transfer_without_fragmenting_source,
+        plate_consistency_throughput_cap, prepare_signed_component_accumulation,
+        project_component_budgets, reset_front_accumulators_for_timestep_change,
+        retain_component_residual, select_contiguous_front_patch, FrontCandidate, FrontComponent,
+        PatchRejectReason,
     };
     use crate::sim::geology_types::{CrustType, PlateId};
-    use crate::sim::world::{BoundaryDynamicsState, BoundaryType, PlateKinematicsState};
+    use crate::sim::world::{
+        BoundaryDynamicsState, BoundaryFrontAccumulatorState, BoundaryType, PlateKinematicsState,
+    };
 
     #[test]
-    fn front_candidate_requires_euler_velocity_into_source_cell() {
+    fn common_euler_rotation_advects_boundary_with_zero_relative_velocity() {
         let positions = vec![[1.0, 0.0, 0.0], [0.995, -0.1, 0.0], [0.995, 0.1, 0.0]];
         let nbr_offsets = vec![0, 2, 3, 4];
         let nbrs = vec![1, 2, 0, 0];
         let plate_id = vec![PlateId(0), PlateId(1), PlateId(1)];
         let plate_states = vec![
-            plate_state([0.0, 0.0, 1.0], 0.0),
+            plate_state([0.0, 0.0, 1.0], 0.2),
             plate_state([0.0, 0.0, 1.0], 0.2),
         ];
         let boundary_state = BoundaryDynamicsState {
@@ -1139,6 +1229,58 @@ mod tests {
         assert_eq!(candidates[0].unwrap().target_plate, PlateId(1));
         assert!(candidates[1].is_none());
         assert!(candidates[2].is_none());
+    }
+
+    #[test]
+    fn symmetric_ridge_motion_does_not_transfer_ownership() {
+        let positions = vec![[1.0, 0.0, 0.0], [0.995, -0.1, 0.0], [0.995, 0.1, 0.0]];
+        let nbr_offsets = vec![0, 2, 3, 4];
+        let nbrs = vec![1, 2, 0, 0];
+        let plate_id = vec![PlateId(0), PlateId(1), PlateId(1)];
+        let plate_states = vec![
+            plate_state([0.0, 0.0, 1.0], 0.2),
+            plate_state([0.0, 0.0, -1.0], 0.2),
+        ];
+        let boundary_state = BoundaryDynamicsState {
+            dominant_type: vec![BoundaryType::Ridge; 3],
+            activity: vec![1.0; 3],
+            ..Default::default()
+        };
+        let crust = vec![CrustType::Oceanic; 3];
+
+        let candidates = collect_front_candidates(
+            &positions,
+            &nbr_offsets,
+            &nbrs,
+            &plate_states,
+            &plate_id,
+            &boundary_state,
+            &crust,
+            &[4, 4],
+            1,
+        );
+
+        assert!(candidates.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn subduction_boundary_uses_overriding_plate_velocity() {
+        let state = BoundaryDynamicsState {
+            subducting_plate: vec![Some(PlateId(1)), Some(PlateId(1))],
+            ..Default::default()
+        };
+
+        let velocity = boundary_velocity_for_edge(
+            PlateId(0),
+            PlateId(1),
+            [0.0, 0.25, 0.0],
+            [0.0, -0.40, 0.0],
+            &state,
+            0,
+            1,
+        );
+
+        assert_eq!(velocity, [0.0, 0.25, 0.0]);
     }
 
     #[test]
@@ -1190,7 +1332,26 @@ mod tests {
             accumulated_cell_fraction: 4.0,
         };
 
-        assert_eq!(component.transfer_budget(), 4);
+        assert_eq!(component.transfer_budget(1.0), 4);
+    }
+
+    #[test]
+    fn front_component_throughput_cap_scales_with_elapsed_time() {
+        let component = FrontComponent {
+            source_plate: PlateId(0),
+            target_plate: PlateId(1),
+            bucket: 0,
+            cells: (0..16).collect(),
+            source_removals: vec![16, 0],
+            support_contact_count: 16,
+            score_sum: 16.0,
+            cell_fraction_sum: 16.0,
+            accumulated_cell_fraction: 16.0,
+        };
+
+        assert_eq!(component.transfer_budget(1.0), 8);
+        assert_eq!(component.transfer_budget(0.2), 1);
+        assert_eq!(component.transfer_budget(0.0), 0);
     }
 
     #[test]
@@ -1207,7 +1368,7 @@ mod tests {
             accumulated_cell_fraction: 1.1,
         };
 
-        assert_eq!(component.transfer_budget(), 1);
+        assert_eq!(component.transfer_budget(1.0), 1);
     }
 
     #[test]
@@ -1229,6 +1390,78 @@ mod tests {
 
         assert_eq!(accumulators.len(), 1);
         assert!((lookup_residual(&accumulators, PlateId(2), PlateId(3), 7) - 0.2).abs() < 1e-5);
+    }
+
+    #[test]
+    fn signed_bucket_carries_forward_debt_against_immediate_reversal() {
+        let previous = vec![BoundaryFrontAccumulatorState {
+            source_plate: 0,
+            target_plate: 1,
+            bucket: 4,
+            residual_cell_fraction: 0.8,
+        }];
+        let mut components = vec![FrontComponent {
+            source_plate: PlateId(1),
+            target_plate: PlateId(0),
+            bucket: 4,
+            cells: vec![0, 1],
+            source_removals: vec![0, 2],
+            support_contact_count: 2,
+            score_sum: 0.0,
+            cell_fraction_sum: 0.3,
+            accumulated_cell_fraction: 0.0,
+        }];
+
+        let net = prepare_signed_component_accumulation(&mut components, &previous);
+
+        assert!((net[&(0, 1, 4)] - 0.5).abs() < 1e-5);
+        assert_eq!(components[0].transfer_budget(1.0), 0);
+    }
+
+    #[test]
+    fn timestep_change_discards_residual_from_previous_integrator() {
+        let mut elapsed_years = 5_000_000.0;
+        let mut accumulators = vec![BoundaryFrontAccumulatorState {
+            source_plate: 0,
+            target_plate: 1,
+            bucket: 4,
+            residual_cell_fraction: 12.4,
+        }];
+
+        reset_front_accumulators_for_timestep_change(
+            &mut accumulators,
+            &mut elapsed_years,
+            5_000_000.0,
+        );
+        assert_eq!(accumulators.len(), 1);
+
+        reset_front_accumulators_for_timestep_change(
+            &mut accumulators,
+            &mut elapsed_years,
+            1_000_000.0,
+        );
+        assert!(accumulators.is_empty());
+        assert_eq!(elapsed_years, 1_000_000.0);
+    }
+
+    #[test]
+    fn unknown_legacy_timestep_discards_existing_residual() {
+        let mut elapsed_years = 0.0;
+        let mut accumulators = vec![BoundaryFrontAccumulatorState {
+            source_plate: 0,
+            target_plate: 1,
+            bucket: 4,
+            residual_cell_fraction: 12.4,
+        }];
+
+        reset_front_accumulators_for_timestep_change(
+            &mut accumulators,
+            &mut elapsed_years,
+            5_000_000.0,
+        );
+
+        assert!(accumulators.is_empty());
+        assert_eq!(elapsed_years, 5_000_000.0);
     }
 
     #[test]
@@ -1377,11 +1610,14 @@ mod tests {
             },
         ];
 
-        let projected = project_component_budgets(&components, &[128, 128], 0);
+        let projected = project_component_budgets(&components, &[128, 128], 0, 1.0);
 
         assert_eq!(projected.budgets, vec![4, 0]);
         assert_eq!(projected.net_area_limited_cell_count, 8);
-        assert_eq!(projected.outgoing_limited_cell_count, 6);
+        assert_eq!(projected.outgoing_limited_cell_count, 4);
+
+        let shorter_step = project_component_budgets(&components, &[128, 128], 0, 0.2);
+        assert_eq!(shorter_step.budgets, vec![1, 0]);
     }
 
     #[test]

@@ -22,10 +22,13 @@ use crate::sim::world::{
 
 use crate::sim::exec::math::{hash01, seeded_axis};
 use boundary_dynamics::{
-    plate_velocity_for_cell, reclassify_boundaries, update_plate_kinematics,
-    ReclassifyBoundariesInput,
+    plate_kinematics_for_elapsed_years, plate_velocity_for_cell, reclassify_boundaries,
+    update_plate_kinematics, ReclassifyBoundariesInput,
 };
-use plate_ownership::{apply_euler_front_advection, EulerFrontAdvectionInput};
+use plate_ownership::{
+    apply_euler_front_advection, reset_front_accumulators_for_timestep_change,
+    EulerFrontAdvectionInput,
+};
 use surface_dynamics::{apply_stress_and_surface_update, SurfaceUpdateInput, SurfaceUpdateOutput};
 use surface_material_elements::{
     update_persistent_surface_material_elements, SurfaceMaterialElementUpdateInput,
@@ -36,6 +39,7 @@ const ENVIRONMENT_GEOLOGY_SPINUP_TICKS: f32 = 32.0;
 pub(super) const EARTH_MEAN_RADIUS_KM: f32 = 6_371.0;
 pub(super) const EARTH_PLATE_REFERENCE_SPEED_KM_PER_MYR: f32 = 50.0;
 pub(super) const YEARS_PER_MYR: f32 = 1_000_000.0;
+pub(super) const PLATE_KINEMATIC_REFERENCE_STEP_MYR: f32 = 5.0;
 
 #[inline]
 fn debug_assert_finite_non_negative(value: f32, label: &str, index: usize) {
@@ -102,6 +106,12 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         return;
     };
 
+    reset_front_accumulators_for_timestep_change(
+        &mut dynamics.boundary_front_accumulators,
+        &mut dynamics.boundary_front_elapsed_years,
+        plate_elapsed_years,
+    );
+
     if dynamics.vertex_states.len() != cell_count {
         return;
     }
@@ -150,8 +160,9 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         &mut dynamics.plate_states,
         &dynamics.boundary_state,
         &world.control.geology_params,
-        plate_elapsed_years,
     );
+    let step_plate_states =
+        plate_kinematics_for_elapsed_years(&dynamics.plate_states, plate_elapsed_years);
 
     if dynamics.boundary_state.edge_pairs.is_empty() {
         reclassify_boundaries(
@@ -173,7 +184,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
         nbr_offsets,
         nbrs,
         plate_id,
-        &dynamics.plate_states,
+        &step_plate_states,
         &dynamics.vertex_states,
         &world.control.geology_params,
     );
@@ -184,7 +195,7 @@ pub(crate) fn run_geology_dynamics_step_with_state(
             nbrs,
             plate_id,
             crust: &dynamics.vertex_states,
-            plate_states: &dynamics.plate_states,
+            plate_states: &step_plate_states,
             boundary_state: &dynamics.boundary_state,
             elements: &mut dynamics.surface_material_elements,
         },
@@ -220,11 +231,13 @@ pub(crate) fn run_geology_dynamics_step_with_state(
             positions,
             nbr_offsets,
             nbrs,
-            plate_states: &dynamics.plate_states,
+            plate_states: &step_plate_states,
             boundary_state: &dynamics.boundary_state,
             accumulators: &mut dynamics.boundary_front_accumulators,
+            throughput_scale: plate_elapsed_years
+                / (PLATE_KINEMATIC_REFERENCE_STEP_MYR * YEARS_PER_MYR),
             project_plate_consistency: true,
-            signed_accumulation: false,
+            signed_accumulation: true,
         },
         &mut next_plate_id,
         &mut next_vertex_states,
@@ -641,6 +654,7 @@ fn ensure_geology_dynamics(
         surface_material_elements: Vec::new(),
         previous_surface_plate_id: world.state.geology.plate_id.clone(),
         boundary_front_accumulators: Vec::new(),
+        boundary_front_elapsed_years: 0.0,
     });
     if world.state.geology.geology_internal.len() != cell_count {
         world.state.geology.geology_internal = vec![GeologyInternal::default(); cell_count];

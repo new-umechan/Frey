@@ -35,8 +35,10 @@
 
 次に、各プレートの動きを更新する。
 プレートは完全に自由な流体ではなく、おおまかには硬い板として扱う。
-そのため、各プレートには回転や移動の向きがあり、境界では隣り合うプレートどうしの
-相対的な動きが現れる。
+そのため、各プレートには初期生成時に Euler axis と 5 Myr 分の有限回転角を与える。
+この回転を kinematics の正本とし、各時代の実時間幅に比例させた角度で更新する。
+slab pull、ridge push、collision drag は境界と地形の診断には使うが、現在はその値から
+Euler vector を逆算しない。
 
 相対的な動きから、まず離反・収束・横ずれを判定する。
 局所的な相対速度は境界を横切る法線成分と、境界に沿う接線成分へ分ける。
@@ -52,9 +54,21 @@
 地形生成に必要な違いを表すための簡略化である。
 
 高さ、熱、火山活動のような連続量は、近傍セルへなめらかに伝わる。
-プレート所属の正本は、固定icosphere上で全球を排他的に覆う `plate_id` である。共有境界の相対Euler速度から
-境界を横切る移動量を求め、小数cell分を境界componentごとに蓄積する。整数cellへ達したら連続したpatchとして
-移し、移動前後のplateが分断・孤立しない場合だけ所属変更を確定する。
+プレート所属の正本は、固定 icosphere 上で全球を排他的に覆う `plate_id` である。
+共有境界の絶対速度は、通常は両 plate の Euler 速度の平均、沈み込みでは overriding plate の速度とする。
+この速度を plate ID 順に向きを固定した edge 法線へ射影し、符号付きの小数 cell 分を
+plate pair と球面 bucket ごとに蓄積する。整数 cell へ達したら連続した patch として移し、
+移動前後の plate が分断・孤立しない場合だけ所属変更を確定する。
+形状保護用の front span と plate-level throughput 上限も 5 Myr を基準に実時間幅へ比例させ、
+上限への飽和が年代ごとの運動速度差を打ち消さないようにする。
+epoch 境界で 1 tick の実時間幅が変わる場合は、旧時間幅で未処理だった front の進行量を破棄し、
+新しい時間刻みで積分を再開する。
+plate loss をまだ扱わないため、沈み込みで material marker がすべて隠れる場合も、診断用 raster には
+投影面積が最大の 1 cell を seed として残す。これは排他的 `plate_id` を変更する処理ではない。
+
+相対 Euler 速度はこの ownership 移動方向には使わず、収束、発散、横ずれの境界分類と
+material の生成・消費に使う。これにより、同じ剛体回転を持つ二つの plate の共有境界も
+地球固定座標上では正しく移動する。
 
 これとは別に、プレートごとに永続化した球面上のmaterial elementが地殻物質を保持する。elementは初期プレートの
 表面を三角形として保持し、プレートのEuler運動に従って移流する。固定メッシュへの投影は地殻組成、年齢、
@@ -90,7 +104,7 @@ element は内部変形せず剛体回転し、衝突時の上下関係や新し
 - 氷、水、堆積物は、長い時間で地形に戻る外力として扱う
 
 実装方式の選定理由と比較した方式の履歴は、
-[shared plate front の decision document](../../decisions/260822-topology-preserving-material-front.md) と
+[kinematic Euler boundary の decision document](../../decisions/260822-kinematic-euler-boundary-advection.md) と
 [persistent material の decision document](../../decisions/260716-persistent-material-ownership.md) に記録する。
 
 ## 意図的な近似
