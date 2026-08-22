@@ -23,15 +23,15 @@ const CROPS = Object.freeze([
 ] as const);
 const LIVESTOCK = Object.freeze(["cattle", "horse", "sheep", "pig", "camel"] as const);
 export const BIOME_LEGEND_ITEMS = Object.freeze([
-    { label: "熱帯林", color: "#217a45" },
-    { label: "サバンナ", color: "#a6a52a" },
-    { label: "砂漠", color: "#d49a52" },
-    { label: "草原", color: "#78a850" },
-    { label: "温帯林", color: "#3f9453" },
-    { label: "針葉樹林", color: "#285c52" },
-    { label: "ツンドラ", color: "#b0c2cc" },
-    { label: "湿地", color: "#397c9e" },
-    { label: "高山帯", color: "#8f939c" },
+    { label: "熱帯林", color: "#087f5b" },
+    { label: "サバンナ", color: "#b9770e" },
+    { label: "砂漠", color: "#f0c36e" },
+    { label: "草原", color: "#74a94f" },
+    { label: "温帯林", color: "#286b44" },
+    { label: "針葉樹林", color: "#315d91" },
+    { label: "ツンドラ", color: "#c9d1d9" },
+    { label: "湿地", color: "#2496b3" },
+    { label: "高山帯", color: "#885da7" },
 ] as const);
 
 const BIOME_LABELS = Object.freeze(BIOME_LEGEND_ITEMS.map((item) => item.label));
@@ -44,12 +44,31 @@ function biomeLabelFromId(value: number): string {
     return BIOME_LABELS[index];
 }
 
+const CROP_LABELS: Readonly<Record<string, string>> = Object.freeze({
+    wheat: "小麦",
+    rice: "米",
+    maize: "トウモロコシ",
+    millet: "粟",
+    potato: "ジャガイモ",
+    cassava: "キャッサバ",
+    sorghum: "ソルガム",
+    yam: "ヤムイモ",
+});
+
+const LIVESTOCK_LABELS: Readonly<Record<string, string>> = Object.freeze({
+    cattle: "牛",
+    horse: "馬",
+    sheep: "羊",
+    pig: "豚",
+    camel: "ラクダ",
+});
+
 function cropLabel(name: string): string {
-    return `作物 ${name[0].toUpperCase()}${name.slice(1)}`;
+    return CROP_LABELS[name] ?? name;
 }
 
 function livestockLabel(name: string): string {
-    return `家畜 ${name[0].toUpperCase()}${name.slice(1)}`;
+    return LIVESTOCK_LABELS[name] ?? name;
 }
 
 function makeCropMetric(name: string): CellMetricDef {

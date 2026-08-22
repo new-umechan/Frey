@@ -236,15 +236,15 @@ vec3 paletteWindDirection(float u, float v) {
 
 vec3 paletteBiome(float value) {
     float biome = floor(max(value, 0.0) + 0.5);
-    if (biome < 0.5) return vec3(0.13, 0.48, 0.27); // TropicalForest
-    if (biome < 1.5) return vec3(0.65, 0.65, 0.16); // Savanna
-    if (biome < 2.5) return vec3(0.83, 0.60, 0.32); // Desert
-    if (biome < 3.5) return vec3(0.47, 0.66, 0.31); // Grassland
-    if (biome < 4.5) return vec3(0.25, 0.58, 0.33); // TemperateForest
-    if (biome < 5.5) return vec3(0.16, 0.36, 0.32); // BorealForest
-    if (biome < 6.5) return vec3(0.69, 0.76, 0.80); // Tundra
-    if (biome < 7.5) return vec3(0.22, 0.49, 0.62); // Wetland
-    return vec3(0.56, 0.58, 0.61); // Alpine
+    if (biome < 0.5) return vec3(0.0024, 0.2122, 0.1046); // TropicalForest #087f5b
+    if (biome < 1.5) return vec3(0.4851, 0.1845, 0.0044); // Savanna #b9770e
+    if (biome < 2.5) return vec3(0.8714, 0.5457, 0.1559); // Desert #f0c36e
+    if (biome < 3.5) return vec3(0.1746, 0.3968, 0.0782); // Grassland #74a94f
+    if (biome < 4.5) return vec3(0.0212, 0.1470, 0.0578); // TemperateForest #286b44
+    if (biome < 5.5) return vec3(0.0307, 0.1095, 0.2831); // BorealForest #315d91
+    if (biome < 6.5) return vec3(0.5841, 0.6376, 0.6939); // Tundra #c9d1d9
+    if (biome < 7.5) return vec3(0.0176, 0.3050, 0.4508); // Wetland #2496b3
+    return vec3(0.2462, 0.1095, 0.3864); // Alpine #885da7
 }
 
 vec3 freyMetricModeColor(float kind) {
@@ -306,7 +306,7 @@ diffuseColor.rgb = terrainColor;`,
             );
     };
 
-    material.customProgramCacheKey = () => "frey-terrain-standard-v9";
+    material.customProgramCacheKey = () => "frey-terrain-standard-v10";
 
     const controller: TerrainMaterialController = {
         material,
