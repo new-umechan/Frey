@@ -22,6 +22,7 @@ export interface PlaybackController {
     appendPlaybackEvent: (type: string, label: string, detail?: unknown, tick?: number) => void;
     bindOverlayActivityEvents: (element: HTMLElement) => () => void;
     handleHistoryJump: (tickText: string) => void;
+    handleHistoryPrefetch: (indexText: string) => void;
     handleHistorySeek: (indexText: string) => void;
     handleHistoryStepDirection: (direction: number) => void;
     handleRewind: () => void;
@@ -286,6 +287,10 @@ export function createPlaybackController({
             await engineClient.seek_world_to_tick(nextWorldId, clampedTick);
             setPlaybackRunning(false);
             await syncWorldFromActiveController();
+            const refreshExact = await engineClient.finish_prefetched_seek?.(nextWorldId, clampedTick) ?? false;
+            if (refreshExact) {
+                await syncWorldFromActiveController();
+            }
             playbackState.selectedTick = clampedTick;
             renderHistorySeekSlider();
             syncPlaybackUi();
@@ -379,6 +384,15 @@ export function createPlaybackController({
         });
     }
 
+    function handleHistoryPrefetch(indexText: string) {
+        const worldId = getActiveWorldId();
+        const targetTick = sanitizeTick(indexText);
+        if (!worldId || targetTick === null) {
+            return;
+        }
+        engineClient.prefetch_timeline?.(worldId, targetTick);
+    }
+
     function handleHistoryStepDirection(direction: number) {
         withHistoryRestore(async () => {
             const normalizedDirection = direction >= 0 ? 1 : -1;
@@ -425,6 +439,7 @@ export function createPlaybackController({
         appendPlaybackEvent,
         bindOverlayActivityEvents: overlayController.bindActivityEvents,
         handleHistoryJump,
+        handleHistoryPrefetch,
         handleHistorySeek,
         handleHistoryStepDirection,
         handleRewind,

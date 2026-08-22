@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::{HeaderValue, Method, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
@@ -37,6 +39,19 @@ const DEFAULT_PRECOMPUTE_RETENTION_TICKS: usize = 2;
 const DEFAULT_FRAME_COMPRESSION: FrameCompression = FrameCompression::Zstd;
 const ZSTD_LEVEL: i32 = 3;
 const DEFAULT_PRECOMPUTE_PROGRESS_INTERVAL: u32 = 16;
+const DEFAULT_STREAM_RADIUS: u32 = 2;
+const MAX_STREAM_RADIUS: u32 = 8;
+const DEFAULT_COARSE_KEYFRAME_INTERVAL: u32 = 256;
+const MIN_COARSE_KEYFRAME_INTERVAL: u32 = 64;
+const MAX_COARSE_KEYFRAME_INTERVAL: u32 = 512;
+const COARSE_STREAM_FIELDS: [&str; 6] = [
+    "height",
+    "lake_depth",
+    "plate_id",
+    "river_flux",
+    "river_next",
+    "mantle_heat",
+];
 
 fn geology_fingerprint(params: &GeologyParams) -> Result<String, String> {
     serde_json::to_string(params)
@@ -113,6 +128,73 @@ struct GenerationRequestedResponse {
     mesh_level: u32,
     status: &'static str,
     message: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum TickStreamRequest {
+    Subscribe {
+        request_id: u64,
+        center_tick: u32,
+        #[serde(default = "default_stream_radius")]
+        radius: u32,
+        #[serde(default)]
+        known_exact_ticks: Vec<u32>,
+        #[serde(default)]
+        known_coarse_ticks: Vec<u32>,
+        #[serde(default = "default_coarse_keyframe_interval")]
+        coarse_interval: u32,
+        #[serde(default)]
+        include_coarse: bool,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum TickStreamResponse {
+    Catalog {
+        world_id: String,
+        head_tick: u32,
+        exact_radius_limit: u32,
+        coarse_interval: u32,
+    },
+    ExactAnchor {
+        request_id: u64,
+        tick: u32,
+        metrics: MetricsResponse,
+        timeline: TimelineStateResponse,
+        frame: ViewDeltaResponse,
+    },
+    ExactDelta {
+        request_id: u64,
+        tick: u32,
+        delta: ViewDeltaResponse,
+    },
+    CoarseFrame {
+        request_id: u64,
+        tick: u32,
+        metrics: MetricsResponse,
+        timeline: TimelineStateResponse,
+        frame: ViewDeltaResponse,
+    },
+    Complete {
+        request_id: u64,
+        center_tick: u32,
+        window_start: u32,
+        window_end: u32,
+    },
+    Error {
+        request_id: Option<u64>,
+        message: String,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ExactStreamPlan {
+    window_start: u32,
+    window_end: u32,
+    anchor_tick: Option<u32>,
+    delta_start: u32,
 }
 
 #[derive(Serialize)]
@@ -239,11 +321,13 @@ struct MaterializedFrame {
     fields: BTreeMap<String, FieldResponse>,
 }
 
+#[derive(Clone)]
 struct PrecomputedStore {
     root_dir: PathBuf,
     seeds: BTreeMap<String, SeedStore>,
 }
 
+#[derive(Clone)]
 struct SeedStore {
     root_dir: PathBuf,
     manifest: PrecomputedStoreManifest,
@@ -261,6 +345,14 @@ fn default_work_budget() -> u32 {
 
 fn default_lod() -> u32 {
     1
+}
+
+fn default_stream_radius() -> u32 {
+    DEFAULT_STREAM_RADIUS
+}
+
+fn default_coarse_keyframe_interval() -> u32 {
+    DEFAULT_COARSE_KEYFRAME_INTERVAL
 }
 
 pub async fn run_from_env() -> Result<(), String> {
@@ -660,6 +752,7 @@ fn router(state: AppState) -> Router {
         .route("/api/worlds/:world_id/view-delta", post(get_view_delta))
         .route("/api/worlds/:world_id/metrics", get(get_metrics))
         .route("/api/worlds/:world_id/timeline", get(get_timeline_state))
+        .route("/api/worlds/:world_id/stream", get(stream_world_ticks))
         .route("/api/worlds/:world_id/field/:field_kind", get(get_field))
         .route(
             "/api/worlds/:world_id/checkpoints",
@@ -709,8 +802,6 @@ impl ServerState {
     fn reload_store(&mut self) -> Result<(), String> {
         let root_dir = self.store.root_dir.clone();
         self.store = PrecomputedStore::load(&root_dir)?;
-        self.sessions.clear();
-        self.seed_worlds.clear();
         Ok(())
     }
 
@@ -723,9 +814,6 @@ impl ServerState {
         if seed_store.manifest.mesh_level != mesh_level {
             let record = self.create_request(seed, mesh_level);
             return Err(InitSessionError::Pending(record));
-        }
-        if let Some(world_id) = self.seed_worlds.get(&seed) {
-            return Ok(world_id.clone());
         }
         let world_id = format!("precomputed-{:06}", self.next_world_seq);
         self.next_world_seq = self.next_world_seq.saturating_add(1);
@@ -1328,6 +1416,53 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove test store");
     }
 
+    #[test]
+    fn exact_stream_uses_anchor_when_window_start_is_not_cached() {
+        let plan = plan_exact_stream(57, 2, 1600, &[54, 56]);
+
+        assert_eq!(
+            plan,
+            ExactStreamPlan {
+                window_start: 55,
+                window_end: 59,
+                anchor_tick: Some(55),
+                delta_start: 56,
+            }
+        );
+    }
+
+    #[test]
+    fn exact_stream_continues_after_cached_prefix() {
+        let plan = plan_exact_stream(58, 2, 1600, &[56, 57, 58, 59]);
+
+        assert_eq!(
+            plan,
+            ExactStreamPlan {
+                window_start: 56,
+                window_end: 60,
+                anchor_tick: None,
+                delta_start: 60,
+            }
+        );
+    }
+
+    #[test]
+    fn exact_stream_clamps_radius_and_head() {
+        let plan = plan_exact_stream(1598, 99, 1600, &[]);
+
+        assert_eq!(plan.window_start, 1590);
+        assert_eq!(plan.window_end, 1600);
+        assert_eq!(plan.anchor_tick, Some(1590));
+        assert_eq!(plan.delta_start, 1591);
+    }
+
+    #[test]
+    fn coarse_ticks_include_head_once() {
+        assert_eq!(coarse_ticks(640, 256), vec![0, 256, 512, 640]);
+        assert_eq!(coarse_ticks(512, 256), vec![0, 256, 512]);
+        assert_eq!(coarse_ticks(0, 256), vec![0]);
+    }
+
     fn unique_test_dir(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1671,6 +1806,275 @@ async fn get_timeline_state(
     let mut timeline = session.frame.timeline.clone();
     timeline.head_tick = config.capped_head_tick(session.frame.head_tick) as f64;
     Ok(Json(timeline))
+}
+
+async fn stream_world_ticks(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    AxumPath(world_id): AxumPath<String>,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let (head_tick, coarse_interval) = {
+        let locked = lock_state(&state)?;
+        let session = locked
+            .session(&world_id)
+            .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+        (
+            state.config.capped_head_tick(session.frame.head_tick),
+            DEFAULT_COARSE_KEYFRAME_INTERVAL,
+        )
+    };
+    Ok(ws.on_upgrade(move |socket| {
+        handle_tick_stream(socket, state, world_id, head_tick, coarse_interval)
+    }))
+}
+
+async fn handle_tick_stream(
+    mut socket: WebSocket,
+    state: AppState,
+    world_id: String,
+    head_tick: u32,
+    coarse_interval: u32,
+) {
+    let catalog = TickStreamResponse::Catalog {
+        world_id: world_id.clone(),
+        head_tick,
+        exact_radius_limit: MAX_STREAM_RADIUS,
+        coarse_interval,
+    };
+    if send_tick_stream_response(&mut socket, &catalog)
+        .await
+        .is_err()
+    {
+        return;
+    }
+
+    while let Some(message) = socket.recv().await {
+        let Ok(message) = message else {
+            break;
+        };
+        let Message::Text(text) = message else {
+            if matches!(message, Message::Close(_)) {
+                break;
+            }
+            continue;
+        };
+        let request = match serde_json::from_str::<TickStreamRequest>(&text) {
+            Ok(request) => request,
+            Err(err) => {
+                let response = TickStreamResponse::Error {
+                    request_id: None,
+                    message: format!("invalid stream request: {err}"),
+                };
+                if send_tick_stream_response(&mut socket, &response)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                continue;
+            }
+        };
+        let prepare_state = state.clone();
+        let prepare_world_id = world_id.clone();
+        let responses = tokio::task::spawn_blocking(move || {
+            prepare_tick_stream_responses(&prepare_state, &prepare_world_id, request)
+        })
+        .await
+        .unwrap_or_else(|err| Err((None, format!("stream worker failed: {err}"))));
+        match responses {
+            Ok(responses) => {
+                for response in responses {
+                    if send_tick_stream_response(&mut socket, &response)
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
+            Err((request_id, message)) => {
+                let response = TickStreamResponse::Error {
+                    request_id,
+                    message,
+                };
+                if send_tick_stream_response(&mut socket, &response)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+async fn send_tick_stream_response(
+    socket: &mut WebSocket,
+    response: &TickStreamResponse,
+) -> Result<(), String> {
+    let payload = serde_json::to_string(response)
+        .map_err(|err| format!("failed to encode stream response: {err}"))?;
+    socket
+        .send(Message::Text(payload.into()))
+        .await
+        .map_err(|err| format!("failed to send stream response: {err}"))
+}
+
+fn prepare_tick_stream_responses(
+    state: &AppState,
+    world_id: &str,
+    request: TickStreamRequest,
+) -> Result<Vec<TickStreamResponse>, (Option<u64>, String)> {
+    let TickStreamRequest::Subscribe {
+        request_id,
+        center_tick,
+        radius,
+        known_exact_ticks,
+        known_coarse_ticks,
+        coarse_interval,
+        include_coarse,
+    } = request;
+    state
+        .config
+        .validate_tick(center_tick)
+        .map_err(|err| (Some(request_id), err))?;
+    let (store, seed, head_tick) = {
+        let locked = state
+            .inner
+            .lock()
+            .map_err(|_| (Some(request_id), "server state lock poisoned".to_string()))?;
+        let session = locked
+            .session(world_id)
+            .map_err(|err| (Some(request_id), err))?;
+        (
+            locked.store.clone(),
+            session.seed.clone(),
+            state.config.capped_head_tick(session.frame.head_tick),
+        )
+    };
+    if center_tick > head_tick {
+        return Err((
+            Some(request_id),
+            format!("tick {center_tick} exceeds precomputed head {head_tick}"),
+        ));
+    }
+
+    let plan = plan_exact_stream(center_tick, radius, head_tick, &known_exact_ticks);
+    let mut responses = Vec::new();
+    if let Some(anchor_tick) = plan.anchor_tick {
+        let mut frame = store
+            .materialize(&seed, anchor_tick)
+            .map_err(|err| (Some(request_id), err))?;
+        frame = with_world_id(frame, world_id);
+        frame.head_tick = head_tick;
+        frame.timeline.head_tick = head_tick as f64;
+        let mut full = full_delta_from_frame(&frame);
+        full.head_tick = head_tick as f64;
+        responses.push(TickStreamResponse::ExactAnchor {
+            request_id,
+            tick: anchor_tick,
+            metrics: frame.metrics,
+            timeline: frame.timeline,
+            frame: full,
+        });
+    }
+    for tick in plan.delta_start..=plan.window_end {
+        let mut delta = store
+            .load_delta(&seed, tick)
+            .map_err(|err| (Some(request_id), err))?;
+        delta.world_id = world_id.to_string();
+        delta.head_tick = head_tick as f64;
+        responses.push(TickStreamResponse::ExactDelta {
+            request_id,
+            tick,
+            delta,
+        });
+    }
+
+    if include_coarse {
+        let interval =
+            coarse_interval.clamp(MIN_COARSE_KEYFRAME_INTERVAL, MAX_COARSE_KEYFRAME_INTERVAL);
+        let known = known_coarse_ticks.into_iter().collect::<BTreeSet<_>>();
+        for tick in coarse_ticks(head_tick, interval) {
+            if known.contains(&tick) {
+                continue;
+            }
+            let mut frame = store
+                .materialize(&seed, tick)
+                .map_err(|err| (Some(request_id), err))?;
+            frame = with_world_id(frame, world_id);
+            frame.head_tick = head_tick;
+            frame.timeline.head_tick = head_tick as f64;
+            let mut full = full_delta_from_frame(&frame);
+            full.head_tick = head_tick as f64;
+            filter_delta_fields(
+                &mut full,
+                Some(ViewDeltaQuery {
+                    include_fields: Some(
+                        COARSE_STREAM_FIELDS
+                            .iter()
+                            .map(|field| (*field).to_string())
+                            .collect(),
+                    ),
+                }),
+            );
+            responses.push(TickStreamResponse::CoarseFrame {
+                request_id,
+                tick,
+                metrics: frame.metrics,
+                timeline: frame.timeline,
+                frame: full,
+            });
+        }
+    }
+    responses.push(TickStreamResponse::Complete {
+        request_id,
+        center_tick,
+        window_start: plan.window_start,
+        window_end: plan.window_end,
+    });
+    Ok(responses)
+}
+
+fn plan_exact_stream(
+    center_tick: u32,
+    radius: u32,
+    head_tick: u32,
+    known_exact_ticks: &[u32],
+) -> ExactStreamPlan {
+    let radius = radius.min(MAX_STREAM_RADIUS);
+    let window_start = center_tick.saturating_sub(radius);
+    let window_end = center_tick.saturating_add(radius).min(head_tick);
+    let known = known_exact_ticks.iter().copied().collect::<BTreeSet<_>>();
+    if !known.contains(&window_start) {
+        return ExactStreamPlan {
+            window_start,
+            window_end,
+            anchor_tick: Some(window_start),
+            delta_start: window_start.saturating_add(1),
+        };
+    }
+    let mut contiguous_end = window_start;
+    while contiguous_end < window_end && known.contains(&contiguous_end.saturating_add(1)) {
+        contiguous_end = contiguous_end.saturating_add(1);
+    }
+    ExactStreamPlan {
+        window_start,
+        window_end,
+        anchor_tick: None,
+        delta_start: contiguous_end.saturating_add(1),
+    }
+}
+
+fn coarse_ticks(head_tick: u32, interval: u32) -> Vec<u32> {
+    let interval = interval.max(1);
+    let mut ticks = (0..=head_tick)
+        .step_by(interval as usize)
+        .collect::<Vec<_>>();
+    if ticks.last().copied() != Some(head_tick) {
+        ticks.push(head_tick);
+    }
+    ticks
 }
 
 async fn get_field(

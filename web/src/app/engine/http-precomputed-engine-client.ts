@@ -16,6 +16,12 @@ import type {
     ExecModuleDocRecord,
     ExecModuleGraphRecord,
 } from "./engine-client";
+import {
+    fieldFromCachedFrame,
+    TimelinePrefetchCache,
+    type CachedTickFrame,
+    viewDeltaFromCachedFrame,
+} from "./timeline-prefetch-cache";
 
 interface ApiErrorBody {
     error?: unknown;
@@ -23,6 +29,26 @@ interface ApiErrorBody {
     precompute_status?: unknown;
     request_id?: unknown;
 }
+
+interface PendingSeek {
+    tick: number;
+    frame: CachedTickFrame;
+    refreshExact: boolean;
+    request: Promise<unknown>;
+}
+
+interface StreamEnvelope {
+    type?: string;
+    request_id?: number;
+    tick?: number;
+    metrics?: MetricsResult;
+    timeline?: TimelineStateResult;
+    frame?: ViewDeltaResult;
+    delta?: ViewDeltaResult;
+}
+
+const PREFETCH_RADIUS = 2;
+const COARSE_INTERVAL = 256;
 
 export class PrecomputePendingError extends Error {
     readonly requestId: string | null;
@@ -36,6 +62,15 @@ export class PrecomputePendingError extends Error {
 
 export class HttpPrecomputedEngineClient implements EngineClient {
     private readonly baseUrl: string;
+    private readonly prefetchCaches = new Map<string, TimelinePrefetchCache>();
+    private readonly streamSockets = new Map<string, WebSocket>();
+    private readonly pendingStreamCenters = new Map<string, number>();
+    private readonly streamSendTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly coarseRequests = new Set<string>();
+    private readonly streamReconnectAttempts = new Map<string, number>();
+    private readonly activeFrames = new Map<string, CachedTickFrame>();
+    private readonly pendingSeeks = new Map<string, PendingSeek>();
+    private nextStreamRequestId = 1;
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -86,11 +121,15 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         meshLevel: number,
         config: unknown,
     ): Promise<InitWorldResult> {
-        return await this.post<InitWorldResult>("/api/worlds", {
+        const result = await this.post<InitWorldResult>("/api/worlds", {
             seed,
             mesh_level: meshLevel,
             config,
         });
+        this.prefetchCaches.set(result.world_id, new TimelinePrefetchCache());
+        this.openTickStream(result.world_id);
+        this.prefetch_timeline(result.world_id, result.tick ?? 0);
+        return result;
     }
 
     async exec_world(worldId: string, tickCount: number): Promise<void> {
@@ -101,10 +140,14 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         worldId: string,
         tickCount: number,
     ): Promise<TimelineAdvanceResult> {
-        return await this.post<TimelineAdvanceResult>(
+        await this.settlePendingSeek(worldId);
+        this.activeFrames.delete(worldId);
+        const result = await this.post<TimelineAdvanceResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/advance`,
             { tick_count: tickCount },
         );
+        this.prefetch_timeline(worldId, result.tick);
+        return result;
     }
 
     async advance_timeline_slice(
@@ -120,10 +163,17 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         workBudget: number,
         options?: unknown,
     ): Promise<ExecWorldSliceAndDeltaResult> {
-        return await this.post<ExecWorldSliceAndDeltaResult>(
+        await this.settlePendingSeek(worldId);
+        this.activeFrames.delete(worldId);
+        const result = await this.post<ExecWorldSliceAndDeltaResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/advance-slice-and-delta`,
             { work_budget: workBudget, options },
         );
+        const nextTick = Number(result.delta?.tick ?? result.slice?.head_tick);
+        if (Number.isFinite(nextTick)) {
+            this.prefetch_timeline(worldId, nextTick);
+        }
+        return result;
     }
 
     async exec_world_slice(
@@ -155,6 +205,10 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         worldId: string,
         options?: unknown,
     ): Promise<ViewDeltaResult> {
+        const activeFrame = this.activeFrames.get(worldId);
+        if (activeFrame) {
+            return viewDeltaFromCachedFrame(activeFrame, includeFieldsFromOptions(options));
+        }
         return await this.post<ViewDeltaResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/view-delta`,
             { options },
@@ -169,12 +223,20 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     }
 
     async get_timeline_state(worldId: string): Promise<TimelineStateResult> {
+        const activeFrame = this.activeFrames.get(worldId);
+        if (activeFrame) {
+            return activeFrame.timeline;
+        }
         return await this.request<TimelineStateResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/timeline`,
         );
     }
 
     async get_metrics(worldId: string): Promise<MetricsResult | null> {
+        const activeFrame = this.activeFrames.get(worldId);
+        if (activeFrame) {
+            return activeFrame.metrics;
+        }
         return await this.request<MetricsResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/metrics`,
         );
@@ -185,6 +247,11 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         fieldKind: string,
         window: number,
     ): Promise<FieldResult> {
+        const activeFrame = this.activeFrames.get(worldId);
+        const cachedField = activeFrame ? fieldFromCachedFrame(activeFrame, fieldKind) : null;
+        if (cachedField && window === 1) {
+            return cachedField;
+        }
         return await this.request<FieldResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/field/${encodeURIComponent(fieldKind)}?lod=${encodeURIComponent(String(window))}`,
         );
@@ -213,7 +280,27 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     }
 
     async seek_world_to_tick(worldId: string, tick: number): Promise<void> {
-        await this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick });
+        await this.settlePendingSeek(worldId);
+        const cache = this.prefetchCaches.get(worldId);
+        const exact = cache?.getExact(tick) ?? null;
+        const base = this.activeFrames.get(worldId) ?? cache?.getNearestExact(tick) ?? null;
+        const frame = exact ?? (base ? cache?.composeCoarsePreview(tick, base) ?? null : null);
+        if (!frame) {
+            this.activeFrames.delete(worldId);
+            await this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick });
+            this.prefetch_timeline(worldId, tick);
+            return;
+        }
+
+        this.activeFrames.set(worldId, frame);
+        const pending: PendingSeek = {
+            tick,
+            frame,
+            refreshExact: frame.preview,
+            request: this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick }),
+        };
+        this.pendingSeeks.set(worldId, pending);
+        this.prefetch_timeline(worldId, tick);
     }
 
     async restore_world_to_tick(worldId: string, tick: number): Promise<void> {
@@ -221,12 +308,15 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     }
 
     async rewind_world_by_ticks(worldId: string, tickCount: number): Promise<void> {
+        await this.settlePendingSeek(worldId);
+        this.activeFrames.delete(worldId);
         await this.post(`/api/worlds/${encodeURIComponent(worldId)}/rewind`, {
             tick_count: tickCount,
         });
     }
 
     async set_simulation_rate(worldId: string, rate: number): Promise<void> {
+        await this.settlePendingSeek(worldId);
         await this.post(`/api/worlds/${encodeURIComponent(worldId)}/simulation-rate`, {
             rate,
         });
@@ -241,4 +331,163 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         const graph = await this.request<unknown>("/api/exec-module-graph");
         return (graph ?? { modules: [], edges: [] }) as ExecModuleGraphRecord;
     }
+
+    prefetch_timeline(worldId: string, centerTick: number): void {
+        const center = Math.max(0, Math.floor(centerTick));
+        this.pendingStreamCenters.set(worldId, center);
+        const socket = this.streamSockets.get(worldId);
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            this.openTickStream(worldId);
+            return;
+        }
+        const existingTimer = this.streamSendTimers.get(worldId);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+        this.streamSendTimers.set(worldId, setTimeout(() => {
+            this.streamSendTimers.delete(worldId);
+            if (socket.readyState === WebSocket.OPEN) {
+                this.sendPrefetchSubscription(worldId, socket, center);
+            }
+        }, 40));
+    }
+
+    async finish_prefetched_seek(worldId: string, tick: number): Promise<boolean> {
+        const pending = this.pendingSeeks.get(worldId);
+        if (!pending || pending.tick !== tick) {
+            return false;
+        }
+        await pending.request;
+        if (this.pendingSeeks.get(worldId) !== pending) {
+            return false;
+        }
+        this.pendingSeeks.delete(worldId);
+        if (pending.refreshExact && this.activeFrames.get(worldId) === pending.frame) {
+            this.activeFrames.delete(worldId);
+            return true;
+        }
+        return false;
+    }
+
+    private async settlePendingSeek(worldId: string): Promise<void> {
+        const pending = this.pendingSeeks.get(worldId);
+        if (!pending) {
+            return;
+        }
+        await pending.request;
+        if (this.pendingSeeks.get(worldId) === pending) {
+            this.pendingSeeks.delete(worldId);
+            if (pending.refreshExact && this.activeFrames.get(worldId) === pending.frame) {
+                this.activeFrames.delete(worldId);
+            }
+        }
+    }
+
+    private openTickStream(worldId: string) {
+        if (typeof WebSocket === "undefined") {
+            return;
+        }
+        const existing = this.streamSockets.get(worldId);
+        if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+        const httpUrl = new URL(
+            this.url(`/api/worlds/${encodeURIComponent(worldId)}/stream`),
+            window.location.href,
+        );
+        httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
+        const socket = new WebSocket(httpUrl);
+        this.streamSockets.set(worldId, socket);
+        socket.addEventListener("open", () => {
+            const center = this.pendingStreamCenters.get(worldId) ?? 0;
+            this.sendPrefetchSubscription(worldId, socket, center);
+        });
+        socket.addEventListener("message", (event) => {
+            this.acceptStreamMessage(worldId, event.data);
+        });
+        socket.addEventListener("close", () => {
+            if (this.streamSockets.get(worldId) === socket) {
+                this.streamSockets.delete(worldId);
+            }
+            const cache = this.prefetchCaches.get(worldId);
+            if (cache?.coarseTicks().length === 0) {
+                this.coarseRequests.delete(worldId);
+            }
+            const attempt = (this.streamReconnectAttempts.get(worldId) ?? 0) + 1;
+            this.streamReconnectAttempts.set(worldId, attempt);
+            if (attempt <= 3 && this.pendingStreamCenters.has(worldId)) {
+                setTimeout(() => this.openTickStream(worldId), attempt * 1000);
+            }
+        });
+        socket.addEventListener("error", () => {
+            socket.close();
+        });
+    }
+
+    private sendPrefetchSubscription(worldId: string, socket: WebSocket, centerTick: number) {
+        const cache = this.prefetchCaches.get(worldId);
+        if (!cache) {
+            return;
+        }
+        const includeCoarse = cache.coarseTicks().length === 0 && !this.coarseRequests.has(worldId);
+        if (includeCoarse) {
+            this.coarseRequests.add(worldId);
+        }
+        socket.send(JSON.stringify({
+            type: "subscribe",
+            request_id: this.nextStreamRequestId,
+            center_tick: centerTick,
+            radius: PREFETCH_RADIUS,
+            known_exact_ticks: cache.exactTicks(),
+            known_coarse_ticks: cache.coarseTicks(),
+            coarse_interval: COARSE_INTERVAL,
+            include_coarse: includeCoarse,
+        }));
+        this.nextStreamRequestId += 1;
+    }
+
+    private acceptStreamMessage(worldId: string, rawData: unknown) {
+        if (typeof rawData !== "string") {
+            return;
+        }
+        let message: StreamEnvelope;
+        try {
+            message = JSON.parse(rawData) as StreamEnvelope;
+        } catch {
+            return;
+        }
+        this.streamReconnectAttempts.set(worldId, 0);
+        const cache = this.prefetchCaches.get(worldId);
+        if (!cache) {
+            return;
+        }
+        const tick = Math.max(0, Math.floor(Number(message.tick ?? 0)));
+        if (message.type === "exact_anchor" && message.frame && message.metrics && message.timeline) {
+            cache.acceptExactAnchor({
+                tick,
+                metrics: message.metrics,
+                timeline: message.timeline,
+                frame: message.frame,
+            });
+        } else if (message.type === "coarse_frame" && message.frame && message.metrics && message.timeline) {
+            cache.acceptCoarseFrame({
+                tick,
+                metrics: message.metrics,
+                timeline: message.timeline,
+                frame: message.frame,
+            });
+        } else if (message.type === "exact_delta" && message.delta) {
+            cache.acceptExactDelta(tick, message.delta);
+        }
+    }
+}
+
+function includeFieldsFromOptions(options: unknown): string[] | undefined {
+    if (!options || typeof options !== "object") {
+        return undefined;
+    }
+    const includeFields = (options as { include_fields?: unknown }).include_fields;
+    return Array.isArray(includeFields)
+        ? includeFields.filter((field): field is string => typeof field === "string")
+        : undefined;
 }

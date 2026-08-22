@@ -215,6 +215,8 @@ export interface EngineClient {
   seek_world_to_tick: (worldId: string, tick: number) => Promise<void>;
   rewind_world_by_ticks: (worldId: string, tickCount: number) => Promise<void>;
   restore_world_to_tick: (worldId: string, tick: number) => Promise<void>;
+  prefetch_timeline?: (worldId: string, centerTick: number) => void;
+  finish_prefetched_seek?: (worldId: string, tick: number) => Promise<boolean>;
   set_simulation_rate: (worldId: string, rate: number) => Promise<void>;
   get_exec_modules: () => Promise<ExecModuleDocRecord[]>;
   get_exec_module_graph: () => Promise<ExecModuleGraphRecord>;

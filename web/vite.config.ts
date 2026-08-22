@@ -29,6 +29,7 @@ export default defineConfig({
                     process.env.FREY_PRECOMPUTE_PROXY_TARGET ??
                     "http://127.0.0.1:8787",
                 changeOrigin: true,
+                ws: true,
             },
         },
     },

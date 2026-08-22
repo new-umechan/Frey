@@ -46,6 +46,7 @@ export interface SetupUiControlsOptions {
     onTogglePlay: () => void;
     onStepForward: () => void;
     onRewind: () => void;
+    onHistoryPrefetch: (indexText: string) => void;
     onHistorySeek: (indexText: string) => void;
     onHistoryStepDirection: (dir: number) => void;
     onEventLogJump: (tickText: string) => void;
@@ -82,6 +83,7 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         onTogglePlay,
         onStepForward,
         onRewind,
+        onHistoryPrefetch,
         onHistorySeek,
         onHistoryStepDirection,
         onEventLogJump,
@@ -155,6 +157,7 @@ export function setupUiControls(options: SetupUiControlsOptions) {
         playbackControls,
         eventLogList,
         onTogglePlay,
+        onHistoryPrefetch,
         onHistorySeek,
         onHistoryStepDirection,
         onEventLogJump,

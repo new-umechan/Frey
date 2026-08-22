@@ -7,15 +7,16 @@ interface PlaybackUiEventsOptions {
     };
     eventLogList: HTMLUListElement;
     onTogglePlay: () => void;
+    onHistoryPrefetch: (indexText: string) => void;
     onHistorySeek: (indexText: string) => void;
     onHistoryStepDirection: (direction: number) => void;
     onEventLogJump: (tickText: string) => void;
 }
 
-export function bindPlaybackUiEvents({ playbackControls, eventLogList, onTogglePlay, onHistorySeek, onHistoryStepDirection, onEventLogJump }: PlaybackUiEventsOptions) {
+export function bindPlaybackUiEvents({ playbackControls, eventLogList, onTogglePlay, onHistoryPrefetch, onHistorySeek, onHistoryStepDirection, onEventLogJump }: PlaybackUiEventsOptions) {
     playbackControls.playToggleButton.addEventListener("click", onTogglePlay);
     playbackControls.historySeekSlider.addEventListener("input", () => {
-        onHistorySeek(playbackControls.historySeekSlider.value);
+        onHistoryPrefetch(playbackControls.historySeekSlider.value);
     });
     playbackControls.historySeekSlider.addEventListener("change", () => {
         onHistorySeek(playbackControls.historySeekSlider.value);

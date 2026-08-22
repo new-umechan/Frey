@@ -22,7 +22,7 @@ smallvec = { version = "1.13", features = ["serde"] }
 slotmap = "1.0"
 s2rst = "0.4.0"
 verification_runtime = { path = "crates/verification_runtime" }
-axum = { version = "0.7", optional = true }
+axum = { version = "0.7", features = ["ws"], optional = true }
 tokio = { version = "1.42", features = ["macros", "rt-multi-thread", "net"], optional = true }
 tower-http = { version = "0.6", features = ["cors"], optional = true }
 zstd = { version = "0.13", optional = true }
