@@ -26,6 +26,7 @@
 - `GET /api/mesh/:level`
 - `POST /api/worlds`
 - `GET /api/worlds/:world_id/stream` (WebSocket upgrade)
+- `GET /api/worlds/:world_id/playback` (WebSocket upgrade)
 - `POST /api/worlds/:world_id/advance`
 - `POST /api/worlds/:world_id/advance-slice-and-delta`
 - `POST /api/worlds/:world_id/view-delta`
@@ -76,6 +77,31 @@ snapshot 取得時だけ保持する。
 Web client は exact frame を8件、coarse frame を16件まで保持する。history slider の `input` は subscribe のみを送り、
 `change` で seek を確定する。近傍 exact cache は即時同期し、遠方は coarse frame の主要 field を既存 full frame に重ねて
 preview を表示した後、HTTP seek の exact state に差し替える。WebSocket が利用できない場合は従来の HTTP seek に fallback する。
+
+## Playback Chunk Stream
+
+`/playback` は連続再生だけに用いるbinary streamであり、`/stream` のseek previewとは独立している。clientは表示済みの
+tickの次だけを要求し、zstd圧縮された保存済みdeltaをWorkerで展開して順に適用する。server session cursorはこのstreamでは
+進めない。HTTP endpointを呼ぶ必要が生じた時だけ、clientが現在tickへseekして整合させる。
+
+要求はJSON text frameで送る。
+
+```json
+{
+    "type": "playback",
+    "epoch": 12,
+    "start_tick": 58,
+    "tick_count": 1,
+    "include_fields": ["height", "lake_depth", "river_flux", "river_next"]
+}
+```
+
+応答はbinary `PlaybackChunk v1` frameである。先頭は `FRPB`、version (`u8`)、epoch (`u32 LE`)、tick (`u32 LE`)、
+compressed payload length (`u32 LE`) の順で、残りはzstd payloadとなる。payloadは表示metadataとfield deltaのtyped-array値を
+含む。`tick_count` は1--4に制限される。clientは先読みを最大8tickとし、seek/rewind時はepochを進めて古いframeを破棄する。
+
+browserが `DecompressionStream("zstd")` を提供しない場合、clientはplayback streamを開かず既存のHTTP JSONへfallbackする。
+このため対応していないbrowserでも表示の正しさは変わらないが、連続再生の通信量削減は得られない。
 
 ## Public Demo Limits
 

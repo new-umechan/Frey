@@ -22,6 +22,7 @@ import {
     type CachedTickFrame,
     viewDeltaFromCachedFrame,
 } from "./timeline-prefetch-cache";
+import { PlaybackChunkWorkerClient } from "./playback-chunk-worker-client";
 
 interface ApiErrorBody {
     error?: unknown;
@@ -49,6 +50,7 @@ interface StreamEnvelope {
 
 const PREFETCH_RADIUS = 2;
 const COARSE_INTERVAL = 256;
+const PLAYBACK_BUFFER_TICKS = 8;
 
 export class PrecomputePendingError extends Error {
     readonly requestId: string | null;
@@ -70,6 +72,16 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     private readonly streamReconnectAttempts = new Map<string, number>();
     private readonly activeFrames = new Map<string, CachedTickFrame>();
     private readonly pendingSeeks = new Map<string, PendingSeek>();
+    // 通常再生専用。JSON の timeline stream とは独立させ、再生を seek の通信量に巻き込まない。
+    private readonly playbackSockets = new Map<string, WebSocket>();
+    private readonly playbackBuffers = new Map<string, Map<number, ViewDeltaResult>>();
+    private readonly playbackLocalTicks = new Map<string, number>();
+    private readonly playbackServerTicks = new Map<string, number>();
+    private readonly playbackInFlightTicks = new Map<string, number>();
+    private readonly playbackEpochs = new Map<string, number>();
+    private readonly playbackFields = new Map<string, string[]>();
+    private playbackDecoder: PlaybackChunkWorkerClient | null = null;
+    private playbackDisabled = false;
     private nextStreamRequestId = 1;
 
     constructor(baseUrl: string) {
@@ -127,8 +139,10 @@ export class HttpPrecomputedEngineClient implements EngineClient {
             config,
         });
         this.prefetchCaches.set(result.world_id, new TimelinePrefetchCache());
-        this.openTickStream(result.world_id);
-        this.prefetch_timeline(result.world_id, result.tick ?? 0);
+        const tick = result.tick ?? 0;
+        this.playbackLocalTicks.set(result.world_id, tick);
+        this.playbackServerTicks.set(result.world_id, tick);
+        this.playbackBuffers.set(result.world_id, new Map());
         return result;
     }
 
@@ -141,12 +155,13 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         tickCount: number,
     ): Promise<TimelineAdvanceResult> {
         await this.settlePendingSeek(worldId);
+        await this.syncPlaybackServerCursor(worldId);
         this.activeFrames.delete(worldId);
         const result = await this.post<TimelineAdvanceResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/advance`,
             { tick_count: tickCount },
         );
-        this.prefetch_timeline(worldId, result.tick);
+        this.notePlaybackServerTick(worldId, result.tick);
         return result;
     }
 
@@ -165,13 +180,35 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     ): Promise<ExecWorldSliceAndDeltaResult> {
         await this.settlePendingSeek(worldId);
         this.activeFrames.delete(worldId);
+        const currentTick = this.playbackLocalTicks.get(worldId);
+        const expectedTick = currentTick === undefined ? null : currentTick + 1;
+        const buffered = expectedTick === null
+            ? undefined
+            : this.playbackBuffers.get(worldId)?.get(expectedTick);
+        if (buffered && expectedTick !== null) {
+            this.playbackBuffers.get(worldId)?.delete(expectedTick);
+            this.playbackLocalTicks.set(worldId, expectedTick);
+            this.ensurePlaybackBuffer(worldId, includeFieldsFromOptions(options));
+            return {
+                slice: {
+                    busy: false,
+                    processed_ticks: 1,
+                    phase: "precomputed",
+                    head_tick: buffered.head_tick,
+                    tick_boundary: "completed_tick",
+                },
+                delta: buffered,
+            };
+        }
+        await this.syncPlaybackServerCursor(worldId);
         const result = await this.post<ExecWorldSliceAndDeltaResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/advance-slice-and-delta`,
             { work_budget: workBudget, options },
         );
         const nextTick = Number(result.delta?.tick ?? result.slice?.head_tick);
         if (Number.isFinite(nextTick)) {
-            this.prefetch_timeline(worldId, nextTick);
+            this.notePlaybackServerTick(worldId, nextTick);
+            this.ensurePlaybackBuffer(worldId, includeFieldsFromOptions(options));
         }
         return result;
     }
@@ -209,6 +246,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         if (activeFrame) {
             return viewDeltaFromCachedFrame(activeFrame, includeFieldsFromOptions(options));
         }
+        await this.syncPlaybackServerCursor(worldId);
         return await this.post<ViewDeltaResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/view-delta`,
             { options },
@@ -227,6 +265,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         if (activeFrame) {
             return activeFrame.timeline;
         }
+        await this.syncPlaybackServerCursor(worldId);
         return await this.request<TimelineStateResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/timeline`,
         );
@@ -237,6 +276,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         if (activeFrame) {
             return activeFrame.metrics;
         }
+        await this.syncPlaybackServerCursor(worldId);
         return await this.request<MetricsResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/metrics`,
         );
@@ -252,6 +292,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         if (cachedField && window === 1) {
             return cachedField;
         }
+        await this.syncPlaybackServerCursor(worldId);
         return await this.request<FieldResult>(
             `/api/worlds/${encodeURIComponent(worldId)}/field/${encodeURIComponent(fieldKind)}?lod=${encodeURIComponent(String(window))}`,
         );
@@ -288,7 +329,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         if (!frame) {
             this.activeFrames.delete(worldId);
             await this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick });
-            this.prefetch_timeline(worldId, tick);
+            this.resetPlaybackPosition(worldId, tick);
             return;
         }
 
@@ -300,7 +341,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
             request: this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick }),
         };
         this.pendingSeeks.set(worldId, pending);
-        this.prefetch_timeline(worldId, tick);
+        this.resetPlaybackPosition(worldId, tick);
     }
 
     async restore_world_to_tick(worldId: string, tick: number): Promise<void> {
@@ -313,6 +354,8 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         await this.post(`/api/worlds/${encodeURIComponent(worldId)}/rewind`, {
             tick_count: tickCount,
         });
+        const previous = this.playbackLocalTicks.get(worldId) ?? 0;
+        this.resetPlaybackPosition(worldId, Math.max(0, previous - tickCount));
     }
 
     async set_simulation_rate(worldId: string, rate: number): Promise<void> {
@@ -381,6 +424,149 @@ export class HttpPrecomputedEngineClient implements EngineClient {
                 this.activeFrames.delete(worldId);
             }
         }
+    }
+
+    private notePlaybackServerTick(worldId: string, tick: number) {
+        const normalized = Math.max(0, Math.floor(tick));
+        this.playbackLocalTicks.set(worldId, normalized);
+        this.playbackServerTicks.set(worldId, normalized);
+        this.playbackBuffers.get(worldId)?.clear();
+        this.playbackInFlightTicks.delete(worldId);
+        this.playbackEpochs.set(worldId, (this.playbackEpochs.get(worldId) ?? 0) + 1);
+    }
+
+    private resetPlaybackPosition(worldId: string, tick: number) {
+        const normalized = Math.max(0, Math.floor(tick));
+        this.playbackLocalTicks.set(worldId, normalized);
+        this.playbackServerTicks.set(worldId, normalized);
+        this.playbackBuffers.get(worldId)?.clear();
+        this.playbackInFlightTicks.delete(worldId);
+        this.playbackEpochs.set(worldId, (this.playbackEpochs.get(worldId) ?? 0) + 1);
+    }
+
+    private async syncPlaybackServerCursor(worldId: string) {
+        const local = this.playbackLocalTicks.get(worldId);
+        const server = this.playbackServerTicks.get(worldId);
+        if (local === undefined || server === local) {
+            return;
+        }
+        await this.post(`/api/worlds/${encodeURIComponent(worldId)}/seek`, { tick: local });
+        this.playbackServerTicks.set(worldId, local);
+    }
+
+    private ensurePlaybackBuffer(worldId: string, fields?: string[]) {
+        if (this.playbackDisabled || typeof WebSocket === "undefined" || typeof Worker === "undefined") {
+            return;
+        }
+        const localTick = this.playbackLocalTicks.get(worldId);
+        if (localTick === undefined || this.playbackInFlightTicks.has(worldId)) {
+            return;
+        }
+        const normalizedFields = fields ?? [];
+        this.playbackFields.set(worldId, normalizedFields);
+        const buffer = this.playbackBuffers.get(worldId) ?? new Map<number, ViewDeltaResult>();
+        this.playbackBuffers.set(worldId, buffer);
+        let target = localTick + 1;
+        while (buffer.has(target)) {
+            target += 1;
+        }
+        if (target > localTick + PLAYBACK_BUFFER_TICKS) {
+            return;
+        }
+        const socket = this.openPlaybackStream(worldId);
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        this.requestPlaybackTick(worldId, socket, target, normalizedFields);
+    }
+
+    private openPlaybackStream(worldId: string): WebSocket | null {
+        if (typeof WebSocket === "undefined" || typeof Worker === "undefined" || this.playbackDisabled) {
+            return null;
+        }
+        const existing = this.playbackSockets.get(worldId);
+        if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+            return existing;
+        }
+        try {
+            this.playbackDecoder ??= new PlaybackChunkWorkerClient();
+            const httpUrl = new URL(
+                this.url(`/api/worlds/${encodeURIComponent(worldId)}/playback`),
+                window.location.href,
+            );
+            httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
+            const socket = new WebSocket(httpUrl);
+            socket.binaryType = "arraybuffer";
+            this.playbackSockets.set(worldId, socket);
+            socket.addEventListener("open", () => this.ensurePlaybackBuffer(worldId, this.playbackFields.get(worldId)));
+            socket.addEventListener("message", (event) => this.acceptPlaybackMessage(worldId, event.data));
+            socket.addEventListener("close", () => {
+                if (this.playbackSockets.get(worldId) === socket) {
+                    this.playbackSockets.delete(worldId);
+                }
+                this.playbackInFlightTicks.delete(worldId);
+            });
+            socket.addEventListener("error", () => socket.close());
+            return socket;
+        } catch {
+            this.disablePlaybackStreaming();
+            return null;
+        }
+    }
+
+    private requestPlaybackTick(worldId: string, socket: WebSocket, tick: number, fields: string[]) {
+        const epoch = this.playbackEpochs.get(worldId) ?? 0;
+        this.playbackInFlightTicks.set(worldId, tick);
+        socket.send(JSON.stringify({
+            type: "playback",
+            epoch,
+            start_tick: tick,
+            tick_count: 1,
+            include_fields: fields,
+        }));
+    }
+
+    private acceptPlaybackMessage(worldId: string, rawData: unknown) {
+        if (rawData instanceof ArrayBuffer) {
+            const decoder = this.playbackDecoder;
+            if (!decoder) {
+                return;
+            }
+            void decoder.decode(rawData).then((chunk) => {
+                const epoch = this.playbackEpochs.get(worldId) ?? 0;
+                if (chunk.epoch !== epoch) {
+                    return;
+                }
+                chunk.delta.world_id = worldId;
+                const buffer = this.playbackBuffers.get(worldId) ?? new Map<number, ViewDeltaResult>();
+                this.playbackBuffers.set(worldId, buffer);
+                const local = this.playbackLocalTicks.get(worldId) ?? 0;
+                if (chunk.tick > local && chunk.tick <= local + PLAYBACK_BUFFER_TICKS) {
+                    buffer.set(chunk.tick, chunk.delta);
+                }
+                if (this.playbackInFlightTicks.get(worldId) === chunk.tick) {
+                    this.playbackInFlightTicks.delete(worldId);
+                }
+                this.ensurePlaybackBuffer(worldId, this.playbackFields.get(worldId));
+            }).catch(() => this.disablePlaybackStreaming());
+            return;
+        }
+        if (typeof rawData === "string") {
+            // エラー応答は当該リクエストを解放し、HTTP フォールバックに任せる。
+            this.playbackInFlightTicks.delete(worldId);
+        }
+    }
+
+    private disablePlaybackStreaming() {
+        this.playbackDisabled = true;
+        for (const socket of this.playbackSockets.values()) {
+            socket.close();
+        }
+        this.playbackSockets.clear();
+        this.playbackInFlightTicks.clear();
+        this.playbackBuffers.clear();
+        this.playbackDecoder?.close();
+        this.playbackDecoder = null;
     }
 
     private openTickStream(worldId: string) {

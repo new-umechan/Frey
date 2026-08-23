@@ -44,6 +44,9 @@ const MAX_STREAM_RADIUS: u32 = 8;
 const DEFAULT_COARSE_KEYFRAME_INTERVAL: u32 = 256;
 const MIN_COARSE_KEYFRAME_INTERVAL: u32 = 64;
 const MAX_COARSE_KEYFRAME_INTERVAL: u32 = 512;
+const PLAYBACK_CHUNK_MAGIC: [u8; 4] = *b"FRPB";
+const PLAYBACK_CHUNK_VERSION: u8 = 1;
+const MAX_PLAYBACK_CHUNK_TICKS: u32 = 4;
 const COARSE_STREAM_FIELDS: [&str; 6] = [
     "height",
     "lake_depth",
@@ -146,6 +149,19 @@ enum TickStreamRequest {
         coarse_interval: u32,
         #[serde(default)]
         include_coarse: bool,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum PlaybackStreamRequest {
+    Playback {
+        epoch: u32,
+        start_tick: u32,
+        #[serde(default = "default_playback_chunk_ticks")]
+        tick_count: u32,
+        #[serde(default)]
+        include_fields: Vec<String>,
     },
 }
 
@@ -353,6 +369,10 @@ fn default_stream_radius() -> u32 {
 
 fn default_coarse_keyframe_interval() -> u32 {
     DEFAULT_COARSE_KEYFRAME_INTERVAL
+}
+
+fn default_playback_chunk_ticks() -> u32 {
+    MAX_PLAYBACK_CHUNK_TICKS
 }
 
 pub async fn run_from_env() -> Result<(), String> {
@@ -753,6 +773,10 @@ fn router(state: AppState) -> Router {
         .route("/api/worlds/:world_id/metrics", get(get_metrics))
         .route("/api/worlds/:world_id/timeline", get(get_timeline_state))
         .route("/api/worlds/:world_id/stream", get(stream_world_ticks))
+        .route(
+            "/api/worlds/:world_id/playback",
+            get(stream_playback_chunks),
+        )
         .route("/api/worlds/:world_id/field/:field_kind", get(get_field))
         .route(
             "/api/worlds/:world_id/checkpoints",
@@ -1463,6 +1487,42 @@ mod tests {
         assert_eq!(coarse_ticks(0, 256), vec![0]);
     }
 
+    #[test]
+    fn playback_chunk_is_zstd_framed_and_carries_epoch_and_tick() {
+        let delta = ViewDeltaResponse {
+            world_id: "world-1".to_string(),
+            tick: 57.0,
+            head_tick: 1600.0,
+            era: "geologic".to_string(),
+            real_years_per_tick: 1_000_000.0,
+            runtime_tick_ms: 70,
+            budgets: crate::application::world_dto::BudgetSummary {
+                geology: 1,
+                climate: 2,
+                ecology: 3,
+                civilization: 4,
+            },
+            deltas: vec![ViewDeltaFieldResponse {
+                field_kind: "height".to_string(),
+                mode: "delta".to_string(),
+                ranges: vec![crate::application::world_dto::DeltaRange { start: 2, end: 4 }],
+                dirty_bitmap: None,
+                f32_data: Some(vec![1.0, 2.0]),
+                u32_data: None,
+                i32_data: None,
+            }],
+        };
+
+        let encoded = encode_playback_chunk(9, 57, &delta).expect("encode playback chunk");
+        assert_eq!(&encoded[..4], PLAYBACK_CHUNK_MAGIC.as_slice());
+        assert_eq!(encoded[4], PLAYBACK_CHUNK_VERSION);
+        assert_eq!(u32::from_le_bytes(encoded[5..9].try_into().unwrap()), 9);
+        assert_eq!(u32::from_le_bytes(encoded[9..13].try_into().unwrap()), 57);
+        let payload = zstd::stream::decode_all(Cursor::new(&encoded[17..]))
+            .expect("decode playback chunk payload");
+        assert!(!payload.is_empty());
+    }
+
     fn unique_test_dir(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -2075,6 +2135,268 @@ fn coarse_ticks(head_tick: u32, interval: u32) -> Vec<u32> {
         ticks.push(head_tick);
     }
     ticks
+}
+
+async fn stream_playback_chunks(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    AxumPath(world_id): AxumPath<String>,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    {
+        let locked = lock_state(&state)?;
+        locked
+            .session(&world_id)
+            .map_err(|err| error_response(StatusCode::BAD_REQUEST, err))?;
+    }
+    Ok(ws.on_upgrade(move |socket| handle_playback_stream(socket, state, world_id)))
+}
+
+async fn handle_playback_stream(mut socket: WebSocket, state: AppState, world_id: String) {
+    while let Some(message) = socket.recv().await {
+        let Ok(message) = message else {
+            break;
+        };
+        let Message::Text(text) = message else {
+            if matches!(message, Message::Close(_)) {
+                break;
+            }
+            continue;
+        };
+        let request = match serde_json::from_str::<PlaybackStreamRequest>(&text) {
+            Ok(request) => request,
+            Err(err) => {
+                if send_playback_error(
+                    &mut socket,
+                    None,
+                    format!("invalid playback request: {err}"),
+                )
+                .await
+                .is_err()
+                {
+                    return;
+                }
+                continue;
+            }
+        };
+        let prepare_state = state.clone();
+        let prepare_world_id = world_id.clone();
+        let chunks = tokio::task::spawn_blocking(move || {
+            prepare_playback_chunks(&prepare_state, &prepare_world_id, request)
+        })
+        .await
+        .unwrap_or_else(|err| Err((None, format!("playback worker failed: {err}"))));
+        match chunks {
+            Ok(chunks) => {
+                for chunk in chunks {
+                    if socket.send(Message::Binary(chunk.into())).await.is_err() {
+                        return;
+                    }
+                }
+            }
+            Err((epoch, message)) => {
+                if send_playback_error(&mut socket, epoch, message)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+async fn send_playback_error(
+    socket: &mut WebSocket,
+    epoch: Option<u32>,
+    message: String,
+) -> Result<(), ()> {
+    socket
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "playback_error",
+                "epoch": epoch,
+                "message": message,
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .map_err(|_| ())
+}
+
+fn prepare_playback_chunks(
+    state: &AppState,
+    world_id: &str,
+    request: PlaybackStreamRequest,
+) -> Result<Vec<Vec<u8>>, (Option<u32>, String)> {
+    let PlaybackStreamRequest::Playback {
+        epoch,
+        start_tick,
+        tick_count,
+        include_fields,
+    } = request;
+    state
+        .config
+        .validate_tick(start_tick)
+        .map_err(|err| (Some(epoch), err))?;
+    let (store, seed, head_tick) = {
+        let locked = state
+            .inner
+            .lock()
+            .map_err(|_| (Some(epoch), "server state lock poisoned".to_string()))?;
+        let session = locked.session(world_id).map_err(|err| (Some(epoch), err))?;
+        (
+            locked.store.clone(),
+            session.seed.clone(),
+            state.config.capped_head_tick(session.frame.head_tick),
+        )
+    };
+    if start_tick == 0 || start_tick > head_tick {
+        return Err((
+            Some(epoch),
+            format!("playback start tick must be within 1..={head_tick} (got {start_tick})"),
+        ));
+    }
+    let end_tick = start_tick
+        .saturating_add(
+            tick_count
+                .clamp(1, MAX_PLAYBACK_CHUNK_TICKS)
+                .saturating_sub(1),
+        )
+        .min(head_tick);
+    let include = if include_fields.is_empty() {
+        None
+    } else {
+        Some(include_fields.into_iter().collect::<BTreeSet<_>>())
+    };
+    let mut chunks = Vec::with_capacity((end_tick - start_tick + 1) as usize);
+    for tick in start_tick..=end_tick {
+        let mut delta = store
+            .load_delta(&seed, tick)
+            .map_err(|err| (Some(epoch), err))?;
+        delta.world_id = world_id.to_string();
+        delta.head_tick = head_tick as f64;
+        if let Some(include) = &include {
+            delta
+                .deltas
+                .retain(|field| include.contains(&field.field_kind));
+        }
+        chunks.push(encode_playback_chunk(epoch, tick, &delta).map_err(|err| (Some(epoch), err))?);
+    }
+    Ok(chunks)
+}
+
+fn encode_playback_chunk(
+    epoch: u32,
+    tick: u32,
+    delta: &ViewDeltaResponse,
+) -> Result<Vec<u8>, String> {
+    let mut payload = Vec::new();
+    write_u32(&mut payload, delta.head_tick.max(0.0).floor() as u32);
+    write_string(&mut payload, &delta.era)?;
+    write_u32(&mut payload, delta.runtime_tick_ms);
+    write_f32(&mut payload, delta.real_years_per_tick);
+    write_u32(&mut payload, delta.budgets.geology);
+    write_u32(&mut payload, delta.budgets.climate);
+    write_u32(&mut payload, delta.budgets.ecology);
+    write_u32(&mut payload, delta.budgets.civilization);
+    let field_count = u16::try_from(delta.deltas.len())
+        .map_err(|_| "too many fields in playback chunk".to_string())?;
+    write_u16(&mut payload, field_count);
+    for field in &delta.deltas {
+        write_string(&mut payload, &field.field_kind)?;
+        payload.push(playback_mode_code(&field.mode)?);
+        let range_count = u16::try_from(field.ranges.len())
+            .map_err(|_| format!("too many ranges for field={}", field.field_kind))?;
+        write_u16(&mut payload, range_count);
+        for range in &field.ranges {
+            write_u32(&mut payload, range.start);
+            write_u32(&mut payload, range.end);
+        }
+        let bitmap = field.dirty_bitmap.as_deref().unwrap_or_default();
+        write_u32(
+            &mut payload,
+            u32::try_from(bitmap.len()).map_err(|_| "bitmap too large".to_string())?,
+        );
+        for word in bitmap {
+            write_u32(&mut payload, *word);
+        }
+        if let Some(values) = &field.f32_data {
+            payload.push(1);
+            write_u32(
+                &mut payload,
+                u32::try_from(values.len()).map_err(|_| "field data too large".to_string())?,
+            );
+            for value in values {
+                write_f32(&mut payload, *value);
+            }
+        } else if let Some(values) = &field.u32_data {
+            payload.push(2);
+            write_u32(
+                &mut payload,
+                u32::try_from(values.len()).map_err(|_| "field data too large".to_string())?,
+            );
+            for value in values {
+                write_u32(&mut payload, *value);
+            }
+        } else if let Some(values) = &field.i32_data {
+            payload.push(3);
+            write_u32(
+                &mut payload,
+                u32::try_from(values.len()).map_err(|_| "field data too large".to_string())?,
+            );
+            for value in values {
+                payload.extend_from_slice(&value.to_le_bytes());
+            }
+        } else {
+            payload.push(0);
+            write_u32(&mut payload, 0);
+        }
+    }
+    let compressed = zstd::stream::encode_all(Cursor::new(payload), ZSTD_LEVEL)
+        .map_err(|err| format!("failed to compress playback chunk: {err}"))?;
+    let mut output = Vec::with_capacity(17 + compressed.len());
+    output.extend_from_slice(&PLAYBACK_CHUNK_MAGIC);
+    output.push(PLAYBACK_CHUNK_VERSION);
+    write_u32(&mut output, epoch);
+    write_u32(&mut output, tick);
+    write_u32(
+        &mut output,
+        u32::try_from(compressed.len()).map_err(|_| "compressed chunk too large")?,
+    );
+    output.extend_from_slice(&compressed);
+    Ok(output)
+}
+
+fn playback_mode_code(mode: &str) -> Result<u8, String> {
+    match mode {
+        "full" => Ok(0),
+        "delta" => Ok(1),
+        "bitmap" => Ok(2),
+        other => Err(format!("unknown playback delta mode: {other}")),
+    }
+}
+
+fn write_u16(output: &mut Vec<u8>, value: u16) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_u32(output: &mut Vec<u8>, value: u32) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_f32(output: &mut Vec<u8>, value: f32) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_string(output: &mut Vec<u8>, value: &str) -> Result<(), String> {
+    let bytes = value.as_bytes();
+    write_u16(
+        output,
+        u16::try_from(bytes.len()).map_err(|_| "playback string too long".to_string())?,
+    );
+    output.extend_from_slice(bytes);
+    Ok(())
 }
 
 async fn get_field(

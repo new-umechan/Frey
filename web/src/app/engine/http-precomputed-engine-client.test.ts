@@ -129,6 +129,7 @@ describe("HttpPrecomputedEngineClient timeline prefetch", () => {
     it("exact cache を即時利用し、coarse preview 後だけ exact 再同期を要求する", async () => {
         const client = new HttpPrecomputedEngineClient("");
         await client.init_world("alpha", 6, {});
+        client.prefetch_timeline("world-1", 10);
         const socket = FakeWebSocket.instances[0];
         socket.open();
         expect(JSON.parse(socket.sent[0])).toMatchObject({
