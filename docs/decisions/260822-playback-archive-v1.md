@@ -31,8 +31,9 @@ background transferが再生を妨害する。bufferは短期的な帯域変動�
 - clientは最低bufferと目標bufferをtick数で管理する。低水位では新規jump previewを優先し、bufferを消費し尽くした場合は
   tickを進めず再bufferする。
 - commandはepochを持つ。jumpはepochを進め、serverとclientは古いepochのqueue、frame、decode結果を破棄する。
-- navigation previewはexact laneとは別laneとする。最終的には空間LOD済みassetをprecomputeする。previewの量子化や空間補間は
-  display-only近似であり、科学model stateやexact metricsには使わない。
+- navigation previewはexact laneとは別laneとする。v1では遠方tickの表示主要6 fieldをmaterializeしたfull keyframeを
+  `PlaybackChunk` で送る。これはexact stateへの到達を待つ間だけ表示する。最終的には空間LOD済みassetをprecomputeする。
+  previewの量子化や空間補間はdisplay-only近似であり、科学model stateやexact metricsには使わない。
 - browserがzstd decompressionを提供しない場合、既存HTTP JSON APIへfallbackする。
 
 ## Trade-off
@@ -42,7 +43,8 @@ background transferが再生を妨害する。bufferは短期的な帯域変動�
   送信queueにはcurrent playbackと最新jumpのみを置く。
 - client-side delta適用はsimulation再実行ではない。main threadを止めないためにWorkerでdecodeし、typed array更新は既存の
   delta適用規則と一致させる。
-- exact binary化だけでは440 Kbpsで高frequency再生を保証しない。preview laneとadaptive playbackはその制約を明示的に扱う。
+- exact binary化だけでは440 Kbpsで高frequency再生を保証しない。v1 previewもfull cell配列なので即時表示を保証しない。
+  空間LOD previewとadaptive playbackはその制約を明示的に扱う次段階である。
 
 ## Validation plan
 

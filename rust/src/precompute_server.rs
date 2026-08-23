@@ -163,6 +163,12 @@ enum PlaybackStreamRequest {
         #[serde(default)]
         include_fields: Vec<String>,
     },
+    Preview {
+        epoch: u32,
+        tick: u32,
+        #[serde(default)]
+        include_fields: Vec<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -2229,12 +2235,19 @@ fn prepare_playback_chunks(
     world_id: &str,
     request: PlaybackStreamRequest,
 ) -> Result<Vec<Vec<u8>>, (Option<u32>, String)> {
-    let PlaybackStreamRequest::Playback {
-        epoch,
-        start_tick,
-        tick_count,
-        include_fields,
-    } = request;
+    let (epoch, start_tick, tick_count, include_fields, materialize_preview) = match request {
+        PlaybackStreamRequest::Playback {
+            epoch,
+            start_tick,
+            tick_count,
+            include_fields,
+        } => (epoch, start_tick, tick_count, include_fields, false),
+        PlaybackStreamRequest::Preview {
+            epoch,
+            tick,
+            include_fields,
+        } => (epoch, tick, 1, include_fields, true),
+    };
     state
         .config
         .validate_tick(start_tick)
@@ -2251,7 +2264,7 @@ fn prepare_playback_chunks(
             state.config.capped_head_tick(session.frame.head_tick),
         )
     };
-    if start_tick == 0 || start_tick > head_tick {
+    if (!materialize_preview && start_tick == 0) || start_tick > head_tick {
         return Err((
             Some(epoch),
             format!("playback start tick must be within 1..={head_tick} (got {start_tick})"),
@@ -2271,11 +2284,22 @@ fn prepare_playback_chunks(
     };
     let mut chunks = Vec::with_capacity((end_tick - start_tick + 1) as usize);
     for tick in start_tick..=end_tick {
-        let mut delta = store
-            .load_delta(&seed, tick)
-            .map_err(|err| (Some(epoch), err))?;
-        delta.world_id = world_id.to_string();
-        delta.head_tick = head_tick as f64;
+        let mut delta = if materialize_preview {
+            let mut frame = store
+                .materialize(&seed, tick)
+                .map_err(|err| (Some(epoch), err))?;
+            frame = with_world_id(frame, world_id);
+            frame.head_tick = head_tick;
+            frame.timeline.head_tick = head_tick as f64;
+            full_delta_from_frame(&frame)
+        } else {
+            let mut delta = store
+                .load_delta(&seed, tick)
+                .map_err(|err| (Some(epoch), err))?;
+            delta.world_id = world_id.to_string();
+            delta.head_tick = head_tick as f64;
+            delta
+        };
         if let Some(include) = &include {
             delta
                 .deltas

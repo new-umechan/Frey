@@ -100,6 +100,19 @@ tickの次だけを要求し、zstd圧縮された保存済みdeltaをWorkerで�
 compressed payload length (`u32 LE`) の順で、残りはzstd payloadとなる。payloadは表示metadataとfield deltaのtyped-array値を
 含む。`tick_count` は1--4に制限される。clientは先読みを最大8tickとし、seek/rewind時はepochを進めて古いframeを破棄する。
 
+history sliderの入力は次の `preview` を使う。serverは指定tickをmaterializeし、指定fieldのfull deltaを同じbinary形式で返す。
+clientは到着後に表示だけへ適用し、sliderの確定時にHTTP seekを行ってexact stateへ置換する。v1のpreviewは時間方向の
+keyframeのみで、空間LODではない。
+
+```json
+{
+    "type": "preview",
+    "epoch": 13,
+    "tick": 512,
+    "include_fields": ["height", "lake_depth", "plate_id", "river_flux", "river_next", "mantle_heat"]
+}
+```
+
 browserが `DecompressionStream("zstd")` を提供しない場合、clientはplayback streamを開かず既存のHTTP JSONへfallbackする。
 このため対応していないbrowserでも表示の正しさは変わらないが、連続再生の通信量削減は得られない。
 
