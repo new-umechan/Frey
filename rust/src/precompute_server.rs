@@ -45,8 +45,9 @@ const DEFAULT_COARSE_KEYFRAME_INTERVAL: u32 = 256;
 const MIN_COARSE_KEYFRAME_INTERVAL: u32 = 64;
 const MAX_COARSE_KEYFRAME_INTERVAL: u32 = 512;
 const PLAYBACK_CHUNK_MAGIC: [u8; 4] = *b"FRPB";
-const PLAYBACK_CHUNK_VERSION: u8 = 1;
+const PLAYBACK_CHUNK_VERSION: u8 = 2;
 const MAX_PLAYBACK_CHUNK_TICKS: u32 = 4;
+const PLAYBACK_PREVIEW_LEVEL_REDUCTION: u32 = 4;
 const COARSE_STREAM_FIELDS: [&str; 6] = [
     "height",
     "lake_depth",
@@ -1519,7 +1520,7 @@ mod tests {
             }],
         };
 
-        let encoded = encode_playback_chunk(9, 57, &delta).expect("encode playback chunk");
+        let encoded = encode_playback_chunk(9, 57, &delta, None).expect("encode playback chunk");
         assert_eq!(&encoded[..4], PLAYBACK_CHUNK_MAGIC.as_slice());
         assert_eq!(encoded[4], PLAYBACK_CHUNK_VERSION);
         assert_eq!(u32::from_le_bytes(encoded[5..9].try_into().unwrap()), 9);
@@ -2252,16 +2253,24 @@ fn prepare_playback_chunks(
         .config
         .validate_tick(start_tick)
         .map_err(|err| (Some(epoch), err))?;
-    let (store, seed, head_tick) = {
+    let (store, seed, head_tick, mesh_level) = {
         let locked = state
             .inner
             .lock()
             .map_err(|_| (Some(epoch), "server state lock poisoned".to_string()))?;
         let session = locked.session(world_id).map_err(|err| (Some(epoch), err))?;
+        let seed = session.seed.clone();
+        let mesh_level = locked
+            .store
+            .seeds
+            .get(&seed)
+            .map(|store| store.manifest.mesh_level)
+            .ok_or_else(|| (Some(epoch), format!("precomputed seed not found: {seed}")))?;
         (
             locked.store.clone(),
-            session.seed.clone(),
+            seed,
             state.config.capped_head_tick(session.frame.head_tick),
+            mesh_level,
         )
     };
     if (!materialize_preview && start_tick == 0) || start_tick > head_tick {
@@ -2282,6 +2291,8 @@ fn prepare_playback_chunks(
     } else {
         Some(include_fields.into_iter().collect::<BTreeSet<_>>())
     };
+    let preview_lod =
+        materialize_preview.then(|| mesh_level.saturating_sub(PLAYBACK_PREVIEW_LEVEL_REDUCTION));
     let mut chunks = Vec::with_capacity((end_tick - start_tick + 1) as usize);
     for tick in start_tick..=end_tick {
         let mut delta = if materialize_preview {
@@ -2305,7 +2316,13 @@ fn prepare_playback_chunks(
                 .deltas
                 .retain(|field| include.contains(&field.field_kind));
         }
-        chunks.push(encode_playback_chunk(epoch, tick, &delta).map_err(|err| (Some(epoch), err))?);
+        if let Some(lod) = preview_lod {
+            apply_preview_spatial_lod(&mut delta, lod);
+        }
+        chunks.push(
+            encode_playback_chunk(epoch, tick, &delta, preview_lod)
+                .map_err(|err| (Some(epoch), err))?,
+        );
     }
     Ok(chunks)
 }
@@ -2314,6 +2331,7 @@ fn encode_playback_chunk(
     epoch: u32,
     tick: u32,
     delta: &ViewDeltaResponse,
+    spatial_lod: Option<u32>,
 ) -> Result<Vec<u8>, String> {
     let mut payload = Vec::new();
     write_u32(&mut payload, delta.head_tick.max(0.0).floor() as u32);
@@ -2324,6 +2342,12 @@ fn encode_playback_chunk(
     write_u32(&mut payload, delta.budgets.climate);
     write_u32(&mut payload, delta.budgets.ecology);
     write_u32(&mut payload, delta.budgets.civilization);
+    payload.push(
+        spatial_lod
+            .map(|lod| u8::try_from(lod).map_err(|_| "playback LOD exceeds u8"))
+            .transpose()?
+            .unwrap_or(u8::MAX),
+    );
     let field_count = u16::try_from(delta.deltas.len())
         .map_err(|_| "too many fields in playback chunk".to_string())?;
     write_u16(&mut payload, field_count);
@@ -2390,6 +2414,23 @@ fn encode_playback_chunk(
     );
     output.extend_from_slice(&compressed);
     Ok(output)
+}
+
+fn apply_preview_spatial_lod(delta: &mut ViewDeltaResponse, lod: u32) {
+    let count = 10usize
+        .saturating_mul(4usize.saturating_pow(lod))
+        .saturating_add(2);
+    for field in &mut delta.deltas {
+        if let Some(values) = &mut field.f32_data {
+            values.truncate(count);
+        }
+        if let Some(values) = &mut field.u32_data {
+            values.truncate(count);
+        }
+        if let Some(values) = &mut field.i32_data {
+            values.truncate(count);
+        }
+    }
 }
 
 fn playback_mode_code(mode: &str) -> Result<u8, String> {

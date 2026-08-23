@@ -96,13 +96,13 @@ tickの次だけを要求し、zstd圧縮された保存済みdeltaをWorkerで�
 }
 ```
 
-応答はbinary `PlaybackChunk v1` frameである。先頭は `FRPB`、version (`u8`)、epoch (`u32 LE`)、tick (`u32 LE`)、
+応答はbinary `PlaybackChunk v2` frameである。先頭は `FRPB`、version (`u8`)、epoch (`u32 LE`)、tick (`u32 LE`)、
 compressed payload length (`u32 LE`) の順で、残りはzstd payloadとなる。payloadは表示metadataとfield deltaのtyped-array値を
 含む。`tick_count` は1--4に制限される。clientは先読みを最大8tickとし、seek/rewind時はepochを進めて古いframeを破棄する。
 
-history sliderの入力は次の `preview` を使う。serverは指定tickをmaterializeし、指定fieldのfull deltaを同じbinary形式で返す。
-clientは到着後に表示だけへ適用し、sliderの確定時にHTTP seekを行ってexact stateへ置換する。v1のpreviewは時間方向の
-keyframeのみで、空間LODではない。
+history sliderの入力は次の `preview` を使う。serverは指定tickをmaterializeし、指定fieldをicosphereの4 level低い親mesh
+（level 6なら162 cell）へ投影して同じbinary形式で返す。clientは最近傍親cellで表示用full meshへ復元し、sliderの確定時に
+HTTP seekを行ってexact stateへ置換する。このpreviewは表示専用で、metricsや科学状態には使わない。
 
 ```json
 {

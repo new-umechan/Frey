@@ -32,6 +32,7 @@ describe("PlaybackChunk payload codec", () => {
         pushU32(payload, 2);
         pushU32(payload, 3);
         pushU32(payload, 4);
+        payload.push(2);
         pushU16(payload, 1);
         pushString(payload, "height");
         payload.push(1);
@@ -48,6 +49,7 @@ describe("PlaybackChunk payload codec", () => {
 
         expect(decoded.epoch).toBe(7);
         expect(decoded.tick).toBe(57);
+        expect(decoded.spatialLod).toBe(2);
         expect(decoded.delta).toMatchObject({
             tick: 57,
             head_tick: 1600,

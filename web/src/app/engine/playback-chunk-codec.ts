@@ -1,11 +1,12 @@
 import type { FieldDeltaResult, ViewDeltaResult } from "./engine-client";
 
 const MAGIC = "FRPB";
-const VERSION = 1;
+const VERSION = 2;
 
 export interface DecodedPlaybackChunk {
     epoch: number;
     tick: number;
+    spatialLod: number | null;
     delta: ViewDeltaResult;
 }
 
@@ -52,6 +53,8 @@ export function decodePlaybackPayload(
         ecology: reader.readU32(),
         civilization: reader.readU32(),
     };
+    const encodedSpatialLod = reader.readU8();
+    const spatialLod = encodedSpatialLod === 0xff ? null : encodedSpatialLod;
     const fieldCount = reader.readU16();
     const deltas: FieldDeltaResult[] = [];
     for (let index = 0; index < fieldCount; index += 1) {
@@ -87,6 +90,7 @@ export function decodePlaybackPayload(
     return {
         epoch,
         tick,
+        spatialLod,
         delta: {
             world_id: "",
             tick,

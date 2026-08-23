@@ -22,6 +22,7 @@ import {
     type CachedTickFrame,
     viewDeltaFromCachedFrame,
 } from "./timeline-prefetch-cache";
+import type { DecodedPlaybackChunk } from "./playback-chunk-codec";
 import { PlaybackChunkWorkerClient } from "./playback-chunk-worker-client";
 
 interface ApiErrorBody {
@@ -56,7 +57,6 @@ const PREVIEW_FIELD_KINDS = [
     "lake_depth",
     "plate_id",
     "river_flux",
-    "river_next",
     "mantle_heat",
 ];
 
@@ -90,6 +90,9 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     private readonly playbackPreviewFrames = new Map<string, Map<number, ViewDeltaResult>>();
     private readonly pendingPlaybackPreviews = new Map<string, number>();
     private readonly activePlaybackPreviews = new Map<string, ViewDeltaResult>();
+    private readonly meshPositions = new Map<number, Float32Array>();
+    private readonly worldMeshLevels = new Map<string, number>();
+    private readonly previewProjections = new Map<string, Uint32Array>();
     private playbackDecoder: PlaybackChunkWorkerClient | null = null;
     private playbackDisabled = false;
     private nextStreamRequestId = 1;
@@ -135,7 +138,9 @@ export class HttpPrecomputedEngineClient implements EngineClient {
     }
 
     async generate_mesh(level: number): Promise<MeshGenerationResult> {
-        return await this.request<MeshGenerationResult>(`/api/mesh/${level}`);
+        const mesh = await this.request<MeshGenerationResult>(`/api/mesh/${level}`);
+        this.meshPositions.set(level, toFloat32Array(mesh.positions));
+        return mesh;
     }
 
     async init_world(
@@ -149,6 +154,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
             config,
         });
         this.prefetchCaches.set(result.world_id, new TimelinePrefetchCache());
+        this.worldMeshLevels.set(result.world_id, meshLevel);
         const tick = result.tick ?? 0;
         this.playbackLocalTicks.set(result.world_id, tick);
         this.playbackServerTicks.set(result.world_id, tick);
@@ -590,11 +596,15 @@ export class HttpPrecomputedEngineClient implements EngineClient {
                 if (chunk.epoch !== epoch) {
                     return;
                 }
-                chunk.delta.world_id = worldId;
+                const delta = this.expandSpatialPreview(worldId, chunk);
+                if (!delta) {
+                    return;
+                }
+                delta.world_id = worldId;
                 const previewTick = this.pendingPlaybackPreviews.get(worldId);
                 if (previewTick === chunk.tick) {
                     const previews = this.playbackPreviewFrames.get(worldId) ?? new Map<number, ViewDeltaResult>();
-                    previews.set(chunk.tick, chunk.delta);
+                    previews.set(chunk.tick, delta);
                     this.playbackPreviewFrames.set(worldId, previews);
                     this.pendingPlaybackPreviews.delete(worldId);
                     this.playbackInFlightTicks.delete(worldId);
@@ -604,7 +614,7 @@ export class HttpPrecomputedEngineClient implements EngineClient {
                 this.playbackBuffers.set(worldId, buffer);
                 const local = this.playbackLocalTicks.get(worldId) ?? 0;
                 if (chunk.tick > local && chunk.tick <= local + PLAYBACK_BUFFER_TICKS) {
-                    buffer.set(chunk.tick, chunk.delta);
+                    buffer.set(chunk.tick, delta);
                 }
                 if (this.playbackInFlightTicks.get(worldId) === chunk.tick) {
                     this.playbackInFlightTicks.delete(worldId);
@@ -629,6 +639,40 @@ export class HttpPrecomputedEngineClient implements EngineClient {
         this.playbackBuffers.clear();
         this.playbackDecoder?.close();
         this.playbackDecoder = null;
+    }
+
+    private expandSpatialPreview(
+        worldId: string,
+        chunk: DecodedPlaybackChunk,
+    ): ViewDeltaResult | null {
+        if (chunk.spatialLod === null) {
+            return chunk.delta;
+        }
+        const meshLevel = this.worldMeshLevels.get(worldId);
+        const positions = meshLevel === undefined ? undefined : this.meshPositions.get(meshLevel);
+        if (!positions) {
+            return null;
+        }
+        const lowCount = 10 * (4 ** chunk.spatialLod) + 2;
+        const cellCount = Math.floor(positions.length / 3);
+        if (lowCount > cellCount) {
+            return null;
+        }
+        const projectionKey = `${worldId}:${chunk.spatialLod}`;
+        let projection = this.previewProjections.get(projectionKey);
+        if (!projection) {
+            projection = buildPreviewProjection(positions, lowCount);
+            this.previewProjections.set(projectionKey, projection);
+        }
+        return {
+            ...chunk.delta,
+            deltas: chunk.delta.deltas.map((field) => ({
+                ...field,
+                f32_data: expandFloatPreviewValues(field.f32_data, projection, lowCount),
+                u32_data: expandUintPreviewValues(field.u32_data, projection, lowCount),
+                i32_data: expandIntPreviewValues(field.i32_data, projection, lowCount),
+            })),
+        };
     }
 
     private openTickStream(worldId: string) {
@@ -752,4 +796,78 @@ function filterPlaybackPreviewFields(
         ...preview,
         deltas: preview.deltas.filter((delta) => include.has(delta.field_kind)),
     };
+}
+
+function toFloat32Array(values: number[] | Float32Array): Float32Array {
+    return values instanceof Float32Array ? values : new Float32Array(values);
+}
+
+function buildPreviewProjection(positions: Float32Array, lowCount: number): Uint32Array {
+    const cellCount = Math.floor(positions.length / 3);
+    const projection = new Uint32Array(cellCount);
+    for (let cell = 0; cell < cellCount; cell += 1) {
+        const offset = cell * 3;
+        const x = positions[offset];
+        const y = positions[offset + 1];
+        const z = positions[offset + 2];
+        let nearest = 0;
+        let nearestDot = -Infinity;
+        for (let candidate = 0; candidate < lowCount; candidate += 1) {
+            const candidateOffset = candidate * 3;
+            const dot = x * positions[candidateOffset]
+                + y * positions[candidateOffset + 1]
+                + z * positions[candidateOffset + 2];
+            if (dot > nearestDot) {
+                nearestDot = dot;
+                nearest = candidate;
+            }
+        }
+        projection[cell] = nearest;
+    }
+    return projection;
+}
+
+function expandFloatPreviewValues(
+    values: number[] | Float32Array | null | undefined,
+    projection: Uint32Array,
+    lowCount: number,
+): number[] | Float32Array | null | undefined {
+    if (!values || !(values instanceof Float32Array) || values.length !== lowCount) {
+        return values;
+    }
+    const expanded = new Float32Array(projection.length);
+    for (let cell = 0; cell < projection.length; cell += 1) {
+        expanded[cell] = values[projection[cell]];
+    }
+    return expanded;
+}
+
+function expandUintPreviewValues(
+    values: number[] | Uint32Array | null | undefined,
+    projection: Uint32Array,
+    lowCount: number,
+): number[] | Uint32Array | null | undefined {
+    if (!values || !(values instanceof Uint32Array) || values.length !== lowCount) {
+        return values;
+    }
+    const expanded = new Uint32Array(projection.length);
+    for (let cell = 0; cell < projection.length; cell += 1) {
+        expanded[cell] = values[projection[cell]];
+    }
+    return expanded;
+}
+
+function expandIntPreviewValues(
+    values: number[] | Int32Array | null | undefined,
+    projection: Uint32Array,
+    lowCount: number,
+): number[] | Int32Array | null | undefined {
+    if (!values || !(values instanceof Int32Array) || values.length !== lowCount) {
+        return values;
+    }
+    const expanded = new Int32Array(projection.length);
+    for (let cell = 0; cell < projection.length; cell += 1) {
+        expanded[cell] = values[projection[cell]];
+    }
+    return expanded;
 }
