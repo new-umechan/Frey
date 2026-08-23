@@ -199,7 +199,8 @@ export function createPlaybackController({
         const sliceBusy = worldState.sliceBusy === true;
 
         playbackControls.playToggleButton.disabled = !hasWorld;
-        playbackControls.historySeekSlider.disabled = !hasWorld || sliceBusy;
+        // jump は通常再生より優先する。操作開始時に再生を止めるため、再生中も slider を無効化しない。
+        playbackControls.historySeekSlider.disabled = !hasWorld;
         playbackControls.seekForwardButton.disabled = sliceBusy || !hasWorld || getNextHistoryTick(getWorldTick()) === null;
         playbackControls.seekBackwardButton.disabled = sliceBusy || !hasWorld || getPreviousHistoryTick(getWorldTick()) === null;
 
@@ -257,7 +258,7 @@ export function createPlaybackController({
 
     async function restoreWorldToTick(targetTick: number | null) {
         const activeWorldId = getActiveWorldId();
-        if (!activeWorldId || worldState.sliceBusy) {
+        if (!activeWorldId) {
             return;
         }
 
@@ -390,6 +391,9 @@ export function createPlaybackController({
         if (!worldId || targetTick === null) {
             return;
         }
+        // ドラッグ開始をjump操作として扱う。再生loopがslider値を現在tickで上書きするのを防ぎ、
+        // 通常再生の先読みはclient側のepoch更新で破棄する。
+        setPlaybackRunning(false);
         engineClient.prefetch_timeline?.(worldId, targetTick);
     }
 
